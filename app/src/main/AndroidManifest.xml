@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+        android:name=".NovaApplication"
         android:theme="@style/AppTheme"
         android:label="Nova Agent"
         android:allowBackup="false"
