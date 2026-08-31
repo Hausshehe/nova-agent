@@ -8,6 +8,7 @@ from .android_bridge import AndroidBridge, AndroidBridgeError
 from .deterministic_reasoner import DeterministicReasoner
 from .goal_evaluator import GoalEvaluator
 from .navigation import NavigationLoop
+from .task_runtime import LegacyNavigationExecutor, TaskRuntime
 
 
 def main() -> int:
@@ -37,9 +38,11 @@ def main() -> int:
             evaluator=GoalEvaluator(),
             max_steps=args.max_steps,
         )
-        achieved = loop.run(args.goal)
-        print(f"GOAL {'ACHIEVED' if achieved else 'NOT ACHIEVED'}")
-        return 0 if achieved else 1
+        runtime = TaskRuntime(navigation=LegacyNavigationExecutor(loop))
+        result = runtime.run(args.goal)
+        print(f"TASK STATUS {result.status.value}")
+        print(f"GOAL {'ACHIEVED' if result.success else 'NOT ACHIEVED'}")
+        return 0 if result.success else 1
     except (AndroidBridgeError, TimeoutError, RuntimeError) as exc:
         print(f"SMOKE FAILED: {exc}", file=sys.stderr)
         return 2
