@@ -2,6 +2,7 @@ package com.hausshehe.nova
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,28 +15,71 @@ import java.net.Socket
 import java.util.concurrent.Executors
 
 object BridgeServer {
+    private const val TAG = "NovaBridgeServer"
     private const val PORT = 18765
     private const val PACKAGE = "com.hausshehe.nova"
+    private const val START_RETRIES = 20
+    private const val RETRY_DELAY_MS = 250L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
     @Synchronized
     fun start(context: Context) {
-        if (started) return
+        if (started) {
+            Log.d(TAG, "start(): already started")
+            return
+        }
+
         started = true
+        Log.i(TAG, "start(): starting localhost bridge on 127.0.0.1:$PORT")
         executor.execute { serve(context.applicationContext) }
     }
 
     private fun serve(context: Context) {
+        var server: ServerSocket? = null
+
         try {
-            ServerSocket(PORT, 50, InetAddress.getByName("127.0.0.1")).use { server ->
+            repeat(START_RETRIES) { attempt ->
+                try {
+                    server = ServerSocket(PORT, 50, InetAddress.getByName("127.0.0.1"))
+                    Log.i(TAG, "Bridge listening on 127.0.0.1:$PORT")
+                    return@repeat
+                } catch (e: Exception) {
+                    Log.e(
+                        TAG,
+                        "Bridge bind failed (attempt ${attempt + 1}/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}",
+                        e
+                    )
+                    if (attempt + 1 < START_RETRIES) {
+                        try {
+                            Thread.sleep(RETRY_DELAY_MS)
+                        } catch (interrupted: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            return
+                        }
+                    }
+                }
+            }
+
+            val listeningServer = server
+            if (listeningServer == null) {
+                Log.e(TAG, "Bridge failed to bind 127.0.0.1:$PORT after $START_RETRIES attempts")
+                return
+            }
+
+            listeningServer.use { boundServer ->
                 while (true) {
-                    val socket = server.accept()
+                    val socket = boundServer.accept()
+                    Log.d(TAG, "Accepted bridge connection from ${socket.remoteSocketAddress}")
                     executor.execute { handle(context, socket) }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Bridge server stopped unexpectedly: ${e.javaClass.simpleName}: ${e.message}", e)
+        } finally {
+            server?.takeIf { !it.isClosed }?.close()
             started = false
+            Log.w(TAG, "Bridge server stopped; started=false")
         }
     }
 
@@ -46,6 +90,7 @@ object BridgeServer {
                 val writer = PrintWriter(s.getOutputStream(), true)
                 val line = reader.readLine() ?: return
                 val request = JSONObject(line)
+                Log.d(TAG, "Request: ${request.optString("command")}")
                 val response = when (request.optString("command")) {
                     "observe" -> observe()
                     "click" -> click(request.optString("elementId"))
@@ -55,6 +100,7 @@ object BridgeServer {
                 }
                 writer.println(response.toString())
             } catch (e: Exception) {
+                Log.e(TAG, "Bridge request failed: ${e.javaClass.simpleName}: ${e.message}", e)
                 PrintWriter(s.getOutputStream(), true).println(error(e.message ?: "bridge error").toString())
             }
         }
