@@ -33,7 +33,7 @@ object NovaTaskShell {
 
         val input = EditText(context).apply {
             hint = "What should Nova do?"
-            singleLine = true
+            setSingleLine(true)
             contentDescription = "Nova task input"
         }
         root.addView(input, LinearLayout.LayoutParams(
