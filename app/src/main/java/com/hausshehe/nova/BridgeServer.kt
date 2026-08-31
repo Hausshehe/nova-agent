@@ -39,18 +39,18 @@ object BridgeServer {
         var server: ServerSocket? = null
 
         try {
-            repeat(START_RETRIES) { attempt ->
+            for (attempt in 1..START_RETRIES) {
                 try {
                     server = ServerSocket(PORT, 50, InetAddress.getByName("127.0.0.1"))
                     Log.i(TAG, "Bridge listening on 127.0.0.1:$PORT")
-                    return@repeat
+                    break
                 } catch (e: Exception) {
                     Log.e(
                         TAG,
-                        "Bridge bind failed (attempt ${attempt + 1}/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}",
+                        "Bridge bind failed (attempt $attempt/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}",
                         e
                     )
-                    if (attempt + 1 < START_RETRIES) {
+                    if (attempt < START_RETRIES) {
                         try {
                             Thread.sleep(RETRY_DELAY_MS)
                         } catch (interrupted: InterruptedException) {
