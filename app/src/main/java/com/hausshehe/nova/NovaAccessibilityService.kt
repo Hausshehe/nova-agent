@@ -15,6 +15,7 @@ class NovaAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         ObservationStore.update(rootInActiveWindow)
+        BridgeServer.start(this)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
