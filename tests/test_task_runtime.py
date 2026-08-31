@@ -21,6 +21,20 @@ class FakeNavigation:
         return self.result
 
 
+@dataclass
+class FakeLegacyNavigationLoop:
+    result: bool = True
+    calls: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.calls is None:
+            self.calls = []
+
+    def run(self, goal: str) -> bool:
+        self.calls.append(goal)
+        return self.result
+
+
 def test_runtime_rejects_empty_goal_without_calling_navigation() -> None:
     navigation = FakeNavigation()
     runtime = TaskRuntime(navigation)
@@ -59,7 +73,7 @@ def test_runtime_contains_executor_failure() -> None:
 
 
 def test_legacy_adapter_preserves_navigation_loop_boundary() -> None:
-    navigation = FakeNavigation(result=True)
+    navigation = FakeLegacyNavigationLoop(result=True)
     adapter = LegacyNavigationExecutor(navigation)
 
     assert adapter.execute("Open Settings") is True
