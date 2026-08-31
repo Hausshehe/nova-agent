@@ -16,7 +16,14 @@ def _score(goal: str, element: UIElement) -> float:
     label_tokens = _tokens(label)
     if not goal_tokens or not label_tokens:
         return 0.0
+
+    # A fuzzy string ratio by itself can create dangerous false positives.
+    # Require at least one meaningful token overlap before treating a node as
+    # related to the requested goal.
     overlap = len(goal_tokens & label_tokens) / len(goal_tokens)
+    if overlap == 0:
+        return 0.0
+
     ratio = SequenceMatcher(None, goal.lower(), label.lower()).ratio()
     exact = 1.0 if goal.strip().lower() == label.strip().lower() else 0.0
     return exact * 10.0 + overlap * 4.0 + ratio
