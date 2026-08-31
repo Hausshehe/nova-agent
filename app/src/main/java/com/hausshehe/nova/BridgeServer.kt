@@ -89,16 +89,17 @@ object BridgeServer {
             ?: return error("Nova accessibility service is not connected")
         val root = service.rootInActiveWindow
             ?: return error("No active accessibility window")
-        root.use {
-            val node = findNode(root, elementId)
-                ?: return error("element not found: $elementId")
-            return JSONObject().apply {
-                val accepted = node.isEnabled && node.isClickable &&
-                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                put("ok", true)
-                put("accepted", accepted)
-                put("changed", accepted)
-            }
+        val node = findNode(root, elementId)
+            ?: return error("element not found: $elementId")
+
+        val accepted = node.isEnabled && node.isClickable &&
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        node.recycle()
+
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", accepted)
+            put("changed", accepted)
         }
     }
 
