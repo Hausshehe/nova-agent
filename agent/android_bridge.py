@@ -4,27 +4,9 @@ import json
 import socket
 import subprocess
 import time
-from dataclasses import dataclass
 from typing import Any
 
-
-@dataclass(frozen=True)
-class UIElement:
-    id: str
-    text: str = ""
-    content_description: str = ""
-    clickable: bool = False
-    enabled: bool = True
-    class_name: str = ""
-    bounds: str = ""
-
-
-@dataclass(frozen=True)
-class AndroidState:
-    observation_id: int
-    package: str
-    activity: str
-    elements: tuple[UIElement, ...]
+from .core import Action, ActionType, ExecutionResult, UIElement, WorldState
 
 
 class AndroidBridgeError(RuntimeError):
@@ -32,7 +14,7 @@ class AndroidBridgeError(RuntimeError):
 
 
 class AndroidBridge:
-    """Small client for Nova's localhost Android command server."""
+    """Client for Nova's localhost Android command server."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 18765, timeout: float = 3.0):
         self.host = host
@@ -53,7 +35,6 @@ class AndroidBridge:
                     data += chunk
         except OSError as exc:
             raise AndroidBridgeError(f"Android bridge unavailable: {exc}") from exc
-
         if not data:
             raise AndroidBridgeError("Android bridge returned no response")
         try:
@@ -66,9 +47,8 @@ class AndroidBridge:
 
     @staticmethod
     def _elements(raw: Any) -> tuple[UIElement, ...]:
-        result = []
-        for item in raw or []:
-            result.append(UIElement(
+        return tuple(
+            UIElement(
                 id=str(item.get("id", "")),
                 text=str(item.get("text", "")),
                 content_description=str(item.get("contentDescription", item.get("content_description", ""))),
@@ -76,27 +56,47 @@ class AndroidBridge:
                 enabled=bool(item.get("enabled", True)),
                 class_name=str(item.get("className", item.get("class_name", ""))),
                 bounds=str(item.get("bounds", "")),
-            ))
-        return tuple(result)
+            )
+            for item in (raw or [])
+        )
 
-    def observe(self) -> AndroidState:
+    def observe(self) -> WorldState:
         response = self._request({"command": "observe"})
         state = response.get("state", response)
-        return AndroidState(
-            observation_id=int(state.get("observationId", state.get("observation_id", 0))),
+        return WorldState(
+            observation_id=str(state.get("observationId", state.get("observation_id", ""))),
             package=str(state.get("package", "")),
             activity=str(state.get("activity", "")),
             elements=self._elements(state.get("elements", [])),
+            timestamp_ms=int(state.get("timestampMs", state.get("timestamp_ms", 0)) or 0),
         )
 
-    def click(self, element_id: str) -> dict[str, Any]:
-        return self._request({"command": "click", "elementId": element_id})
+    def execute(self, action: Action) -> ExecutionResult:
+        if action.type == ActionType.CLICK:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "click action has no target")
+            try:
+                response = self._request({"command": "click", "elementId": action.target.element_id})
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.BACK:
+            try:
+                response = self._request({"command": "back"})
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
+        return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
     def launch(self, package: str = "com.hausshehe.nova") -> dict[str, Any]:
         try:
             return self._request({"command": "launch", "package": package})
         except AndroidBridgeError:
-            # The server may not expose launch on older builds. Fall back to Termux.
             try:
                 subprocess.run(["am", "start", "-n", f"{package}/.MainActivity"], check=True,
                                timeout=self.timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -104,15 +104,15 @@ class AndroidBridge:
             except Exception as exc:
                 raise AndroidBridgeError(f"Unable to launch Nova: {exc}") from exc
 
-    def wait_for_fresh_observation(self, previous_id: int, max_seconds: float = 2.0,
-                                   poll_seconds: float = 0.2) -> AndroidState:
-        deadline = time.monotonic() + max_seconds
+    def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
+                                   poll_seconds: float = 0.2) -> WorldState:
+        deadline = time.monotonic() + timeout
         while True:
             state = self.observe()
-            if state.observation_id != previous_id:
+            if state.observation_id != previous.observation_id:
                 return state
             if time.monotonic() >= deadline:
-                raise AndroidBridgeError(
-                    f"timed out waiting for fresh Android observation after {previous_id}"
+                raise TimeoutError(
+                    f"timed out waiting for fresh Android observation after {previous.observation_id}"
                 )
             time.sleep(poll_seconds)
