@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import time
@@ -93,16 +94,31 @@ class AndroidBridge:
             return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
         return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
-    def launch(self, package: str = "com.hausshehe.nova") -> dict[str, Any]:
+    def launch(self, package: str = "com.hausshehe.nova", root: bool = True) -> dict[str, Any]:
+        """Launch Nova without adb. When falling back to am, prefer root."""
         try:
             return self._request({"command": "launch", "package": package})
         except AndroidBridgeError:
-            try:
-                subprocess.run(["am", "start", "-n", f"{package}/.MainActivity"], check=True,
-                               timeout=self.timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return {"ok": True}
-            except Exception as exc:
-                raise AndroidBridgeError(f"Unable to launch Nova: {exc}") from exc
+            component = f"{package}/.MainActivity"
+            commands: list[list[str]] = []
+            if root:
+                commands.append(["su", "-c", f"am start -n {component}"])
+            commands.append(["am", "start", "-n", component])
+
+            last_error: Exception | None = None
+            for command in commands:
+                try:
+                    subprocess.run(
+                        command,
+                        check=True,
+                        timeout=self.timeout,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return {"ok": True, "root": command[0] == "su"}
+                except Exception as exc:
+                    last_error = exc
+            raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
