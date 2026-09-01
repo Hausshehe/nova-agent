@@ -130,8 +130,8 @@ def test_navigation_history_records_unverified_action_for_replanning():
 
 
 def test_navigation_loop_replans_to_alternative_after_unverified_action():
-    first = UIElement("n1", text="Try action", clickable=True)
-    fallback = UIElement("n2", text="Alternative action", clickable=True)
+    first = UIElement("n1", text="Try finish", clickable=True)
+    fallback = UIElement("n2", text="Alternative finish", clickable=True)
     before = WorldState(package="nova", observation_id="1", elements=(first, fallback))
     after_first = WorldState(package="nova", observation_id="2", elements=(first, fallback))
     after_second = WorldState(package="nova", observation_id="3", elements=(UIElement("n3", text="Finish navigation"),))
@@ -139,7 +139,7 @@ def test_navigation_loop_replans_to_alternative_after_unverified_action():
     planner = RecoveryPlanner()
     verifier = FirstFailureThenSuccessVerifier()
 
-    assert NavigationLoop(bridge, planner, verifier=verifier, max_steps=2).run("Finish navigation") is True
+    assert NavigationLoop(bridge, planner, verifier=verifier, max_steps=2).run("Finish") is True
     assert planner.calls == 2
     assert len(bridge.actions) == 2
     assert bridge.actions[0].target.element_id == "n1"
