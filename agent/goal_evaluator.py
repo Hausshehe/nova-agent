@@ -5,7 +5,7 @@ import re
 from .core import WorldState, element_text
 
 
-_ACTION_VERBS = {"tap", "click", "open"}
+_ACTION_VERBS = {"tap", "click", "open", "back", "wait"}
 _STOP_WORDS = {"a", "an", "the", "to", "of", "and", "then", "please"}
 
 
