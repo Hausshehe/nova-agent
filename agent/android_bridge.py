@@ -72,12 +72,16 @@ class AndroidBridge:
             timestamp_ms=int(state.get("timestampMs", state.get("timestamp_ms", 0)) or 0),
         )
 
+    def click(self, element_id: str) -> dict[str, Any]:
+        """Execute a direct click through Nova's Android bridge."""
+        return self._request({"command": "click", "elementId": element_id})
+
     def execute(self, action: Action) -> ExecutionResult:
         if action.type == ActionType.CLICK:
             if action.target is None:
                 return ExecutionResult(False, False, False, "click action has no target")
             try:
-                response = self._request({"command": "click", "elementId": action.target.element_id})
+                response = self.click(action.target.element_id)
             except AndroidBridgeError as exc:
                 return ExecutionResult(False, False, False, str(exc))
             return ExecutionResult(
