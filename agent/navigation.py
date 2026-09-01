@@ -18,6 +18,21 @@ class Planner(Protocol):
     def plan(self, context: ReasoningContext) -> Decision: ...
 
 
+def _action_history(decision: Decision, step: int, *, accepted: bool, changed: bool, verified: bool, error: str | None = None) -> dict[str, Any]:
+    target = decision.action.target
+    return {
+        "step": step,
+        "action_type": decision.action.type.value,
+        "target_id": target.element_id if target else None,
+        "target_text": target.text if target else "",
+        "target_content_description": target.content_description if target else "",
+        "accepted": accepted,
+        "changed": changed,
+        "verified": verified,
+        "error": error,
+    }
+
+
 @dataclass
 class NavigationLoop:
     bridge: NavigationBridge
@@ -40,26 +55,44 @@ class NavigationLoop:
             result = self.bridge.execute(decision.action)
 
             if not result.accepted:
-                history.append({"step": step, "accepted": False, "changed": False, "verified": False})
+                history.append(
+                    _action_history(
+                        decision,
+                        step,
+                        accepted=False,
+                        changed=False,
+                        verified=False,
+                        error=result.error,
+                    )
+                )
                 continue
 
             try:
                 after = self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
             except TimeoutError:
-                history.append({"step": step, "accepted": True, "changed": False, "verified": False})
+                history.append(
+                    _action_history(
+                        decision,
+                        step,
+                        accepted=True,
+                        changed=False,
+                        verified=False,
+                        error="fresh observation timeout",
+                    )
+                )
                 continue
 
             changed = after != state
             verified = self.verifier.verify(state, after, ExecutionResult(True, changed, False))
-            history.append({
-                "step": step,
-                "target_id": decision.action.target.element_id if decision.action.target else None,
-                "target_text": decision.action.target.text if decision.action.target else "",
-                "target_content_description": decision.action.target.content_description if decision.action.target else "",
-                "accepted": True,
-                "changed": changed,
-                "verified": verified,
-            })
+            history.append(
+                _action_history(
+                    decision,
+                    step,
+                    accepted=True,
+                    changed=changed,
+                    verified=verified,
+                )
+            )
 
             state = after
             if self.evaluator.evaluate(goal, state):
