@@ -20,7 +20,7 @@ def test_back_and_wait_goals_are_direct_actions_not_state_goals():
     current = state("Back", "Wait")
     evaluator = GoalEvaluator()
 
-    assert evaluator.is_action_goal("Go back") is False
+    assert evaluator.is_action_goal("Go back") is True
     assert evaluator.is_action_goal("Wait") is True
     assert evaluator.evaluate("Wait", current) is False
 
