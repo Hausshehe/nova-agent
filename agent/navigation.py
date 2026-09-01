@@ -57,8 +57,9 @@ class NavigationLoop:
             # WAIT is a navigation synchronization primitive, not an Android
             # command. The bridge already owns the fresh-observation wait used
             # to settle real UI transitions, so do not invent a native no-op.
-            if decision.action.type is ActionType.WAIT:
-                result = ExecutionResult(True, True)
+            is_wait = decision.action.type is ActionType.WAIT
+            if is_wait:
+                result = ExecutionResult(True, False)
             else:
                 result = self.bridge.execute(decision.action)
 
@@ -91,7 +92,12 @@ class NavigationLoop:
                 continue
 
             changed = after != state
-            verified = self.verifier.verify(state, after, ExecutionResult(True, changed, False))
+            # WAIT is verified by successful synchronization/fresh observation,
+            # not by a state transition. State-changing actions still require
+            # the normal transition verifier.
+            verified = True if is_wait else self.verifier.verify(
+                state, after, ExecutionResult(True, changed, False)
+            )
             history.append(
                 _action_history(
                     decision,
