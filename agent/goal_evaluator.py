@@ -14,7 +14,11 @@ class GoalEvaluator:
 
     def is_action_goal(self, goal: str) -> bool:
         tokens = re.findall(r"[a-z0-9]+", goal.lower())
-        return bool(tokens) and tokens[0] in _ACTION_VERBS
+        if not tokens:
+            return False
+        if tokens[0] in _ACTION_VERBS:
+            return True
+        return len(tokens) >= 2 and tokens[:2] == ["go", "back"]
 
     def evaluate(self, goal: str, state: WorldState) -> bool:
         goal_norm = " ".join(re.findall(r"[a-z0-9]+", goal.lower()))
