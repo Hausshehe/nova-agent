@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
-from .core import Action, Decision, ExecutionResult, TransitionVerifier, WorldState
+from .core import Action, ActionType, Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .reasoning_context import ReasoningContext, build_reasoning_context
 
@@ -53,7 +53,14 @@ class NavigationLoop:
         for step in range(1, self.max_steps + 1):
             context = build_reasoning_context(goal, state, history)
             decision = self.planner.plan(context)
-            result = self.bridge.execute(decision.action)
+
+            # WAIT is a navigation synchronization primitive, not an Android
+            # command. The bridge already owns the fresh-observation wait used
+            # to settle real UI transitions, so do not invent a native no-op.
+            if decision.action.type is ActionType.WAIT:
+                result = ExecutionResult(True, True)
+            else:
+                result = self.bridge.execute(decision.action)
 
             if not result.accepted:
                 history.append(
