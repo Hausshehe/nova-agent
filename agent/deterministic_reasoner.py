@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from typing import Any
 
 from .core import Action, ActionType, Decision, Target
-from .reasoning_context import ReasoningContext
-from .targeting import _score
+from .reasoning_context import ActionCandidate, ReasoningContext
 
 
 class DeterministicReasoner:
@@ -24,21 +24,49 @@ class DeterministicReasoner:
             if item.get("target_id") is not None
         }
 
+    @staticmethod
+    def _score(goal: str, candidate: ActionCandidate) -> float:
+        if candidate.target is None:
+            return 0.0
+        goal_tokens = set(re.findall(r"[a-z0-9]+", goal.lower()))
+        label = " ".join(
+            part for part in (
+                candidate.target.text,
+                candidate.target.content_description,
+            ) if part
+        ).strip()
+        label_tokens = set(re.findall(r"[a-z0-9]+", label.lower()))
+        if not goal_tokens or not label_tokens:
+            return 0.0
+        overlap = len(goal_tokens & label_tokens) / len(goal_tokens)
+        if overlap == 0:
+            return 0.0
+        ratio = SequenceMatcher(None, goal.lower(), label.lower()).ratio()
+        exact = 1.0 if goal.strip().lower() == label.strip().lower() else 0.0
+        return exact * 10.0 + overlap * 4.0 + ratio
+
     def plan(self, context: ReasoningContext) -> Decision:
-        candidates = [e for e in context.state.elements if e.enabled and e.clickable]
+        candidates = [
+            candidate
+            for candidate in context.candidates
+            if candidate.action_type is ActionType.CLICK
+            and candidate.enabled
+            and candidate.visible
+            and candidate.target is not None
+        ]
         if not candidates:
             raise RuntimeError("no clickable target available")
 
         used = self._used_ids(context)
-        ranked = sorted(candidates, key=lambda e: _score(context.goal, e), reverse=True)
+        ranked = sorted(candidates, key=lambda c: self._score(context.goal, c), reverse=True)
 
         # Recovery: after an accepted-but-unverified action, prefer another
         # matching target rather than blindly repeating the same node.
-        for element in ranked:
-            if element.id not in used and _score(context.goal, element) > 0:
-                target = Target(element.id, element.text, element.content_description)
-                return Decision(Action(ActionType.CLICK, target), f"selected matching target {element.id}")
+        for candidate in ranked:
+            if candidate.target.element_id not in used and self._score(context.goal, candidate) > 0:
+                target = candidate.target
+                return Decision(Action(ActionType.CLICK, target), f"selected matching target {target.element_id}")
 
         best = ranked[0]
-        target = Target(best.id, best.text, best.content_description)
-        return Decision(Action(ActionType.CLICK, target), f"reusing best matching target {best.id}")
+        target = best.target
+        return Decision(Action(ActionType.CLICK, target), f"reusing best matching target {target.element_id}")
