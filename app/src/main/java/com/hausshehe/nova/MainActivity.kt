@@ -1,6 +1,7 @@
 package com.hausshehe.nova
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup
@@ -20,7 +21,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        BridgeServer.start(applicationContext)
+        startService(Intent(this, BridgeHostService::class.java))
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
