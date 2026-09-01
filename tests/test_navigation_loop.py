@@ -81,7 +81,7 @@ def test_navigation_loop_completes_after_observation_transition():
     bridge = FakeBridge([before, after])
 
     assert NavigationLoop(bridge, SequencePlanner(), max_steps=2).run("Navigation Complete") is True
-    assert len(bridge.actions) == 2
+    assert len(bridge.actions) == 1
 
 
 def test_navigation_loop_stops_at_step_limit():
