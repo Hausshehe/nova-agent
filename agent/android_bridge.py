@@ -57,6 +57,12 @@ class AndroidBridge:
                 enabled=bool(item.get("enabled", True)),
                 class_name=str(item.get("className", item.get("class_name", ""))),
                 bounds=str(item.get("bounds", "")),
+                editable=bool(item.get("editable", False)),
+                scrollable=bool(item.get("scrollable", False)),
+                checkable=bool(item.get("checkable", False)),
+                checked=bool(item.get("checked", False)),
+                focused=bool(item.get("focused", False)),
+                visible=bool(item.get("visible", True)),
             )
             for item in (raw or [])
         )
