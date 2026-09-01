@@ -20,6 +20,12 @@ class UIElement:
     enabled: bool = True
     class_name: str = ""
     bounds: str = ""
+    editable: bool = False
+    scrollable: bool = False
+    checkable: bool = False
+    checked: bool = False
+    focused: bool = False
+    visible: bool = True
 
 
 @dataclass(frozen=True)
