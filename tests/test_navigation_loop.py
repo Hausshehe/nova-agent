@@ -146,3 +146,13 @@ def test_navigation_loop_replans_to_alternative_after_unverified_action():
     assert bridge.actions[1].target.element_id == "n2"
     assert planner.contexts[1].history[0]["target_id"] == "n1"
     assert planner.contexts[1].history[0]["verified"] is False
+
+
+def test_action_goal_requires_an_executed_and_verified_action():
+    button = UIElement("n1", text="Test Navigation Action", clickable=True)
+    before = WorldState(package="nova", observation_id="1", elements=(button,))
+    after = WorldState(package="nova", observation_id="2", elements=(UIElement("n2", text="Navigation Action Completed"),))
+    bridge = FakeBridge([before, after])
+
+    assert NavigationLoop(bridge, SequencePlanner(), max_steps=1).run("Tap Test Navigation Action") is True
+    assert len(bridge.actions) == 1
