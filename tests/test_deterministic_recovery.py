@@ -19,7 +19,7 @@ def test_deterministic_reasoner_avoids_previously_failed_target():
         "error": None,
     },)
 
-    context = build_reasoning_context("Complete task", state, history)
+    context = build_reasoning_context("Try action", state, history)
     decision = DeterministicReasoner().plan(context)
 
     assert decision.action.target is not None
