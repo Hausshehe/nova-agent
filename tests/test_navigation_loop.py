@@ -79,14 +79,14 @@ def test_navigation_loop_replans_after_timeout():
 
 
 def test_navigation_history_records_unverified_action_for_replanning():
-    first = UIElement("n1", text="Try Wi-Fi", clickable=True)
-    second = UIElement("n2", text="Alternative Wi-Fi", clickable=True)
+    first = UIElement("n1", text="Try action", clickable=True)
+    second = UIElement("n2", text="Alternative action", clickable=True)
     before = WorldState(package="nova", observation_id="1", elements=(first, second))
     after = WorldState(package="nova", observation_id="2", elements=(first, second))
     bridge = FakeBridge([before, after])
     planner = SequencePlanner()
 
-    assert NavigationLoop(bridge, planner, max_steps=2).run("Wi-Fi") is False
+    assert NavigationLoop(bridge, planner, max_steps=2).run("Complete task") is False
 
     assert len(planner.contexts) == 2
     history = planner.contexts[1].history
@@ -95,7 +95,7 @@ def test_navigation_history_records_unverified_action_for_replanning():
     assert attempt["step"] == 1
     assert attempt["action_type"] == "click"
     assert attempt["target_id"] == "n1"
-    assert attempt["target_text"] == "Try Wi-Fi"
+    assert attempt["target_text"] == "Try action"
     assert attempt["accepted"] is True
     assert attempt["changed"] is False
     assert attempt["verified"] is False
