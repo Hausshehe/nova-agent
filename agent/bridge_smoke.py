@@ -5,6 +5,10 @@ import argparse
 from .android_bridge import AndroidBridge, AndroidBridgeError
 
 
+def _matches_text(element, target_text: str) -> bool:
+    return element.text == target_text or element.content_description == target_text
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check Nova Android bridge connectivity")
     parser.add_argument("--launch-nova", action="store_true")
@@ -25,7 +29,7 @@ def main() -> int:
                 print(f"{element.id} | text={element.text!r} | desc={element.content_description!r} | clickable={element.clickable}")
 
         if args.click_text is not None:
-            target = next((e for e in state.elements if e.text == args.click_text), None)
+            target = next((e for e in state.elements if _matches_text(e, args.click_text)), None)
             if target is None:
                 print(f"TARGET NOT FOUND: {args.click_text!r}")
                 return 2
