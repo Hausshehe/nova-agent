@@ -151,11 +151,19 @@ object BridgeServer {
         }
     }
 
-    private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? {
-        if (root.viewIdResourceName == id) return root
-        for (i in 0 until root.childCount) {
-            val child = root.getChild(i) ?: continue
-            val result = findNode(child, id)
+    private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? =
+        findNode(root, id, "0")
+
+    private fun findNode(
+        node: AccessibilityNodeInfo,
+        id: String,
+        path: String
+    ): AccessibilityNodeInfo? {
+        if (node.viewIdResourceName == id || "path:$path" == id) return node
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findNode(child, id, "$path.$i")
             if (result != null) {
                 if (result !== child) child.recycle()
                 return result
