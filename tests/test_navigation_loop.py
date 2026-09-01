@@ -21,8 +21,6 @@ class FakeBridge:
 
     def execute(self, action):
         self.actions.append(action)
-        self.accepted = len(self.actions) > 1
-        self.changed = len(self.actions) > 1
         return ExecutionResult(self.accepted, self.changed)
 
     def wait_for_fresh_observation(self, previous, timeout):
@@ -67,9 +65,13 @@ class NoTransitionVerifier:
         return False
 
 
-class SecondActionVerifier:
+class FirstFailureThenSuccessVerifier:
+    def __init__(self):
+        self.calls = 0
+
     def verify(self, before, after, result):
-        return result.accepted and result.changed
+        self.calls += 1
+        return self.calls >= 2 and result.accepted and result.changed
 
 
 def test_navigation_loop_completes_after_observation_transition():
@@ -131,11 +133,13 @@ def test_navigation_loop_replans_to_alternative_after_unverified_action():
     first = UIElement("n1", text="Try action", clickable=True)
     fallback = UIElement("n2", text="Alternative action", clickable=True)
     before = WorldState(package="nova", observation_id="1", elements=(first, fallback))
-    after = WorldState(package="nova", observation_id="2", elements=(first, fallback))
-    bridge = FakeBridge([before, after, after])
+    after_first = WorldState(package="nova", observation_id="2", elements=(first, fallback))
+    after_second = WorldState(package="nova", observation_id="3", elements=(UIElement("n3", text="Finish navigation"),))
+    bridge = FakeBridge([before, after_first, after_second])
     planner = RecoveryPlanner()
+    verifier = FirstFailureThenSuccessVerifier()
 
-    assert NavigationLoop(bridge, planner, verifier=SecondActionVerifier(), max_steps=2).run("Try action") is True
+    assert NavigationLoop(bridge, planner, verifier=verifier, max_steps=2).run("Finish navigation") is True
     assert planner.calls == 2
     assert len(bridge.actions) == 2
     assert bridge.actions[0].target.element_id == "n1"
