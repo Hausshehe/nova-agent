@@ -179,7 +179,7 @@ def test_navigation_loop_executes_back_action_and_verifies_transition():
     assert bridge.actions == [Action(ActionType.BACK)]
 
 
-def test_navigation_loop_executes_wait_action_and_verifies_transition():
+def test_navigation_loop_waits_for_fresh_observation_without_bridge_command():
     before = WorldState(package="nova", activity="Loading", observation_id="1")
     after = WorldState(package="nova", activity="Ready", observation_id="2")
     bridge = FakeBridge([before, after])
@@ -187,4 +187,4 @@ def test_navigation_loop_executes_wait_action_and_verifies_transition():
 
     assert NavigationLoop(bridge, planner, max_steps=1).run("Wait") is True
     assert planner.calls == 1
-    assert bridge.actions == [Action(ActionType.WAIT)]
+    assert bridge.actions == []
