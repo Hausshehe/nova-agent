@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol
 
 from .core import Action, Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
@@ -45,8 +45,9 @@ class NavigationLoop:
     def run(self, goal: str) -> bool:
         history: list[Mapping[str, Any]] = []
         state = self.bridge.observe()
+        action_goal = self.evaluator.is_action_goal(goal)
 
-        if self.evaluator.evaluate(goal, state):
+        if not action_goal and self.evaluator.evaluate(goal, state):
             return True
 
         for step in range(1, self.max_steps + 1):
@@ -95,6 +96,8 @@ class NavigationLoop:
             )
 
             state = after
+            if action_goal and verified:
+                return True
             if self.evaluator.evaluate(goal, state):
                 return True
 
