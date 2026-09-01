@@ -1,5 +1,6 @@
 package com.hausshehe.nova
 
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.atomic.AtomicLong
 
@@ -25,13 +26,23 @@ object ObservationStore {
     ) {
         val resourceId = node.viewIdResourceName
         val stableId = resourceId?.takeIf { it.isNotBlank() } ?: "path:$path"
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
 
         out += UiElementSnapshot(
             id = stableId,
             text = node.text?.toString() ?: "",
             contentDescription = node.contentDescription?.toString() ?: "",
             clickable = node.isClickable,
-            enabled = node.isEnabled
+            enabled = node.isEnabled,
+            className = node.className?.toString() ?: "",
+            bounds = bounds.toShortString(),
+            editable = node.isEditable,
+            scrollable = node.isScrollable,
+            checkable = node.isCheckable,
+            checked = node.isChecked,
+            focused = node.isFocused,
+            visible = node.isVisibleToUser
         )
 
         for (i in 0 until node.childCount) {
@@ -50,5 +61,13 @@ data class UiElementSnapshot(
     val text: String,
     val contentDescription: String,
     val clickable: Boolean,
-    val enabled: Boolean
+    val enabled: Boolean,
+    val className: String,
+    val bounds: String,
+    val editable: Boolean,
+    val scrollable: Boolean,
+    val checkable: Boolean,
+    val checked: Boolean,
+    val focused: Boolean,
+    val visible: Boolean
 )
