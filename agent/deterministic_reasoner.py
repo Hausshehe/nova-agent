@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import re
 from difflib import SequenceMatcher
-from typing import Any
 
-from .core import Action, ActionType, Decision, Target
+from .core import Action, ActionType, Decision
 from .reasoning_context import ActionCandidate, ReasoningContext
 
 
@@ -45,7 +44,24 @@ class DeterministicReasoner:
         exact = 1.0 if goal.strip().lower() == label.strip().lower() else 0.0
         return exact * 10.0 + overlap * 4.0 + ratio
 
+    @staticmethod
+    def _global_action(context: ReasoningContext) -> Decision | None:
+        terms = set(DeterministicReasoner._meaningful_terms(context.goal))
+        if "back" in terms:
+            for candidate in context.candidates:
+                if candidate.action_type is ActionType.BACK and candidate.enabled and candidate.visible:
+                    return Decision(Action(ActionType.BACK), "goal explicitly requests back")
+        if "wait" in terms or "waits" in terms:
+            for candidate in context.candidates:
+                if candidate.action_type is ActionType.WAIT and candidate.enabled and candidate.visible:
+                    return Decision(Action(ActionType.WAIT), "goal explicitly requests wait")
+        return None
+
     def plan(self, context: ReasoningContext) -> Decision:
+        global_action = self._global_action(context)
+        if global_action is not None:
+            return global_action
+
         candidates = [
             candidate
             for candidate in context.candidates
