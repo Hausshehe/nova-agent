@@ -16,6 +16,15 @@ def test_action_goal_is_not_complete_when_only_action_target_is_visible():
     assert GoalEvaluator().evaluate("Tap Test Navigation Action", current) is False
 
 
+def test_back_and_wait_goals_are_direct_actions_not_state_goals():
+    current = state("Back", "Wait")
+    evaluator = GoalEvaluator()
+
+    assert evaluator.is_action_goal("Go back") is False
+    assert evaluator.is_action_goal("Wait") is True
+    assert evaluator.evaluate("Wait", current) is False
+
+
 def test_state_goal_still_completes_from_visible_result_text():
     current = state("Wi-Fi", "Wi-Fi enabled")
 
