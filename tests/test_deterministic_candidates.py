@@ -50,3 +50,53 @@ def test_deterministic_reasoner_ignores_disabled_or_invisible_candidates():
         assert str(exc) == "no clickable target available"
     else:
         raise AssertionError("planner selected an unusable candidate")
+
+
+def test_deterministic_reasoner_selects_back_only_when_goal_requests_it():
+    context = ReasoningContext(
+        goal="Go back",
+        state=WorldState(),
+        candidates=(
+            ActionCandidate(action_type=ActionType.BACK),
+            ActionCandidate(action_type=ActionType.WAIT),
+        ),
+    )
+
+    decision = DeterministicReasoner().plan(context)
+
+    assert decision.action.type is ActionType.BACK
+    assert decision.action.target is None
+
+
+def test_deterministic_reasoner_selects_wait_only_when_goal_requests_it():
+    context = ReasoningContext(
+        goal="Wait",
+        state=WorldState(),
+        candidates=(
+            ActionCandidate(action_type=ActionType.BACK),
+            ActionCandidate(action_type=ActionType.WAIT),
+        ),
+    )
+
+    decision = DeterministicReasoner().plan(context)
+
+    assert decision.action.type is ActionType.WAIT
+    assert decision.action.target is None
+
+
+def test_deterministic_reasoner_does_not_use_global_actions_as_click_fallback():
+    context = ReasoningContext(
+        goal="Open Settings",
+        state=WorldState(),
+        candidates=(
+            ActionCandidate(action_type=ActionType.BACK),
+            ActionCandidate(action_type=ActionType.WAIT),
+        ),
+    )
+
+    try:
+        DeterministicReasoner().plan(context)
+    except RuntimeError as exc:
+        assert str(exc) == "no clickable target available"
+    else:
+        raise AssertionError("planner used a global action without an explicit goal")
