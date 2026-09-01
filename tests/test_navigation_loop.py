@@ -48,6 +48,16 @@ class SequencePlanner:
         )
 
 
+class FixedActionPlanner:
+    def __init__(self, action_type):
+        self.calls = 0
+        self.action_type = action_type
+
+    def plan(self, context):
+        self.calls += 1
+        return Decision(Action(self.action_type), "test global action")
+
+
 class RecoveryPlanner:
     def __init__(self):
         self.calls = 0
@@ -156,3 +166,25 @@ def test_action_goal_requires_an_executed_and_verified_action():
 
     assert NavigationLoop(bridge, SequencePlanner(), max_steps=1).run("Tap Test Navigation Action") is True
     assert len(bridge.actions) == 1
+
+
+def test_navigation_loop_executes_back_action_and_verifies_transition():
+    before = WorldState(package="nova", activity="Details", observation_id="1")
+    after = WorldState(package="nova", activity="Home", observation_id="2")
+    bridge = FakeBridge([before, after])
+    planner = FixedActionPlanner(ActionType.BACK)
+
+    assert NavigationLoop(bridge, planner, max_steps=1).run("Go back") is True
+    assert planner.calls == 1
+    assert bridge.actions == [Action(ActionType.BACK)]
+
+
+def test_navigation_loop_executes_wait_action_and_verifies_transition():
+    before = WorldState(package="nova", activity="Loading", observation_id="1")
+    after = WorldState(package="nova", activity="Ready", observation_id="2")
+    bridge = FakeBridge([before, after])
+    planner = FixedActionPlanner(ActionType.WAIT)
+
+    assert NavigationLoop(bridge, planner, max_steps=1).run("Wait") is True
+    assert planner.calls == 1
+    assert bridge.actions == [Action(ActionType.WAIT)]
