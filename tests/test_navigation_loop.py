@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from agent.core import Action, ActionType, Decision, ExecutionResult, UIElement, WorldState
+from agent.core import Action, ActionType, Decision, ExecutionResult, Target, UIElement, WorldState
 from agent.navigation import NavigationLoop
 
 
@@ -32,15 +32,17 @@ class FakeBridge:
 class SequencePlanner:
     def __init__(self):
         self.calls = 0
+        self.contexts = []
 
     def plan(self, context):
         self.calls += 1
+        self.contexts.append(context)
+        element = context.state.elements[0]
         return Decision(
-            Action(ActionType.CLICK, context.state.elements[0] and __import__("agent.core", fromlist=["Target"]).Target(
-                context.state.elements[0].id,
-                context.state.elements[0].text,
-                context.state.elements[0].content_description,
-            )),
+            Action(
+                ActionType.CLICK,
+                Target(element.id, element.text, element.content_description),
+            ),
             "test sequence",
         )
 
@@ -74,3 +76,27 @@ def test_navigation_loop_replans_after_timeout():
 
     assert NavigationLoop(bridge, planner, max_steps=2).run("Something else") is False
     assert planner.calls == 2
+
+
+def test_navigation_history_records_unverified_action_for_replanning():
+    first = UIElement("n1", text="Try Wi-Fi", clickable=True)
+    second = UIElement("n2", text="Alternative Wi-Fi", clickable=True)
+    before = WorldState(package="nova", observation_id="1", elements=(first, second))
+    after = WorldState(package="nova", observation_id="2", elements=(first, second))
+    bridge = FakeBridge([before, after])
+    planner = SequencePlanner()
+
+    assert NavigationLoop(bridge, planner, max_steps=2).run("Wi-Fi") is False
+
+    assert len(planner.contexts) == 2
+    history = planner.contexts[1].history
+    assert len(history) == 1
+    attempt = history[0]
+    assert attempt["step"] == 1
+    assert attempt["action_type"] == "click"
+    assert attempt["target_id"] == "n1"
+    assert attempt["target_text"] == "Try Wi-Fi"
+    assert attempt["accepted"] is True
+    assert attempt["changed"] is False
+    assert attempt["verified"] is False
+    assert attempt["error"] is None
