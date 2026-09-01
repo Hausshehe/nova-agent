@@ -32,7 +32,7 @@ class ReasoningContext:
 
 
 def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
-    return tuple(
+    candidates = [
         ActionCandidate(
             action_type=ActionType.CLICK,
             target=Target(element.id, element.text, element.content_description),
@@ -48,7 +48,10 @@ def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
         )
         for element in state.elements
         if element.clickable
-    )
+    ]
+    candidates.append(ActionCandidate(action_type=ActionType.BACK))
+    candidates.append(ActionCandidate(action_type=ActionType.WAIT))
+    return tuple(candidates)
 
 
 def build_reasoning_context(
