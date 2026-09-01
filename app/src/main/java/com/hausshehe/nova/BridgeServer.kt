@@ -20,6 +20,8 @@ object BridgeServer {
     private const val PACKAGE = "com.hausshehe.nova"
     private const val START_RETRIES = 20
     private const val RETRY_DELAY_MS = 250L
+    private const val LAUNCH_WAIT_MS = 3000L
+    private const val OBSERVATION_POLL_MS = 100L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
@@ -179,10 +181,36 @@ object BridgeServer {
             ?: return error("launch intent not found: $packageName")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         context.startActivity(intent)
-        return JSONObject().apply {
-            put("ok", true)
-            put("accepted", true)
+
+        val service = NovaAccessibilityService.instance
+        if (service == null) {
+            return error("Nova accessibility service is not connected")
         }
+
+        val deadline = System.currentTimeMillis() + LAUNCH_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val root = service.rootInActiveWindow
+            val activePackage = root?.packageName?.toString()
+            if (activePackage == packageName) {
+                ObservationStore.update(root)
+                Log.i(TAG, "Launch synchronized with accessibility window: $activePackage")
+                return JSONObject().apply {
+                    put("ok", true)
+                    put("accepted", true)
+                }
+            }
+            root?.recycle()
+            try {
+                Thread.sleep(OBSERVATION_POLL_MS)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return error("launch wait interrupted")
+            }
+        }
+
+        val activePackage = service.rootInActiveWindow?.packageName?.toString()
+        Log.e(TAG, "Launch did not reach target package $packageName; active package=$activePackage")
+        return error("launch timed out waiting for accessibility window: expected=$packageName active=$activePackage")
     }
 
     private fun error(message: String): JSONObject = JSONObject().apply {
