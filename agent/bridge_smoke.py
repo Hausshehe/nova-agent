@@ -33,7 +33,7 @@ def main() -> int:
             if target is None:
                 print(f"TARGET NOT FOUND: {args.click_text!r}")
                 return 2
-            before = state.observation_id
+            before = state
             bridge.click(target.id)
             fresh = bridge.wait_for_fresh_observation(before)
             print(f"CLICKED {target.id}")
