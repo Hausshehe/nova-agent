@@ -118,6 +118,14 @@ object BridgeServer {
                 put("contentDescription", e.contentDescription)
                 put("clickable", e.clickable)
                 put("enabled", e.enabled)
+                put("className", e.className)
+                put("bounds", e.bounds)
+                put("editable", e.editable)
+                put("scrollable", e.scrollable)
+                put("checkable", e.checkable)
+                put("checked", e.checked)
+                put("focused", e.focused)
+                put("visible", e.visible)
             })
         }
         return JSONObject().apply {
