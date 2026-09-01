@@ -9,6 +9,12 @@ def _matches_text(element, target_text: str) -> bool:
     return element.text == target_text or element.content_description == target_text
 
 
+def _print_elements(state) -> None:
+    for element in state.elements:
+        if element.text or element.content_description:
+            print(f"{element.id} | text={element.text!r} | desc={element.content_description!r} | clickable={element.clickable}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check Nova Android bridge connectivity")
     parser.add_argument("--launch-nova", action="store_true")
@@ -24,9 +30,7 @@ def main() -> int:
         print(f"PACKAGE {state.package}")
         print(f"ACTIVITY {state.activity}")
         print(f"ELEMENTS {len(state.elements)}")
-        for element in state.elements:
-            if element.text or element.content_description:
-                print(f"{element.id} | text={element.text!r} | desc={element.content_description!r} | clickable={element.clickable}")
+        _print_elements(state)
 
         if args.click_text is not None:
             target = next((e for e in state.elements if _matches_text(e, args.click_text)), None)
@@ -38,6 +42,8 @@ def main() -> int:
             fresh = bridge.wait_for_fresh_observation(before)
             print(f"CLICKED {target.id}")
             print(f"FRESH_OBSERVATION {fresh.observation_id}")
+            print(f"FRESH_ELEMENTS {len(fresh.elements)}")
+            _print_elements(fresh)
         return 0
     except AndroidBridgeError as exc:
         print(f"BRIDGE ERROR: {exc}")
