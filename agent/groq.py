@@ -4,7 +4,7 @@ import os
 
 from .llm_transport import OpenAICompatibleTransport
 
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_BASE_URL = "https://api.groq.com/openai"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 
 
