@@ -1,4 +1,5 @@
 from agent.core import Action, ActionType, Decision, ExecutionResult, UIElement, WorldState
+from agent.reasoning_context import build_reasoning_context
 from agent.task_runtime import TaskExecutor
 
 
@@ -58,10 +59,13 @@ class SpyRecoveryEngine:
     def recover(self, goal, state, history, planner):
         self.calls += 1
         self.recoveries += 1
-        return Decision(
-            Action(ActionType.CLICK, next(c.target for c in __import__('agent.reasoning_context', fromlist=['build_reasoning_context']).build_reasoning_context(goal, state, history).candidates if c.target and c.target.element_id == "retry")),
-            "recovery plan",
+        context = build_reasoning_context(goal, state, history)
+        target = next(
+            candidate.target
+            for candidate in context.candidates
+            if candidate.target and candidate.target.element_id == "retry"
         )
+        return Decision(Action(ActionType.CLICK, target), "recovery plan")
 
 
 def test_task_executor_routes_failed_action_through_recovery_engine():
