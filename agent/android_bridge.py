@@ -130,15 +130,39 @@ class AndroidBridge:
                     last_error = exc
             raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
 
+    @staticmethod
+    def _same_ui(before: WorldState, after: WorldState) -> bool:
+        """Compare UI state while ignoring observation identity and timestamps."""
+        return (
+            before.package == after.package
+            and before.activity == after.activity
+            and before.elements == after.elements
+        )
+
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
+        """Wait for a fresh observation, then return only after the UI settles."""
         deadline = time.monotonic() + timeout
+        candidate: WorldState | None = None
+
         while True:
             state = self.observe()
-            if state.observation_id != previous.observation_id:
+
+            if candidate is None:
+                if state.observation_id == previous.observation_id:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"timed out waiting for fresh Android observation after {previous.observation_id}"
+                        )
+                else:
+                    candidate = state
+            elif self._same_ui(candidate, state):
                 return state
+            else:
+                candidate = state
+
             if time.monotonic() >= deadline:
                 raise TimeoutError(
-                    f"timed out waiting for fresh Android observation after {previous.observation_id}"
+                    f"timed out waiting for settled Android observation after {previous.observation_id}"
                 )
             time.sleep(poll_seconds)
