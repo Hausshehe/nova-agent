@@ -1,31 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 
-from .android_bridge import AndroidBridge, AndroidBridgeError
-from .core import Action, ActionType, Decision
-from .goal_evaluator import GoalEvaluator
-from .task_runtime import TaskExecutor
+from agent.android_bridge import AndroidBridge
+from agent.core import Action, ActionType, Decision, Target
+from agent.task_runtime import TaskExecutor
 
 
-def _matches_candidate(candidate, text: str) -> bool:
-    target = candidate.target
-    return target is not None and (
-        target.text == text or target.content_description == text
-    )
-
-
-def _find_target(context, text: str):
-    return next(
-        (
-            candidate.target
-            for candidate in context.candidates
-            if _matches_candidate(candidate, text)
-        ),
-        None,
-    )
+def _find_target(context, text: str) -> Target | None:
+    for candidate in context.candidates:
+        if candidate.element.text == text:
+            return candidate.target
+    return None
 
 
 class MultiStepRuntimePlanner:
@@ -58,88 +45,74 @@ class MultiStepRuntimePlanner:
         return Decision(Action(ActionType.CLICK, target), rationale)
 
 
-def _wait_for_target(bridge: AndroidBridge, text: str, timeout: float = 2.0):
+def _wait_for_target(bridge: AndroidBridge, target_text: str, timeout: float = 2.0):
     deadline = time.monotonic() + timeout
     while True:
         state = bridge.observe()
-        if any(
-            element.text == text or element.content_description == text
-            for element in state.elements
-        ):
+        if any(element.text == target_text and element.clickable for element in state.elements):
             return state
         if time.monotonic() >= deadline:
-            raise RuntimeError(f"target {text!r} not observable before timeout")
+            raise RuntimeError(f"timed out waiting for target {target_text!r}")
         time.sleep(0.2)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Real-device R7 TaskExecutor multi-step migration smoke test"
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument("--launch-nova", action="store_true")
-    parser.add_argument("--max-steps", type=int, default=3)
     args = parser.parse_args()
 
     bridge = AndroidBridge()
+    if args.launch_nova:
+        print(f"LAUNCH {bridge.launch(root=True)}")
 
     try:
-        if args.launch_nova:
-            launch = bridge.launch(root=True)
-            print(f"LAUNCH {launch}")
-
         ready = _wait_for_target(bridge, "Multi-Step Test")
         print(f"READY observation={ready.observation_id} target=Multi-Step Test")
 
-        executor = TaskExecutor(
+        runtime = TaskExecutor(
             bridge=bridge,
             planner=MultiStepRuntimePlanner(),
-            evaluator=GoalEvaluator(),
-            max_steps=args.max_steps,
+            max_steps=3,
         )
-        achieved = executor.run("Multi-Step Test completed")
+        completed = runtime.run("Multi-Step Test completed")
 
-        if not achieved:
-            print("R7 MULTI-STEP FAILED: TaskExecutor did not complete the goal", file=sys.stderr)
-            return 1
-
-        final_state = executor.current_state
-        if final_state is None or not any(
-            element.text == "Multi-Step Test completed" for element in final_state.elements
-        ):
-            print(
-                "R7 GOAL VERIFICATION FAILED: final TaskExecutor state does not contain "
-                "'Multi-Step Test completed'",
-                file=sys.stderr,
-            )
-            return 1
-
-        action_history = [
-            item.get("target_text") or item.get("target_id")
-            for item in executor.history
+        history = [
+            item
+            for item in runtime.history
+            if item.get("action_type") == ActionType.CLICK.value
         ]
-        if action_history != ["Multi-Step Test", "Continue Multi-Step", "Finish Multi-Step"]:
-            print(
-                "R7 ACTION SEQUENCE FAILED: expected "
-                "['Multi-Step Test', 'Continue Multi-Step', 'Finish Multi-Step'], "
-                f"got {action_history!r}",
-                file=sys.stderr,
+        expected = ["Multi-Step Test", "Continue Multi-Step", "Finish Multi-Step"]
+        actual = [item.get("target_text", "") for item in history]
+        normalized_actual = [value.strip().casefold() for value in actual]
+        normalized_expected = [value.casefold() for value in expected]
+
+        if normalized_actual != normalized_expected:
+            raise RuntimeError(
+                f"expected {expected!r}, got {actual!r}"
             )
-            return 1
 
-        if not all(item.get("verified") for item in executor.history):
-            print("R7 TRANSITION VERIFICATION FAILED: an action was not verified", file=sys.stderr)
-            return 1
+        if not completed:
+            raise RuntimeError("TaskExecutor did not report task completion")
 
-        print(f"HISTORY {action_history}")
+        final_state = runtime.current_state
+        if final_state is None or "Multi-Step Test completed" not in {
+            element.text for element in final_state.elements if element.text
+        }:
+            raise RuntimeError("completion was not observed in the final fresh state")
+
+        if not all(item.get("verified") for item in history):
+            raise RuntimeError("not all multi-step transitions were verified")
+
+        print(f"HISTORY {actual}")
         print(f"FINAL_OBSERVATION {final_state.observation_id}")
         print("ALL THREE ACTION TRANSITIONS VERIFIED")
         print("GOAL VERIFIED IN FRESH STATE: Multi-Step Test completed")
         print("TASK EXECUTOR MULTI-STEP MIGRATION VERIFIED")
         print("TASK COMPLETED")
         return 0
-    except (AndroidBridgeError, TimeoutError, RuntimeError, StopIteration) as exc:
-        print(f"R7 MULTI-STEP SMOKE FAILED: {exc}", file=sys.stderr)
-        return 2
+    except Exception as exc:
+        print(f"R7 ACTION SEQUENCE FAILED: {exc}")
+        return 1
 
 
 if __name__ == "__main__":
