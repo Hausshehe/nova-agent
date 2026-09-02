@@ -12,7 +12,7 @@ from .task_runtime import TaskExecutor
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Real-device Nova TaskExecutor boundary smoke test"
+        description="Real-device Nova TaskExecutor observation-boundary smoke test"
     )
     parser.add_argument("--goal", required=True)
     parser.add_argument("--launch-nova", action="store_true")
@@ -26,12 +26,6 @@ def main() -> int:
             launch = bridge.launch(root=True)
             print(f"LAUNCH {launch}")
             time.sleep(0.5)
-
-        before = bridge.observe()
-        print(f"OBSERVATION {before.observation_id}")
-        print(f"PACKAGE {before.package}")
-        print(f"ACTIVITY {before.activity}")
-        print(f"ELEMENTS {len(before.elements)}")
 
         executor = TaskExecutor(
             bridge=bridge,
