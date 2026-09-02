@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from agent.core import Action, ActionType, Decision, ExecutionResult, Target, UIElement, WorldState
 from agent.deterministic_reasoner import DeterministicReasoner
 from agent.navigation import NavigationLoop
+from agent.reasoning_context import ReasoningContext
 
 
 @dataclass
@@ -50,6 +51,26 @@ class SequencePlanner:
         )
 
 
+class DecideOnlyProvider:
+    """Provider-shaped test double with no legacy plan() method."""
+
+    def __init__(self):
+        self.calls = 0
+        self.contexts = []
+
+    def decide(self, context: ReasoningContext):
+        self.calls += 1
+        self.contexts.append(context)
+        element = context.state.elements[0]
+        return Decision(
+            Action(
+                ActionType.CLICK,
+                Target(element.id, element.text, element.content_description),
+            ),
+            "provider boundary",
+        )
+
+
 class FixedActionPlanner:
     def __init__(self, action_type):
         self.calls = 0
@@ -94,6 +115,19 @@ def test_navigation_loop_completes_after_observation_transition():
 
     assert NavigationLoop(bridge, SequencePlanner(), max_steps=2).run("Navigation Complete") is True
     assert len(bridge.actions) == 1
+
+
+def test_navigation_loop_accepts_decide_only_reasoning_provider():
+    button = UIElement("n1", text="Finish", clickable=True)
+    before = WorldState(package="nova", observation_id="1", elements=(button,))
+    after = WorldState(package="nova", observation_id="2", elements=(UIElement("n2", text="Done"),))
+    bridge = FakeBridge([before, after])
+    provider = DecideOnlyProvider()
+
+    assert NavigationLoop(bridge, provider, max_steps=1).run("Finish") is True
+    assert provider.calls == 1
+    assert provider.contexts[0].goal == "Finish"
+    assert bridge.actions == [Action(ActionType.CLICK, Target("n1", "Finish", ""))]
 
 
 def test_navigation_loop_stops_at_step_limit():
