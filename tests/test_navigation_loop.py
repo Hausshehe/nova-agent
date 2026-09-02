@@ -12,6 +12,7 @@ class FakeBridge:
     changed: bool = True
     index: int = 0
     actions: list[Action] = None
+    wait_calls: int = 0
 
     def __post_init__(self):
         self.actions = []
@@ -24,6 +25,7 @@ class FakeBridge:
         return ExecutionResult(self.accepted, self.changed)
 
     def wait_for_fresh_observation(self, previous, timeout):
+        self.wait_calls += 1
         if self.index + 1 >= len(self.states):
             raise TimeoutError("no next state")
         self.index += 1
@@ -181,12 +183,13 @@ def test_navigation_loop_executes_back_action_and_verifies_transition():
 
 def test_navigation_loop_wait_goal_completes_without_state_change():
     state = WorldState(package="nova", activity="Ready", observation_id="1")
-    bridge = FakeBridge([state, state])
+    bridge = FakeBridge([state])
     planner = FixedActionPlanner(ActionType.WAIT)
 
     assert NavigationLoop(bridge, planner, max_steps=1).run("Wait") is True
     assert planner.calls == 1
     assert bridge.actions == []
+    assert bridge.wait_calls == 0
 
 
 def test_navigation_loop_waits_for_fresh_observation_without_bridge_command():
@@ -198,3 +201,4 @@ def test_navigation_loop_waits_for_fresh_observation_without_bridge_command():
     assert NavigationLoop(bridge, planner, max_steps=1).run("Wait") is True
     assert planner.calls == 1
     assert bridge.actions == []
+    assert bridge.wait_calls == 0
