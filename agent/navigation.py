@@ -56,9 +56,9 @@ class NavigationLoop:
     max_steps: int = 5
     settle_timeout: float = 2.0
 
-    def run(self, goal: str) -> bool:
+    def run(self, goal: str, *, initial_state: WorldState | None = None) -> bool:
         history: list[Mapping[str, Any]] = []
-        state = self.bridge.observe()
+        state = initial_state if initial_state is not None else self.bridge.observe()
         action_goal = self.evaluator.is_action_goal(goal)
 
         if not action_goal and self.evaluator.evaluate(goal, state):
