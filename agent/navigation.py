@@ -87,6 +87,11 @@ class NavigationLoop:
                         error=result.error,
                     )
                 )
+                # A rejected action does not establish a verified transition,
+                # but the live UI may have changed independently. Re-observe so
+                # the next reasoning pass is based on current state, while the
+                # failure remains available in history.
+                state = self.bridge.observe()
                 continue
 
             try:
