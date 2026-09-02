@@ -23,7 +23,7 @@ def test_valid_click_response_becomes_decision():
 
     assert decision.action.type is ActionType.CLICK
     assert decision.action.target.element_id == "n1"
-    assert decision.reason == "matches the goal"
+    assert decision.rationale == "matches the goal"
 
 
 def test_click_response_rejects_unknown_target():
