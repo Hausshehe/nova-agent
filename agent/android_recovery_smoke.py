@@ -16,11 +16,12 @@ def _matches_element_id(actual: str, expected: str) -> bool:
 
 
 class InjectedFailureBridge:
-    """Reject exactly the primary recovery action, then delegate to Android."""
+    """Execute the primary click on Android, then report a synthetic failure."""
 
     def __init__(self, bridge: AndroidBridge):
         self.bridge = bridge
         self.failed_once = False
+        self.executed_actions: list[str] = []
 
     def observe(self) -> WorldState:
         return self.bridge.observe()
@@ -32,15 +33,33 @@ class InjectedFailureBridge:
         return self.bridge.launch(**kwargs)
 
     def execute(self, action: Action) -> ExecutionResult:
-        if action.type is ActionType.CLICK and action.target is not None:
-            if _matches_element_id(action.target.element_id, "recovery_primary") and not self.failed_once:
+        target_id = action.target.element_id if action.target is not None else None
+
+        if action.type is ActionType.CLICK and target_id is not None:
+            if _matches_element_id(target_id, "recovery_primary") and not self.failed_once:
                 self.failed_once = True
-                print("INJECTED FAILURE: primary action rejected")
+                print("ACTION 1: CLICK recovery_primary")
+                result = self.bridge.execute(action)
+                if not result.accepted:
+                    print("PHYSICAL ACTION FAILED: recovery_primary was rejected by Android")
+                    return result
+                self.executed_actions.append("recovery_primary")
+                print("PHYSICAL ACTION EXECUTED: recovery_primary")
+                print("INJECTED FAILURE: primary action reported as failed after physical click")
                 return ExecutionResult(
                     accepted=False,
                     changed=False,
-                    error="injected recovery failure",
+                    error="injected recovery failure after physical primary click",
                 )
+
+            if _matches_element_id(target_id, "recovery_fallback"):
+                print("ACTION 2: CLICK recovery_fallback")
+                result = self.bridge.execute(action)
+                if result.accepted:
+                    self.executed_actions.append("recovery_fallback")
+                    print("PHYSICAL ACTION EXECUTED: recovery_fallback")
+                return result
+
         return self.bridge.execute(action)
 
 
@@ -90,7 +109,7 @@ def _wait_for_target(bridge: AndroidBridge, element_id: str, timeout: float = 2.
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Real-device Nova RecoveryEngine boundary smoke test"
+        description="Real-device Nova RecoveryEngine physical recovery smoke test"
     )
     parser.add_argument("--launch-nova", action="store_true")
     parser.add_argument("--max-steps", type=int, default=2)
@@ -115,8 +134,12 @@ def main() -> int:
         )
         achieved = executor.run("Recovery completed")
 
-        if not bridge.failed_once:
-            print("RECOVERY BOUNDARY FAILED: primary failure was not injected", file=sys.stderr)
+        if bridge.executed_actions != ["recovery_primary", "recovery_fallback"]:
+            print(
+                "RECOVERY BOUNDARY FAILED: expected physical action sequence "
+                f"['recovery_primary', 'recovery_fallback'], got {bridge.executed_actions!r}",
+                file=sys.stderr,
+            )
             return 1
 
         fallback_used = any(
@@ -125,10 +148,16 @@ def main() -> int:
             for item in executor.history
         )
         if not fallback_used:
-            print("RECOVERY BOUNDARY FAILED: fallback was not executed", file=sys.stderr)
+            print("RECOVERY BOUNDARY FAILED: fallback was not accepted", file=sys.stderr)
             return 1
 
-        print("RECOVERY BOUNDARY: failure routed through recovery path")
+        final_state = bridge.observe()
+        if not any(element.text == "Recovery completed" for element in final_state.elements):
+            print("RECOVERY BOUNDARY FAILED: final observation lacks 'Recovery completed'", file=sys.stderr)
+            return 1
+
+        print("PHYSICAL SEQUENCE VERIFIED: recovery_primary -> recovery_fallback")
+        print("RECOVERY BOUNDARY: physical failure routed through recovery path")
         print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
         return 0 if achieved else 1
     except (AndroidBridgeError, TimeoutError, RuntimeError, StopIteration) as exc:
