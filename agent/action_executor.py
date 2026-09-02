@@ -34,7 +34,11 @@ class ActionExecutor:
             result = self.bridge.execute(action)
 
         if not result.accepted:
-            return result, self.observation_provider.observe(), False
+            try:
+                after = self.observation_provider.refresh(previous)
+            except TimeoutError:
+                after = self.observation_provider.observe()
+            return result, after, False
 
         try:
             after = (
