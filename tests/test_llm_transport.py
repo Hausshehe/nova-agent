@@ -28,6 +28,7 @@ def test_transport_posts_prompt_and_returns_structured_json(monkeypatch):
         captured["timeout"] = timeout
         captured["body"] = json.loads(request.data.decode("utf-8"))
         captured["authorization"] = request.headers.get("Authorization")
+        captured["user_agent"] = request.headers.get("User-Agent")
         return FakeResponse(
             {
                 "choices": [
@@ -54,10 +55,14 @@ def test_transport_posts_prompt_and_returns_structured_json(monkeypatch):
     assert captured["timeout"] == 7.0
     assert captured["body"]["model"] == "qwen-test"
     assert captured["body"]["messages"] == [
-        {"role": "user", "content": "reason about this UI"}
+        {
+            "role": "user",
+            "content": "Respond with a valid JSON object.\n\nreason about this UI",
+        }
     ]
     assert captured["body"]["response_format"] == {"type": "json_object"}
     assert captured["authorization"] == "Bearer local-key"
+    assert captured["user_agent"] == "Nova-Agent/1.0"
 
 
 def test_transport_allows_local_server_without_api_key(monkeypatch):
