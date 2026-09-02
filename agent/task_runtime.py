@@ -4,12 +4,13 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
 from .action_executor import ActionExecutor
-from .core import TransitionVerifier, WorldState
+from .core import Decision, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
 from .observation_provider import AndroidObservationProvider, ObservationProvider
 from .reasoning_context import build_reasoning_context
 from .reasoning_provider import ReasoningProvider
+from .recovery_engine import RecoveryEngine
 
 
 class TaskRunner(Protocol):
@@ -29,6 +30,7 @@ class TaskExecutor:
     max_steps: int = 5
     settle_timeout: float = 2.0
     observation_provider: ObservationProvider | None = None
+    recovery_engine: RecoveryEngine = field(default_factory=RecoveryEngine)
     current_state: WorldState | None = field(default=None, init=False)
     history: list[Mapping[str, Any]] = field(default_factory=list, init=False)
     current_step: int = field(default=0, init=False)
@@ -55,17 +57,24 @@ class TaskExecutor:
         """Execute one task until verified completion or the step budget ends."""
         self.history.clear()
         self.current_step = 0
+        self.recovery_engine.reset()
         state = self._observe()
         self.current_state = state
         action_goal = self.evaluator.is_action_goal(goal)
+        next_decision: Decision | None = None
 
         if not action_goal and self.evaluator.evaluate(goal, state):
             return True
 
         for step in range(1, self.max_steps + 1):
             self.current_step = step
-            context = build_reasoning_context(goal, state, self.history)
-            decision = _decide(self.planner, context)
+            if next_decision is None:
+                context = build_reasoning_context(goal, state, self.history)
+                decision = _decide(self.planner, context)
+            else:
+                decision = next_decision
+                next_decision = None
+
             result, after, verified = self.action_executor.execute(decision.action, state)
 
             if not result.accepted:
@@ -81,6 +90,10 @@ class TaskExecutor:
                 )
                 state = after if after is not None else self._observe()
                 self.current_state = state
+                if step < self.max_steps:
+                    next_decision = self.recovery_engine.recover(
+                        goal, state, self.history, self.planner
+                    )
                 continue
 
             if after is None:
@@ -94,6 +107,10 @@ class TaskExecutor:
                         error=result.error or "fresh observation timeout",
                     )
                 )
+                if step < self.max_steps:
+                    next_decision = self.recovery_engine.recover(
+                        goal, state, self.history, self.planner
+                    )
                 continue
 
             changed = result.changed
@@ -114,5 +131,9 @@ class TaskExecutor:
                 return True
             if self.evaluator.evaluate(goal, state):
                 return True
+            if not verified and step < self.max_steps:
+                next_decision = self.recovery_engine.recover(
+                    goal, state, self.history, self.planner
+                )
 
         return False
