@@ -47,6 +47,15 @@ def test_task_executor_establishes_high_level_task_boundary():
     assert bridge.executed == 1
 
 
+def test_task_executor_owns_initial_observation():
+    bridge = FakeBridge()
+    runtime = TaskExecutor(bridge=bridge, planner=FinishPlanner(), max_steps=1)
+
+    assert bridge.observed == 0
+    assert runtime.run("Tap Finish") is True
+    assert bridge.observed == 2
+
+
 def test_task_executor_preserves_navigation_configuration():
     bridge = FakeBridge()
     planner = FinishPlanner()
