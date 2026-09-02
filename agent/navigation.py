@@ -54,9 +54,8 @@ class NavigationLoop:
             context = build_reasoning_context(goal, state, history)
             decision = self.planner.plan(context)
 
-            # WAIT is a navigation synchronization primitive, not an Android
-            # command. The bridge already owns the fresh-observation wait used
-            # to settle real UI transitions, so do not invent a native no-op.
+            # WAIT is a synchronization/observation primitive, not an Android
+            # command and not a state-transition requirement.
             is_wait = decision.action.type is ActionType.WAIT
             if is_wait:
                 result = ExecutionResult(True, False)
@@ -77,7 +76,14 @@ class NavigationLoop:
                 continue
 
             try:
-                after = self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
+                # Real state-changing actions require a fresh observation whose
+                # identity differs from the previous state. WAIT only requires
+                # a successful observation; an unchanged UI is valid.
+                after = (
+                    self.bridge.observe()
+                    if is_wait
+                    else self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
+                )
             except TimeoutError:
                 history.append(
                     _action_history(
@@ -92,9 +98,6 @@ class NavigationLoop:
                 continue
 
             changed = after != state
-            # WAIT is verified by successful synchronization/fresh observation,
-            # not by a state transition. State-changing actions still require
-            # the normal transition verifier.
             verified = True if is_wait else self.verifier.verify(
                 state, after, ExecutionResult(True, changed, False)
             )
