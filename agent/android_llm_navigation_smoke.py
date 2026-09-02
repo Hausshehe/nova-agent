@@ -9,6 +9,52 @@ from .llm_reasoning_provider import LLMReasoningProvider
 from .navigation import NavigationLoop
 
 
+class TracingLLMReasoningProvider(LLMReasoningProvider):
+    """Print each LLM decision while preserving the production provider path."""
+
+    def decide(self, context):
+        print(f"LLM_STEP goal={context.goal!r} observation={context.state.observation_id}")
+        try:
+            decision = super().decide(context)
+        except Exception as exc:
+            print(f"LLM_ERROR {type(exc).__name__}: {exc}", file=sys.stderr)
+            raise
+        target = decision.action.target
+        print(f"LLM_ACTION {decision.action.type.value}")
+        print(f"LLM_TARGET {target.element_id if target else None}")
+        print(f"LLM_TARGET_TEXT {target.text if target else ''!r}")
+        print(f"LLM_RATIONALE {decision.rationale}")
+        return decision
+
+
+class TracingBridge(AndroidBridge):
+    """Print execution and observation transitions for the real-device smoke."""
+
+    def observe(self):
+        state = super().observe()
+        print(f"OBSERVATION {state.observation_id} ELEMENTS {len(state.elements)}")
+        return state
+
+    def execute(self, action):
+        target = action.target
+        print(
+            f"EXECUTE {action.type.value} "
+            f"target={target.element_id if target else None}"
+        )
+        result = super().execute(action)
+        print(
+            f"EXECUTION_RESULT accepted={result.accepted} "
+            f"changed={result.changed} error={result.error!r}"
+        )
+        return result
+
+    def wait_for_fresh_observation(self, previous, timeout=2.0):
+        print(f"WAIT_FRESH after={previous.observation_id} timeout={timeout}")
+        state = super().wait_for_fresh_observation(previous, timeout)
+        print(f"FRESH_OBSERVATION {state.observation_id}")
+        return state
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Real-device Nova multi-step LLM navigation smoke test"
@@ -19,7 +65,7 @@ def main() -> int:
     parser.add_argument("--max-steps", type=int, default=3)
     args = parser.parse_args()
 
-    bridge = AndroidBridge()
+    bridge = TracingBridge()
 
     try:
         if args.launch_nova:
@@ -27,7 +73,7 @@ def main() -> int:
             print(f"LAUNCH {launch}")
 
         transport = groq_transport(model=args.model)
-        provider = LLMReasoningProvider(transport.complete)
+        provider = TracingLLMReasoningProvider(transport.complete)
         loop = NavigationLoop(
             bridge=bridge,
             planner=provider,
@@ -38,7 +84,7 @@ def main() -> int:
         print(f"GOAL {'ACHIEVED' if achieved else 'NOT ACHIEVED'}")
         return 0 if achieved else 1
     except (AndroidBridgeError, RuntimeError, TimeoutError, ValueError) as exc:
-        print(f"SMOKE FAILED: {exc}", file=sys.stderr)
+        print(f"SMOKE FAILED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 
 
