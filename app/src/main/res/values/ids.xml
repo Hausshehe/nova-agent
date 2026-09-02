@@ -6,4 +6,8 @@
     <item name="multi_step_test" type="id" />
     <item name="multi_step_continue" type="id" />
     <item name="multi_step_finish" type="id" />
+    <item name="stale_test" type="id" />
+    <item name="stale_target" type="id" />
+    <item name="stale_invalidate" type="id" />
+    <item name="stale_fresh_target" type="id" />
 </resources>
