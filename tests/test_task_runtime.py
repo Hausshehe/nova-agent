@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from agent.action_executor import ActionExecutor
 from agent.core import Action, ActionType, Decision, ExecutionResult, Target, TransitionVerifier, UIElement, WorldState
+from agent.observation_provider import AndroidObservationProvider
 from agent.task_runtime import TaskExecutor
 
 
@@ -29,6 +30,21 @@ class FakeBridge:
             observation_id=str(self.observed),
             elements=(),
         )
+
+
+@dataclass
+class FakeObservationProvider:
+    source: FakeBridge
+    observed: int = 0
+    refreshed: int = 0
+
+    def observe(self) -> WorldState:
+        self.observed += 1
+        return self.source.observe()
+
+    def refresh(self, previous: WorldState) -> WorldState:
+        self.refreshed += 1
+        return self.source.wait_for_fresh_observation(previous, 0.5)
 
 
 class FinishPlanner:
@@ -106,6 +122,36 @@ def test_task_executor_preserves_navigation_configuration():
     assert runtime.settle_timeout == 1.25
     assert runtime.planner is planner
     assert runtime.bridge is bridge
+    assert isinstance(runtime.observation_provider, AndroidObservationProvider)
+    assert runtime.observation_provider.settle_timeout == 1.25
+
+
+def test_observation_provider_owns_settling_configuration():
+    bridge = FakeBridge()
+    provider = AndroidObservationProvider(bridge, settle_timeout=1.25)
+    previous = provider.observe()
+
+    after = provider.refresh(previous)
+
+    assert after.observation_id == "2"
+    assert provider.settle_timeout == 1.25
+    assert bridge.observed == 2
+
+
+def test_task_executor_uses_injected_observation_provider():
+    bridge = FakeBridge()
+    provider = FakeObservationProvider(bridge)
+    runtime = TaskExecutor(
+        bridge=bridge,
+        planner=FinishPlanner(),
+        max_steps=1,
+        observation_provider=provider,
+    )
+
+    assert runtime.run("Tap Finish") is True
+    assert provider.observed == 1
+    assert provider.refreshed == 1
+    assert runtime.action_executor.observation_provider is provider
 
 
 def test_action_executor_executes_and_verifies_transition():
@@ -124,6 +170,25 @@ def test_action_executor_executes_and_verifies_transition():
     assert bridge.executed == 1
 
 
+def test_action_executor_uses_injected_observation_provider():
+    bridge = FakeBridge()
+    provider = FakeObservationProvider(bridge)
+    executor = ActionExecutor(
+        bridge=bridge,
+        verifier=TransitionVerifier(),
+        observation_provider=provider,
+    )
+    previous = provider.observe()
+    action = Action(ActionType.CLICK, Target(element_id="finish", text="Finish"))
+
+    result, after, verified = executor.execute(action, previous)
+
+    assert result.accepted is True
+    assert after is not None
+    assert verified is True
+    assert provider.refreshed == 1
+
+
 def test_task_executor_uses_action_executor_boundary():
     bridge = FakeBridge()
     runtime = TaskExecutor(bridge=bridge, planner=FinishPlanner(), max_steps=1)
@@ -132,3 +197,4 @@ def test_task_executor_uses_action_executor_boundary():
     assert runtime.action_executor.bridge is bridge
     assert runtime.action_executor.verifier is runtime.verifier
     assert runtime.action_executor.settle_timeout == runtime.settle_timeout
+    assert runtime.action_executor.observation_provider is runtime.observation_provider
