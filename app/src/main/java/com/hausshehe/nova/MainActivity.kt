@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -136,6 +137,55 @@ class MainActivity : Activity() {
 
         multiStepStatus = status("Multi-Step ready")
         root.addView(multiStepStatus)
+
+        root.addView(section("Stale Transition Safety"))
+        val staleTarget = Button(this).apply {
+            id = R.id.stale_target
+            text = "Stale Target"
+            contentDescription = "Stale Target"
+            setOnClickListener {
+                throw IllegalStateException("stale target was physically executed")
+            }
+        }
+        root.addView(staleTarget, buttonParams())
+
+        val invalidateStale = Button(this).apply {
+            id = R.id.stale_invalidate
+            text = "Invalidate Stale Target"
+            contentDescription = "Invalidate Stale Target"
+            setOnClickListener {
+                staleTarget.visibility = View.GONE
+                staleFreshTarget.visibility = View.VISIBLE
+                staleStatus.text = "Old target invalidated. Choose fresh target."
+            }
+        }
+        root.addView(invalidateStale, buttonParams())
+
+        val staleFreshTarget = Button(this).apply {
+            id = R.id.stale_fresh_target
+            text = "Fresh Target"
+            contentDescription = "Fresh Target"
+            visibility = View.GONE
+            setOnClickListener {
+                staleStatus.text = "Stale transition safety completed"
+            }
+        }
+        root.addView(staleFreshTarget, buttonParams())
+
+        val staleTest = Button(this).apply {
+            id = R.id.stale_test
+            text = "Stale Safety Test"
+            contentDescription = "Stale Safety Test"
+            setOnClickListener {
+                staleTarget.visibility = View.VISIBLE
+                staleFreshTarget.visibility = View.GONE
+                staleStatus.text = "Stale target available"
+            }
+        }
+        root.addView(staleTest, buttonParams())
+
+        val staleStatus = status("Stale safety ready")
+        root.addView(staleStatus)
 
         setContentView(root)
     }
