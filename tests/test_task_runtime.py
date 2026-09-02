@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agent.core import Action, ActionType, Decision, ExecutionResult, UIElement, WorldState
+from agent.action_executor import ActionExecutor
+from agent.core import Action, ActionType, Decision, ExecutionResult, Target, TransitionVerifier, UIElement, WorldState
 from agent.task_runtime import TaskExecutor
 
 
@@ -105,3 +106,29 @@ def test_task_executor_preserves_navigation_configuration():
     assert runtime.settle_timeout == 1.25
     assert runtime.planner is planner
     assert runtime.bridge is bridge
+
+
+def test_action_executor_executes_and_verifies_transition():
+    bridge = FakeBridge()
+    executor = ActionExecutor(bridge=bridge, verifier=TransitionVerifier(), settle_timeout=1.25)
+    previous = bridge.observe()
+    action = Action(ActionType.CLICK, Target(element_id="finish", text="Finish"))
+
+    result, after, verified = executor.execute(action, previous)
+
+    assert result.accepted is True
+    assert result.changed is True
+    assert after is not None
+    assert after.observation_id == "2"
+    assert verified is True
+    assert bridge.executed == 1
+
+
+def test_task_executor_uses_action_executor_boundary():
+    bridge = FakeBridge()
+    runtime = TaskExecutor(bridge=bridge, planner=FinishPlanner(), max_steps=1)
+
+    assert isinstance(runtime.action_executor, ActionExecutor)
+    assert runtime.action_executor.bridge is bridge
+    assert runtime.action_executor.verifier is runtime.verifier
+    assert runtime.action_executor.settle_timeout == runtime.settle_timeout
