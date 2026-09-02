@@ -22,6 +22,8 @@ object BridgeServer {
     private const val RETRY_DELAY_MS = 250L
     private const val LAUNCH_WAIT_MS = 3000L
     private const val OBSERVATION_POLL_MS = 100L
+    private const val CLICK_WAIT_MS = 2000L
+    private const val CLICK_POLL_MS = 100L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
@@ -143,19 +145,54 @@ object BridgeServer {
     private fun click(elementId: String): JSONObject {
         val service = NovaAccessibilityService.instance
             ?: return error("Nova accessibility service is not connected")
+
+        val deadline = System.currentTimeMillis() + CLICK_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val root = service.rootInActiveWindow
+            if (root == null) {
+                sleepForClickRetry()
+                continue
+            }
+
+            val activePackage = root.packageName?.toString()
+            if (activePackage != PACKAGE) {
+                Log.d(TAG, "Click waiting for Nova window: requested=$elementId active=$activePackage")
+                root.recycle()
+                sleepForClickRetry()
+                continue
+            }
+
+            val node = findNode(root, elementId)
+            if (node == null) {
+                Log.d(TAG, "Click waiting for accessibility node: $elementId")
+                root.recycle()
+                sleepForClickRetry()
+                continue
+            }
+
+            val accepted = node.isEnabled && node.isClickable &&
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (node !== root) root.recycle()
+            node.recycle()
+
+            return JSONObject().apply {
+                put("ok", true)
+                put("accepted", accepted)
+                put("changed", accepted)
+            }
+        }
+
         val root = service.rootInActiveWindow
-            ?: return error("No active accessibility window")
-        val node = findNode(root, elementId)
-            ?: return error("element not found: $elementId")
+        val activePackage = root?.packageName?.toString()
+        root?.recycle()
+        return error("element not found after ${CLICK_WAIT_MS}ms: $elementId activePackage=$activePackage")
+    }
 
-        val accepted = node.isEnabled && node.isClickable &&
-            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        node.recycle()
-
-        return JSONObject().apply {
-            put("ok", true)
-            put("accepted", accepted)
-            put("changed", accepted)
+    private fun sleepForClickRetry() {
+        try {
+            Thread.sleep(CLICK_POLL_MS)
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
