@@ -14,6 +14,7 @@ from .task_runtime import TaskExecutor
 STARTUP_POLL_SECONDS = 0.2
 STARTUP_TIMEOUT_SECONDS = 5.0
 STALE_TARGET_ID = "stale_target"
+STALE_TEST_ID = "com.hausshehe.nova:id/stale_test"
 INVALIDATE_TARGET_ID = "com.hausshehe.nova:id/stale_invalidate"
 FRESH_TARGET_ID = "stale_fresh_target"
 GOAL = "Stale transition safety completed"
@@ -68,6 +69,22 @@ def _wait_for_target(bridge: AndroidBridge, target_text: str) -> WorldState:
         time.sleep(STARTUP_POLL_SECONDS)
 
 
+def _reset_stale_fixture(bridge: StaleTransitionBridge) -> None:
+    """Reset the Android fixture so repeated smoke runs start from the same state."""
+    state = _wait_for_target(bridge, "Stale Safety Test")
+    reset = Action(
+        ActionType.CLICK,
+        Target(STALE_TEST_ID, "Stale Safety Test", "Stale Safety Test"),
+    )
+    result = bridge.execute(reset)
+    if not result.accepted:
+        raise RuntimeError(f"failed to reset stale fixture: {result}")
+    bridge.physical_actions.clear()
+    bridge.invalidated = False
+    bridge.attempted_stale_click = False
+    bridge.wait_for_fresh_observation(state, timeout=2.0)
+
+
 class StaleSafetyPlanner:
     """Choose the old target once, then require the fresh target after invalidation."""
 
@@ -115,6 +132,7 @@ def main() -> int:
             print(f"LAUNCH {launch}")
             time.sleep(0.5)
 
+        _reset_stale_fixture(bridge)
         ready = _wait_for_target(bridge, "Stale Target")
         print(f"READY observation={ready.observation_id} target=Stale Target")
 
