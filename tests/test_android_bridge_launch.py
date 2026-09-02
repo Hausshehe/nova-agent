@@ -56,7 +56,7 @@ def test_launch_does_not_report_success_when_wrong_activity_remains_foreground(m
         bridge.launch(root=False)
 
 
-def test_launch_falls_back_to_am_when_bridge_launch_cannot_be_verified(monkeypatch):
+def test_launch_falls_back_to_am_when_bridge_launch_is_unavailable(monkeypatch):
     bridge = AndroidBridge(timeout=0.1)
     calls = []
     bridge._request = lambda payload: (_ for _ in ()).throw(
@@ -77,7 +77,6 @@ def test_launch_falls_back_to_am_when_bridge_launch_cannot_be_verified(monkeypat
 
     assert result == {"ok": True, "root": True}
     assert calls == [
-        ["su", "-c", "dumpsys activity activities"],
         ["su", "-c", "am start -n com.hausshehe.nova/.MainActivity"],
         ["su", "-c", "dumpsys activity activities"],
     ]
