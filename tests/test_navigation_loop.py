@@ -124,9 +124,9 @@ def test_navigation_loop_accepts_decide_only_reasoning_provider():
     bridge = FakeBridge([before, after])
     provider = DecideOnlyProvider()
 
-    assert NavigationLoop(bridge, provider, max_steps=1).run("Finish") is True
+    assert NavigationLoop(bridge, provider, max_steps=1).run("Tap Finish") is True
     assert provider.calls == 1
-    assert provider.contexts[0].goal == "Finish"
+    assert provider.contexts[0].goal == "Tap Finish"
     assert bridge.actions == [Action(ActionType.CLICK, Target("n1", "Finish", ""))]
 
 
