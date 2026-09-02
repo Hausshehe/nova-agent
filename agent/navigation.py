@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
 from .core import Action, ActionType, Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
@@ -56,9 +56,26 @@ class NavigationLoop:
     max_steps: int = 5
     settle_timeout: float = 2.0
 
-    def run(self, goal: str, *, initial_state: WorldState | None = None) -> bool:
+    def run(
+        self,
+        goal: str,
+        *,
+        initial_state: WorldState | None = None,
+        observe: Callable[[], WorldState] | None = None,
+        refresh: Callable[[WorldState], WorldState] | None = None,
+    ) -> bool:
+        """Run navigation using observation callbacks supplied by the task boundary.
+
+        The callbacks let TaskExecutor own observation acquisition/refresh while
+        preserving this loop as a compatibility planner/execution engine.
+        Direct callers still use the bridge when callbacks are omitted.
+        """
         history: list[Mapping[str, Any]] = []
-        state = initial_state if initial_state is not None else self.bridge.observe()
+        observe_fn = observe or self.bridge.observe
+        refresh_fn = refresh or (
+            lambda previous: self.bridge.wait_for_fresh_observation(previous, self.settle_timeout)
+        )
+        state = initial_state if initial_state is not None else observe_fn()
         action_goal = self.evaluator.is_action_goal(goal)
 
         if not action_goal and self.evaluator.evaluate(goal, state):
@@ -91,18 +108,14 @@ class NavigationLoop:
                 # but the live UI may have changed independently. Re-observe so
                 # the next reasoning pass is based on current state, while the
                 # failure remains available in history.
-                state = self.bridge.observe()
+                state = observe_fn()
                 continue
 
             try:
                 # Real state-changing actions require a fresh observation whose
                 # identity differs from the previous state. WAIT only requires
                 # a successful observation; an unchanged UI is valid.
-                after = (
-                    self.bridge.observe()
-                    if is_wait
-                    else self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
-                )
+                after = observe_fn() if is_wait else refresh_fn(state)
             except TimeoutError:
                 history.append(
                     _action_history(
