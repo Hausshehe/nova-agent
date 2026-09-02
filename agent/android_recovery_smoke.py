@@ -16,7 +16,7 @@ def _matches_element_id(actual: str, expected: str) -> bool:
 
 
 class InjectedFailureBridge:
-    """Execute the recovery flow and inject failure only after the primary transition is observed."""
+    """Execute recovery and inject failure only after the primary UI transition is observed."""
 
     def __init__(self, bridge: AndroidBridge):
         self.bridge = bridge
@@ -48,7 +48,14 @@ class InjectedFailureBridge:
         action_number = len(self.executed_actions) + 1
 
         if action.type is ActionType.CLICK and target_id is not None:
-            print(f"ACTION {action_number}: CLICK {target_name}")
+            # Capture the state immediately before the physical click. The
+            # primary transition is then required to produce a fresh state
+            # before this harness reports the injected failure to TaskExecutor.
+            before_click = self.bridge.observe()
+            print(
+                f"ACTION {action_number}: CLICK {target_name} "
+                f"after_observation={before_click.observation_id}"
+            )
             result = self.bridge.execute(action)
 
             if not result.accepted:
@@ -59,11 +66,7 @@ class InjectedFailureBridge:
             print(f"PHYSICAL ACTION EXECUTED: {target_name}")
 
             if _matches_element_id(target_id, "recovery_primary") and not self.failed_once:
-                # Do not report the injected failure until Android has produced
-                # a fresh observation containing the primary button's result.
-                # This deliberately proves the next recovery action cannot race
-                # ahead of the physical UI transition.
-                settled = self.bridge.wait_for_fresh_observation(result_state := self.bridge.observe(), 2.0)
+                settled = self.bridge.wait_for_fresh_observation(before_click, 2.0)
                 self._record_observation(settled)
                 if not any(
                     element.text == "Primary action failed. Recovery required."
@@ -77,7 +80,7 @@ class InjectedFailureBridge:
                 print(
                     f"PRIMARY TRANSITION VERIFIED observation={settled.observation_id}"
                 )
-                print("INJECTED FAILURE: primary action reported as failed after physical transition")
+                print("INJECTED FAILURE: primary action reported as failed after verified physical transition")
                 return ExecutionResult(
                     accepted=False,
                     changed=True,
@@ -235,7 +238,7 @@ def main() -> int:
             return 1
 
         print("PHYSICAL SEQUENCE VERIFIED: recovery_test -> recovery_primary -> recovery_fallback")
-        print("TRANSITION SAFETY VERIFIED: each recovery action followed a fresh Android observation")
+        print("TRANSITION SAFETY VERIFIED: primary failure was reported only after a fresh Android transition")
         print("RECOVERY BOUNDARY: physical failure routed through recovery path")
         print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
         return 0 if achieved else 1
