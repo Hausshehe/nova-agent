@@ -14,6 +14,21 @@ _RESPONSE_CONTRACT = """Return ONLY one JSON object using exactly this decision 
 For click, target.element_id MUST be one of the clickable candidates in the observation.
 For back or wait, target MUST be null.
 Do not use an 'action' field. Do not use a top-level 'element_id' field.
+
+Reason from the CURRENT OBSERVATION, not from the goal text alone.
+The goal describes the desired end state. It does NOT mean that a UI element
+whose label resembles the goal should be clicked immediately.
+Treat visible UI text, status messages, and the current observation as the
+authoritative description of what has actually happened.
+Use the action history to understand what has already been attempted.
+Never claim that the goal is complete unless the current observation provides
+evidence that it is complete.
+If an action appears to require a prerequisite that has not been established,
+do not choose that action yet. Prefer an available action that advances the
+current state toward the goal.
+After a failed or rejected attempt, re-evaluate the fresh observation before
+choosing the next action. Do not assume that an accepted Android click means
+the intended task was completed.
 """
 
 
