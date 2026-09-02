@@ -8,7 +8,7 @@ from .reasoning_context import ActionCandidate, ReasoningContext
 
 
 class DeterministicReasoner:
-    """Small, explainable planner used as the stable baseline before any LLM."""
+    """Small, explainable reasoning provider used as Nova's stable baseline."""
 
     @staticmethod
     def _meaningful_terms(goal: str) -> tuple[str, ...]:
@@ -57,7 +57,7 @@ class DeterministicReasoner:
                     return Decision(Action(ActionType.WAIT), "goal explicitly requests wait")
         return None
 
-    def plan(self, context: ReasoningContext) -> Decision:
+    def decide(self, context: ReasoningContext) -> Decision:
         global_action = self._global_action(context)
         if global_action is not None:
             return global_action
@@ -76,8 +76,6 @@ class DeterministicReasoner:
         used = self._used_ids(context)
         ranked = sorted(candidates, key=lambda c: self._score(context.goal, c), reverse=True)
 
-        # Recovery: after an accepted-but-unverified action, prefer another
-        # matching target rather than blindly repeating the same node.
         for candidate in ranked:
             if candidate.target.element_id not in used and self._score(context.goal, candidate) > 0:
                 target = candidate.target
@@ -86,3 +84,7 @@ class DeterministicReasoner:
         best = ranked[0]
         target = best.target
         return Decision(Action(ActionType.CLICK, target), f"reusing best matching target {target.element_id}")
+
+    def plan(self, context: ReasoningContext) -> Decision:
+        """Backward-compatible planner entry point for the existing kernel."""
+        return self.decide(context)
