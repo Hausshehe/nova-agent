@@ -93,6 +93,10 @@ def test_launch_raises_when_am_start_succeeds_but_foreground_verification_fails(
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         if command[0] == "su" and command[2].startswith("dumpsys"):
             return subprocess.CompletedProcess(command, 0, stdout=FOREGROUND_TERMUX, stderr="")
+        if command == ["am", "start", "-n", "com.hausshehe.nova/.MainActivity"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if command == ["dumpsys", "activity", "activities"]:
+            return subprocess.CompletedProcess(command, 0, stdout=FOREGROUND_TERMUX, stderr="")
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(subprocess, "run", run)
