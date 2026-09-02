@@ -16,7 +16,7 @@ def _matches_element_id(actual: str, expected: str) -> bool:
 
 
 class InjectedFailureBridge:
-    """Execute the recovery flow on Android and inject failure after the primary click."""
+    """Execute the recovery flow and inject failure only after the primary transition is observed."""
 
     def __init__(self, bridge: AndroidBridge):
         self.bridge = bridge
@@ -59,12 +59,29 @@ class InjectedFailureBridge:
             print(f"PHYSICAL ACTION EXECUTED: {target_name}")
 
             if _matches_element_id(target_id, "recovery_primary") and not self.failed_once:
+                # Do not report the injected failure until Android has produced
+                # a fresh observation containing the primary button's result.
+                # This deliberately proves the next recovery action cannot race
+                # ahead of the physical UI transition.
+                settled = self.bridge.wait_for_fresh_observation(result_state := self.bridge.observe(), 2.0)
+                self._record_observation(settled)
+                if not any(
+                    element.text == "Primary action failed. Recovery required."
+                    for element in settled.elements
+                ):
+                    raise RuntimeError(
+                        "primary click was accepted, but its UI transition was not observed"
+                    )
+
                 self.failed_once = True
-                print("INJECTED FAILURE: primary action reported as failed after physical click")
+                print(
+                    f"PRIMARY TRANSITION VERIFIED observation={settled.observation_id}"
+                )
+                print("INJECTED FAILURE: primary action reported as failed after physical transition")
                 return ExecutionResult(
                     accepted=False,
-                    changed=False,
-                    error="injected recovery failure after physical primary click",
+                    changed=True,
+                    error="injected recovery failure after verified physical primary transition",
                 )
 
             return result
@@ -218,6 +235,7 @@ def main() -> int:
             return 1
 
         print("PHYSICAL SEQUENCE VERIFIED: recovery_test -> recovery_primary -> recovery_fallback")
+        print("TRANSITION SAFETY VERIFIED: each recovery action followed a fresh Android observation")
         print("RECOVERY BOUNDARY: physical failure routed through recovery path")
         print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
         return 0 if achieved else 1
