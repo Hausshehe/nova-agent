@@ -4,8 +4,7 @@ import argparse
 import sys
 
 from .android_bridge import AndroidBridge, AndroidBridgeError
-from .core import Action, Decision, ExecutionResult, WorldState
-from .deterministic_reasoner import DeterministicReasoner
+from .core import Action, ActionType, Decision, ExecutionResult, WorldState
 from .goal_evaluator import GoalEvaluator
 from .task_runtime import TaskExecutor
 
@@ -44,14 +43,20 @@ class RecoverySmokePlanner:
                 for candidate in context.candidates
                 if candidate.target and candidate.target.element_id == "recovery_primary"
             )
-            return Decision(Action.click(target), "smoke: choose primary before injected failure")
+            return Decision(
+                Action(ActionType.CLICK, target),
+                "smoke: choose primary before injected failure",
+            )
 
         target = next(
             candidate.target
             for candidate in context.candidates
             if candidate.target and candidate.target.element_id == "recovery_fallback"
         )
-        return Decision(Action.click(target), "smoke: choose fallback during recovery")
+        return Decision(
+            Action(ActionType.CLICK, target),
+            "smoke: choose fallback during recovery",
+        )
 
 
 def main() -> int:
