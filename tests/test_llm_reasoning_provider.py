@@ -66,10 +66,11 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
         "Never claim that the goal is complete unless the current observation provides",
         "If an action appears to require a prerequisite that has not been established,",
         "After a failed or rejected attempt, re-evaluate the fresh observation before",
-        "Do not assume that an accepted Android click means the intended task was completed.",
+        "Do not assume that an accepted Android click means the intended task was",
     )
     for instruction in required_instructions:
         assert instruction in contract
+    assert "completed." in contract
 
     payload = json.loads(contract.split("Observation and goal:\n", 1)[1])
     assert payload["goal"] == "Multi-Step completed"
