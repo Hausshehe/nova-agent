@@ -10,6 +10,11 @@ from .goal_evaluator import GoalEvaluator
 from .task_runtime import TaskExecutor
 
 
+def _matches_element_id(actual: str, expected: str) -> bool:
+    """Match Android resource IDs whether namespaced or shorthand."""
+    return actual == expected or actual.endswith(f":id/{expected}")
+
+
 class InjectedFailureBridge:
     """Reject exactly the primary recovery action, then delegate to Android."""
 
@@ -28,7 +33,7 @@ class InjectedFailureBridge:
 
     def execute(self, action: Action) -> ExecutionResult:
         if action.type is ActionType.CLICK and action.target is not None:
-            if action.target.element_id == "recovery_primary" and not self.failed_once:
+            if _matches_element_id(action.target.element_id, "recovery_primary") and not self.failed_once:
                 self.failed_once = True
                 print("INJECTED FAILURE: primary action rejected")
                 return ExecutionResult(
@@ -43,11 +48,15 @@ class RecoverySmokePlanner:
     """Choose the primary action first and the fallback after recovery."""
 
     def decide(self, context):
-        if not any(item.get("target_id") == "recovery_primary" for item in context.history):
+        if not any(
+            _matches_element_id(item.get("target_id", ""), "recovery_primary")
+            for item in context.history
+        ):
             target = next(
                 candidate.target
                 for candidate in context.candidates
-                if candidate.target and candidate.target.element_id == "recovery_primary"
+                if candidate.target
+                and _matches_element_id(candidate.target.element_id, "recovery_primary")
             )
             return Decision(
                 Action(ActionType.CLICK, target),
@@ -57,7 +66,8 @@ class RecoverySmokePlanner:
         target = next(
             candidate.target
             for candidate in context.candidates
-            if candidate.target and candidate.target.element_id == "recovery_fallback"
+            if candidate.target
+            and _matches_element_id(candidate.target.element_id, "recovery_fallback")
         )
         return Decision(
             Action(ActionType.CLICK, target),
@@ -70,7 +80,7 @@ def _wait_for_target(bridge: AndroidBridge, element_id: str, timeout: float = 2.
     deadline = time.monotonic() + timeout
     while True:
         state = bridge.observe()
-        if any(element.id == element_id for element in state.elements):
+        if any(_matches_element_id(element.id, element_id) for element in state.elements):
             return state
         if time.monotonic() >= deadline:
             ids = ", ".join(element.id for element in state.elements)
@@ -110,7 +120,8 @@ def main() -> int:
             return 1
 
         fallback_used = any(
-            item.get("target_id") == "recovery_fallback" and item.get("accepted")
+            _matches_element_id(item.get("target_id", ""), "recovery_fallback")
+            and item.get("accepted")
             for item in executor.history
         )
         if not fallback_used:
