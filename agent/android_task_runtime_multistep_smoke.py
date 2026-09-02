@@ -13,8 +13,9 @@ STARTUP_TIMEOUT_SECONDS = 5.0
 
 
 def _find_target(context, text: str) -> Target | None:
+    expected = text.strip().casefold()
     for candidate in context.candidates:
-        if candidate.element.text == text:
+        if candidate.element.text and candidate.element.text.strip().casefold() == expected:
             return candidate.target
     return None
 
@@ -24,17 +25,21 @@ class MultiStepRuntimePlanner:
 
     def decide(self, context):
         labels = {element.text for element in context.state.elements if element.text}
+        normalized_labels = {label.strip().casefold() for label in labels}
 
         # The fixture keeps all three buttons visible at every step. The status
         # text is therefore the authoritative representation of the fixture's
         # current state, rather than button visibility.
-        if "Multi-Step ready" in labels:
+        if "multi-step ready" in normalized_labels:
             target_text = "Multi-Step Test"
             rationale = "r7: enter multi-step test"
-        elif any(label.startswith("Run ") and label.endswith(": Step 1 started") for label in labels):
+        elif any(
+            label.startswith("run ") and label.endswith(": step 1 started")
+            for label in normalized_labels
+        ):
             target_text = "Continue Multi-Step"
             rationale = "r7: continue multi-step test"
-        elif "Step 2 started" in labels:
+        elif "step 2 started" in normalized_labels:
             target_text = "Finish Multi-Step"
             rationale = "r7: finish multi-step test"
         else:
@@ -55,10 +60,16 @@ def _wait_for_target(
     timeout: float = STARTUP_TIMEOUT_SECONDS,
 ):
     """Wait for the launched fixture to become observable, without a blind sleep."""
+    expected = target_text.strip().casefold()
     deadline = time.monotonic() + timeout
     while True:
         state = bridge.observe()
-        if any(element.text == target_text and element.clickable for element in state.elements):
+        if any(
+            element.text
+            and element.text.strip().casefold() == expected
+            and element.clickable
+            for element in state.elements
+        ):
             return state
         if time.monotonic() >= deadline:
             raise RuntimeError(f"timed out waiting for target {target_text!r} after {timeout:.1f}s")
