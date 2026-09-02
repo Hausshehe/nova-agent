@@ -8,6 +8,10 @@ from agent.core import Action, ActionType, Decision, Target
 from agent.task_runtime import TaskExecutor
 
 
+STARTUP_POLL_SECONDS = 0.2
+STARTUP_TIMEOUT_SECONDS = 5.0
+
+
 def _find_target(context, text: str) -> Target | None:
     for candidate in context.candidates:
         if candidate.element.text == text:
@@ -45,15 +49,20 @@ class MultiStepRuntimePlanner:
         return Decision(Action(ActionType.CLICK, target), rationale)
 
 
-def _wait_for_target(bridge: AndroidBridge, target_text: str, timeout: float = 2.0):
+def _wait_for_target(
+    bridge: AndroidBridge,
+    target_text: str,
+    timeout: float = STARTUP_TIMEOUT_SECONDS,
+):
+    """Wait for the launched fixture to become observable, without a blind sleep."""
     deadline = time.monotonic() + timeout
     while True:
         state = bridge.observe()
         if any(element.text == target_text and element.clickable for element in state.elements):
             return state
         if time.monotonic() >= deadline:
-            raise RuntimeError(f"timed out waiting for target {target_text!r}")
-        time.sleep(0.2)
+            raise RuntimeError(f"timed out waiting for target {target_text!r} after {timeout:.1f}s")
+        time.sleep(STARTUP_POLL_SECONDS)
 
 
 def main() -> int:
@@ -87,9 +96,7 @@ def main() -> int:
         normalized_expected = [value.casefold() for value in expected]
 
         if normalized_actual != normalized_expected:
-            raise RuntimeError(
-                f"expected {expected!r}, got {actual!r}"
-            )
+            raise RuntimeError(f"expected {expected!r}, got {actual!r}")
 
         if not completed:
             raise RuntimeError("TaskExecutor did not report task completion")
