@@ -29,7 +29,7 @@ def test_launch_verifies_requested_activity_is_foreground(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", run)
 
-    result = bridge.launch()
+    result = bridge.launch(root=False)
 
     assert result["ok"] is True
     assert calls == [["dumpsys", "activity", "activities"]]
@@ -77,6 +77,7 @@ def test_launch_falls_back_to_am_when_bridge_launch_cannot_be_verified(monkeypat
 
     assert result == {"ok": True, "root": True}
     assert calls == [
+        ["su", "-c", "dumpsys activity activities"],
         ["su", "-c", "am start -n com.hausshehe.nova/.MainActivity"],
         ["su", "-c", "dumpsys activity activities"],
     ]
