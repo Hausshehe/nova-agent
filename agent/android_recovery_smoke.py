@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from .android_bridge import AndroidBridge, AndroidBridgeError
 from .core import Action, ActionType, Decision, ExecutionResult, WorldState
@@ -10,7 +11,7 @@ from .task_runtime import TaskExecutor
 
 
 class InjectedFailureBridge:
-    """Inject one rejected action, then delegate all later actions to Android."""
+    """Reject exactly the primary recovery action, then delegate to Android."""
 
     def __init__(self, bridge: AndroidBridge):
         self.bridge = bridge
@@ -26,15 +27,20 @@ class InjectedFailureBridge:
         return self.bridge.launch(**kwargs)
 
     def execute(self, action: Action) -> ExecutionResult:
-        if not self.failed_once:
-            self.failed_once = True
-            print("INJECTED FAILURE: primary action rejected")
-            return ExecutionResult(accepted=False, changed=False, error="injected recovery failure")
+        if action.type is ActionType.CLICK and action.target is not None:
+            if action.target.element_id == "recovery_primary" and not self.failed_once:
+                self.failed_once = True
+                print("INJECTED FAILURE: primary action rejected")
+                return ExecutionResult(
+                    accepted=False,
+                    changed=False,
+                    error="injected recovery failure",
+                )
         return self.bridge.execute(action)
 
 
 class RecoverySmokePlanner:
-    """Choose the primary action first and the fallback during recovery."""
+    """Choose the primary action first and the fallback after recovery."""
 
     def decide(self, context):
         if not any(item.get("target_id") == "recovery_primary" for item in context.history):
@@ -59,6 +65,19 @@ class RecoverySmokePlanner:
         )
 
 
+def _wait_for_target(bridge: AndroidBridge, element_id: str, timeout: float = 2.0) -> WorldState:
+    """Wait for the launched activity's target to become observable."""
+    deadline = time.monotonic() + timeout
+    while True:
+        state = bridge.observe()
+        if any(element.id == element_id for element in state.elements):
+            return state
+        if time.monotonic() >= deadline:
+            ids = ", ".join(element.id for element in state.elements)
+            raise RuntimeError(f"target {element_id!r} not observable; current ids: {ids}")
+        time.sleep(0.2)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Real-device Nova RecoveryEngine boundary smoke test"
@@ -75,6 +94,9 @@ def main() -> int:
             launch = bridge.launch(root=True)
             print(f"LAUNCH {launch}")
 
+        ready = _wait_for_target(android, "recovery_primary")
+        print(f"READY observation={ready.observation_id} target=recovery_primary")
+
         executor = TaskExecutor(
             bridge=bridge,
             planner=RecoverySmokePlanner(),
@@ -83,12 +105,19 @@ def main() -> int:
         )
         achieved = executor.run("Recovery completed")
 
-        if bridge.failed_once:
-            print("RECOVERY BOUNDARY: failure routed through recovery path")
-        else:
-            print("RECOVERY BOUNDARY FAILED: failure injection did not run", file=sys.stderr)
+        if not bridge.failed_once:
+            print("RECOVERY BOUNDARY FAILED: primary failure was not injected", file=sys.stderr)
             return 1
 
+        fallback_used = any(
+            item.get("target_id") == "recovery_fallback" and item.get("accepted")
+            for item in executor.history
+        )
+        if not fallback_used:
+            print("RECOVERY BOUNDARY FAILED: fallback was not executed", file=sys.stderr)
+            return 1
+
+        print("RECOVERY BOUNDARY: failure routed through recovery path")
         print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
         return 0 if achieved else 1
     except (AndroidBridgeError, TimeoutError, RuntimeError, StopIteration) as exc:
