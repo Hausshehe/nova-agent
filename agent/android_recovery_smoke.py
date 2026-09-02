@@ -23,41 +23,43 @@ class InjectedFailureBridge:
         self.failed_once = False
         self.executed_actions: list[str] = []
         self.observed_statuses: list[str] = []
+        self.observations: list[tuple[int, list[str]]] = []
+
+    def _record_observation(self, state: WorldState) -> WorldState:
+        statuses = [element.text for element in state.elements if element.text]
+        self.observed_statuses.extend(statuses)
+        self.observations.append((state.observation_id, statuses))
+        return state
 
     def observe(self) -> WorldState:
-        state = self.bridge.observe()
-        self.observed_statuses.extend(
-            element.text
-            for element in state.elements
-            if element.text
-        )
-        return state
+        return self._record_observation(self.bridge.observe())
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState:
-        state = self.bridge.wait_for_fresh_observation(previous, timeout)
-        self.observed_statuses.extend(
-            element.text
-            for element in state.elements
-            if element.text
+        return self._record_observation(
+            self.bridge.wait_for_fresh_observation(previous, timeout)
         )
-        return state
 
     def launch(self, **kwargs):
         return self.bridge.launch(**kwargs)
 
     def execute(self, action: Action) -> ExecutionResult:
         target_id = action.target.element_id if action.target is not None else None
+        target_name = target_id or action.type.value
+        action_number = len(self.executed_actions) + 1
 
         if action.type is ActionType.CLICK and target_id is not None:
+            print(f"ACTION {action_number}: CLICK {target_name}")
+            result = self.bridge.execute(action)
+
+            if not result.accepted:
+                print(f"PHYSICAL ACTION FAILED: {target_name} was rejected by Android")
+                return result
+
+            self.executed_actions.append(target_id)
+            print(f"PHYSICAL ACTION EXECUTED: {target_name}")
+
             if _matches_element_id(target_id, "recovery_primary") and not self.failed_once:
                 self.failed_once = True
-                print("ACTION 2: CLICK recovery_primary")
-                result = self.bridge.execute(action)
-                if not result.accepted:
-                    print("PHYSICAL ACTION FAILED: recovery_primary was rejected by Android")
-                    return result
-                self.executed_actions.append("recovery_primary")
-                print("PHYSICAL ACTION EXECUTED: recovery_primary")
                 print("INJECTED FAILURE: primary action reported as failed after physical click")
                 return ExecutionResult(
                     accepted=False,
@@ -65,13 +67,7 @@ class InjectedFailureBridge:
                     error="injected recovery failure after physical primary click",
                 )
 
-            if _matches_element_id(target_id, "recovery_fallback"):
-                print("ACTION 3: CLICK recovery_fallback")
-                result = self.bridge.execute(action)
-                if result.accepted:
-                    self.executed_actions.append("recovery_fallback")
-                    print("PHYSICAL ACTION EXECUTED: recovery_fallback")
-                return result
+            return result
 
         return self.bridge.execute(action)
 
@@ -135,6 +131,19 @@ def _wait_for_target(bridge: AndroidBridge, element_id: str, timeout: float = 2.
         time.sleep(0.2)
 
 
+def _assert_status_order(observations: list[tuple[int, list[str]]], required: list[str]) -> None:
+    """Require each expected status to appear in a later/equal observation in order."""
+    index = 0
+    for observation_id, statuses in observations:
+        while index < len(required) and required[index] in statuses:
+            print(f"OBSERVED observation={observation_id}: {required[index]}")
+            index += 1
+        if index == len(required):
+            return
+    missing = required[index:]
+    raise RuntimeError(f"expected status transition order was not observed: {missing!r}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Real-device Nova RecoveryEngine physical recovery smoke test"
@@ -167,10 +176,18 @@ def main() -> int:
             "recovery_primary",
             "recovery_fallback",
         ]
-        if bridge.executed_actions != expected_actions:
+        recorded_actions = [
+            next(
+                name
+                for name in expected_actions
+                if _matches_element_id(action_id, name)
+            )
+            for action_id in bridge.executed_actions
+        ]
+        if recorded_actions != expected_actions:
             print(
                 "RECOVERY BOUNDARY FAILED: expected physical action sequence "
-                f"{expected_actions!r}, got {bridge.executed_actions!r}",
+                f"{expected_actions!r}, got {recorded_actions!r}",
                 file=sys.stderr,
             )
             return 1
@@ -180,17 +197,7 @@ def main() -> int:
             "Primary action failed. Recovery required.",
             "Recovery completed",
         ]
-        missing_statuses = [
-            status for status in required_statuses
-            if status not in bridge.observed_statuses
-        ]
-        if missing_statuses:
-            print(
-                "RECOVERY BOUNDARY FAILED: expected status transitions were not observed: "
-                f"{missing_statuses!r}",
-                file=sys.stderr,
-            )
-            return 1
+        _assert_status_order(bridge.observations, required_statuses)
 
         if not bridge.failed_once:
             print("RECOVERY BOUNDARY FAILED: primary failure was not injected", file=sys.stderr)
@@ -210,9 +217,6 @@ def main() -> int:
             print("RECOVERY BOUNDARY FAILED: final observation lacks 'Recovery completed'", file=sys.stderr)
             return 1
 
-        print("OBSERVED: Recovery run 1: choose a recovery action")
-        print("OBSERVED: Primary action failed. Recovery required.")
-        print("OBSERVED: Recovery completed")
         print("PHYSICAL SEQUENCE VERIFIED: recovery_test -> recovery_primary -> recovery_fallback")
         print("RECOVERY BOUNDARY: physical failure routed through recovery path")
         print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
