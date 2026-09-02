@@ -19,6 +19,15 @@ FRESH_TARGET_ID = "stale_fresh_target"
 GOAL = "Stale transition safety completed"
 
 
+def _matches_text(element, target_text: str) -> bool:
+    """Match the requested label against either visible text or content description."""
+    target = target_text.casefold()
+    return target in {
+        (element.text or "").casefold(),
+        (element.content_description or "").casefold(),
+    }
+
+
 class StaleTransitionBridge(AndroidBridge):
     """Inject a real Android transition immediately before a stale action."""
 
@@ -50,7 +59,7 @@ def _wait_for_target(bridge: AndroidBridge, target_text: str) -> WorldState:
     while True:
         state = bridge.observe()
         if any(
-            element.text == target_text and element.clickable and element.visible
+            _matches_text(element, target_text) and element.clickable and element.visible
             for element in state.elements
         ):
             return state
