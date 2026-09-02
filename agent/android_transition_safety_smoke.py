@@ -14,7 +14,7 @@ from .task_runtime import TaskExecutor
 STARTUP_POLL_SECONDS = 0.2
 STARTUP_TIMEOUT_SECONDS = 5.0
 STALE_TARGET_ID = "stale_target"
-INVALIDATE_TARGET_ID = "stale_invalidate"
+INVALIDATE_TARGET_ID = "com.hausshehe.nova:id/stale_invalidate"
 FRESH_TARGET_ID = "stale_fresh_target"
 GOAL = "Stale transition safety completed"
 
