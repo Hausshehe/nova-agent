@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
-from .core import ActionType, ExecutionResult, TransitionVerifier, WorldState
+from .action_executor import ActionExecutor
+from .core import TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
 from .reasoning_context import build_reasoning_context
@@ -18,13 +19,7 @@ class TaskRunner(Protocol):
 
 @dataclass
 class TaskExecutor:
-    """Own the complete lifecycle of one high-level task.
-
-    The runtime owns task state, history, step progression, observation
-    acquisition, action execution, transition verification, and termination.
-    NavigationLoop remains available as a compatibility component for legacy
-    callers, but new task execution no longer delegates its lifecycle to it.
-    """
+    """Own the complete lifecycle of one high-level task."""
 
     bridge: NavigationBridge
     planner: ReasoningProvider | LegacyPlanner
@@ -35,16 +30,17 @@ class TaskExecutor:
     current_state: WorldState | None = field(default=None, init=False)
     history: list[Mapping[str, Any]] = field(default_factory=list, init=False)
     current_step: int = field(default=0, init=False)
+    action_executor: ActionExecutor = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.action_executor = ActionExecutor(
+            bridge=self.bridge,
+            verifier=self.verifier,
+            settle_timeout=self.settle_timeout,
+        )
 
     def _observe(self) -> WorldState:
         self.current_state = self.bridge.observe()
-        return self.current_state
-
-    def _refresh(self, previous: WorldState) -> WorldState:
-        self.current_state = self.bridge.wait_for_fresh_observation(
-            previous,
-            self.settle_timeout,
-        )
         return self.current_state
 
     def run(self, goal: str) -> bool:
@@ -52,6 +48,7 @@ class TaskExecutor:
         self.history.clear()
         self.current_step = 0
         state = self._observe()
+        self.current_state = state
         action_goal = self.evaluator.is_action_goal(goal)
 
         if not action_goal and self.evaluator.evaluate(goal, state):
@@ -61,12 +58,7 @@ class TaskExecutor:
             self.current_step = step
             context = build_reasoning_context(goal, state, self.history)
             decision = _decide(self.planner, context)
-
-            is_wait = decision.action.type is ActionType.WAIT
-            if is_wait:
-                result = ExecutionResult(True, False)
-            else:
-                result = self.bridge.execute(decision.action)
+            result, after, verified = self.action_executor.execute(decision.action, state)
 
             if not result.accepted:
                 self.history.append(
@@ -79,12 +71,11 @@ class TaskExecutor:
                         error=result.error,
                     )
                 )
-                state = self._observe()
+                state = after if after is not None else self._observe()
+                self.current_state = state
                 continue
 
-            try:
-                after = self._observe() if is_wait else self._refresh(state)
-            except TimeoutError:
+            if after is None:
                 self.history.append(
                     _action_history(
                         decision,
@@ -92,15 +83,12 @@ class TaskExecutor:
                         accepted=True,
                         changed=False,
                         verified=False,
-                        error="fresh observation timeout",
+                        error=result.error or "fresh observation timeout",
                     )
                 )
                 continue
 
-            changed = after != state
-            verified = True if is_wait else self.verifier.verify(
-                state, after, ExecutionResult(True, changed, False)
-            )
+            changed = result.changed
             self.history.append(
                 _action_history(
                     decision,
@@ -108,10 +96,12 @@ class TaskExecutor:
                     accepted=True,
                     changed=changed,
                     verified=verified,
+                    error=result.error,
                 )
             )
 
             state = after
+            self.current_state = state
             if action_goal and verified:
                 return True
             if self.evaluator.evaluate(goal, state):
