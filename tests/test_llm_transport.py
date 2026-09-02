@@ -28,7 +28,7 @@ def test_transport_posts_prompt_and_returns_structured_json(monkeypatch):
         captured["timeout"] = timeout
         captured["body"] = json.loads(request.data.decode("utf-8"))
         captured["authorization"] = request.headers.get("Authorization")
-        captured["user_agent"] = request.headers.get("User-Agent")
+        captured["user_agent"] = request.get_header("User-agent")
         return FakeResponse(
             {
                 "choices": [
