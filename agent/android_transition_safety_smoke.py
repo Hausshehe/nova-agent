@@ -29,6 +29,21 @@ def _matches_text(element, target_text: str) -> bool:
     }
 
 
+def _describe_state(state: WorldState | None) -> list[dict[str, object]]:
+    if state is None:
+        return []
+    return [
+        {
+            "id": element.id,
+            "text": element.text,
+            "content_description": element.content_description,
+            "clickable": element.clickable,
+            "visible": element.visible,
+        }
+        for element in state.elements
+    ]
+
+
 class StaleTransitionBridge(AndroidBridge):
     """Inject a real Android transition immediately before a stale action."""
 
@@ -155,7 +170,14 @@ def main() -> int:
             element.id.endswith(FRESH_TARGET_ID) and element.visible
             for element in executor.current_state.elements
         ):
-            raise AssertionError("final observation did not contain fresh target")
+            raise AssertionError(
+                "final observation did not contain fresh target; "
+                f"physical_actions={bridge.physical_actions}; "
+                f"planner_calls={planner.calls}; "
+                f"planner_observations={[state.observation_id for state in planner.observations]}; "
+                f"executor_history={executor.history}; "
+                f"current_state={_describe_state(executor.current_state)}"
+            )
         if any(
             element.id.endswith(STALE_TARGET_ID) and element.visible
             for element in planner.observations[-1].elements
