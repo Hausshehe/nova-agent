@@ -13,9 +13,14 @@ STARTUP_TIMEOUT_SECONDS = 5.0
 
 
 def _find_target(context, text: str) -> Target | None:
-    expected = text.strip().casefold()
+    wanted = text.strip().casefold()
     for candidate in context.candidates:
-        if candidate.element.text and candidate.element.text.strip().casefold() == expected:
+        if (
+            candidate.action_type == ActionType.CLICK
+            and candidate.target is not None
+            and candidate.target.text
+            and candidate.target.text.strip().casefold() == wanted
+        ):
             return candidate.target
     return None
 
@@ -60,13 +65,13 @@ def _wait_for_target(
     timeout: float = STARTUP_TIMEOUT_SECONDS,
 ):
     """Wait for the launched fixture to become observable, without a blind sleep."""
-    expected = target_text.strip().casefold()
+    wanted = target_text.strip().casefold()
     deadline = time.monotonic() + timeout
     while True:
         state = bridge.observe()
         if any(
             element.text
-            and element.text.strip().casefold() == expected
+            and element.text.strip().casefold() == wanted
             and element.clickable
             for element in state.elements
         ):
