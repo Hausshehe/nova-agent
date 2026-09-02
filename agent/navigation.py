@@ -87,6 +87,10 @@ class NavigationLoop:
                         error=result.error,
                     )
                 )
+                # A rejected action does not establish a state transition, but
+                # the UI may have changed independently. Refresh the observation
+                # before asking the reasoning provider to choose again.
+                state = self.bridge.observe()
                 continue
 
             try:
