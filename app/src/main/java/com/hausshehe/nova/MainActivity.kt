@@ -139,6 +139,9 @@ class MainActivity : Activity() {
         root.addView(multiStepStatus)
 
         root.addView(section("Stale Transition Safety"))
+        val staleStatus = status("Stale safety ready")
+        root.addView(staleStatus)
+
         val staleTarget = Button(this).apply {
             id = R.id.stale_target
             text = "Stale Target"
@@ -148,6 +151,17 @@ class MainActivity : Activity() {
             }
         }
         root.addView(staleTarget, buttonParams())
+
+        val staleFreshTarget = Button(this).apply {
+            id = R.id.stale_fresh_target
+            text = "Fresh Target"
+            contentDescription = "Fresh Target"
+            visibility = View.GONE
+            setOnClickListener {
+                staleStatus.text = "Stale transition safety completed"
+            }
+        }
+        root.addView(staleFreshTarget, buttonParams())
 
         val invalidateStale = Button(this).apply {
             id = R.id.stale_invalidate
@@ -161,17 +175,6 @@ class MainActivity : Activity() {
         }
         root.addView(invalidateStale, buttonParams())
 
-        val staleFreshTarget = Button(this).apply {
-            id = R.id.stale_fresh_target
-            text = "Fresh Target"
-            contentDescription = "Fresh Target"
-            visibility = View.GONE
-            setOnClickListener {
-                staleStatus.text = "Stale transition safety completed"
-            }
-        }
-        root.addView(staleFreshTarget, buttonParams())
-
         val staleTest = Button(this).apply {
             id = R.id.stale_test
             text = "Stale Safety Test"
@@ -183,9 +186,6 @@ class MainActivity : Activity() {
             }
         }
         root.addView(staleTest, buttonParams())
-
-        val staleStatus = status("Stale safety ready")
-        root.addView(staleStatus)
 
         setContentView(root)
     }
