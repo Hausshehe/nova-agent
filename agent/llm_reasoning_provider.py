@@ -9,6 +9,14 @@ from .reasoning_payload import reasoning_payload
 from .core import Decision
 
 
+_RESPONSE_CONTRACT = """Return ONLY one JSON object using exactly this decision shape:
+{"action_type":"click|back|wait","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
+For click, target.element_id MUST be one of the clickable candidates in the observation.
+For back or wait, target MUST be null.
+Do not use an 'action' field. Do not use a top-level 'element_id' field.
+"""
+
+
 class LLMReasoningProvider:
     """Connect an LLM-compatible callable to Nova's structured reasoning boundary.
 
@@ -21,7 +29,11 @@ class LLMReasoningProvider:
 
     def decide(self, context: ReasoningContext) -> Decision:
         payload = reasoning_payload(context)
-        prompt = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        prompt = _RESPONSE_CONTRACT + "\nObservation and goal:\n" + json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         try:
             response = self._responder(prompt)
         except Exception as exc:
