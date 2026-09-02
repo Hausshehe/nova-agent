@@ -29,7 +29,12 @@ class OpenAICompatibleTransport:
         url = self.base_url.rstrip("/") + "/v1/chat/completions"
         body = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Respond with a valid JSON object.\n\n" + prompt,
+                }
+            ],
             "response_format": {"type": "json_object"},
             "stream": False,
         }
