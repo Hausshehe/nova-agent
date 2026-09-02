@@ -34,14 +34,13 @@ class RecoveryBridge:
     def execute(self, action):
         self.executed.append(action)
         if action.target.element_id == "wrong":
+            self.index = 1
             return ExecutionResult(accepted=False, changed=False, error="rejected")
         self.index = 2
         return ExecutionResult(accepted=True, changed=True)
 
     def wait_for_fresh_observation(self, previous, timeout):
         assert timeout == 2.0
-        if previous.observation_id == "before":
-            self.index = 1
         return self.states[self.index]
 
 
