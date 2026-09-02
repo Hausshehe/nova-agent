@@ -19,7 +19,9 @@ def test_llm_provider_serializes_context_and_validates_response():
 
     def responder(prompt):
         received.append(prompt)
-        payload = json.loads(prompt)
+        assert '"action_type":"click|back|wait"' in prompt
+        assert 'Do not use an \'action\' field.' in prompt
+        payload = json.loads(prompt.split("Observation and goal:\n", 1)[1])
         assert payload["goal"] == "Tap Continue"
         assert payload["state"]["elements"][0]["id"] == "n1"
         return {
