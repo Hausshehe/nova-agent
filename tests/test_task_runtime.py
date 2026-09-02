@@ -56,6 +56,15 @@ def test_task_executor_owns_initial_observation():
     assert bridge.observed == 2
 
 
+def test_task_executor_owns_current_observation_after_action_refresh():
+    bridge = FakeBridge()
+    runtime = TaskExecutor(bridge=bridge, planner=FinishPlanner(), max_steps=1)
+
+    assert runtime.run("Tap Finish") is True
+    assert runtime.current_state is not None
+    assert runtime.current_state.observation_id == "2"
+
+
 def test_task_executor_preserves_navigation_configuration():
     bridge = FakeBridge()
     planner = FinishPlanner()
