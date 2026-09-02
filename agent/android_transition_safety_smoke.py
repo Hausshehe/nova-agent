@@ -36,6 +36,7 @@ class StaleTransitionBridge(AndroidBridge):
                     ActionType.CLICK,
                     Target(INVALIDATE_TARGET_ID, "Invalidate Stale Target", "Invalidate Stale Target"),
                 )
+                self.physical_actions.append(INVALIDATE_TARGET_ID)
                 invalidate_result = super().execute(invalidate)
                 if not invalidate_result.accepted:
                     raise RuntimeError(f"failed to invalidate stale target: {invalidate_result}")
@@ -119,11 +120,14 @@ def main() -> int:
 
         if not bridge.attempted_stale_click:
             raise AssertionError("stale-target transition was not injected")
-        if bridge.physical_actions[:2] != [INVALIDATE_TARGET_ID, STALE_TARGET_ID]:
+        if bridge.physical_actions[:2] != [STALE_TARGET_ID, INVALIDATE_TARGET_ID]:
             raise AssertionError(
                 f"unexpected physical sequence before recovery: {bridge.physical_actions}"
             )
-        if not any(element.id.endswith(FRESH_TARGET_ID) and element.visible for element in executor.current_state.elements):
+        if executor.current_state is None or not any(
+            element.id.endswith(FRESH_TARGET_ID) and element.visible
+            for element in executor.current_state.elements
+        ):
             raise AssertionError("final observation did not contain fresh target")
         if any(
             element.id.endswith(STALE_TARGET_ID) and element.visible
