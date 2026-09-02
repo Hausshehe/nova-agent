@@ -34,14 +34,17 @@ class MultiStepRuntimePlanner:
     def decide(self, context):
         labels = {element.text for element in context.state.elements if element.text}
 
-        if "Multi-Step Test" in labels:
-            target = _find_target(context, "Multi-Step Test")
+        # The fixture keeps all three buttons visible at every step. The status
+        # text is therefore the authoritative representation of the fixture's
+        # current state, rather than button visibility.
+        if "Multi-Step ready" in labels:
+            target_text = "Multi-Step Test"
             rationale = "r7: enter multi-step test"
-        elif "Continue Multi-Step" in labels:
-            target = _find_target(context, "Continue Multi-Step")
+        elif any(label.startswith("Run ") and label.endswith(": Step 1 started") for label in labels):
+            target_text = "Continue Multi-Step"
             rationale = "r7: continue multi-step test"
-        elif "Finish Multi-Step" in labels:
-            target = _find_target(context, "Finish Multi-Step")
+        elif "Step 2 started" in labels:
+            target_text = "Finish Multi-Step"
             rationale = "r7: finish multi-step test"
         else:
             raise RuntimeError(
@@ -49,8 +52,9 @@ class MultiStepRuntimePlanner:
                 f"visible labels={sorted(labels)!r}"
             )
 
+        target = _find_target(context, target_text)
         if target is None:
-            raise RuntimeError("expected multi-step target was not available")
+            raise RuntimeError(f"expected multi-step target {target_text!r} was not available")
         return Decision(Action(ActionType.CLICK, target), rationale)
 
 
