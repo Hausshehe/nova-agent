@@ -33,6 +33,12 @@ class TracingBridge(AndroidBridge):
     def observe(self):
         state = super().observe()
         print(f"OBSERVATION {state.observation_id} ELEMENTS {len(state.elements)}")
+        for element in state.elements:
+            label = " ".join(
+                part for part in (element.text, element.content_description) if part
+            ).strip()
+            if label:
+                print(f"OBSERVED_TEXT id={element.id} text={label!r}")
         return state
 
     def execute(self, action):
