@@ -7,6 +7,7 @@ from .action_executor import ActionExecutor
 from .core import TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
+from .observation_provider import AndroidObservationProvider, ObservationProvider
 from .reasoning_context import build_reasoning_context
 from .reasoning_provider import ReasoningProvider
 
@@ -27,20 +28,27 @@ class TaskExecutor:
     verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
     max_steps: int = 5
     settle_timeout: float = 2.0
+    observation_provider: ObservationProvider | None = None
     current_state: WorldState | None = field(default=None, init=False)
     history: list[Mapping[str, Any]] = field(default_factory=list, init=False)
     current_step: int = field(default=0, init=False)
     action_executor: ActionExecutor = field(init=False)
 
     def __post_init__(self) -> None:
+        if self.observation_provider is None:
+            self.observation_provider = AndroidObservationProvider(
+                self.bridge,
+                settle_timeout=self.settle_timeout,
+            )
         self.action_executor = ActionExecutor(
             bridge=self.bridge,
             verifier=self.verifier,
+            observation_provider=self.observation_provider,
             settle_timeout=self.settle_timeout,
         )
 
     def _observe(self) -> WorldState:
-        self.current_state = self.bridge.observe()
+        self.current_state = self.observation_provider.observe()
         return self.current_state
 
     def run(self, goal: str) -> bool:
