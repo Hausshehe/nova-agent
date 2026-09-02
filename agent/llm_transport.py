@@ -33,7 +33,10 @@ class OpenAICompatibleTransport:
             "response_format": {"type": "json_object"},
             "stream": False,
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Nova-Agent/1.0",
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
