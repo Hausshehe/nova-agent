@@ -136,23 +136,29 @@ class TaskExecutor:
         state = self._observe()
         self.current_state = state
         action_goal = self.evaluator.is_action_goal(goal)
-        next_decision: Decision | None = None
+        recovery_required = False
 
         if not action_goal and self.evaluator.evaluate(goal, state):
             return True
 
         for step in range(1, self.max_steps + 1):
             self.current_step = step
-            if next_decision is None:
+
+            if recovery_required:
+                # Generate the recovery decision from the state that was just
+                # produced by the preceding action. Do not cache a decision
+                # across iterations: Android may change independently between
+                # observations, and every decision must cross the guard against
+                # the state it was actually derived from.
+                decision = self._recover(goal, state)
+                recovery_required = False
+            else:
                 context = build_reasoning_context(goal, state, self.history, self.task_state)
                 decision = _decide(self.planner, context)
-            else:
-                decision = next_decision
-                next_decision = None
 
             if not self._guard_decision(decision, state, step):
                 if step < self.max_steps:
-                    next_decision = self._recover(goal, state)
+                    recovery_required = True
                 continue
 
             result, after, verified = self.action_executor.execute(decision.action, state)
@@ -172,7 +178,7 @@ class TaskExecutor:
                 state = state_after
                 self.current_state = state
                 if step < self.max_steps:
-                    next_decision = self._recover(goal, state)
+                    recovery_required = True
                 continue
 
             if after is None:
@@ -187,7 +193,7 @@ class TaskExecutor:
                     state_after=None,
                 )
                 if step < self.max_steps:
-                    next_decision = self._recover(goal, state)
+                    recovery_required = True
                 continue
 
             changed = result.changed
@@ -209,6 +215,6 @@ class TaskExecutor:
             if not action_goal and self.evaluator.evaluate(goal, state):
                 return True
             if effect in {TaskEffect.BLOCKED, TaskEffect.FAILED, TaskEffect.UNKNOWN} and step < self.max_steps:
-                next_decision = self._recover(goal, state)
+                recovery_required = True
 
         return False
