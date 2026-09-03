@@ -30,20 +30,21 @@ def create_task_executor(
     bridge,
     *,
     provider: ProviderName = "deterministic",
+    reasoning_provider: ReasoningProvider | None = None,
     model: str | None = None,
     provider_timeout: float = 30.0,
     max_steps: int = 5,
     settle_timeout: float = 2.0,
 ) -> TaskExecutor:
     """Build the canonical Nova task runtime from a selected provider."""
-    reasoning_provider = create_reasoning_provider(
+    selected_provider = reasoning_provider or create_reasoning_provider(
         provider,
         model=model,
         timeout=provider_timeout,
     )
     return TaskExecutor(
         bridge=bridge,
-        planner=reasoning_provider,
+        planner=selected_provider,
         max_steps=max_steps,
         settle_timeout=settle_timeout,
     )
