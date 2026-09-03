@@ -77,16 +77,41 @@ class NavigationLoop:
                 result = self.bridge.execute(decision.action)
 
             if not result.accepted:
+                try:
+                    # A rejected action can still coincide with a UI transition
+                    # (for example, another actor may have changed the screen).
+                    # Refresh once so the next bounded reasoning step sees the
+                    # current world instead of repeatedly reasoning from stale UI.
+                    after_rejection = self.bridge.wait_for_fresh_observation(
+                        state, self.settle_timeout
+                    )
+                except TimeoutError:
+                    history.append(
+                        _action_history(
+                            decision,
+                            step,
+                            accepted=False,
+                            changed=False,
+                            verified=False,
+                            error=result.error or "fresh observation timeout after rejection",
+                        )
+                    )
+                    continue
+
+                changed = after_rejection != state
                 history.append(
                     _action_history(
                         decision,
                         step,
                         accepted=False,
-                        changed=False,
+                        changed=changed,
                         verified=False,
                         error=result.error,
                     )
                 )
+                state = after_rejection
+                if self.evaluator.evaluate(goal, state):
+                    return True
                 continue
 
             try:
