@@ -11,6 +11,8 @@ from .observation_provider import AndroidObservationProvider, ObservationProvide
 from .reasoning_context import build_reasoning_context
 from .reasoning_provider import ReasoningProvider
 from .recovery_engine import RecoveryEngine
+from .task_effect import TaskEffect, TaskEffectEvaluator
+from .task_state import TaskState
 
 
 class TaskRunner(Protocol):
@@ -27,6 +29,8 @@ class TaskExecutor:
     planner: ReasoningProvider | LegacyPlanner
     evaluator: GoalEvaluator = field(default_factory=GoalEvaluator)
     verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
+    task_effect_evaluator: TaskEffectEvaluator = field(default_factory=TaskEffectEvaluator)
+    task_state: TaskState = field(default_factory=TaskState, init=False)
     max_steps: int = 5
     settle_timeout: float = 2.0
     observation_provider: ObservationProvider | None = None
@@ -53,11 +57,60 @@ class TaskExecutor:
         self.current_state = self.observation_provider.observe()
         return self.current_state
 
+    def _record_effect(
+        self,
+        decision: Decision,
+        step: int,
+        *,
+        accepted: bool,
+        changed: bool,
+        verified: bool,
+        error: str | None,
+        state_before: WorldState,
+        state_after: WorldState | None,
+    ) -> TaskEffect:
+        effect = self.task_effect_evaluator.evaluate(
+            self._goal,
+            decision.action,
+            # The evaluator only needs the execution fields here. Verification is
+            # retained in history and handled independently by TransitionVerifier.
+            self._execution_result(accepted, changed, verified, error),
+            state_before,
+            state_after,
+        )
+        self.task_state.apply(decision.action, effect, state_before, state_after)
+        self.history.append(
+            _action_history(
+                decision,
+                step,
+                accepted=accepted,
+                changed=changed,
+                verified=verified,
+                error=error,
+                task_effect=effect.effect.value,
+                effect_evidence=effect.evidence,
+            )
+        )
+        return effect.effect
+
+    @staticmethod
+    def _execution_result(
+        accepted: bool,
+        changed: bool,
+        verified: bool,
+        error: str | None,
+    ):
+        from .core import ExecutionResult
+
+        return ExecutionResult(accepted, changed, verified, error)
+
     def run(self, goal: str) -> bool:
         """Execute one task until verified completion or the step budget ends."""
         self.history.clear()
         self.current_step = 0
         self.recovery_engine.reset()
+        self.task_state.reset()
+        self._goal = goal
         state = self._observe()
         self.current_state = state
         action_goal = self.evaluator.is_action_goal(goal)
@@ -69,7 +122,7 @@ class TaskExecutor:
         for step in range(1, self.max_steps + 1):
             self.current_step = step
             if next_decision is None:
-                context = build_reasoning_context(goal, state, self.history)
+                context = build_reasoning_context(goal, state, self.history, self.task_state)
                 decision = _decide(self.planner, context)
             else:
                 decision = next_decision
@@ -78,17 +131,18 @@ class TaskExecutor:
             result, after, verified = self.action_executor.execute(decision.action, state)
 
             if not result.accepted:
-                self.history.append(
-                    _action_history(
-                        decision,
-                        step,
-                        accepted=False,
-                        changed=False,
-                        verified=False,
-                        error=result.error,
-                    )
+                state_after = after if after is not None else self._observe()
+                effect = self._record_effect(
+                    decision,
+                    step,
+                    accepted=False,
+                    changed=False,
+                    verified=False,
+                    error=result.error,
+                    state_before=state,
+                    state_after=state_after,
                 )
-                state = after if after is not None else self._observe()
+                state = state_after
                 self.current_state = state
                 if step < self.max_steps:
                     next_decision = self.recovery_engine.recover(
@@ -97,15 +151,15 @@ class TaskExecutor:
                 continue
 
             if after is None:
-                self.history.append(
-                    _action_history(
-                        decision,
-                        step,
-                        accepted=True,
-                        changed=False,
-                        verified=False,
-                        error=result.error or "fresh observation timeout",
-                    )
+                effect = self._record_effect(
+                    decision,
+                    step,
+                    accepted=True,
+                    changed=False,
+                    verified=False,
+                    error=result.error or "fresh observation timeout",
+                    state_before=state,
+                    state_after=None,
                 )
                 if step < self.max_steps:
                     next_decision = self.recovery_engine.recover(
@@ -114,24 +168,24 @@ class TaskExecutor:
                 continue
 
             changed = result.changed
-            self.history.append(
-                _action_history(
-                    decision,
-                    step,
-                    accepted=True,
-                    changed=changed,
-                    verified=verified,
-                    error=result.error,
-                )
+            effect = self._record_effect(
+                decision,
+                step,
+                accepted=True,
+                changed=changed,
+                verified=verified,
+                error=result.error,
+                state_before=state,
+                state_after=after,
             )
 
             state = after
             self.current_state = state
-            if action_goal and verified and self.evaluator.action_goal_satisfied(goal, decision.action, state):
+            if action_goal and effect is TaskEffect.COMPLETED:
                 return True
             if not action_goal and self.evaluator.evaluate(goal, state):
                 return True
-            if not verified and step < self.max_steps:
+            if effect in {TaskEffect.BLOCKED, TaskEffect.FAILED, TaskEffect.UNKNOWN} and step < self.max_steps:
                 next_decision = self.recovery_engine.recover(
                     goal, state, self.history, self.planner
                 )
