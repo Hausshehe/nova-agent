@@ -21,6 +21,7 @@ class FakeBridge:
                 ),
             ),
         )
+        self.fresh_calls = []
 
     def observe(self):
         return self.state
@@ -28,6 +29,15 @@ class FakeBridge:
     def execute(self, action):
         self.executed.append(action)
         return LegacyExecutionResult(accepted=True, changed=True)
+
+    def wait_for_fresh_observation(self, previous, timeout, poll_seconds):
+        self.fresh_calls.append((previous, timeout, poll_seconds))
+        return WorldState(
+            package=self.state.package,
+            activity=self.state.activity,
+            observation_id="obs-2",
+            elements=self.state.elements,
+        )
 
 
 def test_android_adapter_observe_translates_bridge_state():
@@ -43,6 +53,19 @@ def test_android_adapter_observe_translates_bridge_state():
     assert first.elements[0].text == "Continue"
     assert first.revision == 1
     assert second.revision == 2
+
+
+def test_android_adapter_observe_fresh_uses_last_bridge_observation():
+    bridge = FakeBridge()
+    adapter = AndroidBridgeAdapter(bridge)
+
+    before = adapter.observe()
+    after = adapter.observe_fresh(before)
+
+    assert after.revision == 2
+    assert bridge.fresh_calls == [(bridge.state, 2.0, 0.2)]
+    assert after.package == before.package
+    assert after.elements == before.elements
 
 
 def test_android_adapter_translates_supported_v2_actions():
