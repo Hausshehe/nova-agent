@@ -127,7 +127,7 @@ class TaskExecutor:
 
             state = after
             self.current_state = state
-            if action_goal and verified and self.evaluator.action_goal_satisfied(goal, decision.action):
+            if action_goal and verified and self.evaluator.action_goal_satisfied(goal, decision.action, state):
                 return True
             if not action_goal and self.evaluator.evaluate(goal, state):
                 return True
