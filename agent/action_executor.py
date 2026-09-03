@@ -46,18 +46,33 @@ class ActionExecutor:
                 if is_wait
                 else self.observation_provider.refresh(previous)
             )
-        except TimeoutError:
+        except TimeoutError as exc:
+            # A settling timeout must not force the runtime to reason from the
+            # stale pre-action state. Capture the newest available observation
+            # and make verification/effect classification explicitly unknown.
+            try:
+                after = self.observation_provider.observe()
+            except Exception:
+                after = None
             return ExecutionResult(
                 accepted=True,
                 changed=False,
                 verified=False,
-                error="fresh observation timeout",
-            ), None, False
+                error=f"fresh observation timeout: {exc}",
+            ), after, False
 
-        changed = after != previous
+        changed = not self._same_ui(previous, after)
         verified = True if is_wait else self.verifier.verify(
             previous,
             after,
             ExecutionResult(True, changed, False),
         )
         return ExecutionResult(True, changed, verified), after, verified
+
+    @staticmethod
+    def _same_ui(before: WorldState, after: WorldState) -> bool:
+        return (
+            before.package == after.package
+            and before.activity == after.activity
+            and before.elements == after.elements
+        )
