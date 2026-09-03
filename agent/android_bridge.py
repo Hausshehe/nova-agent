@@ -81,12 +81,29 @@ class AndroidBridge:
         """Execute a direct click through Nova's Android bridge."""
         return self._request({"command": "click", "elementId": element_id})
 
+    def scroll(self, element_id: str) -> dict[str, Any]:
+        """Scroll a scrollable accessibility container forward by one page."""
+        return self._request({"command": "scroll", "elementId": element_id})
+
     def execute(self, action: Action) -> ExecutionResult:
         if action.type == ActionType.CLICK:
             if action.target is None:
                 return ExecutionResult(False, False, False, "click action has no target")
             try:
                 response = self.click(action.target.element_id)
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.SCROLL:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "scroll action has no target")
+            try:
+                response = self.scroll(action.target.element_id)
             except AndroidBridgeError as exc:
                 return ExecutionResult(False, False, False, str(exc))
             return ExecutionResult(
