@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
 from .action_executor import ActionExecutor
-from .core import Decision, TransitionVerifier, WorldState
+from .core import Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
 from .observation_provider import AndroidObservationProvider, ObservationProvider
@@ -39,6 +39,7 @@ class TaskExecutor:
     history: list[Mapping[str, Any]] = field(default_factory=list, init=False)
     current_step: int = field(default=0, init=False)
     action_executor: ActionExecutor = field(init=False)
+    _goal: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
         if self.observation_provider is None:
@@ -72,9 +73,7 @@ class TaskExecutor:
         effect = self.task_effect_evaluator.evaluate(
             self._goal,
             decision.action,
-            # The evaluator only needs the execution fields here. Verification is
-            # retained in history and handled independently by TransitionVerifier.
-            self._execution_result(accepted, changed, verified, error),
+            ExecutionResult(accepted, changed, verified, error),
             state_before,
             state_after,
         )
@@ -92,17 +91,6 @@ class TaskExecutor:
             )
         )
         return effect.effect
-
-    @staticmethod
-    def _execution_result(
-        accepted: bool,
-        changed: bool,
-        verified: bool,
-        error: str | None,
-    ):
-        from .core import ExecutionResult
-
-        return ExecutionResult(accepted, changed, verified, error)
 
     def run(self, goal: str) -> bool:
         """Execute one task until verified completion or the step budget ends."""
@@ -151,7 +139,7 @@ class TaskExecutor:
                 continue
 
             if after is None:
-                effect = self._record_effect(
+                self._record_effect(
                     decision,
                     step,
                     accepted=True,
