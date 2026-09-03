@@ -5,7 +5,7 @@ from typing import Any, Mapping, Protocol
 
 from .action_executor import ActionExecutor
 from .action_guard import ActionGuard
-from .core import Action, Decision, ExecutionResult, TransitionVerifier, WorldState
+from .core import Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
 from .observation_provider import AndroidObservationProvider, ObservationProvider
@@ -32,11 +32,11 @@ class TaskExecutor:
     verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
     task_effect_evaluator: TaskEffectEvaluator = field(default_factory=TaskEffectEvaluator)
     task_state: TaskState = field(default_factory=TaskState, init=False)
-    action_guard: ActionGuard = field(default_factory=ActionGuard)
     max_steps: int = 5
     settle_timeout: float = 2.0
     observation_provider: ObservationProvider | None = None
     recovery_engine: RecoveryEngine = field(default_factory=RecoveryEngine)
+    action_guard: ActionGuard = field(default_factory=ActionGuard)
     current_state: WorldState | None = field(default=None, init=False)
     history: list[Mapping[str, Any]] = field(default_factory=list, init=False)
     current_step: int = field(default=0, init=False)
@@ -103,7 +103,6 @@ class TaskExecutor:
         error = f"action guard blocked: {result.reason}"
         if result.evidence:
             error = f"{error}: {result.evidence}"
-        effect = TaskEffect.BLOCKED
         self.history.append(
             _action_history(
                 decision,
@@ -112,7 +111,7 @@ class TaskExecutor:
                 changed=False,
                 verified=False,
                 error=error,
-                task_effect=effect.value,
+                task_effect=TaskEffect.BLOCKED.value,
                 effect_evidence=result.evidence,
             )
         )
