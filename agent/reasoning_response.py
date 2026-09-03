@@ -30,16 +30,20 @@ def decision_from_response(response: Mapping[str, Any], context: ReasoningContex
     if action is ActionType.WAIT:
         raise InvalidReasoningResponse("unsupported action type")
 
-    if action is not ActionType.CLICK:
-        raise InvalidReasoningResponse("unsupported action type")
     if not isinstance(target_data, Mapping):
-        raise InvalidReasoningResponse("click action requires a target object")
+        raise InvalidReasoningResponse(f"{action.value} action requires a target object")
     element_id = target_data.get("element_id")
     if not isinstance(element_id, str) or not element_id:
-        raise InvalidReasoningResponse("click target requires element_id")
+        raise InvalidReasoningResponse(f"{action.value} target requires element_id")
 
-    candidate = next((c for c in context.candidates if c.action_type is ActionType.CLICK and c.target and c.target.element_id == element_id), None)
+    candidate = next(
+        (
+            c for c in context.candidates
+            if c.action_type is action and c.target and c.target.element_id == element_id
+        ),
+        None,
+    )
     if candidate is None or not candidate.enabled or not candidate.visible:
-        raise InvalidReasoningResponse("click target is not currently actionable")
+        raise InvalidReasoningResponse(f"{action.value} target is not currently actionable")
     target = Target(element_id, candidate.target.text, candidate.target.content_description)
-    return Decision(Action(ActionType.CLICK, target), str(response.get("reason", "provider decision")))
+    return Decision(Action(action, target), str(response.get("reason", "provider decision")))
