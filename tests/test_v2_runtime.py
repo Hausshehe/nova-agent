@@ -1,4 +1,4 @@
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement, RunStatus
+from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, RunStatus
 from nova_core.runtime import Runtime
 from nova_core.state_machine import RunState
 
@@ -96,3 +96,32 @@ def test_runtime_executes_at_most_one_action_per_step():
     assert executor.calls == 0
     runtime.step()
     assert executor.calls == 1
+
+
+def test_runtime_run_returns_success_without_manual_stepping():
+    observer = FakeObserver()
+    reasoner = FakeReasoner()
+    executor = FakeExecutor()
+    verifier = FakeVerifier()
+    runtime = Runtime(Goal("tap button"), observer, reasoner, executor, verifier, max_steps=1)
+
+    result = runtime.run()
+
+    assert result.status is RunStatus.SUCCEEDED
+    assert result.steps == 1
+    assert executor.calls == 1
+
+
+def test_runtime_run_is_bounded_when_verification_never_succeeds():
+    observer = FakeObserver()
+    reasoner = FakeReasoner()
+    executor = FakeExecutor()
+    verifier = FakeVerifier(achieved=False)
+    runtime = Runtime(Goal("never finish"), observer, reasoner, executor, verifier, max_steps=2)
+
+    result = runtime.run()
+
+    assert result.status is RunStatus.FAILED
+    assert result.steps == 2
+    assert result.error == "step budget exhausted"
+    assert executor.calls == 2
