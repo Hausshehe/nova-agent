@@ -1,8 +1,8 @@
 """Small orchestration boundary for Nova Agent v2.
 
-The controller owns run-state progression and the step budget, but it does
-not observe Android, call a reasoning provider, or execute actions. Runtime
-adapters will be connected later.
+The controller owns run-state progression, the step budget, and the completed
+reasoning history, but it does not observe Android, call a reasoning provider,
+or execute actions.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .models import Goal, Observation, Decision, ExecutionResult, RunResult, RunStatus
+from .reasoning import ReasoningStep
 from .state_machine import InvalidTransition, RunState, is_terminal, transition
 
 
@@ -24,6 +25,7 @@ class RunController:
     observation: Observation | None = None
     decision: Decision | None = None
     last_execution: ExecutionResult | None = None
+    history: tuple[ReasoningStep, ...] = ()
     error: str | None = None
 
     def __post_init__(self) -> None:
@@ -48,13 +50,16 @@ class RunController:
         self.decision = decision
 
     def record_execution(self, result: ExecutionResult) -> None:
-        """Attach an execution result and consume one bounded step."""
+        """Attach an execution result, consume one step, and close its history entry."""
         if self.state != RunState.EXECUTING:
             raise InvalidTransition("execution can only be recorded while executing")
         if self.steps >= self.max_steps:
             raise RuntimeError("step budget exhausted")
+        if self.decision is None:
+            raise RuntimeError("execution cannot be recorded without a decision")
         self.last_execution = result
         self.steps += 1
+        self.history = self.history + (ReasoningStep(self.decision, result),)
 
     def finish(self, status: RunStatus, error: str | None = None) -> RunResult:
         """Enter one terminal state explicitly and return the run result."""
