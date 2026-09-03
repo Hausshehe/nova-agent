@@ -88,16 +88,19 @@ object BridgeServer {
                 val writer = PrintWriter(s.getOutputStream(), true)
                 val line = reader.readLine() ?: return
                 val request = JSONObject(line)
-                Log.d(TAG, "Request: ${request.optString("command")}")
-                val response = when (request.optString("command")) {
+                val command = request.optString("command")
+                Log.d(TAG, "Request: $command")
+                val response = when (command) {
                     "observe" -> observe()
                     "click" -> click(request.optString("elementId"))
                     "scroll" -> scroll(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
-                    else -> error("unknown command: ${request.optString("command")}")
+                    else -> error("unknown command: $command")
                 }
+                Log.d(TAG, "Response ready: command=$command")
                 writer.println(response.toString())
+                Log.d(TAG, "Response sent: command=$command")
             } catch (e: Exception) {
                 Log.e(TAG, "Bridge request failed: ${e.javaClass.simpleName}: ${e.message}", e)
                 PrintWriter(s.getOutputStream(), true).println(error(e.message ?: "bridge error").toString())
@@ -141,27 +144,36 @@ object BridgeServer {
         val service = NovaAccessibilityService.instance
             ?: return error("Nova accessibility service is not connected")
         val deadline = System.currentTimeMillis() + CLICK_WAIT_MS
+        Log.d(TAG, "click(): begin elementId=$elementId")
         while (System.currentTimeMillis() < deadline) {
             val root = service.rootInActiveWindow
             if (root == null) {
+                Log.d(TAG, "click(): root unavailable")
                 sleepForRetry(CLICK_POLL_MS)
                 continue
             }
             val activePackage = root.packageName?.toString()
             if (activePackage != PACKAGE) {
+                Log.d(TAG, "click(): wrong package=$activePackage")
                 root.recycle()
                 sleepForRetry(CLICK_POLL_MS)
                 continue
             }
+            Log.d(TAG, "click(): root acquired, finding node elementId=$elementId")
             val node = findNode(root, elementId)
             if (node == null) {
+                Log.d(TAG, "click(): node not found")
                 root.recycle()
                 sleepForRetry(CLICK_POLL_MS)
                 continue
             }
+            Log.d(TAG, "click(): node found enabled=${node.isEnabled} clickable=${node.isClickable} visible=${node.isVisibleToUser}")
+            Log.d(TAG, "click(): calling performAction elementId=$elementId")
             val accepted = node.isEnabled && node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            Log.d(TAG, "click(): performAction returned accepted=$accepted elementId=$elementId")
             if (node !== root) root.recycle()
             node.recycle()
+            Log.d(TAG, "click(): returning response elementId=$elementId")
             return JSONObject().apply {
                 put("ok", true)
                 put("accepted", accepted)
@@ -171,6 +183,7 @@ object BridgeServer {
         val root = service.rootInActiveWindow
         val activePackage = root?.packageName?.toString()
         root?.recycle()
+        Log.d(TAG, "click(): timeout elementId=$elementId activePackage=$activePackage")
         return error("element not found after ${CLICK_WAIT_MS}ms: $elementId activePackage=$activePackage")
     }
 
