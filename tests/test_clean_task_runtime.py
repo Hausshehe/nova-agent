@@ -164,11 +164,11 @@ class ClickTwicePlanner:
 def test_clean_runtime_blocks_repeated_action_in_same_state():
     bridge = Bridge([])
     planner = Planner()
-    runtime = create_task_runtime(bridge, reasoning_provider=planner, max_steps=4)
+    runtime = create_task_runtime(bridge, reasoning_provider=planner, max_steps=3)
 
-    # The fake planner deliberately proposes Finish, Continue, Continue, Start.
-    # The runtime must block the second Continue before Android receives it.
-    # Because the fake planner does not adapt after the block, the task must stop.
+    # The fake planner deliberately proposes Finish, Continue, Continue.
+    # The runtime must block the repeated Continue before Android receives it.
+    # It gets one fresh reasoning turn, then stops when the planner repeats it.
     assert runtime.run("Tap Finish Multi-Step") is False
     assert [a.target.element_id for a in bridge.actions] == ["finish", "continue"]
     assert runtime.runtime_state.history[2]["accepted"] is False
