@@ -88,7 +88,7 @@ def main() -> int:
 
     bridge = AndroidBridge()
     if args.launch_nova:
-        print(f"LAUNCH {bridge.launch(root=True)}")
+        print(f"LAUNCH {bridge.launch()}")
 
     try:
         ready = _wait_for_target(bridge, "Multi-Step Test")
