@@ -28,10 +28,6 @@ class FakeBridge:
 
     def execute(self, action: Action) -> ExecutionResult:
         self.executed += 1
-        # AndroidObservationProvider.refresh() needs two stable post-action
-        # observations before returning the settled state. Keep exactly those
-        # two observations in the synthetic transition, then restore the
-        # initial UI for the next independent TaskExecutor.run().
         self._post_action_observations = 2
         return ExecutionResult(True, True)
 
@@ -225,26 +221,28 @@ def test_task_executor_uses_action_executor_boundary():
 
 @dataclass
 class GuardIntegrationBridge:
-    executed_actions: list[Action] = None
+    executed_actions: list[Action] | None = None
 
     def __post_init__(self):
         if self.executed_actions is None:
             self.executed_actions = []
 
     def observe(self) -> WorldState:
-        return self._state("Ready", "initial")
+        if not self.executed_actions:
+            return self._state("Ready", "initial")
+        if self.executed_actions[-1].target.element_id == "finish":
+            return self._state("Previous steps required", "blocked")
+        return WorldState(
+            observation_id="complete",
+            elements=(UIElement(id="status", text="Completed", clickable=False),),
+        )
 
     def execute(self, action: Action) -> ExecutionResult:
         self.executed_actions.append(action)
         return ExecutionResult(True, True)
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState:
-        if len(self.executed_actions) == 1:
-            return self._state("Previous steps required", "blocked")
-        return WorldState(
-            observation_id="complete",
-            elements=(UIElement(id="status", text="Completed", clickable=False),),
-        )
+        return self.observe()
 
     @staticmethod
     def _state(status: str, observation_id: str) -> WorldState:
