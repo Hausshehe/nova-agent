@@ -10,14 +10,14 @@ def test_action_goal_does_not_fall_back_to_state_goal_match() -> None:
         observation_id=2,
         elements=[
             UIElement(
-                element_id="finish",
+                id="finish",
                 text="Finish Multi-Step",
                 clickable=True,
                 enabled=True,
                 visible=False,
             ),
             UIElement(
-                element_id="status",
+                id="status",
                 text="Complete the previous steps first",
                 clickable=False,
                 enabled=True,
