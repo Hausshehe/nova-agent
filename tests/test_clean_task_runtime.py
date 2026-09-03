@@ -58,8 +58,12 @@ class RealisticMultiStepBridge:
 
     def __post_init__(self):
         self.step = 0
+        self.status_override: str | None = None
+        self.observation_number = 0
 
     def observe(self):
+        if self.status_override is not None:
+            return state(self.status_override, f"blocked-{len(self.actions)}")
         if self.step == 0:
             return state("Multi-Step ready", "ready")
         if self.step == 1:
@@ -76,14 +80,17 @@ class RealisticMultiStepBridge:
         target = action.target.element_id
         if target == "start" and self.step == 0:
             self.step = 1
+            self.status_override = None
         elif target == "continue" and self.step == 1:
             self.step = 2
+            self.status_override = None
         elif target == "finish" and self.step == 2:
             self.step = 3
+            self.status_override = None
         elif target == "finish":
-            self.step = self.step
+            self.status_override = "Complete the previous steps first"
         elif target == "continue":
-            self.step = 0
+            self.status_override = "Start a Multi-Step Test first"
         return ExecutionResult(True, True)
 
     def wait_for_fresh_observation(self, previous, timeout=2.0):
