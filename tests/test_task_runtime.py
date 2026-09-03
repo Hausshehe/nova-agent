@@ -17,10 +17,8 @@ class FakeBridge:
     def observe(self) -> WorldState:
         self.observed += 1
         if self._post_action_observations:
-            self._post_action_observations += 1
+            self._post_action_observations -= 1
             elements = ()
-            if self._post_action_observations >= 2:
-                self._post_action_observations = 0
         else:
             elements = (UIElement(id="finish", text="Finish", clickable=True),)
         return WorldState(
@@ -30,7 +28,11 @@ class FakeBridge:
 
     def execute(self, action: Action) -> ExecutionResult:
         self.executed += 1
-        self._post_action_observations = 1
+        # AndroidObservationProvider.refresh() needs two stable post-action
+        # observations before returning the settled state. Keep exactly those
+        # two observations in the synthetic transition, then restore the
+        # initial UI for the next independent TaskExecutor.run().
+        self._post_action_observations = 2
         return ExecutionResult(True, True)
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState:
