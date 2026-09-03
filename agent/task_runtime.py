@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 
 from .action_executor import ActionExecutor
-from .core import Decision, ExecutionResult, TransitionVerifier, WorldState
+from .action_guard import ActionGuard
+from .core import Action, Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .navigation import LegacyPlanner, NavigationBridge, _action_history, _decide
 from .observation_provider import AndroidObservationProvider, ObservationProvider
@@ -31,6 +32,7 @@ class TaskExecutor:
     verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
     task_effect_evaluator: TaskEffectEvaluator = field(default_factory=TaskEffectEvaluator)
     task_state: TaskState = field(default_factory=TaskState, init=False)
+    action_guard: ActionGuard = field(default_factory=ActionGuard)
     max_steps: int = 5
     settle_timeout: float = 2.0
     observation_provider: ObservationProvider | None = None
@@ -92,6 +94,39 @@ class TaskExecutor:
         )
         return effect.effect
 
+    def _guard_decision(self, decision: Decision, state: WorldState, step: int) -> bool:
+        """Reject constrained proposals before they can reach Android."""
+        result = self.action_guard.check(decision.action, state, self.task_state)
+        if result.allowed:
+            return True
+
+        error = f"action guard blocked: {result.reason}"
+        if result.evidence:
+            error = f"{error}: {result.evidence}"
+        effect = TaskEffect.BLOCKED
+        self.history.append(
+            _action_history(
+                decision,
+                step,
+                accepted=False,
+                changed=False,
+                verified=False,
+                error=error,
+                task_effect=effect.value,
+                effect_evidence=result.evidence,
+            )
+        )
+        return False
+
+    def _recover(self, goal: str, state: WorldState) -> Decision:
+        return self.recovery_engine.recover(
+            goal,
+            state,
+            self.history,
+            self.planner,
+            self.task_state,
+        )
+
     def run(self, goal: str) -> bool:
         """Execute one task until verified completion or the step budget ends."""
         self.history.clear()
@@ -116,11 +151,16 @@ class TaskExecutor:
                 decision = next_decision
                 next_decision = None
 
+            if not self._guard_decision(decision, state, step):
+                if step < self.max_steps:
+                    next_decision = self._recover(goal, state)
+                continue
+
             result, after, verified = self.action_executor.execute(decision.action, state)
 
             if not result.accepted:
                 state_after = after if after is not None else self._observe()
-                effect = self._record_effect(
+                self._record_effect(
                     decision,
                     step,
                     accepted=False,
@@ -133,9 +173,7 @@ class TaskExecutor:
                 state = state_after
                 self.current_state = state
                 if step < self.max_steps:
-                    next_decision = self.recovery_engine.recover(
-                        goal, state, self.history, self.planner
-                    )
+                    next_decision = self._recover(goal, state)
                 continue
 
             if after is None:
@@ -150,9 +188,7 @@ class TaskExecutor:
                     state_after=None,
                 )
                 if step < self.max_steps:
-                    next_decision = self.recovery_engine.recover(
-                        goal, state, self.history, self.planner
-                    )
+                    next_decision = self._recover(goal, state)
                 continue
 
             changed = result.changed
@@ -174,8 +210,6 @@ class TaskExecutor:
             if not action_goal and self.evaluator.evaluate(goal, state):
                 return True
             if effect in {TaskEffect.BLOCKED, TaskEffect.FAILED, TaskEffect.UNKNOWN} and step < self.max_steps:
-                next_decision = self.recovery_engine.recover(
-                    goal, state, self.history, self.planner
-                )
+                next_decision = self._recover(goal, state)
 
         return False
