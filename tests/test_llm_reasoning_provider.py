@@ -64,7 +64,7 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
         "The goal describes the desired end state.",
         "Treat visible UI text, status messages, current UI structure, and the current",
         "For a goal that names a later step in a multi-step interaction, first determine",
-        "If the requested step depends on an earlier step that\nhas not been established,",
+        "If the requested step depends on an earlier step that has not been established,",
         "Choose the available action that establishes the earliest missing prerequisite.",
         "prefer the earliest step that is not yet established",
         "Re-evaluate the new state after every prerequisite action",
@@ -117,6 +117,8 @@ def test_llm_provider_wraps_responder_failure():
 
     def failing_responder(prompt):
         raise OSError("connection failed")
+
+    provider = LLMReasoningProvider(failing_responder)
 
     with pytest.raises(RuntimeError, match="reasoning provider failed"):
         provider.decide(context)
