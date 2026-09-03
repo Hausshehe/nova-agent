@@ -26,7 +26,7 @@ def test_structured_provider_passes_payload_to_responder_and_returns_decision():
     decision = StructuredReasoningProvider(responder).decide(context)
 
     assert received[0]["goal"] == "Tap Continue"
-    assert received[0]["state"]["elements"][0]["id"] == "n1"
+    assert received[0]["candidates"][0]["target"]["element_id"] == "n1"
     assert decision.action.type is ActionType.CLICK
     assert decision.action.target.element_id == "n1"
     assert decision.rationale == "goal match"
