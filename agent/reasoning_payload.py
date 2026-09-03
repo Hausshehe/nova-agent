@@ -28,7 +28,7 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         for element in state.elements
     ]
 
-    return {
+    payload = {
         "goal": context.goal,
         "state": {
             "package": state.package,
@@ -56,3 +56,6 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
             for candidate in context.candidates
         ],
     }
+    if context.task_state is not None:
+        payload["task_state"] = context.task_state.as_context(state)
+    return payload
