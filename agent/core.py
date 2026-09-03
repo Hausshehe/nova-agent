@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 class ActionType(str, Enum):
     CLICK = "click"
     BACK = "back"
+    SCROLL = "scroll"
     WAIT = "wait"
 
 
