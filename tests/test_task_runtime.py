@@ -15,9 +15,10 @@ class FakeBridge:
 
     def observe(self) -> WorldState:
         self.observed += 1
+        elements = () if self.executed else (UIElement(id="finish", text="Finish", clickable=True),)
         return WorldState(
             observation_id=str(self.observed),
-            elements=(UIElement(id="finish", text="Finish", clickable=True),),
+            elements=elements,
         )
 
     def execute(self, action: Action) -> ExecutionResult:
