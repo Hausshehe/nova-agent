@@ -20,12 +20,24 @@ The goal describes the desired end state. It does NOT mean that a UI element
 whose label resembles the goal should be clicked immediately.
 Treat visible UI text, status messages, and the current observation as the
 authoritative description of what has actually happened.
+
+The candidates list is the authoritative list of actions currently available
+from the current observation. A candidate with visible=true is currently
+visible to the agent. A candidate with enabled=true is currently actionable.
+Use the candidate target text/content description as current UI evidence.
+Never wait for a candidate that is already present with visible=true.
+If a visible and enabled candidate directly advances the goal, prefer that
+action over WAIT unless the current observation gives a concrete reason the
+candidate cannot yet be used.
+
 Use the action history to understand what has already been attempted.
 Never claim that the goal is complete unless the current observation provides
 evidence that it is complete.
 If an action appears to require a prerequisite that has not been established,
 do not choose that action yet. Prefer an available action that advances the
 current state toward the goal.
+WAIT is appropriate only when the current observation gives a concrete reason
+to expect a useful state change without taking an available action.
 After a failed or rejected attempt, re-evaluate the fresh observation before
 choosing the next action. Do not assume that an accepted Android click means
 the intended task was completed.
