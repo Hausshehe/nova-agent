@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 
-from .core import WorldState, element_text
+from .core import Action, ActionType, WorldState, element_text
 
 
 _ACTION_VERBS = {"tap", "click", "open", "back", "wait"}
 _STOP_WORDS = {"a", "an", "the", "to", "of", "and", "then", "please"}
+_CLICK_VERBS = {"tap", "click", "open"}
 
 
 class GoalEvaluator:
@@ -19,6 +20,36 @@ class GoalEvaluator:
         if tokens[0] in _ACTION_VERBS:
             return True
         return len(tokens) >= 2 and tokens[:2] == ["go", "back"]
+
+    def action_goal_satisfied(self, goal: str, action: Action) -> bool:
+        """Return whether an executed action actually satisfies an action goal."""
+        tokens = re.findall(r"[a-z0-9]+", goal.lower())
+        if not tokens or not self.is_action_goal(goal):
+            return False
+
+        if tokens[:2] == ["go", "back"] or tokens[0] == "back":
+            return action.type is ActionType.BACK
+        if tokens[0] == "wait":
+            return action.type is ActionType.WAIT
+        if tokens[0] not in _CLICK_VERBS:
+            return False
+        if action.type is not ActionType.CLICK or action.target is None:
+            return False
+
+        meaningful = [
+            token
+            for token in tokens[1:]
+            if token not in _STOP_WORDS and token not in _ACTION_VERBS
+        ]
+        if not meaningful:
+            return False
+
+        label = " ".join(
+            re.findall(r"[a-z0-9]+", " ".join(
+                part for part in (action.target.text, action.target.content_description) if part
+            ).lower())
+        )
+        return all(term in label for term in meaningful)
 
     def evaluate(self, goal: str, state: WorldState) -> bool:
         goal_norm = " ".join(re.findall(r"[a-z0-9]+", goal.lower()))
