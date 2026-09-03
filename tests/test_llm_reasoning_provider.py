@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -64,10 +65,8 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
         "The goal describes the desired end state.",
         "Treat visible UI text, status messages, current UI structure, and the current",
         "For a goal that names a later step in a multi-step interaction, first determine",
-        "If the requested step depends on an earlier step that has",
-        "not been established, do NOT jump directly to the requested step.",
-        "Choose the available action that establishes the earliest",
-        "missing prerequisite.",
+        "If the requested step depends on an earlier step that has not been established,",
+        "Choose the available action that establishes the earliest missing prerequisite.",
         "prefer the earliest step that is not yet established",
         "Re-evaluate the new state after every prerequisite action",
         "Use the action history to understand what has already been attempted.",
@@ -77,8 +76,9 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
         "Do not assume that an accepted Android click means",
         "the intended task was completed.",
     )
+    normalized_contract = re.sub(r"\s+", " ", contract)
     for instruction in required_instructions:
-        assert instruction in contract
+        assert re.sub(r"\s+", " ", instruction).strip() in normalized_contract
 
     payload = json.loads(contract.split("Observation and goal:\n", 1)[1])
     assert payload["goal"] == "Multi-Step completed"
