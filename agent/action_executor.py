@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .core import Action, ActionType, ExecutionResult, TransitionVerifier, WorldState
+from .core import Action, ActionType, ExecutionResult, TransitionVerifier, WorldState, same_ui_state
 from .navigation import NavigationBridge
 from .observation_provider import ObservationProvider
 
@@ -47,9 +47,9 @@ class ActionExecutor:
                 else self.observation_provider.refresh(previous)
             )
         except TimeoutError as exc:
-            # A settling timeout must not force the runtime to reason from the
-            # stale pre-action state. Capture the newest available observation
-            # and make verification/effect classification explicitly unknown.
+            # Never send recovery back to the planner using the stale
+            # pre-action snapshot when settling fails. Capture the newest
+            # available state and explicitly mark the transition unverified.
             try:
                 after = self.observation_provider.observe()
             except Exception:
@@ -61,18 +61,10 @@ class ActionExecutor:
                 error=f"fresh observation timeout: {exc}",
             ), after, False
 
-        changed = not self._same_ui(previous, after)
+        changed = not same_ui_state(previous, after)
         verified = True if is_wait else self.verifier.verify(
             previous,
             after,
             ExecutionResult(True, changed, False),
         )
         return ExecutionResult(True, changed, verified), after, verified
-
-    @staticmethod
-    def _same_ui(before: WorldState, after: WorldState) -> bool:
-        return (
-            before.package == after.package
-            and before.activity == after.activity
-            and before.elements == after.elements
-        )
