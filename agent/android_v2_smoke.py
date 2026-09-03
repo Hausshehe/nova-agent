@@ -14,17 +14,30 @@ from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.models import Action, ActionType
 
 
+def _normalize(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
 def _find_element(observation, text: str):
-    needle = " ".join(text.casefold().split())
+    needle = _normalize(text)
     for element in observation.elements:
-        haystack = " ".join(
-            " ".join(part.casefold().split())
-            for part in (element.text, element.content_description)
-            if part
-        )
-        if needle == haystack:
+        values = (element.text, element.content_description)
+        if any(value and _normalize(value) == needle for value in values):
             return element
     return None
+
+
+def _print_observed_elements(observation) -> None:
+    print("OBSERVED_ELEMENTS:")
+    for element in observation.elements:
+        text = _normalize(element.text) if element.text else ""
+        description = _normalize(element.content_description) if element.content_description else ""
+        if text or description:
+            print(
+                f"  id={element.id!r} text={text!r} "
+                f"content_description={description!r} "
+                f"clickable={element.clickable} enabled={element.enabled} visible={element.visible}"
+            )
 
 
 def main() -> int:
@@ -47,6 +60,7 @@ def main() -> int:
     target = _find_element(before, args.click_text)
     if target is None:
         print(f"ERROR target not found: {args.click_text!r}")
+        _print_observed_elements(before)
         return 1
     if not target.clickable or not target.enabled or not target.visible:
         print(
