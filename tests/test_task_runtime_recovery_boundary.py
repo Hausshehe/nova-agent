@@ -1,6 +1,7 @@
 from agent.core import Action, ActionType, Decision, ExecutionResult, UIElement, WorldState
 from agent.reasoning_context import build_reasoning_context
 from agent.task_runtime import TaskExecutor
+from agent.task_state import TaskState
 
 
 class RecoveryBridge:
@@ -56,10 +57,10 @@ class SpyRecoveryEngine:
     def reset(self):
         self.recoveries = 0
 
-    def recover(self, goal, state, history, planner):
+    def recover(self, goal, state, history, planner, task_state: TaskState | None = None):
         self.calls += 1
         self.recoveries += 1
-        context = build_reasoning_context(goal, state, history)
+        context = build_reasoning_context(goal, state, history, task_state)
         target = next(
             candidate.target
             for candidate in context.candidates
