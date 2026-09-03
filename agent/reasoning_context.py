@@ -37,16 +37,6 @@ def build_reasoning_context(
         for element in state.elements
         if element.clickable and element.visible
     ]
-    candidates.extend(
-        ActionCandidate(
-            action_type=ActionType.SCROLL,
-            target=Target(element.id, element.text, element.content_description),
-            enabled=element.enabled,
-            visible=element.visible,
-        )
-        for element in state.elements
-        if element.scrollable and element.visible
-    )
     candidates.append(ActionCandidate(ActionType.BACK))
     candidates.append(ActionCandidate(ActionType.WAIT))
     return ReasoningContext(
