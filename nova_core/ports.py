@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from .models import Action, Decision, ExecutionResult, Goal, Observation
+from .models import Action, ExecutionResult, Observation
+from .models import Decision, Goal
+from .reasoning import ReasoningContext
 
 
 class Observer(Protocol):
@@ -28,9 +30,9 @@ class FreshObserver(Protocol):
 
 
 class Reasoner(Protocol):
-    """Capability for choosing one action for the current observation."""
+    """Capability for choosing one action from explicit run context."""
 
-    def decide(self, goal: Goal, observation: Observation) -> Decision:
+    def decide(self, context: ReasoningContext) -> Decision:
         ...
 
 
