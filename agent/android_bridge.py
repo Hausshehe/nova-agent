@@ -152,15 +152,39 @@ class AndroidBridge:
                     last_error = exc
             raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
 
-    def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
-                                   poll_seconds: float = 0.2) -> WorldState:
+    @staticmethod
+    def _same_ui(left: WorldState, right: WorldState) -> bool:
+        return (
+            left.package == right.package
+            and left.activity == right.activity
+            and left.elements == right.elements
+        )
+
+    def wait_for_fresh_observation(
+        self,
+        previous: WorldState,
+        timeout: float = 2.0,
+        poll_seconds: float = 0.2,
+    ) -> WorldState:
+        """Wait for a fresh observation whose UI has also stabilized.
+
+        A new accessibility observation ID only proves that an accessibility
+        event occurred. It does not prove that the post-action UI is settled.
+        Require two consecutive identical UI snapshots after the first fresh
+        observation, while keeping the whole wait bounded.
+        """
         deadline = time.monotonic() + timeout
+        candidate: WorldState | None = None
         while True:
             state = self.observe()
             if state.observation_id != previous.observation_id:
-                return state
-            if time.monotonic() >= deadline:
+                if candidate is not None and self._same_ui(candidate, state):
+                    return state
+                candidate = state
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise TimeoutError(
-                    f"timed out waiting for fresh Android observation after {previous.observation_id}"
+                    f"timed out waiting for fresh stable Android observation after {previous.observation_id}"
                 )
-            time.sleep(poll_seconds)
+            time.sleep(min(poll_seconds, remaining))
