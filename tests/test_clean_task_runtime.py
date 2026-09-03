@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from agent.core import Action, ActionType, Decision, ExecutionResult, UIElement, WorldState
+from agent.reasoning_context import build_reasoning_context
+from agent.reasoning_response import InvalidReasoningResponse, decision_from_response
 from agent.runtime import create_task_runtime
 
 
@@ -48,6 +52,29 @@ class Bridge:
         return self.observe()
 
 
+@dataclass
+class ChangingTargetBridge:
+    actions: list[Action]
+
+    def observe(self):
+        if len(self.actions) < 2:
+            return WorldState(
+                package="test", activity="Main", observation_id=str(len(self.actions) + 1),
+                elements=(UIElement("target", "TEST NAVIGATION ACTION", clickable=True),),
+            )
+        return WorldState(
+            package="test", activity="Main", observation_id=str(len(self.actions) + 1),
+            elements=(UIElement("target", "NAVIGATION ACTION COMPLETED", clickable=True),),
+        )
+
+    def execute(self, action: Action):
+        self.actions.append(action)
+        return ExecutionResult(True, True)
+
+    def wait_for_fresh_observation(self, previous, timeout=2.0):
+        return self.observe()
+
+
 class Planner:
     def __init__(self):
         self.calls = 0
@@ -59,6 +86,12 @@ class Planner:
             Action(ActionType.CLICK, next(c.target for c in context.candidates if c.target and c.target.element_id == target)),
             "test",
         )
+
+
+class ClickTwicePlanner:
+    def decide(self, context):
+        candidate = next(c.target for c in context.candidates if c.target)
+        return Decision(Action(ActionType.CLICK, candidate), "test")
 
 
 def test_clean_runtime_blocks_repeated_action_in_same_state():
@@ -80,3 +113,29 @@ def test_action_goal_is_not_satisfied_by_a_preexisting_button():
     runtime = create_task_runtime(bridge, reasoning_provider=Planner(), max_steps=1)
     assert runtime.run("Tap Finish Multi-Step") is False
     assert len(bridge.actions) == 1
+
+
+def test_action_goal_completes_when_target_changes_to_completed_state():
+    bridge = ChangingTargetBridge([])
+    runtime = create_task_runtime(bridge, reasoning_provider=ClickTwicePlanner(), max_steps=3)
+
+    assert runtime.run("Tap Test Navigation Action") is True
+    assert len(bridge.actions) == 2
+    assert runtime.runtime_state.history[-1]["task_effect"] == "completed"
+
+
+def test_wait_is_rejected_when_not_an_available_candidate():
+    context = build_reasoning_context(
+        "Tap Test Navigation Action",
+        WorldState(
+            package="test", activity="Main", observation_id="1",
+            elements=(UIElement("target", "TEST NAVIGATION ACTION", clickable=True),),
+        ),
+        [],
+    )
+
+    with pytest.raises(InvalidReasoningResponse, match="not currently available"):
+        decision_from_response(
+            {"action_type": "wait", "target": None, "reason": "wait"},
+            context,
+        )
