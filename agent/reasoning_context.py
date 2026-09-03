@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from .core import ActionType, Target, WorldState
+from .task_state import TaskState
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class ReasoningContext:
     state: WorldState
     history: tuple[Mapping[str, Any], ...] = ()
     candidates: tuple[ActionCandidate, ...] = ()
+    task_state: TaskState | None = None
 
 
 def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
@@ -57,6 +59,7 @@ def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
             visible=element.visible,
             class_name=element.class_name,
             bounds=element.bounds,
+            editable=element.editable,
             scrollable=element.scrollable,
         )
         for element in state.elements
@@ -71,10 +74,12 @@ def build_reasoning_context(
     goal: str,
     state: WorldState,
     history: Sequence[Mapping[str, Any]],
+    task_state: TaskState | None = None,
 ) -> ReasoningContext:
     return ReasoningContext(
         goal=goal,
         state=state,
         history=tuple(history),
         candidates=_build_candidates(state),
+        task_state=task_state,
     )
