@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import socket
 import subprocess
 import time
@@ -24,16 +23,32 @@ class AndroidBridge:
 
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         raw = (json.dumps(payload) + "\n").encode()
+        deadline = time.monotonic() + self.timeout
         try:
             with socket.create_connection((self.host, self.port), self.timeout) as sock:
-                sock.settimeout(self.timeout)
+                sock.settimeout(min(0.5, self.timeout))
                 sock.sendall(raw)
                 data = b""
                 while b"\n" not in data:
-                    chunk = sock.recv(65536)
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise AndroidBridgeError(
+                            f"Android bridge response timed out after {self.timeout:.1f}s"
+                        )
+                    sock.settimeout(min(0.5, remaining))
+                    try:
+                        chunk = sock.recv(65536)
+                    except socket.timeout as exc:
+                        if time.monotonic() >= deadline:
+                            raise AndroidBridgeError(
+                                f"Android bridge response timed out after {self.timeout:.1f}s"
+                            ) from exc
+                        continue
                     if not chunk:
                         break
                     data += chunk
+        except AndroidBridgeError:
+            raise
         except OSError as exc:
             raise AndroidBridgeError(f"Android bridge unavailable: {exc}") from exc
         if not data:
