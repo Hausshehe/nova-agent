@@ -5,6 +5,7 @@ from enum import Enum
 import re
 
 from .core import Action, ExecutionResult, WorldState, element_text
+from .goal_evaluator import GoalEvaluator
 
 
 class TaskEffect(str, Enum):
@@ -52,6 +53,9 @@ class TaskEffectResult:
 class TaskEffectEvaluator:
     """Translate execution + fresh UI evidence into a task-level effect."""
 
+    def __init__(self, goal_evaluator: GoalEvaluator | None = None) -> None:
+        self.goal_evaluator = goal_evaluator or GoalEvaluator()
+
     def evaluate(
         self,
         goal: str,
@@ -70,7 +74,17 @@ class TaskEffectEvaluator:
         if evidence:
             return TaskEffectResult(TaskEffect.BLOCKED, evidence)
 
-        if self._completion_evidence(goal, action, before, after):
+        # Click/open/tap goals require actual post-action evidence. A matching
+        # button being clicked is execution success, not proof that the task
+        # outcome was achieved.
+        if action.type is not action.type.CLICK and self.goal_evaluator.action_goal_satisfied(
+            goal, action, after
+        ):
+            return TaskEffectResult(TaskEffect.COMPLETED)
+
+        if action.type is action.type.CLICK and self._completion_evidence(
+            goal, action, before, after
+        ):
             return TaskEffectResult(TaskEffect.COMPLETED)
 
         if not result.changed or before == after:
@@ -85,7 +99,7 @@ class TaskEffectEvaluator:
         before: WorldState,
         after: WorldState,
     ) -> bool:
-        """Require post-action evidence before declaring an action goal complete."""
+        """Require post-action evidence before declaring a click goal complete."""
         tokens = re.findall(r"[a-z0-9]+", goal.lower())
         if not tokens or tokens[0] not in {"tap", "click", "open"}:
             return False
