@@ -24,10 +24,20 @@ def create_task_runtime(
     *,
     provider: ProviderName = "deterministic",
     reasoning_provider: ReasoningProvider | None = None,
+    fallback_planner: ReasoningProvider | None = None,
     model: str | None = None,
     provider_timeout: float = 30.0,
     max_steps: int = 5,
     settle_timeout: float = 2.0,
 ) -> CleanTaskRuntime:
     selected = reasoning_provider or create_reasoning_provider(provider, model=model, timeout=provider_timeout)
-    return CleanTaskRuntime(bridge=bridge, planner=selected, max_steps=max_steps, settle_timeout=settle_timeout)
+    fallback = fallback_planner
+    if fallback is None and provider == "groq":
+        fallback = DeterministicReasoner()
+    return CleanTaskRuntime(
+        bridge=bridge,
+        planner=selected,
+        fallback_planner=fallback,
+        max_steps=max_steps,
+        settle_timeout=settle_timeout,
+    )
