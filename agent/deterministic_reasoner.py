@@ -11,6 +11,8 @@ from .targeting import _score
 class DeterministicReasoner:
     """Small, explainable planner used as a stable fallback before any LLM."""
 
+    _PREREQUISITE_WORDS = ("start", "begin", "initialize", "select", "choose", "enable")
+
     @staticmethod
     def _meaningful_terms(goal: str) -> tuple[str, ...]:
         stop = {"a", "an", "the", "to", "of", "and", "then", "please", "tap", "click", "open"}
@@ -18,10 +20,12 @@ class DeterministicReasoner:
 
     @staticmethod
     def _used_ids(context: ReasoningContext) -> set[str]:
+        # A blocked action is state-specific. It must remain reusable after a
+        # later action changes the UI state, so only non-blocked actions count.
         return {
             str(item.get("target_id"))
             for item in context.history
-            if item.get("target_id") is not None
+            if item.get("target_id") is not None and item.get("task_effect") != "blocked"
         }
 
     @staticmethod
@@ -33,6 +37,13 @@ class DeterministicReasoner:
             None,
         )
         return _score(context.goal, element) if element is not None else 0.0
+
+    @staticmethod
+    def _latest_blocker(context: ReasoningContext) -> str:
+        for item in reversed(context.history):
+            if item.get("task_effect") == "blocked":
+                return str(item.get("effect_evidence") or "").lower()
+        return ""
 
     def plan(self, context: ReasoningContext) -> Decision:
         candidates = [
@@ -46,9 +57,30 @@ class DeterministicReasoner:
         used = self._used_ids(context)
         clicks = [candidate for candidate in candidates if candidate.action_type is ActionType.CLICK]
         ranked = sorted(clicks, key=lambda candidate: self._target_score(context, candidate), reverse=True)
+        blocker = self._latest_blocker(context)
 
-        # Recovery: after an accepted-but-blocked action, prefer another
-        # currently available matching target instead of repeating the same node.
+        # When the UI explicitly says a prerequisite must happen first, prefer
+        # a currently available prerequisite-looking control. This is generic
+        # recovery logic, not knowledge of any particular app or workflow.
+        if "first" in blocker:
+            prerequisite = [
+                candidate
+                for candidate in ranked
+                if candidate.target.element_id not in used
+                and any(
+                    word in (candidate.target.text + " " + candidate.target.content_description).lower()
+                    for word in self._PREREQUISITE_WORDS
+                )
+            ]
+            if prerequisite:
+                candidate = prerequisite[0]
+                return Decision(
+                    Action(ActionType.CLICK, candidate.target),
+                    f"selected prerequisite candidate {candidate.target.element_id}",
+                )
+
+        # Otherwise prefer a new semantic match. A previously blocked target
+        # is intentionally eligible once the state has changed.
         for candidate in ranked:
             score = self._target_score(context, candidate)
             if candidate.target.element_id not in used and score > 0:
@@ -58,8 +90,7 @@ class DeterministicReasoner:
                 )
 
         # If no visible click is a new semantic match, use a visible scroll
-        # candidate rather than inventing an off-screen target or clicking a
-        # stale node. The runtime will observe again before the next decision.
+        # candidate rather than inventing an off-screen target or stale node.
         for candidate in candidates:
             if candidate.action_type is ActionType.SCROLL:
                 return Decision(Action(ActionType.SCROLL, candidate.target), "scroll to reveal more of the current UI")
