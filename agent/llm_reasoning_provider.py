@@ -10,8 +10,9 @@ from .core import Decision
 
 
 _RESPONSE_CONTRACT = """Return ONLY one JSON object using exactly this decision shape:
-{"action_type":"click|back|wait","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
+{"action_type":"click|back|wait|scroll","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
 For click, target.element_id MUST be one of the clickable candidates in the observation.
+For scroll, target.element_id MUST be one of the scrollable candidates in the observation.
 For back or wait, target MUST be null.
 Do not use an 'action' field. Do not use a top-level 'element_id' field.
 
@@ -29,6 +30,12 @@ Never wait for a candidate that is already present with visible=true.
 If a visible and enabled candidate directly advances the goal, prefer that
 action over WAIT unless the current observation gives a concrete reason the
 candidate cannot yet be used.
+
+If a goal-relevant candidate exists but is visible=false, do not click it.
+If a visible, enabled, scrollable candidate is available, use SCROLL to bring
+off-screen content into view, then reason again from the fresh observation.
+SCROLL moves forward through the scrollable container. Do not scroll when the
+goal-relevant action is already visible and usable.
 
 Use the action history to understand what has already been attempted.
 Never claim that the goal is complete unless the current observation provides
