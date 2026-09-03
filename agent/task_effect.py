@@ -74,9 +74,10 @@ class TaskEffectEvaluator:
         if evidence:
             return TaskEffectResult(TaskEffect.BLOCKED, evidence)
 
-        # Click/open/tap goals require actual post-action evidence. A matching
-        # button being clicked is execution success, not proof that the task
-        # outcome was achieved.
+        # Global actions such as BACK and WAIT retain their established
+        # semantic completion rules. Click/open goals are stricter: execution
+        # success alone is never proof that the requested task outcome was
+        # achieved.
         if action.type is not ActionType.CLICK and self.goal_evaluator.action_goal_satisfied(
             goal, action, after
         ):
@@ -99,15 +100,25 @@ class TaskEffectEvaluator:
         before: WorldState,
         after: WorldState,
     ) -> bool:
-        """Require post-action evidence before declaring a click goal complete."""
+        """Require concrete post-action evidence before declaring a click complete."""
         tokens = re.findall(r"[a-z0-9]+", goal.lower())
         if not tokens or tokens[0] not in {"tap", "click", "open"}:
             return False
-        if action.target is None:
+        target = action.target
+        if target is None:
             return False
 
-        target_id = action.target.element_id
-        if target_id and not any(element.id == target_id for element in after.elements):
+        # The strongest generic completion signal is that the actionable
+        # target which was selected is no longer present after the transition.
+        # Match by stable id first, with text/content-description fallback for
+        # providers that do not preserve resource ids.
+        before_target = next(
+            (element for element in before.elements if TaskEffectEvaluator._target_matches(element, target)),
+            None,
+        )
+        if before_target is not None and not any(
+            TaskEffectEvaluator._target_matches(element, target) for element in after.elements
+        ):
             return True
 
         for element in after.elements:
@@ -118,6 +129,19 @@ class TaskEffectEvaluator:
             if any(phrase in normalized for phrase in _COMPLETION_PHRASES):
                 return True
         return False
+
+    @staticmethod
+    def _target_matches(element, target) -> bool:
+        if target.element_id and element.id == target.element_id:
+            return True
+        target_text = target.text.strip().lower()
+        target_description = target.content_description.strip().lower()
+        element_text_value = element.text.strip().lower()
+        element_description = element.content_description.strip().lower()
+        return bool(
+            (target_text and element_text_value == target_text)
+            or (target_description and element_description == target_description)
+        )
 
     @staticmethod
     def _failure_evidence(state: WorldState) -> str:
