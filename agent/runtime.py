@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .core import WorldState
 from .deterministic_reasoner import DeterministicReasoner
 from .groq import groq_transport
 from .llm_reasoning_provider import LLMReasoningProvider
