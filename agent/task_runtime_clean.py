@@ -43,11 +43,7 @@ _FAILURE_RE = re.compile(
 
 
 def _ui_key(state: WorldState) -> tuple[Any, ...]:
-    return (
-        state.package,
-        state.activity,
-        tuple(state.elements),
-    )
+    return (state.package, state.activity, tuple(state.elements))
 
 
 def _status_evidence(state: WorldState) -> str | None:
@@ -62,7 +58,7 @@ def _status_evidence(state: WorldState) -> str | None:
 
 @dataclass
 class CleanTaskRuntime:
-    """One authoritative observe → reason → execute → observe loop."""
+    """One authoritative observe -> reason -> execute -> observe loop."""
 
     bridge: NavigationBridge
     planner: Any
@@ -120,7 +116,6 @@ class CleanTaskRuntime:
         self.current_state = self.bridge.observe()
         state = self.current_state
 
-        # Never let a static button label satisfy an action goal before the action occurred.
         if not self._is_action_goal(goal) and self.evaluator.evaluate(goal, state):
             return True
 
@@ -130,8 +125,17 @@ class CleanTaskRuntime:
 
             blocked_evidence = self._guard(decision.action, state)
             if blocked_evidence is not None:
-                self._record(step, decision, ExecutionResult(False, False, False, "action blocked by runtime"), "blocked", blocked_evidence)
-                continue
+                self._record(
+                    step,
+                    decision,
+                    ExecutionResult(False, False, False, "action blocked by runtime"),
+                    "blocked",
+                    blocked_evidence,
+                )
+                # A planner that keeps proposing the same blocked action has
+                # provided no new executable path. Do not burn the remaining
+                # budget looping on a mechanical prohibition.
+                return False
 
             try:
                 result = self.bridge.execute(decision.action)
@@ -146,7 +150,13 @@ class CleanTaskRuntime:
             try:
                 after = self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
             except TimeoutError as exc:
-                self._record(step, decision, ExecutionResult(True, False, False, str(exc)), "unknown", str(exc))
+                self._record(
+                    step,
+                    decision,
+                    ExecutionResult(True, False, False, str(exc)),
+                    "unknown",
+                    str(exc),
+                )
                 state = self.bridge.observe()
                 self.current_state = state
                 continue
@@ -157,7 +167,12 @@ class CleanTaskRuntime:
 
             if failure:
                 self.runtime_state.blocked.append(
-                    BlockedAction(decision.action.type, decision.action.target.element_id if decision.action.target else None, failure, _ui_key(after))
+                    BlockedAction(
+                        decision.action.type,
+                        decision.action.target.element_id if decision.action.target else None,
+                        failure,
+                        _ui_key(after),
+                    )
                 )
                 self._record(step, decision, result, "blocked", failure)
             elif self._action_completed(goal, decision, state, after):
@@ -173,7 +188,6 @@ class CleanTaskRuntime:
             state = after
             self.current_state = after
 
-            # Drop stale blocks once the observable state changes.
             current_key = _ui_key(state)
             self.runtime_state.blocked = [b for b in self.runtime_state.blocked if b.state_key == current_key]
 
