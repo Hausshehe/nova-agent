@@ -132,9 +132,6 @@ class CleanTaskRuntime:
                     "blocked",
                     blocked_evidence,
                 )
-                # A planner that keeps proposing the same blocked action has
-                # provided no new executable path. Do not burn the remaining
-                # budget looping on a mechanical prohibition.
                 return False
 
             try:
@@ -175,7 +172,20 @@ class CleanTaskRuntime:
                     )
                 )
                 self._record(step, decision, result, "blocked", failure)
-            elif self._action_completed(goal, decision, state, after):
+            elif self._is_action_goal(goal):
+                # Action goals can only complete from evidence caused by the
+                # requested click. Never fall back to static goal matching
+                # after unrelated actions such as BACK.
+                if self._action_completed(goal, decision, state, after):
+                    self._record(step, decision, result, "completed")
+                    state = after
+                    self.current_state = after
+                    return True
+                elif changed:
+                    self._record(step, decision, result, "progressed")
+                else:
+                    self._record(step, decision, result, "unknown", "no observable UI change")
+            elif self.evaluator.evaluate(goal, after):
                 self._record(step, decision, result, "completed")
                 state = after
                 self.current_state = after
