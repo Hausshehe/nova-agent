@@ -94,8 +94,10 @@ class AndroidBridge:
         )
 
     def click(self, element_id: str) -> dict[str, Any]:
-        """Execute a direct click through Nova's Android bridge."""
         return self._request({"command": "click", "elementId": element_id})
+
+    def scroll(self, element_id: str) -> dict[str, Any]:
+        return self._request({"command": "scroll", "elementId": element_id})
 
     def execute(self, action: Action) -> ExecutionResult:
         if action.type == ActionType.CLICK:
@@ -103,6 +105,19 @@ class AndroidBridge:
                 return ExecutionResult(False, False, False, "click action has no target")
             try:
                 response = self.click(action.target.element_id)
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.SCROLL:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "scroll action has no target")
+            try:
+                response = self.scroll(action.target.element_id)
             except AndroidBridgeError as exc:
                 return ExecutionResult(False, False, False, str(exc))
             return ExecutionResult(
@@ -120,7 +135,6 @@ class AndroidBridge:
         return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
     def launch(self, package: str = "com.hausshehe.nova", root: bool = True) -> dict[str, Any]:
-        """Launch Nova without adb. When falling back to am, prefer root."""
         try:
             return self._request({"command": "launch", "package": package})
         except AndroidBridgeError:
@@ -129,17 +143,10 @@ class AndroidBridge:
             if root:
                 commands.append(["su", "-c", f"am start -n {component}"])
             commands.append(["am", "start", "-n", component])
-
             last_error: Exception | None = None
             for command in commands:
                 try:
-                    subprocess.run(
-                        command,
-                        check=True,
-                        timeout=self.timeout,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
+                    subprocess.run(command, check=True, timeout=self.timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     return {"ok": True, "root": command[0] == "su"}
                 except Exception as exc:
                     last_error = exc
