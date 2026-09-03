@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from .android_bridge import AndroidBridge, AndroidBridgeError
+from .reasoning_payload import reasoning_payload
 from .reasoning_provider import ReasoningProvider
 from .runtime import create_reasoning_provider, create_task_executor
 
@@ -16,6 +18,8 @@ class TracingReasoningProvider:
 
     def decide(self, context):
         print(f"LLM_STEP goal={context.goal!r} observation={context.state.observation_id}")
+        payload = reasoning_payload(context)
+        print("LLM_PAYLOAD " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
         try:
             decision = self._provider.decide(context)
         except Exception as exc:
