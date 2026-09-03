@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import socket
 import subprocess
 import time
@@ -104,84 +103,22 @@ class AndroidBridge:
             return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
         return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
-    @staticmethod
-    def _foreground_matches(output: str, package: str, component: str) -> bool:
-        """Return whether ActivityManager reports the requested component foreground."""
-        foreground_markers = ("mFocusedApp=", "mResumedActivity=", "topResumedActivity=")
-        for line in output.splitlines():
-            if not any(marker in line for marker in foreground_markers):
-                continue
-            if component in line:
-                return True
-        return False
-
-    def _foreground_output(self, root: bool) -> str:
-        command = ["dumpsys", "activity", "activities"]
-        if root:
-            command = ["su", "-c", "dumpsys activity activities"]
-        result = subprocess.run(
-            command,
-            check=True,
-            timeout=self.timeout,
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout
-
-    def _wait_for_foreground(self, package: str, component: str, root: bool) -> bool:
-        deadline = time.monotonic() + self.timeout
-        while True:
-            try:
-                output = self._foreground_output(root)
-                if self._foreground_matches(output, package, component):
-                    return True
-            except (OSError, subprocess.SubprocessError):
-                pass
-
-            if time.monotonic() >= deadline:
-                return False
-            time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
-
-    def launch(self, package: str = "com.hausshehe.nova", root: bool = True) -> dict[str, Any]:
-        """Launch Nova and verify ActivityManager actually foregrounded its main activity."""
-        component = f"{package}/.MainActivity"
-        launch_error: Exception | None = None
-
+    def launch(self, package: str = "com.hausshehe.nova") -> dict[str, Any]:
+        """Launch Nova through the Android bridge, with a non-root shell fallback."""
         try:
-            response = self._request({"command": "launch", "package": package})
-            if self._wait_for_foreground(package, component, root):
-                return response
-            launch_error = AndroidBridgeError(
-                f"Android bridge reported launch success, but {component} did not become foreground"
-            )
-        except AndroidBridgeError as exc:
-            launch_error = exc
-
-        commands: list[list[str]] = []
-        if root:
-            commands.append(["su", "-c", f"am start -n {component}"])
-        commands.append(["am", "start", "-n", component])
-
-        last_error: Exception | None = launch_error
-        for command in commands:
+            return self._request({"command": "launch", "package": package})
+        except AndroidBridgeError:
             try:
                 subprocess.run(
-                    command,
+                    ["am", "start", "-n", f"{package}/.MainActivity"],
                     check=True,
                     timeout=self.timeout,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                verified_root = command[0] == "su"
-                if self._wait_for_foreground(package, component, verified_root):
-                    return {"ok": True, "root": verified_root}
-                last_error = AndroidBridgeError(
-                    f"launch command succeeded, but {component} did not become foreground"
-                )
+                return {"ok": True}
             except Exception as exc:
-                last_error = exc
-
-        raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
+                raise AndroidBridgeError(f"Unable to launch Nova: {exc}") from exc
 
     @staticmethod
     def _same_ui(before: WorldState, after: WorldState) -> bool:
