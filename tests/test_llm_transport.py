@@ -106,6 +106,66 @@ def test_transport_wraps_http_failure(monkeypatch):
         OpenAICompatibleTransport("http://localhost:8080", "local").complete("test")
 
 
+def test_transport_retries_429_using_retry_after(monkeypatch):
+    calls = {"count": 0}
+    waits = []
+
+    class Headers(dict):
+        def get(self, key, default=None):
+            return super().get(key, default)
+
+    def fake_urlopen(request, timeout):
+        calls["count"] += 1
+        if calls["count"] < 2:
+            raise HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                Headers({"Retry-After": "0.25"}),
+                None,
+            )
+        return FakeResponse(
+            {"choices": [{"message": {"content": '{"action_type":"wait"}'}}]}
+        )
+
+    monkeypatch.setattr("agent.llm_transport.urlopen", fake_urlopen)
+    monkeypatch.setattr("agent.llm_transport.time.sleep", waits.append)
+
+    result = OpenAICompatibleTransport(
+        "http://localhost:8080", "local", max_rate_limit_retries=2
+    ).complete("test")
+
+    assert result == {"action_type": "wait"}
+    assert calls["count"] == 2
+    assert waits == [0.25]
+
+
+def test_transport_rejects_429_without_retry_after(monkeypatch):
+    def fake_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 429, "rate limited", {}, None)
+
+    monkeypatch.setattr("agent.llm_transport.urlopen", fake_urlopen)
+
+    with pytest.raises(LLMTransportError, match="rate limited \(429\)"):
+        OpenAICompatibleTransport("http://localhost:8080", "local").complete("test")
+
+
+def test_transport_rejects_429_when_retry_after_exceeds_bound(monkeypatch):
+    def fake_urlopen(request, timeout):
+        raise HTTPError(
+            request.full_url,
+            429,
+            "rate limited",
+            {"Retry-After": "11"},
+            None,
+        )
+
+    monkeypatch.setattr("agent.llm_transport.urlopen", fake_urlopen)
+
+    with pytest.raises(LLMTransportError, match="retry-after unavailable or too long"):
+        OpenAICompatibleTransport("http://localhost:8080", "local").complete("test")
+
+
 def test_transport_rejects_non_json_model_message(monkeypatch):
     def fake_urlopen(request, timeout):
         return FakeResponse(
