@@ -1,37 +1,140 @@
+"""
+LLM Reasoning Provider - Updated with root action support
+"""
+
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Mapping
+import os
+from typing import Callable, Dict, Any, Optional
 
-from .core import Decision
+from .core import Decision, WorldState
 from .reasoning_context import ReasoningContext
-from .reasoning_payload import reasoning_payload
-from .reasoning_response import InvalidReasoningResponse, decision_from_response
-
-
-_RESPONSE_CONTRACT = """Return ONLY one JSON object:
-{"action_type":"click|back|scroll","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
-Use only an actionable candidate from the CURRENT observation. The current observation is authoritative.
-The goal describes the desired outcome, not an instruction to click a similarly named element immediately.
-Use history to understand what has already happened. After every executed action, reason again from the fresh observation.
-Never assume an accepted Android action completed the task. Never repeat an action just because it was previously chosen.
-A scroll action moves a currently scrollable container forward to reveal content that is not currently visible. Use scroll when the desired target is below the current viewport, rather than selecting an offscreen target.
-Do not invent or emit action types that are not present in the candidate list.
-"""
+from .reasoning_payload import build_reasoning_payload
+from .reasoning_response import decision_from_response
 
 
 class LLMReasoningProvider:
-    def __init__(self, responder: Callable[[str], Mapping[str, Any]]):
-        self._responder = responder
-
-    def decide(self, context: ReasoningContext) -> Decision:
-        prompt = _RESPONSE_CONTRACT + "\nObservation and goal:\n" + json.dumps(
-            reasoning_payload(context), ensure_ascii=False, separators=(",", ":")
-        )
+    """LLM-based reasoning provider that can handle root actions"""
+    
+    def __init__(self, complete_fn: Callable[[str], str]):
+        self.complete_fn = complete_fn
+        self._last_prompt = ""
+        self._last_response = ""
+    
+    def plan(self, context: ReasoningContext) -> Decision:
+        """Generate a decision using the LLM"""
+        
+        # Build the prompt with root action descriptions
+        prompt = self._build_prompt(context)
+        self._last_prompt = prompt
+        
         try:
-            response = self._responder(prompt)
-        except Exception as exc:
-            raise RuntimeError(f"reasoning provider failed: {type(exc).__name__}: {exc}") from exc
-        if not isinstance(response, Mapping):
-            raise InvalidReasoningResponse("LLM response must be an object")
-        return decision_from_response(response, context)
+            response = self.complete_fn(prompt)
+            self._last_response = response
+            
+            # Parse the response
+            decision = decision_from_response(response, context)
+            
+            # If no valid decision was made, fall back to wait
+            if decision is None:
+                from .core import Action, ActionType, Decision
+                return Decision(
+                    action=Action(type=ActionType.WAIT, target=None),
+                    rationale="LLM response invalid, waiting"
+                )
+            
+            return decision
+            
+        except Exception as e:
+            # If LLM fails, wait
+            from .core import Action, ActionType, Decision
+            return Decision(
+                action=Action(type=ActionType.WAIT, target=None),
+                rationale=f"LLM error: {str(e)}, waiting"
+            )
+    
+    def _build_prompt(self, context: ReasoningContext) -> str:
+        """Build the prompt for the LLM with root actions included"""
+        
+        # Get the UI elements description
+        elements_desc = []
+        for element in context.current_state.elements[:30]:
+            if element.clickable or element.editable or element.scrollable:
+                desc = {
+                    "id": element.id,
+                    "text": element.text,
+                    "content_description": element.content_description,
+                    "clickable": element.clickable,
+                    "enabled": element.enabled,
+                    "editable": element.editable,
+                    "scrollable": element.scrollable,
+                    "class": element.class_name,
+                    "visible": element.visible,
+                }
+                elements_desc.append(desc)
+        
+        # Build action history
+        history_desc = []
+        for entry in context.history:
+            if isinstance(entry, dict):
+                history_desc.append({
+                    "action": entry.get("action", {}),
+                    "result": entry.get("result", {}),
+                })
+            else:
+                history_desc.append(str(entry))
+        
+        prompt = f"""You are Nova, an AI agent controlling an Android phone.
+
+GOAL: {context.goal}
+
+CURRENT STATE:
+- App: {context.current_state.package}
+- Activity: {context.current_state.activity}
+
+UI ELEMENTS:
+{json.dumps(elements_desc, indent=2)}
+
+ACTION HISTORY:
+{json.dumps(history_desc, indent=2)}
+
+AVAILABLE ACTIONS:
+1. click - Click on a UI element
+   Requires: target with element_id from UI elements above
+2. back - Press the back button
+3. wait - Wait for UI to settle
+
+ROOT ACTIONS (system commands):
+4. clear_app - Clear app storage/data
+   Requires: package (e.g., "youtube", "whatsapp", "com.google.android.youtube")
+5. launch_app - Launch/open an app
+   Requires: package (e.g., "settings", "youtube", "com.android.settings")
+6. list_apps - List installed apps
+   Optional: filter_text (e.g., "google")
+7. screenshot - Take a screenshot
+
+RESPOND WITH JSON:
+{{
+    "action_type": "click|back|wait|clear_app|launch_app|list_apps|screenshot",
+    "target": {{"element_id": "..."}},  // Required for click
+    "package": "...",                    // Required for clear_app/launch_app
+    "filter_text": "...",                // Optional for list_apps
+    "reason": "Brief explanation of why this action"
+}}
+
+Important rules:
+- For click, ONLY use element IDs that appear in the UI ELEMENTS above
+- Do NOT click elements that are not clickable or not enabled
+- For clear_app/launch_app, you can use shortcuts: youtube, whatsapp, instagram, facebook, twitter, telegram, settings, spotify, chrome, gmail
+- If you've already tried an action that failed, try a different approach
+- If the goal seems to be achieved, choose "wait" and explain why
+- A single failed action doesn't mean the goal is impossible
+- Consider prerequisites - e.g., to clear an app, you don't need to open it first"""
+        
+        return prompt
+
+
+def create_llm_provider(complete_fn: Callable[[str], str]) -> LLMReasoningProvider:
+    """Factory function for creating an LLM provider"""
+    return LLMReasoningProvider(complete_fn)
