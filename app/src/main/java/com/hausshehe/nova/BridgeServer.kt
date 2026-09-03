@@ -24,6 +24,8 @@ object BridgeServer {
     private const val OBSERVATION_POLL_MS = 100L
     private const val CLICK_WAIT_MS = 2000L
     private const val CLICK_POLL_MS = 100L
+    private const val SCROLL_WAIT_MS = 2000L
+    private const val SCROLL_POLL_MS = 100L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
@@ -33,7 +35,6 @@ object BridgeServer {
             Log.d(TAG, "start(): already started")
             return
         }
-
         started = true
         Log.i(TAG, "start(): starting localhost bridge on 127.0.0.1:$PORT")
         executor.execute { serve(context.applicationContext) }
@@ -41,7 +42,6 @@ object BridgeServer {
 
     private fun serve(context: Context) {
         var server: ServerSocket? = null
-
         try {
             for (attempt in 1..START_RETRIES) {
                 try {
@@ -49,11 +49,7 @@ object BridgeServer {
                     Log.i(TAG, "Bridge listening on 127.0.0.1:$PORT")
                     break
                 } catch (e: Exception) {
-                    Log.e(
-                        TAG,
-                        "Bridge bind failed (attempt $attempt/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}",
-                        e
-                    )
+                    Log.e(TAG, "Bridge bind failed (attempt $attempt/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}", e)
                     if (attempt < START_RETRIES) {
                         try {
                             Thread.sleep(RETRY_DELAY_MS)
@@ -64,13 +60,11 @@ object BridgeServer {
                     }
                 }
             }
-
             val listeningServer = server
             if (listeningServer == null) {
                 Log.e(TAG, "Bridge failed to bind 127.0.0.1:$PORT after $START_RETRIES attempts")
                 return
             }
-
             listeningServer.use { boundServer ->
                 while (true) {
                     val socket = boundServer.accept()
@@ -98,6 +92,7 @@ object BridgeServer {
                 val response = when (request.optString("command")) {
                     "observe" -> observe()
                     "click" -> click(request.optString("elementId"))
+                    "scroll" -> scroll(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
                     else -> error("unknown command: ${request.optString("command")}")
@@ -145,67 +140,90 @@ object BridgeServer {
     private fun click(elementId: String): JSONObject {
         val service = NovaAccessibilityService.instance
             ?: return error("Nova accessibility service is not connected")
-
         val deadline = System.currentTimeMillis() + CLICK_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
             val root = service.rootInActiveWindow
             if (root == null) {
-                sleepForClickRetry()
+                sleepForRetry(CLICK_POLL_MS)
                 continue
             }
-
             val activePackage = root.packageName?.toString()
             if (activePackage != PACKAGE) {
-                Log.d(TAG, "Click waiting for Nova window: requested=$elementId active=$activePackage")
                 root.recycle()
-                sleepForClickRetry()
+                sleepForRetry(CLICK_POLL_MS)
                 continue
             }
-
             val node = findNode(root, elementId)
             if (node == null) {
-                Log.d(TAG, "Click waiting for accessibility node: $elementId")
                 root.recycle()
-                sleepForClickRetry()
+                sleepForRetry(CLICK_POLL_MS)
                 continue
             }
-
-            val accepted = node.isEnabled && node.isClickable &&
-                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            val accepted = node.isEnabled && node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             if (node !== root) root.recycle()
             node.recycle()
-
             return JSONObject().apply {
                 put("ok", true)
                 put("accepted", accepted)
                 put("changed", accepted)
             }
         }
-
         val root = service.rootInActiveWindow
         val activePackage = root?.packageName?.toString()
         root?.recycle()
         return error("element not found after ${CLICK_WAIT_MS}ms: $elementId activePackage=$activePackage")
     }
 
-    private fun sleepForClickRetry() {
+    private fun scroll(elementId: String): JSONObject {
+        val service = NovaAccessibilityService.instance
+            ?: return error("Nova accessibility service is not connected")
+        val deadline = System.currentTimeMillis() + SCROLL_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val root = service.rootInActiveWindow
+            if (root == null) {
+                sleepForRetry(SCROLL_POLL_MS)
+                continue
+            }
+            val activePackage = root.packageName?.toString()
+            if (activePackage != PACKAGE) {
+                root.recycle()
+                sleepForRetry(SCROLL_POLL_MS)
+                continue
+            }
+            val node = findNode(root, elementId)
+            if (node == null) {
+                root.recycle()
+                sleepForRetry(SCROLL_POLL_MS)
+                continue
+            }
+            val accepted = node.isEnabled && node.isScrollable &&
+                node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            if (node !== root) root.recycle()
+            node.recycle()
+            return JSONObject().apply {
+                put("ok", true)
+                put("accepted", accepted)
+                put("changed", accepted)
+            }
+        }
+        val root = service.rootInActiveWindow
+        val activePackage = root?.packageName?.toString()
+        root?.recycle()
+        return error("scrollable element not found after ${SCROLL_WAIT_MS}ms: $elementId activePackage=$activePackage")
+    }
+
+    private fun sleepForRetry(delayMs: Long) {
         try {
-            Thread.sleep(CLICK_POLL_MS)
+            Thread.sleep(delayMs)
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
         }
     }
 
-    private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? =
-        findNode(root, id, "0")
+    private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? = findNode(root, id, "0")
 
-    private fun findNode(
-        node: AccessibilityNodeInfo,
-        id: String,
-        path: String
-    ): AccessibilityNodeInfo? {
+    private fun findNode(node: AccessibilityNodeInfo, id: String, path: String): AccessibilityNodeInfo? {
         if (node.viewIdResourceName == id || "path:$path" == id) return node
-
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val result = findNode(child, id, "$path.$i")
@@ -234,12 +252,8 @@ object BridgeServer {
             ?: return error("launch intent not found: $packageName")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         context.startActivity(intent)
-
         val service = NovaAccessibilityService.instance
-        if (service == null) {
-            return error("Nova accessibility service is not connected")
-        }
-
+            ?: return error("Nova accessibility service is not connected")
         val deadline = System.currentTimeMillis() + LAUNCH_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
             val root = service.rootInActiveWindow
@@ -253,14 +267,8 @@ object BridgeServer {
                 }
             }
             root?.recycle()
-            try {
-                Thread.sleep(OBSERVATION_POLL_MS)
-            } catch (interrupted: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return error("launch wait interrupted")
-            }
+            sleepForRetry(OBSERVATION_POLL_MS)
         }
-
         val activePackage = service.rootInActiveWindow?.packageName?.toString()
         Log.e(TAG, "Launch did not reach target package $packageName; active package=$activePackage")
         return error("launch timed out waiting for accessibility window: expected=$packageName active=$activePackage")
