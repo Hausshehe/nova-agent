@@ -1,49 +1,116 @@
+"""
+Reasoning response - UI navigation only
+"""
+
 from __future__ import annotations
 
-from typing import Any, Mapping
+import json
+from typing import Any, Dict, Optional
 
-from .core import Action, ActionType, Decision, Target
+from .core import Action, ActionType, Target, Decision
 from .reasoning_context import ReasoningContext
 
 
-class InvalidReasoningResponse(ValueError):
-    pass
-
-
-def decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
-    action_type = response.get("action_type")
+def decision_from_response(
+    response_text: str,
+    context: ReasoningContext
+) -> Decision:
+    """Parse LLM response into a Decision - UI navigation only"""
+    
+    if isinstance(response_text, dict):
+        response_text = json.dumps(response_text)
+    
     try:
-        action = ActionType(action_type)
-    except (TypeError, ValueError) as exc:
-        raise InvalidReasoningResponse("invalid action_type") from exc
-
-    candidate_types = {candidate.action_type for candidate in context.candidates}
-    if action not in candidate_types:
-        raise InvalidReasoningResponse(f"action type is not currently available: {action.value}")
-
-    target_data = response.get("target")
-    if action is ActionType.BACK:
-        if target_data is not None:
-            raise InvalidReasoningResponse("target is not allowed for this action")
-        return Decision(Action(action), str(response.get("reason", "provider decision")))
-
-    if action is ActionType.WAIT:
-        raise InvalidReasoningResponse("unsupported action type")
-
-    if not isinstance(target_data, Mapping):
-        raise InvalidReasoningResponse(f"{action.value} action requires a target object")
-    element_id = target_data.get("element_id")
-    if not isinstance(element_id, str) or not element_id:
-        raise InvalidReasoningResponse(f"{action.value} target requires element_id")
-
-    candidate = next(
-        (
-            c for c in context.candidates
-            if c.action_type is action and c.target and c.target.element_id == element_id
-        ),
-        None,
+        data = json.loads(response_text)
+    except json.JSONDecodeError:
+        data = _extract_from_text(response_text)
+    
+    action_type_str = data.get("action_type", "wait")
+    reason = data.get("reason", data.get("rationale", "LLM decision"))
+    
+    # Map string to ActionType enum
+    action_type_map = {
+        "click": ActionType.CLICK,
+        "back": ActionType.BACK,
+        "wait": ActionType.WAIT,
+    }
+    
+    action_type = action_type_map.get(action_type_str.lower(), ActionType.WAIT)
+    
+    # Handle click
+    if action_type == ActionType.CLICK:
+        target_data = data.get("target", {})
+        element_id = target_data.get("element_id") if target_data else None
+        
+        if not element_id:
+            # Try to find by text
+            target_text = target_data.get("text", "")
+            if target_text:
+                for element in context.state.elements:
+                    if target_text in element.text or target_text in element.content_description:
+                        element_id = element.id
+                        break
+        
+        if not element_id:
+            return Decision(
+                action=Action(type=ActionType.WAIT, target=None),
+                rationale=f"Could not find target for click action: {data}"
+            )
+        
+        # Validate the target exists and is clickable
+        target_element = None
+        for element in context.state.elements:
+            if element.id == element_id:
+                target_element = element
+                break
+        
+        if not target_element:
+            return Decision(
+                action=Action(type=ActionType.WAIT, target=None),
+                rationale=f"Element {element_id} not found in current state"
+            )
+        
+        if not target_element.clickable:
+            return Decision(
+                action=Action(type=ActionType.WAIT, target=None),
+                rationale=f"Element {element_id} is not clickable"
+            )
+        
+        return Decision(
+            action=Action(
+                type=ActionType.CLICK,
+                target=Target(element_id=element_id)
+            ),
+            rationale=reason
+        )
+    
+    # Handle back/wait
+    if action_type in [ActionType.BACK, ActionType.WAIT]:
+        return Decision(
+            action=Action(type=action_type, target=None),
+            rationale=reason
+        )
+    
+    # Unknown - default to wait
+    return Decision(
+        action=Action(type=ActionType.WAIT, target=None),
+        rationale=f"Unknown action type: {action_type_str}, defaulting to wait"
     )
-    if candidate is None or not candidate.enabled or not candidate.visible:
-        raise InvalidReasoningResponse(f"{action.value} target is not currently actionable")
-    target = Target(element_id, candidate.target.text, candidate.target.content_description)
-    return Decision(Action(action, target), str(response.get("reason", "provider decision")))
+
+
+def _extract_from_text(text: str) -> Dict[str, Any]:
+    """Extract action from raw text"""
+    data = {"action_type": "wait", "reason": text[:100]}
+    text_lower = text.lower()
+    
+    if "click" in text_lower:
+        data["action_type"] = "click"
+        import re
+        id_match = re.search(r'element_id["\']?\s*[:=]\s*["\']?([\w.]+)', text)
+        if id_match:
+            data["target"] = {"element_id": id_match.group(1)}
+    
+    elif "back" in text_lower:
+        data["action_type"] = "back"
+    
+    return data
