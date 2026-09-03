@@ -38,7 +38,6 @@ def build_reasoning_context(
         if element.clickable and element.visible
     ]
     candidates.append(ActionCandidate(ActionType.BACK))
-    candidates.append(ActionCandidate(ActionType.WAIT))
     return ReasoningContext(
         goal=goal,
         state=state,
