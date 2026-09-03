@@ -22,7 +22,7 @@ class RecoveryBridge:
                 package="nova",
                 activity="MainActivity",
                 observation_id="done",
-                elements=(UIElement("done", text="Completed", clickable=False),),
+                elements=(UIElement("done", text="Recovery Completed", clickable=False),),
             ),
         ]
         self.index = 0
