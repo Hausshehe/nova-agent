@@ -7,7 +7,7 @@ logic into the core.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from .models import Action, Decision, ExecutionResult, Goal, Observation
 
@@ -16,6 +16,14 @@ class Observer(Protocol):
     """Capability for obtaining the current UI observation."""
 
     def observe(self) -> Observation:
+        ...
+
+
+@runtime_checkable
+class FreshObserver(Protocol):
+    """Capability for obtaining an observation after a prior state changes."""
+
+    def observe_fresh(self, previous: Observation) -> Observation:
         ...
 
 
