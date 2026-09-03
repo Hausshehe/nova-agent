@@ -6,7 +6,7 @@ from .reasoning_context import ReasoningContext
 
 
 def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
-    """Convert reasoning context into a stable, model/provider-neutral payload."""
+    """Convert reasoning context into a compact, model/provider-neutral payload."""
     state = context.state
     return {
         "goal": context.goal,
@@ -14,7 +14,6 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
             "package": state.package,
             "activity": state.activity,
             "observation_id": state.observation_id,
-            "timestamp_ms": state.timestamp_ms,
             "elements": [
                 {
                     "id": element.id,
@@ -22,13 +21,6 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
                     "content_description": element.content_description,
                     "clickable": element.clickable,
                     "enabled": element.enabled,
-                    "class_name": element.class_name,
-                    "bounds": element.bounds,
-                    "editable": element.editable,
-                    "scrollable": element.scrollable,
-                    "checkable": element.checkable,
-                    "checked": element.checked,
-                    "focused": element.focused,
                     "visible": element.visible,
                 }
                 for element in state.elements
@@ -49,13 +41,6 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
                 ),
                 "enabled": candidate.enabled,
                 "visible": candidate.visible,
-                "class_name": candidate.class_name,
-                "bounds": candidate.bounds,
-                "editable": candidate.editable,
-                "scrollable": candidate.scrollable,
-                "checkable": candidate.checkable,
-                "checked": candidate.checked,
-                "focused": candidate.focused,
             }
             for candidate in context.candidates
         ],
