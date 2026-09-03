@@ -140,7 +140,22 @@ class CleanTaskRuntime:
 
         for step in range(1, self.max_steps + 1):
             context = build_reasoning_context(goal, state, self.runtime_state.history)
-            decision = self.planner.decide(context) if hasattr(self.planner, "decide") else self.planner.plan(context)
+            try:
+                decision = self.planner.decide(context) if hasattr(self.planner, "decide") else self.planner.plan(context)
+            except Exception as exc:
+                self.runtime_state.history.append({
+                    "step": step,
+                    "target_id": None,
+                    "target_text": "",
+                    "action_type": "invalid",
+                    "accepted": False,
+                    "changed": False,
+                    "verified": False,
+                    "error": f"reasoning error: {type(exc).__name__}: {exc}",
+                    "task_effect": "failed",
+                    "effect_evidence": "invalid reasoning decision",
+                })
+                return False
 
             blocked_evidence = self._guard(decision.action, state)
             if blocked_evidence is not None:
