@@ -36,6 +36,19 @@ def test_explicit_prerequisite_failure_is_blocked_even_when_click_was_accepted()
     assert result.evidence == "Complete the previous steps first"
 
 
+def test_start_first_prerequisite_evidence_is_blocked():
+    result = TaskEffectEvaluator().evaluate(
+        "Tap Continue",
+        Action(ActionType.CLICK, Target(element_id="continue", text="Continue")),
+        ExecutionResult(True, True),
+        state(observation_id="1"),
+        state(UIElement(id="status", text="Start a Multi-Step Test first"), observation_id="2"),
+    )
+
+    assert result.effect is TaskEffect.BLOCKED
+    assert result.evidence == "Start a Multi-Step Test first"
+
+
 def test_successful_action_goal_is_completed():
     result = TaskEffectEvaluator().evaluate(
         "Tap Finish",
