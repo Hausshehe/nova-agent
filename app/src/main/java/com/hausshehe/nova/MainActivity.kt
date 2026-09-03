@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class MainActivity : Activity() {
@@ -24,17 +25,17 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         startService(Intent(this, BridgeHostService::class.java))
 
-        val root = LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 48, 32, 32)
         }
 
-        root.addView(TextView(this).apply {
+        content.addView(TextView(this).apply {
             text = "Nova Agent"
             textSize = 26f
         })
 
-        root.addView(TextView(this).apply {
+        content.addView(TextView(this).apply {
             text = "Android navigation test harness"
             textSize = 15f
             setTextColor(Color.GRAY)
@@ -43,9 +44,9 @@ class MainActivity : Activity() {
 
         // Keep the stale-transition fixture at the top of the viewport so Android
         // accessibility reports it as visible on cold start.
-        root.addView(section("Stale Transition Safety"))
+        content.addView(section("Stale Transition Safety"))
         val staleStatus = status("Stale safety ready")
-        root.addView(staleStatus)
+        content.addView(staleStatus)
 
         val staleTarget = Button(this).apply {
             id = R.id.stale_target
@@ -55,7 +56,7 @@ class MainActivity : Activity() {
                 throw IllegalStateException("stale target was physically executed")
             }
         }
-        root.addView(staleTarget, buttonParams())
+        content.addView(staleTarget, buttonParams())
 
         val staleFreshTarget = Button(this).apply {
             id = R.id.stale_fresh_target
@@ -66,7 +67,7 @@ class MainActivity : Activity() {
                 staleStatus.text = "Stale transition safety completed"
             }
         }
-        root.addView(staleFreshTarget, buttonParams())
+        content.addView(staleFreshTarget, buttonParams())
 
         val invalidateStale = Button(this).apply {
             id = R.id.stale_invalidate
@@ -78,7 +79,7 @@ class MainActivity : Activity() {
                 staleStatus.text = "Old target invalidated. Choose fresh target."
             }
         }
-        root.addView(invalidateStale, buttonParams())
+        content.addView(invalidateStale, buttonParams())
 
         val staleTest = Button(this).apply {
             id = R.id.stale_test
@@ -90,9 +91,9 @@ class MainActivity : Activity() {
                 staleStatus.text = "Stale target available"
             }
         }
-        root.addView(staleTest, buttonParams())
+        content.addView(staleTest, buttonParams())
 
-        root.addView(section("Navigation"))
+        content.addView(section("Navigation"))
         val navigationButton = Button(this).apply {
             id = R.id.test_navigation_action
             text = "Test Navigation Action"
@@ -103,12 +104,12 @@ class MainActivity : Activity() {
                 navigationStatus.text = "Clicked $navigationClicks time${if (navigationClicks == 1) "" else "s"}"
             }
         }
-        root.addView(navigationButton, buttonParams())
+        content.addView(navigationButton, buttonParams())
 
         navigationStatus = status("Clicked 0 times")
-        root.addView(navigationStatus)
+        content.addView(navigationStatus)
 
-        root.addView(section("Recovery"))
+        content.addView(section("Recovery"))
         val recoveryButton = Button(this).apply {
             id = R.id.recovery_test
             text = "Recovery Test"
@@ -118,7 +119,7 @@ class MainActivity : Activity() {
                 recoveryStatus.text = "Recovery run $recoveryRuns: choose a recovery action"
             }
         }
-        root.addView(recoveryButton, buttonParams())
+        content.addView(recoveryButton, buttonParams())
 
         val recoveryPrimary = Button(this).apply {
             id = R.id.recovery_primary
@@ -128,7 +129,7 @@ class MainActivity : Activity() {
                 recoveryStatus.text = "Primary action failed. Recovery required."
             }
         }
-        root.addView(recoveryPrimary, buttonParams())
+        content.addView(recoveryPrimary, buttonParams())
 
         val recoveryFallback = Button(this).apply {
             id = R.id.recovery_fallback
@@ -138,12 +139,12 @@ class MainActivity : Activity() {
                 recoveryStatus.text = "Recovery completed"
             }
         }
-        root.addView(recoveryFallback, buttonParams())
+        content.addView(recoveryFallback, buttonParams())
 
         recoveryStatus = status("Recovery ready")
-        root.addView(recoveryStatus)
+        content.addView(recoveryStatus)
 
-        root.addView(section("Multi-Step"))
+        content.addView(section("Multi-Step"))
         val multiStepButton = Button(this).apply {
             id = R.id.multi_step_test
             text = "Multi-Step Test"
@@ -154,7 +155,7 @@ class MainActivity : Activity() {
                 multiStepStatus.text = "Run $multiStepRuns: Step 1 started"
             }
         }
-        root.addView(multiStepButton, buttonParams())
+        content.addView(multiStepButton, buttonParams())
 
         val continueButton = Button(this).apply {
             id = R.id.multi_step_continue
@@ -169,7 +170,7 @@ class MainActivity : Activity() {
                 }
             }
         }
-        root.addView(continueButton, buttonParams())
+        content.addView(continueButton, buttonParams())
 
         val finishButton = Button(this).apply {
             id = R.id.multi_step_finish
@@ -184,12 +185,20 @@ class MainActivity : Activity() {
                 }
             }
         }
-        root.addView(finishButton, buttonParams())
+        content.addView(finishButton, buttonParams())
 
         multiStepStatus = status("Multi-Step ready")
-        root.addView(multiStepStatus)
+        content.addView(multiStepStatus)
 
-        setContentView(root)
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            addView(content, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+
+        setContentView(scrollView)
     }
 
     private fun section(title: String): TextView = TextView(this).apply {
