@@ -49,6 +49,19 @@ def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
         for element in state.elements
         if element.clickable
     ]
+    candidates.extend(
+        ActionCandidate(
+            action_type=ActionType.SCROLL,
+            target=Target(element.id, element.text, element.content_description),
+            enabled=element.enabled,
+            visible=element.visible,
+            class_name=element.class_name,
+            bounds=element.bounds,
+            scrollable=element.scrollable,
+        )
+        for element in state.elements
+        if element.scrollable
+    )
     candidates.append(ActionCandidate(action_type=ActionType.BACK))
     candidates.append(ActionCandidate(action_type=ActionType.WAIT))
     return tuple(candidates)
