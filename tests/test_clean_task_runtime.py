@@ -88,6 +88,28 @@ class Planner:
         )
 
 
+class AdaptivePlanner:
+    def __init__(self):
+        self.calls = 0
+
+    def decide(self, context):
+        self.calls += 1
+        if self.calls == 1:
+            target = "finish"
+        elif self.calls == 2:
+            target = "start"
+        elif self.calls == 3:
+            target = "continue"
+        elif self.calls == 4:
+            target = "continue"
+        else:
+            target = "finish"
+        return Decision(
+            Action(ActionType.CLICK, next(c.target for c in context.candidates if c.target and c.target.element_id == target)),
+            "test",
+        )
+
+
 class ClickTwicePlanner:
     def decide(self, context):
         candidate = next(c.target for c in context.candidates if c.target)
@@ -101,11 +123,23 @@ def test_clean_runtime_blocks_repeated_action_in_same_state():
 
     # The fake planner deliberately proposes Finish, Continue, Continue, Start.
     # The runtime must block the second Continue before Android receives it.
-    # Because the planner does not adapt after the block, the task must stop.
+    # Because the fake planner does not adapt after the block, the task must stop.
     assert runtime.run("Tap Finish Multi-Step") is False
     assert [a.target.element_id for a in bridge.actions] == ["finish", "continue"]
     assert runtime.runtime_state.history[2]["accepted"] is False
     assert runtime.runtime_state.history[2]["task_effect"] == "blocked"
+
+
+def test_adaptive_planner_recovers_from_blocked_action_and_finishes():
+    bridge = Bridge([])
+    runtime = create_task_runtime(bridge, reasoning_provider=AdaptivePlanner(), max_steps=5)
+
+    assert runtime.run("Tap Finish Multi-Step") is True
+    assert [a.target.element_id for a in bridge.actions] == ["finish", "start", "continue", "continue", "finish"]
+    assert runtime.runtime_state.history[0]["task_effect"] == "blocked"
+    assert runtime.runtime_state.history[3]["task_effect"] == "blocked"
+    assert runtime.runtime_state.history[3]["accepted"] is True
+    assert runtime.runtime_state.history[4]["task_effect"] == "completed"
 
 
 def test_action_goal_is_not_satisfied_by_a_preexisting_button():
