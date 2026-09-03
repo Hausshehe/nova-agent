@@ -1,14 +1,14 @@
 """Bounded runtime orchestration for Nova Agent v2.
 
-The runtime coordinates the core ports without implementing any adapter
-behavior. ``step`` advances one lifecycle phase, while ``run`` provides a
-bounded convenience entrypoint for completing one run.
+The runtime coordinates injected ports. Android-specific freshness behavior is
+exposed through the optional FreshObserver capability rather than hidden waits
+or sleeps in the core loop.
 """
 
 from __future__ import annotations
 
 from .models import Goal, RunResult, RunStatus
-from .ports import Executor, Observer, Reasoner, Verifier
+from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
 from .state_machine import RunState
 
@@ -65,11 +65,14 @@ class Runtime:
             assert self.controller.observation is not None
             assert self.controller.decision is not None
             assert self.controller.last_execution is not None
-            after = self.observer.observe()
+            if isinstance(self.observer, FreshObserver):
+                after = self.observer.observe_fresh(self.controller.observation)
+            else:
+                after = self.observer.observe()
             achieved = self.verifier.verify(
                 self.controller.goal,
                 self.controller.observation,
-                self.controller.decision.action,
+                self.controller.decision,
                 self.controller.last_execution,
                 after,
             )
@@ -84,18 +87,16 @@ class Runtime:
         return self.controller.state
 
     def run(self) -> RunResult:
-        """Complete the run using a finite lifecycle budget.
-
-        Four non-terminal phases are possible per action, plus the initial
-        creation transition. The bound is derived from the action budget, so
-        this method cannot spin indefinitely.
-        """
+        """Complete the run using a finite lifecycle budget."""
         phase_budget = self.controller.max_steps * 4 + 1
         for _ in range(phase_budget):
-            if self.controller.result() is not None:
-                return self.controller.result()  # type: ignore[return-value]
+            result = self.controller.result()
+            if result is not None:
+                return result
             self.step()
 
         if self.controller.result() is None:
             self.controller.finish(RunStatus.FAILED, "runtime phase budget exhausted")
-        return self.controller.result()  # type: ignore[return-value]
+        result = self.controller.result()
+        assert result is not None
+        return result
