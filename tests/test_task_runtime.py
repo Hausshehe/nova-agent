@@ -230,9 +230,25 @@ class GuardIntegrationBridge:
     def observe(self) -> WorldState:
         if not self.executed_actions:
             return self._state("Ready", "initial")
-        if self.executed_actions[-1].target.element_id == "finish":
-            return self._state("Previous steps required", "blocked")
+        last = self.executed_actions[-1].target.element_id
+        if last == "finish":
+            return self._state("Previous steps required", "finish-blocked")
+        if last == "continue":
+            return self._state("Start a Multi-Step Test first", "continue-blocked")
+        if last == "start":
+            return WorldState(
+                package="test",
+                activity="Main",
+                observation_id="started",
+                elements=(
+                    UIElement(id="finish", text="Finish", clickable=True),
+                    UIElement(id="continue", text="Continue", clickable=True),
+                    UIElement(id="status", text="Started", clickable=False),
+                ),
+            )
         return WorldState(
+            package="test",
+            activity="Main",
             observation_id="complete",
             elements=(UIElement(id="status", text="Completed", clickable=False),),
         )
@@ -253,6 +269,7 @@ class GuardIntegrationBridge:
             elements=(
                 UIElement(id="finish", text="Finish", clickable=True),
                 UIElement(id="continue", text="Continue", clickable=True),
+                UIElement(id="start", text="Start a Multi-Step Test", clickable=True),
                 UIElement(id="status", text=status, clickable=False),
             ),
         )
@@ -264,7 +281,12 @@ class RepeatingFinishThenContinuePlanner:
 
     def decide(self, context):
         self.calls += 1
-        target_id = "continue" if self.calls >= 3 else "finish"
+        target_id = {
+            1: "finish",
+            2: "continue",
+            3: "continue",
+            4: "start",
+        }.get(self.calls, "finish")
         for candidate in context.candidates:
             if candidate.target is not None and candidate.target.element_id == target_id:
                 return Decision(Action(ActionType.CLICK, candidate.target), rationale="integration test")
@@ -274,15 +296,18 @@ class RepeatingFinishThenContinuePlanner:
 def test_task_executor_guard_prevents_repeating_blocked_action():
     bridge = GuardIntegrationBridge()
     planner = RepeatingFinishThenContinuePlanner()
-    runtime = TaskExecutor(bridge=bridge, planner=planner, max_steps=3)
+    runtime = TaskExecutor(bridge=bridge, planner=planner, max_steps=5)
 
     assert runtime.run("Tap Finish") is True
-    assert len(bridge.executed_actions) == 2
-    assert bridge.executed_actions[0].target.element_id == "finish"
-    assert bridge.executed_actions[1].target.element_id == "continue"
-    assert planner.calls == 3
+    assert [action.target.element_id for action in bridge.executed_actions] == [
+        "finish",
+        "continue",
+        "start",
+    ]
+    assert planner.calls == 4
     assert runtime.history[0]["task_effect"] == "blocked"
     assert runtime.history[1]["task_effect"] == "blocked"
-    assert runtime.history[1]["accepted"] is False
-    assert "action guard blocked" in runtime.history[1]["error"]
-    assert runtime.history[2]["task_effect"] == "completed"
+    assert runtime.history[2]["accepted"] is False
+    assert runtime.history[2]["task_effect"] == "blocked"
+    assert "action guard blocked" in runtime.history[2]["error"]
+    assert runtime.history[3]["task_effect"] == "completed"
