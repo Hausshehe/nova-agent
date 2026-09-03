@@ -24,6 +24,7 @@ def test_llm_provider_serializes_context_and_validates_response():
         payload = json.loads(prompt.split("Observation and goal:\n", 1)[1])
         assert payload["goal"] == "Tap Continue"
         assert payload["candidates"][0]["target"]["element_id"] == "n1"
+        assert payload["state"]["current_ui"][0]["text"] == "Continue"
         return {
             "action_type": "click",
             "target": {"element_id": "n1"},
@@ -61,7 +62,12 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
     required_instructions = (
         "Reason from the CURRENT OBSERVATION, not from the goal text alone.",
         "The goal describes the desired end state.",
-        "Treat visible UI text, status messages, and the current observation as the",
+        "Treat visible UI text, status messages, current UI structure, and the current",
+        "For a goal that names a later step in a multi-step interaction, first determine",
+        "If the requested step depends on an earlier step that has not been established,",
+        "Choose the available action that establishes the earliest missing prerequisite.",
+        "prefer the earliest step that is not yet established",
+        "Re-evaluate the new state after every prerequisite action",
         "Use the action history to understand what has already been attempted.",
         "Never claim that the goal is complete unless the current observation provides",
         "If an action appears to require a prerequisite that has not been established,",
@@ -75,6 +81,7 @@ def test_llm_provider_reasoning_contract_requires_current_state_and_prerequisite
     payload = json.loads(contract.split("Observation and goal:\n", 1)[1])
     assert payload["goal"] == "Multi-Step completed"
     assert payload["history"][0]["target_id"] == "n0"
+    assert payload["state"]["current_ui"][0]["text"] == "Finish multi-step"
 
 
 def test_llm_provider_rejects_stale_target_before_execution():
