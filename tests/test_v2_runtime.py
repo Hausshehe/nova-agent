@@ -12,6 +12,16 @@ class FakeObserver:
         return Observation("pkg", "MainActivity", revision=self.calls)
 
 
+class FreshFakeObserver(FakeObserver):
+    def __init__(self):
+        super().__init__()
+        self.fresh_calls = 0
+
+    def observe_fresh(self, previous):
+        self.fresh_calls += 1
+        return Observation("pkg", "MainActivity", revision=previous.revision + 1)
+
+
 class FakeReasoner:
     def __init__(self):
         self.calls = 0
@@ -60,6 +70,23 @@ def test_runtime_wires_ports_without_owning_adapter_behavior():
     assert runtime.controller.state is RunState.SUCCEEDED
     assert runtime.controller.result().status is RunStatus.SUCCEEDED
     assert observer.calls == 2
+    assert reasoner.calls == 1
+    assert executor.calls == 1
+    assert verifier.calls == 1
+
+
+def test_runtime_uses_fresh_observer_when_available_for_verification():
+    observer = FreshFakeObserver()
+    reasoner = FakeReasoner()
+    executor = FakeExecutor()
+    verifier = FakeVerifier()
+    runtime = Runtime(Goal("tap button"), observer, reasoner, executor, verifier, max_steps=1)
+
+    advance_to_terminal(runtime)
+
+    assert runtime.controller.state is RunState.SUCCEEDED
+    assert observer.calls == 1
+    assert observer.fresh_calls == 1
     assert reasoner.calls == 1
     assert executor.calls == 1
     assert verifier.calls == 1
