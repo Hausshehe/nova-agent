@@ -1,12 +1,13 @@
-"""One-step runtime orchestration for Nova Agent v2.
+"""Bounded runtime orchestration for Nova Agent v2.
 
 The runtime coordinates the core ports without implementing any adapter
-behavior. Each call to ``step`` performs at most one action execution.
+behavior. ``step`` advances one lifecycle phase, while ``run`` provides a
+bounded convenience entrypoint for completing one run.
 """
 
 from __future__ import annotations
 
-from .models import Goal, RunStatus
+from .models import Goal, RunResult, RunStatus
 from .ports import Executor, Observer, Reasoner, Verifier
 from .run_controller import RunController
 from .state_machine import RunState
@@ -81,3 +82,20 @@ class Runtime:
             return self.controller.state
 
         return self.controller.state
+
+    def run(self) -> RunResult:
+        """Complete the run using a finite lifecycle budget.
+
+        Four non-terminal phases are possible per action, plus the initial
+        creation transition. The bound is derived from the action budget, so
+        this method cannot spin indefinitely.
+        """
+        phase_budget = self.controller.max_steps * 4 + 1
+        for _ in range(phase_budget):
+            if self.controller.result() is not None:
+                return self.controller.result()  # type: ignore[return-value]
+            self.step()
+
+        if self.controller.result() is None:
+            self.controller.finish(RunStatus.FAILED, "runtime phase budget exhausted")
+        return self.controller.result()  # type: ignore[return-value]
