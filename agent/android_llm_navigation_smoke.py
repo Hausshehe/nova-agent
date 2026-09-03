@@ -6,7 +6,7 @@ import sys
 from .android_bridge import AndroidBridge, AndroidBridgeError
 from .groq import groq_transport
 from .llm_reasoning_provider import LLMReasoningProvider
-from .navigation import NavigationLoop
+from .task_runtime import TaskExecutor
 
 
 class TracingLLMReasoningProvider(LLMReasoningProvider):
@@ -75,18 +75,18 @@ def main() -> int:
 
     try:
         if args.launch_nova:
-            launch = bridge.launch(root=True)
+            launch = bridge.launch()
             print(f"LAUNCH {launch}")
 
         transport = groq_transport(model=args.model)
         provider = TracingLLMReasoningProvider(transport.complete)
-        loop = NavigationLoop(
+        executor = TaskExecutor(
             bridge=bridge,
             planner=provider,
             max_steps=args.max_steps,
         )
 
-        achieved = loop.run(args.goal)
+        achieved = executor.run(args.goal)
         print(f"GOAL {'ACHIEVED' if achieved else 'NOT ACHIEVED'}")
         return 0 if achieved else 1
     except (AndroidBridgeError, RuntimeError, TimeoutError, ValueError) as exc:
