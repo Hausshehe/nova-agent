@@ -8,23 +8,20 @@ from .reasoning_context import ReasoningContext
 def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Convert reasoning context into a compact, model/provider-neutral payload."""
     state = context.state
+    status_text = [
+        " ".join(part for part in (element.text, element.content_description) if part).strip()
+        for element in state.elements
+        if not element.clickable
+    ]
+    status_text = [text for text in status_text if text]
+
     return {
         "goal": context.goal,
         "state": {
             "package": state.package,
             "activity": state.activity,
             "observation_id": state.observation_id,
-            "elements": [
-                {
-                    "id": element.id,
-                    "text": element.text,
-                    "content_description": element.content_description,
-                    "clickable": element.clickable,
-                    "enabled": element.enabled,
-                    "visible": element.visible,
-                }
-                for element in state.elements
-            ],
+            "status_text": status_text,
         },
         "history": [dict(item) for item in context.history],
         "candidates": [
