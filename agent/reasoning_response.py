@@ -17,11 +17,18 @@ def decision_from_response(response: Mapping[str, Any], context: ReasoningContex
     except (TypeError, ValueError) as exc:
         raise InvalidReasoningResponse("invalid action_type") from exc
 
+    candidate_types = {candidate.action_type for candidate in context.candidates}
+    if action not in candidate_types:
+        raise InvalidReasoningResponse(f"action type is not currently available: {action.value}")
+
     target_data = response.get("target")
-    if action in (ActionType.BACK, ActionType.WAIT):
+    if action is ActionType.BACK:
         if target_data is not None:
             raise InvalidReasoningResponse("target is not allowed for this action")
         return Decision(Action(action), str(response.get("reason", "provider decision")))
+
+    if action is ActionType.WAIT:
+        raise InvalidReasoningResponse("unsupported action type")
 
     if action is not ActionType.CLICK:
         raise InvalidReasoningResponse("unsupported action type")
