@@ -116,6 +116,14 @@ class CleanTaskRuntime:
                 return blocked.evidence
         return None
 
+    @staticmethod
+    def _guard_key(action: Action, state: WorldState) -> tuple[Any, ...]:
+        return (
+            _ui_key(state),
+            action.type.value,
+            action.target.element_id if action.target else None,
+        )
+
     def _record(self, step: int, decision: Decision, result: ExecutionResult, effect: str, evidence: str = "") -> None:
         self.runtime_state.history.append({
             "step": step,
@@ -134,6 +142,7 @@ class CleanTaskRuntime:
         self.runtime_state.reset()
         self.current_state = self.bridge.observe()
         state = self.current_state
+        guard_rejections: dict[tuple[Any, ...], int] = {}
 
         if not self._is_action_goal(goal) and self.evaluator.evaluate(goal, state):
             return True
@@ -159,6 +168,8 @@ class CleanTaskRuntime:
 
             blocked_evidence = self._guard(decision.action, state)
             if blocked_evidence is not None:
+                guard_key = self._guard_key(decision.action, state)
+                guard_rejections[guard_key] = guard_rejections.get(guard_key, 0) + 1
                 self._record(
                     step,
                     decision,
@@ -166,7 +177,12 @@ class CleanTaskRuntime:
                     "blocked",
                     blocked_evidence,
                 )
-                return False
+                # Give the planner one fresh reasoning turn with explicit blocker
+                # history. If it insists on the same prohibited action again in
+                # the same state, stop rather than burning the runtime budget.
+                if guard_rejections[guard_key] >= 2:
+                    return False
+                continue
 
             try:
                 result = self.bridge.execute(decision.action)
@@ -228,9 +244,6 @@ class CleanTaskRuntime:
 
             state = after
             self.current_state = after
-
-            current_key = _ui_key(state)
-            self.runtime_state.blocked = [b for b in self.runtime_state.blocked if b.state_key == current_key]
 
         return False
 
