@@ -221,3 +221,70 @@ def test_task_executor_uses_action_executor_boundary():
     assert runtime.action_executor.verifier is runtime.verifier
     assert runtime.action_executor.settle_timeout == runtime.settle_timeout
     assert runtime.action_executor.observation_provider is runtime.observation_provider
+
+
+@dataclass
+class GuardIntegrationBridge:
+    executed_actions: list[Action] = None
+
+    def __post_init__(self):
+        if self.executed_actions is None:
+            self.executed_actions = []
+
+    def observe(self) -> WorldState:
+        return self._state("Ready", "initial")
+
+    def execute(self, action: Action) -> ExecutionResult:
+        self.executed_actions.append(action)
+        return ExecutionResult(True, True)
+
+    def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState:
+        if len(self.executed_actions) == 1:
+            return self._state("Previous steps required", "blocked")
+        return WorldState(
+            observation_id="complete",
+            elements=(UIElement(id="status", text="Completed", clickable=False),),
+        )
+
+    @staticmethod
+    def _state(status: str, observation_id: str) -> WorldState:
+        return WorldState(
+            package="test",
+            activity="Main",
+            observation_id=observation_id,
+            elements=(
+                UIElement(id="finish", text="Finish", clickable=True),
+                UIElement(id="continue", text="Continue", clickable=True),
+                UIElement(id="status", text=status, clickable=False),
+            ),
+        )
+
+
+class RepeatingFinishThenContinuePlanner:
+    def __init__(self):
+        self.calls = 0
+
+    def decide(self, context):
+        self.calls += 1
+        target_id = "continue" if self.calls >= 3 else "finish"
+        for candidate in context.candidates:
+            if candidate.target is not None and candidate.target.element_id == target_id:
+                return Decision(Action(ActionType.CLICK, candidate.target), rationale="integration test")
+        raise AssertionError(f"missing candidate: {target_id}")
+
+
+def test_task_executor_guard_prevents_repeating_blocked_action():
+    bridge = GuardIntegrationBridge()
+    planner = RepeatingFinishThenContinuePlanner()
+    runtime = TaskExecutor(bridge=bridge, planner=planner, max_steps=3)
+
+    assert runtime.run("Tap Finish") is True
+    assert len(bridge.executed_actions) == 2
+    assert bridge.executed_actions[0].target.element_id == "finish"
+    assert bridge.executed_actions[1].target.element_id == "continue"
+    assert planner.calls == 3
+    assert runtime.history[0]["task_effect"] == "blocked"
+    assert runtime.history[1]["task_effect"] == "blocked"
+    assert runtime.history[1]["accepted"] is False
+    assert "action guard blocked" in runtime.history[1]["error"]
+    assert runtime.history[2]["task_effect"] == "completed"
