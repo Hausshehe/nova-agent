@@ -7,6 +7,7 @@ from .core import Action, ActionType, Decision, ExecutionResult, TransitionVerif
 from .goal_evaluator import GoalEvaluator
 from .reasoning_context import ReasoningContext, build_reasoning_context
 from .reasoning_provider import ReasoningProvider
+from .task_effect import TaskEffectEvaluator
 
 
 class NavigationBridge(Protocol):
@@ -32,7 +33,17 @@ def _decide(provider: ReasoningProvider | LegacyPlanner, context: ReasoningConte
     raise TypeError("reasoning provider must implement decide() or legacy plan()")
 
 
-def _action_history(decision: Decision, step: int, *, accepted: bool, changed: bool, verified: bool, error: str | None = None) -> dict[str, Any]:
+def _action_history(
+    decision: Decision,
+    step: int,
+    *,
+    accepted: bool,
+    changed: bool,
+    verified: bool,
+    error: str | None = None,
+    task_effect: str | None = None,
+    effect_evidence: str = "",
+) -> dict[str, Any]:
     target = decision.action.target
     return {
         "step": step,
@@ -44,6 +55,8 @@ def _action_history(decision: Decision, step: int, *, accepted: bool, changed: b
         "changed": changed,
         "verified": verified,
         "error": error,
+        "task_effect": task_effect,
+        "effect_evidence": effect_evidence,
     }
 
 
@@ -53,6 +66,7 @@ class NavigationLoop:
     planner: ReasoningProvider | LegacyPlanner
     evaluator: GoalEvaluator = field(default_factory=GoalEvaluator)
     verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
+    task_effect_evaluator: TaskEffectEvaluator = field(default_factory=TaskEffectEvaluator)
     max_steps: int = 5
     settle_timeout: float = 2.0
 
@@ -85,8 +99,6 @@ class NavigationLoop:
             context = build_reasoning_context(goal, state, history)
             decision = _decide(self.planner, context)
 
-            # WAIT is a synchronization/observation primitive, not an Android
-            # command and not a state-transition requirement.
             is_wait = decision.action.type is ActionType.WAIT
             if is_wait:
                 result = ExecutionResult(True, False)
@@ -94,6 +106,8 @@ class NavigationLoop:
                 result = self.bridge.execute(decision.action)
 
             if not result.accepted:
+                after = observe_fn()
+                effect = self.task_effect_evaluator.evaluate(goal, decision.action, result, state, after)
                 history.append(
                     _action_history(
                         decision,
@@ -102,21 +116,18 @@ class NavigationLoop:
                         changed=False,
                         verified=False,
                         error=result.error,
+                        task_effect=effect.effect.value,
+                        effect_evidence=effect.evidence,
                     )
                 )
-                # A rejected action does not establish a verified transition,
-                # but the live UI may have changed independently. Re-observe so
-                # the next reasoning pass is based on current state, while the
-                # failure remains available in history.
-                state = observe_fn()
+                state = after
                 continue
 
             try:
-                # Real state-changing actions require a fresh observation whose
-                # identity differs from the previous state. WAIT only requires
-                # a successful observation; an unchanged UI is valid.
                 after = observe_fn() if is_wait else refresh_fn(state)
             except TimeoutError:
+                result = ExecutionResult(True, False, False, "fresh observation timeout")
+                effect = self.task_effect_evaluator.evaluate(goal, decision.action, result, state, None)
                 history.append(
                     _action_history(
                         decision,
@@ -124,7 +135,9 @@ class NavigationLoop:
                         accepted=True,
                         changed=False,
                         verified=False,
-                        error="fresh observation timeout",
+                        error=result.error,
+                        task_effect=effect.effect.value,
+                        effect_evidence=effect.evidence,
                     )
                 )
                 continue
@@ -133,6 +146,13 @@ class NavigationLoop:
             verified = True if is_wait else self.verifier.verify(
                 state, after, ExecutionResult(True, changed, False)
             )
+            effect = self.task_effect_evaluator.evaluate(
+                goal,
+                decision.action,
+                ExecutionResult(True, changed, verified),
+                state,
+                after,
+            )
             history.append(
                 _action_history(
                     decision,
@@ -140,6 +160,8 @@ class NavigationLoop:
                     accepted=True,
                     changed=changed,
                     verified=verified,
+                    task_effect=effect.effect.value,
+                    effect_evidence=effect.evidence,
                 )
             )
 
