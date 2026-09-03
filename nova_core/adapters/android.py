@@ -7,7 +7,7 @@ v2 receives only its own models and port contracts.
 
 from __future__ import annotations
 
-import re
+from typing import Callable
 
 from agent.android_bridge import AndroidBridge
 from agent.core import Action as LegacyAction
@@ -24,9 +24,8 @@ class AndroidBridgeAdapter:
         self.bridge = bridge or AndroidBridge()
         self._revision = 0
 
-    def observe(self) -> Observation:
-        state = self.bridge.observe()
-        self._revision += 1
+    @staticmethod
+    def _to_observation(state, revision: int) -> Observation:
         return Observation(
             package=state.package,
             activity=state.activity,
@@ -41,8 +40,20 @@ class AndroidBridgeAdapter:
                 )
                 for element in state.elements
             ),
-            revision=self._revision,
+            revision=revision,
         )
+
+    def observe(self) -> Observation:
+        state = self.bridge.observe()
+        self._revision += 1
+        return self._to_observation(state, self._revision)
+
+    def observe_fresh(self, previous: Observation) -> Observation:
+        state = self.bridge.wait_for_fresh_observation(
+            self.bridge.observe(), timeout=2.0, poll_seconds=0.2
+        )
+        self._revision += 1
+        return self._to_observation(state, self._revision)
 
     def execute(self, action: Action) -> ExecutionResult:
         legacy_action = self._to_legacy_action(action)
@@ -81,15 +92,9 @@ class AndroidBridgeAdapter:
 
 
 class AndroidGoalVerifier:
-    """Conservative UI verifier with an injectable completion evaluator.
+    """Conservative UI verifier with an injectable completion evaluator."""
 
-    The evaluator is deliberately supplied by the caller. This keeps goal
-    semantics separate from Android transport and prevents the adapter from
-    inventing completion rules that may later be replaced by a stronger
-    reasoning/evaluation layer.
-    """
-
-    def __init__(self, goal_evaluator) -> None:
+    def __init__(self, goal_evaluator: Callable[[str, Observation], bool]) -> None:
         self.goal_evaluator = goal_evaluator
 
     def verify(
