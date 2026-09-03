@@ -22,6 +22,7 @@ def test_reasoning_payload_contains_goal_state_history_and_candidates():
                 bounds="[0,0][100,50]",
                 focused=True,
             ),
+            UIElement("status", text="Step 2 started", clickable=False),
         ),
     )
     history = ({"step": 1, "action_type": "click", "target_id": "n0", "verified": False},)
@@ -33,14 +34,28 @@ def test_reasoning_payload_contains_goal_state_history_and_candidates():
     assert payload["state"]["package"] == "com.hausshehe.nova"
     assert payload["state"]["activity"] == "MainActivity"
     assert payload["state"]["observation_id"] == "42"
-    assert payload["state"]["elements"][0]["text"] == "Continue"
-    assert payload["state"]["elements"][0]["clickable"] is True
-    assert payload["state"]["elements"][0]["enabled"] is True
+    assert payload["state"]["status_text"] == ["Step 2 started"]
     assert payload["history"] == list(history)
     assert payload["candidates"][0]["action_type"] == ActionType.CLICK.value
     assert payload["candidates"][0]["target"]["element_id"] == "n1"
     assert payload["candidates"][-2]["action_type"] == ActionType.BACK.value
     assert payload["candidates"][-1]["action_type"] == ActionType.WAIT.value
+
+
+def test_reasoning_payload_excludes_clickable_elements_from_status_text():
+    state = WorldState(
+        package="nova",
+        elements=(
+            UIElement("n1", text="Finish", clickable=True),
+            UIElement("status", text="Step 2 started", clickable=False),
+        ),
+    )
+    context = build_reasoning_context("Tap Finish", state, [])
+
+    payload = reasoning_payload(context)
+
+    assert payload["state"]["status_text"] == ["Step 2 started"]
+    assert "Finish" not in payload["state"]["status_text"]
 
 
 def test_reasoning_payload_omits_llm_irrelevant_ui_metadata():
@@ -67,21 +82,17 @@ def test_reasoning_payload_omits_llm_irrelevant_ui_metadata():
     context = build_reasoning_context("Tap Finish", state, [])
 
     payload = reasoning_payload(context)
-    element = payload["state"]["elements"][0]
     candidate = payload["candidates"][0]
 
-    assert set(element) == {
-        "id",
-        "text",
-        "content_description",
-        "clickable",
-        "enabled",
-        "visible",
+    assert set(payload["state"]) == {
+        "package",
+        "activity",
+        "observation_id",
+        "status_text",
     }
     assert set(candidate) == {"action_type", "target", "enabled", "visible"}
     assert set(candidate["target"]) == {"element_id", "text", "content_description"}
-    assert "bounds" not in element
-    assert "class_name" not in element
+    assert "elements" not in payload["state"]
     assert "bounds" not in candidate
     assert "class_name" not in candidate
 
