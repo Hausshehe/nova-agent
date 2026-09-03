@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
@@ -65,6 +65,15 @@ class ExecutionResult:
     error: str | None = None
 
 
+def same_ui_state(before: WorldState, after: WorldState) -> bool:
+    """Compare observable UI state without treating observation identity as UI state."""
+    return (
+        before.package == after.package
+        and before.activity == after.activity
+        and before.elements == after.elements
+    )
+
+
 @dataclass(frozen=True)
 class TransitionVerifier:
     def verify(self, before: WorldState, after: WorldState, result: ExecutionResult) -> bool:
@@ -72,7 +81,7 @@ class TransitionVerifier:
             return False
         if not result.changed:
             return False
-        return before != after
+        return not same_ui_state(before, after)
 
 
 def element_text(element: UIElement) -> str:
