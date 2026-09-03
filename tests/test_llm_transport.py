@@ -129,7 +129,7 @@ def test_transport_retries_429_using_retry_after(monkeypatch):
         return FakeResponse({"choices": [{"message": {"content": '{"action_type":"wait"}'}}]})
 
     monkeypatch.setattr("agent.llm_transport.urlopen", fake_urlopen)
-    monkeypatch.setattr("agent.llm_transport.sleep", waits.append)
+    monkeypatch.setattr("agent.llm_transport.time.sleep", waits.append)
 
     result = OpenAICompatibleTransport(
         "http://localhost:8080", "local", max_rate_limit_retries=2
@@ -156,5 +156,5 @@ def test_transport_rejects_429_when_retry_after_exceeds_bound(monkeypatch):
 
     monkeypatch.setattr("agent.llm_transport.urlopen", fake_urlopen)
 
-    with pytest.raises(LLMTransportError, match="Retry-After exceeds maximum"):
+    with pytest.raises(LLMTransportError, match="retry-after unavailable or too long"):
         OpenAICompatibleTransport("http://localhost:8080", "local").complete("test")
