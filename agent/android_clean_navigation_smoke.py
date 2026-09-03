@@ -5,8 +5,41 @@ import sys
 import time
 
 from .android_bridge import AndroidBridge, AndroidBridgeError
-from .core import Action, ActionType, Decision
+from .core import Action, ActionType, Decision, WorldState, ExecutionResult
 from .runtime import create_task_runtime
+
+
+class TracingBridge(AndroidBridge):
+    """Android bridge that exposes the runtime's physical UI interaction in smoke output."""
+
+    def observe(self) -> WorldState:
+        state = super().observe()
+        print(f"OBSERVATION {state.observation_id} package={state.package!r} activity={state.activity!r}")
+        for index, element in enumerate(state.elements):
+            print(
+                "UI_ELEMENT "
+                f"#{index} id={element.id!r} text={element.text!r} "
+                f"description={element.content_description!r} "
+                f"clickable={element.clickable} enabled={element.enabled} "
+                f"scrollable={element.scrollable} bounds={element.bounds!r}"
+            )
+        return state
+
+    def execute(self, action: Action) -> ExecutionResult:
+        target = action.target
+        print(
+            "EXECUTE "
+            f"action={action.type.value!r} "
+            f"target_id={(target.element_id if target else None)!r} "
+            f"target_text={(target.text if target else None)!r}"
+        )
+        result = super().execute(action)
+        print(
+            "EXECUTION_RESULT "
+            f"accepted={result.accepted} changed={result.changed} "
+            f"verified={result.verified} error={result.error!r}"
+        )
+        return result
 
 
 class TracingProvider:
@@ -43,7 +76,7 @@ def main() -> int:
     parser.add_argument("--model", default=None)
     args = parser.parse_args()
 
-    bridge = AndroidBridge()
+    bridge = TracingBridge()
     try:
         if args.launch_nova:
             print(f"LAUNCH {bridge.launch(root=True)}")
