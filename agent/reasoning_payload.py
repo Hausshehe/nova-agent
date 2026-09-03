@@ -15,6 +15,19 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     ]
     status_text = [text for text in status_text if text]
 
+    current_ui = [
+        {
+            "element_id": element.id,
+            "text": element.text,
+            "content_description": element.content_description,
+            "clickable": element.clickable,
+            "enabled": element.enabled,
+            "visible": element.visible,
+            "scrollable": element.scrollable,
+        }
+        for element in state.elements
+    ]
+
     return {
         "goal": context.goal,
         "state": {
@@ -22,6 +35,7 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
             "activity": state.activity,
             "observation_id": state.observation_id,
             "status_text": status_text,
+            "current_ui": current_ui,
         },
         "history": [dict(item) for item in context.history],
         "candidates": [
