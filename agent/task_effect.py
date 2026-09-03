@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
-from .core import Action, ExecutionResult, WorldState, element_text
+from .core import Action, ActionType, ExecutionResult, WorldState, element_text
 from .goal_evaluator import GoalEvaluator
 
 
@@ -77,12 +77,12 @@ class TaskEffectEvaluator:
         # Click/open/tap goals require actual post-action evidence. A matching
         # button being clicked is execution success, not proof that the task
         # outcome was achieved.
-        if action.type is not action.type.CLICK and self.goal_evaluator.action_goal_satisfied(
+        if action.type is not ActionType.CLICK and self.goal_evaluator.action_goal_satisfied(
             goal, action, after
         ):
             return TaskEffectResult(TaskEffect.COMPLETED)
 
-        if action.type is action.type.CLICK and self._completion_evidence(
+        if action.type is ActionType.CLICK and self._completion_evidence(
             goal, action, before, after
         ):
             return TaskEffectResult(TaskEffect.COMPLETED)
