@@ -161,14 +161,16 @@ class ClickTwicePlanner:
         return Decision(Action(ActionType.CLICK, candidate), "test")
 
 
+class AlwaysFailingPlanner:
+    def decide(self, context):
+        raise RuntimeError("simulated provider outage")
+
+
 def test_clean_runtime_blocks_repeated_action_in_same_state():
     bridge = Bridge([])
     planner = Planner()
     runtime = create_task_runtime(bridge, reasoning_provider=planner, max_steps=3)
 
-    # The fake planner deliberately proposes Finish, Continue, Continue.
-    # The runtime must block the repeated Continue before Android receives it.
-    # It gets one fresh reasoning turn, then stops when the planner repeats it.
     assert runtime.run("Tap Finish Multi-Step") is False
     assert [a.target.element_id for a in bridge.actions] == ["finish", "continue"]
     assert runtime.runtime_state.history[2]["accepted"] is False
@@ -185,6 +187,21 @@ def test_adaptive_planner_recovers_from_blocked_action_and_finishes():
     assert runtime.runtime_state.history[3]["task_effect"] == "blocked"
     assert runtime.runtime_state.history[3]["accepted"] is True
     assert runtime.runtime_state.history[4]["task_effect"] == "completed"
+
+
+def test_provider_outage_uses_bounded_fallback_and_finishes():
+    bridge = RealisticMultiStepBridge([])
+    runtime = create_task_runtime(
+        bridge,
+        reasoning_provider=AlwaysFailingPlanner(),
+        fallback_planner=None,
+        max_steps=6,
+    )
+
+    assert runtime.run("Tap Finish Multi-Step") is True
+    assert [a.target.element_id for a in bridge.actions] == ["finish", "start", "continue", "finish"]
+    assert sum(item["action_type"] == "reasoning_unavailable" for item in runtime.runtime_state.history) == 4
+    assert runtime.runtime_state.history[-1]["task_effect"] == "completed"
 
 
 def test_action_goal_is_not_satisfied_by_a_preexisting_button():
