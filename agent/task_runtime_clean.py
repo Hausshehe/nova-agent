@@ -40,6 +40,10 @@ _FAILURE_RE = re.compile(
     r"|\b(?:start|do|complete|finish|perform|select|choose)\b.+\bfirst\b",
     re.IGNORECASE,
 )
+_COMPLETION_RE = re.compile(
+    r"\b(?:completed|complete|finished|success(?:ful)?|done)\b",
+    re.IGNORECASE,
+)
 
 
 def _ui_key(state: WorldState) -> tuple[Any, ...]:
@@ -74,19 +78,34 @@ class CleanTaskRuntime:
 
     def _action_completed(self, goal: str, decision: Decision, before: WorldState, after: WorldState) -> bool:
         if not self._is_action_goal(goal) or decision.action.type is not ActionType.CLICK:
-            return self.evaluator.evaluate(goal, after)
+            return False
         target = decision.action.target
         if target is None:
             return False
-        before_has = any(e.id == target.element_id for e in before.elements)
-        after_has = any(e.id == target.element_id for e in after.elements)
-        if before_has and not after_has:
+
+        before_target = next((e for e in before.elements if e.id == target.element_id), None)
+        after_target = next((e for e in after.elements if e.id == target.element_id), None)
+
+        if before_target is not None and after_target is None:
             return True
+
+        if after_target is not None:
+            after_text = " ".join(
+                p for p in (after_target.text, after_target.content_description) if p
+            ).strip()
+            if _COMPLETION_RE.search(after_text):
+                if before_target is None:
+                    return False
+                before_text = " ".join(
+                    p for p in (before_target.text, before_target.content_description) if p
+                ).strip()
+                return after_text != before_text
+
         for e in after.elements:
             if e.clickable:
                 continue
             text = " ".join(p for p in (e.text, e.content_description) if p).lower()
-            if any(word in text for word in ("completed", "complete", "finished", "success", "done")):
+            if _COMPLETION_RE.search(text):
                 return True
         return False
 
@@ -173,9 +192,6 @@ class CleanTaskRuntime:
                 )
                 self._record(step, decision, result, "blocked", failure)
             elif self._is_action_goal(goal):
-                # Action goals can only complete from evidence caused by the
-                # requested click. Never fall back to static goal matching
-                # after unrelated actions such as BACK.
                 if self._action_completed(goal, decision, state, after):
                     self._record(step, decision, result, "completed")
                     state = after
