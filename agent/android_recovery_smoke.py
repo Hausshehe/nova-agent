@@ -177,7 +177,7 @@ def main() -> int:
 
     try:
         if args.launch_nova:
-            launch = bridge.launch(root=True)
+            launch = bridge.launch()
             print(f"LAUNCH {launch}")
 
         ready = _wait_for_target(android, "recovery_test")
