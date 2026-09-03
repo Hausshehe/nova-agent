@@ -70,7 +70,7 @@ def test_task_executor_owns_initial_observation():
 
     assert bridge.observed == 0
     assert runtime.run("Tap Finish") is True
-    assert bridge.observed == 2
+    assert bridge.observed == 3
 
 
 def test_task_executor_owns_current_observation_after_action_refresh():
@@ -79,7 +79,7 @@ def test_task_executor_owns_current_observation_after_action_refresh():
 
     assert runtime.run("Tap Finish") is True
     assert runtime.current_state is not None
-    assert runtime.current_state.observation_id == "2"
+    assert runtime.current_state.observation_id == "3"
 
 
 def test_task_executor_owns_history_and_step_progression():
@@ -128,14 +128,26 @@ def test_task_executor_preserves_navigation_configuration():
 
 def test_observation_provider_owns_settling_configuration():
     bridge = FakeBridge()
-    provider = AndroidObservationProvider(bridge, settle_timeout=1.25)
+    provider = AndroidObservationProvider(bridge, settle_timeout=1.25, poll_seconds=0.0)
     previous = provider.observe()
 
     after = provider.refresh(previous)
 
-    assert after.observation_id == "2"
+    assert after.observation_id == "3"
     assert provider.settle_timeout == 1.25
-    assert bridge.observed == 2
+    assert provider.poll_seconds == 0.0
+    assert bridge.observed == 3
+
+
+def test_observation_provider_settling_does_not_use_source_refresh_hook():
+    bridge = FakeBridge()
+    provider = AndroidObservationProvider(bridge, settle_timeout=1.25, poll_seconds=0.0)
+    previous = provider.observe()
+
+    after = provider.refresh(previous)
+
+    assert after.elements == previous.elements
+    assert after.observation_id != previous.observation_id
 
 
 def test_task_executor_uses_injected_observation_provider():
@@ -165,7 +177,7 @@ def test_action_executor_executes_and_verifies_transition():
     assert result.accepted is True
     assert result.changed is True
     assert after is not None
-    assert after.observation_id == "2"
+    assert after.observation_id == "3"
     assert verified is True
     assert bridge.executed == 1
 
