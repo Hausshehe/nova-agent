@@ -54,7 +54,6 @@ class Planner:
 
     def decide(self, context):
         self.calls += 1
-        ids = {"finish", "continue", "continue", "start"}
         target = {1: "finish", 2: "continue", 3: "continue", 4: "start"}[self.calls]
         return Decision(
             Action(ActionType.CLICK, next(c.target for c in context.candidates if c.target and c.target.element_id == target)),
@@ -69,7 +68,8 @@ def test_clean_runtime_blocks_repeated_action_in_same_state():
 
     # The fake planner deliberately proposes Finish, Continue, Continue, Start.
     # The runtime must block the second Continue before Android receives it.
-    assert runtime.run("Tap Finish Multi-Step") is False
+    # Start then succeeds, so the overall task is complete.
+    assert runtime.run("Tap Finish Multi-Step") is True
     assert [a.target.element_id for a in bridge.actions] == ["finish", "continue", "start"]
     assert runtime.runtime_state.history[2]["accepted"] is False
     assert runtime.runtime_state.history[2]["task_effect"] == "blocked"
