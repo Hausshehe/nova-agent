@@ -9,6 +9,7 @@ class ActionType(str, Enum):
     CLICK = "click"
     BACK = "back"
     WAIT = "wait"
+    SCROLL = "scroll"
 
 
 @dataclass(frozen=True)
