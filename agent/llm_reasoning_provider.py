@@ -10,11 +10,12 @@ from .reasoning_response import InvalidReasoningResponse, decision_from_response
 
 
 _RESPONSE_CONTRACT = """Return ONLY one JSON object:
-{"action_type":"click|back","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
+{"action_type":"click|back|scroll","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
 Use only an actionable candidate from the CURRENT observation. The current observation is authoritative.
 The goal describes the desired outcome, not an instruction to click a similarly named element immediately.
 Use history to understand what has already happened. After every executed action, reason again from the fresh observation.
 Never assume an accepted Android action completed the task. Never repeat an action just because it was previously chosen.
+A scroll action moves a currently scrollable container forward to reveal content that is not currently visible. Use scroll when the desired target is below the current viewport, rather than selecting an offscreen target.
 Do not invent or emit action types that are not present in the candidate list.
 """
 
