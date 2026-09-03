@@ -23,7 +23,7 @@ def test_llm_provider_serializes_context_and_validates_response():
         assert "Do not use an 'action' field." in prompt
         payload = json.loads(prompt.split("Observation and goal:\n", 1)[1])
         assert payload["goal"] == "Tap Continue"
-        assert payload["state"]["elements"][0]["id"] == "n1"
+        assert payload["candidates"][0]["target"]["element_id"] == "n1"
         return {
             "action_type": "click",
             "target": {"element_id": "n1"},
