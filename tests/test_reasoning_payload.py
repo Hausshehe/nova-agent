@@ -58,7 +58,7 @@ def test_reasoning_payload_excludes_clickable_elements_from_status_text():
     assert "Finish" not in payload["state"]["status_text"]
 
 
-def test_reasoning_payload_omits_llm_irrelevant_ui_metadata():
+def test_reasoning_payload_includes_current_ui_evidence_for_state_reasoning():
     state = WorldState(
         package="nova",
         elements=(
@@ -68,33 +68,40 @@ def test_reasoning_payload_omits_llm_irrelevant_ui_metadata():
                 content_description="Finish task",
                 clickable=True,
                 enabled=True,
-                class_name="android.widget.Button",
-                bounds="[0,0][100,50]",
-                editable=True,
-                scrollable=True,
-                checkable=True,
-                checked=True,
-                focused=True,
+                scrollable=False,
                 visible=True,
             ),
+            UIElement(
+                "n2",
+                text="Continue",
+                clickable=True,
+                enabled=True,
+                visible=True,
+            ),
+            UIElement("status", text="Step 1 started", clickable=False, visible=True),
         ),
     )
     context = build_reasoning_context("Tap Finish", state, [])
 
     payload = reasoning_payload(context)
-    candidate = payload["candidates"][0]
+    current_ui = payload["state"]["current_ui"]
 
-    assert set(payload["state"]) == {
-        "package",
-        "activity",
-        "observation_id",
-        "status_text",
+    assert [item["element_id"] for item in current_ui] == ["n1", "n2", "status"]
+    assert current_ui[0]["text"] == "Finish"
+    assert current_ui[0]["clickable"] is True
+    assert current_ui[0]["enabled"] is True
+    assert current_ui[1]["text"] == "Continue"
+    assert current_ui[2]["text"] == "Step 1 started"
+    assert current_ui[2]["clickable"] is False
+    assert set(current_ui[0]) == {
+        "element_id",
+        "text",
+        "content_description",
+        "clickable",
+        "enabled",
+        "visible",
+        "scrollable",
     }
-    assert set(candidate) == {"action_type", "target", "enabled", "visible"}
-    assert set(candidate["target"]) == {"element_id", "text", "content_description"}
-    assert "elements" not in payload["state"]
-    assert "bounds" not in candidate
-    assert "class_name" not in candidate
 
 
 def test_reasoning_payload_is_json_serializable():
@@ -107,3 +114,4 @@ def test_reasoning_payload_is_json_serializable():
     encoded = json.dumps(reasoning_payload(context))
 
     assert '"goal": "Tap Finish"' in encoded
+    assert '"current_ui"' in encoded
