@@ -68,9 +68,9 @@ def test_clean_runtime_blocks_repeated_action_in_same_state():
 
     # The fake planner deliberately proposes Finish, Continue, Continue, Start.
     # The runtime must block the second Continue before Android receives it.
-    # Start then succeeds, so the overall task is complete.
-    assert runtime.run("Tap Finish Multi-Step") is True
-    assert [a.target.element_id for a in bridge.actions] == ["finish", "continue", "start"]
+    # Because the planner does not adapt after the block, the task must stop.
+    assert runtime.run("Tap Finish Multi-Step") is False
+    assert [a.target.element_id for a in bridge.actions] == ["finish", "continue"]
     assert runtime.runtime_state.history[2]["accepted"] is False
     assert runtime.runtime_state.history[2]["task_effect"] == "blocked"
 
