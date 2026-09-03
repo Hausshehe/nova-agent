@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -24,6 +25,8 @@ class OpenAICompatibleTransport:
     model: str
     timeout: float = 30.0
     api_key: str | None = None
+    max_rate_limit_retries: int = 2
+    max_rate_limit_wait: float = 10.0
 
     def complete(self, prompt: str) -> Mapping[str, Any]:
         url = self.base_url.rstrip("/") + "/v1/chat/completions"
@@ -52,15 +55,32 @@ class OpenAICompatibleTransport:
             method="POST",
         )
 
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                raw = response.read().decode("utf-8")
-        except HTTPError as exc:
-            raise LLMTransportError(f"LLM HTTP error: {exc.code}") from exc
-        except URLError as exc:
-            raise LLMTransportError("LLM connection failed") from exc
-        except TimeoutError as exc:
-            raise LLMTransportError("LLM request timed out") from exc
+        rate_limit_attempts = 0
+        while True:
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except HTTPError as exc:
+                if exc.code != 429 or rate_limit_attempts >= self.max_rate_limit_retries:
+                    detail = self._http_error_detail(exc)
+                    suffix = f": {detail}" if detail else ""
+                    raise LLMTransportError(f"LLM HTTP error: {exc.code}{suffix}") from exc
+
+                wait_seconds = self._retry_after_seconds(exc)
+                if wait_seconds is None or wait_seconds > self.max_rate_limit_wait:
+                    detail = self._http_error_detail(exc)
+                    suffix = f": {detail}" if detail else ""
+                    raise LLMTransportError(
+                        f"LLM rate limited (429); retry-after unavailable or too long{suffix}"
+                    ) from exc
+
+                rate_limit_attempts += 1
+                time.sleep(wait_seconds)
+            except URLError as exc:
+                raise LLMTransportError("LLM connection failed") from exc
+            except TimeoutError as exc:
+                raise LLMTransportError("LLM request timed out") from exc
 
         try:
             payload = json.loads(raw)
@@ -79,3 +99,32 @@ class OpenAICompatibleTransport:
         if not isinstance(result, Mapping):
             raise LLMTransportError("LLM JSON response must be an object")
         return result
+
+    @staticmethod
+    def _retry_after_seconds(exc: HTTPError) -> float | None:
+        value = exc.headers.get("Retry-After") if exc.headers else None
+        if value is None:
+            return None
+        try:
+            seconds = float(value)
+        except (TypeError, ValueError):
+            return None
+        return seconds if seconds >= 0 else None
+
+    @staticmethod
+    def _http_error_detail(exc: HTTPError) -> str | None:
+        try:
+            raw = exc.read().decode("utf-8")
+        except Exception:
+            return None
+        if not raw:
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw[:200]
+        error = payload.get("error") if isinstance(payload, Mapping) else None
+        if isinstance(error, Mapping):
+            message = error.get("message") or error.get("code")
+            return str(message) if message else None
+        return None
