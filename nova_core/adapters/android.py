@@ -23,6 +23,7 @@ class AndroidBridgeAdapter:
     def __init__(self, bridge: AndroidBridge | None = None) -> None:
         self.bridge = bridge or AndroidBridge()
         self._revision = 0
+        self._last_legacy_state = None
 
     @staticmethod
     def _to_observation(state, revision: int) -> Observation:
@@ -45,13 +46,17 @@ class AndroidBridgeAdapter:
 
     def observe(self) -> Observation:
         state = self.bridge.observe()
+        self._last_legacy_state = state
         self._revision += 1
         return self._to_observation(state, self._revision)
 
     def observe_fresh(self, previous: Observation) -> Observation:
+        if self._last_legacy_state is None:
+            raise ValueError("cannot observe fresh state before an initial observation")
         state = self.bridge.wait_for_fresh_observation(
-            self.bridge.observe(), timeout=2.0, poll_seconds=0.2
+            self._last_legacy_state, timeout=2.0, poll_seconds=0.2
         )
+        self._last_legacy_state = state
         self._revision += 1
         return self._to_observation(state, self._revision)
 
