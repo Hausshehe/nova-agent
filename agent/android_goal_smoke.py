@@ -21,7 +21,7 @@ def main() -> int:
 
     try:
         if args.launch_nova:
-            launch = bridge.launch(root=True)
+            launch = bridge.launch()
             print(f"LAUNCH {launch}")
             time.sleep(0.5)
 
