@@ -53,6 +53,44 @@ class Bridge:
 
 
 @dataclass
+class RealisticMultiStepBridge:
+    actions: list[Action]
+
+    def __post_init__(self):
+        self.step = 0
+
+    def observe(self):
+        if self.step == 0:
+            return state("Multi-Step ready", "ready")
+        if self.step == 1:
+            return state("Step 1 started", "step1")
+        if self.step == 2:
+            return state("Step 2 started", "step2")
+        return WorldState(
+            package="test", activity="Main", observation_id="done",
+            elements=(UIElement("status", "Multi-Step Test completed"),),
+        )
+
+    def execute(self, action: Action):
+        self.actions.append(action)
+        target = action.target.element_id
+        if target == "start" and self.step == 0:
+            self.step = 1
+        elif target == "continue" and self.step == 1:
+            self.step = 2
+        elif target == "finish" and self.step == 2:
+            self.step = 3
+        elif target == "finish":
+            self.step = self.step
+        elif target == "continue":
+            self.step = 0
+        return ExecutionResult(True, True)
+
+    def wait_for_fresh_observation(self, previous, timeout=2.0):
+        return self.observe()
+
+
+@dataclass
 class ChangingTargetBridge:
     actions: list[Action]
 
@@ -131,8 +169,8 @@ def test_clean_runtime_blocks_repeated_action_in_same_state():
 
 
 def test_adaptive_planner_recovers_from_blocked_action_and_finishes():
-    bridge = Bridge([])
-    runtime = create_task_runtime(bridge, reasoning_provider=AdaptivePlanner(), max_steps=5)
+    bridge = RealisticMultiStepBridge([])
+    runtime = create_task_runtime(bridge, reasoning_provider=AdaptivePlanner(), max_steps=6)
 
     assert runtime.run("Tap Finish Multi-Step") is True
     assert [a.target.element_id for a in bridge.actions] == ["finish", "start", "continue", "continue", "finish"]
