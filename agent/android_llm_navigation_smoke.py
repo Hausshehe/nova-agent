@@ -4,18 +4,20 @@ import argparse
 import sys
 
 from .android_bridge import AndroidBridge, AndroidBridgeError
-from .groq import groq_transport
-from .llm_reasoning_provider import LLMReasoningProvider
-from .task_runtime import TaskExecutor
+from .reasoning_provider import ReasoningProvider
+from .runtime import create_reasoning_provider, create_task_executor
 
 
-class TracingLLMReasoningProvider(LLMReasoningProvider):
-    """Print each LLM decision while preserving the production provider path."""
+class TracingReasoningProvider:
+    """Print each reasoning decision while preserving the production provider."""
+
+    def __init__(self, provider: ReasoningProvider):
+        self._provider = provider
 
     def decide(self, context):
         print(f"LLM_STEP goal={context.goal!r} observation={context.state.observation_id}")
         try:
-            decision = super().decide(context)
+            decision = self._provider.decide(context)
         except Exception as exc:
             print(f"LLM_ERROR {type(exc).__name__}: {exc}", file=sys.stderr)
             raise
@@ -78,11 +80,11 @@ def main() -> int:
             launch = bridge.launch()
             print(f"LAUNCH {launch}")
 
-        transport = groq_transport(model=args.model)
-        provider = TracingLLMReasoningProvider(transport.complete)
-        executor = TaskExecutor(
-            bridge=bridge,
-            planner=provider,
+        provider = create_reasoning_provider("groq", model=args.model)
+        tracing_provider = TracingReasoningProvider(provider)
+        executor = create_task_executor(
+            bridge,
+            reasoning_provider=tracing_provider,
             max_steps=args.max_steps,
         )
 
