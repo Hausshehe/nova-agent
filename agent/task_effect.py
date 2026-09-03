@@ -33,6 +33,13 @@ _FAILURE_PHRASES = (
     "previous steps",
 )
 
+_PREREQUISITE_PATTERNS = (
+    re.compile(r"\b(?:start|do|complete|finish|perform|select|choose)\b.+\bfirst\b"),
+    re.compile(r"\b(?:before|until)\b.+\b(?:can|may|able|proceed)\b"),
+    re.compile(r"\bmust\b.+\bfirst\b"),
+    re.compile(r"\bneed(?:s)?\b.+\bfirst\b"),
+)
+
 _COMPLETION_PHRASES = (
     "completed",
     "complete",
@@ -151,5 +158,7 @@ class TaskEffectEvaluator:
             text = element_text(element).strip()
             normalized = " ".join(re.findall(r"[a-z0-9]+", text.lower()))
             if any(phrase in normalized for phrase in _FAILURE_PHRASES):
+                return text
+            if any(pattern.search(normalized) for pattern in _PREREQUISITE_PATTERNS):
                 return text
         return ""
