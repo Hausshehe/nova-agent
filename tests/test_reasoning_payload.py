@@ -1,8 +1,10 @@
 import json
 
-from agent.core import ActionType, UIElement, WorldState
+from agent.core import Action, ActionType, Target, UIElement, WorldState
 from agent.reasoning_context import build_reasoning_context
 from agent.reasoning_payload import reasoning_payload
+from agent.task_effect import TaskEffect, TaskEffectResult
+from agent.task_state import TaskState
 
 
 def test_reasoning_payload_contains_goal_state_history_and_candidates():
@@ -102,6 +104,37 @@ def test_reasoning_payload_includes_current_ui_evidence_for_state_reasoning():
         "visible",
         "scrollable",
     }
+
+
+def test_reasoning_payload_includes_task_state_constraints():
+    state = WorldState(
+        package="nova",
+        elements=(
+            UIElement("finish", text="Finish", clickable=True),
+            UIElement("status", text="Previous steps required", clickable=False),
+        ),
+    )
+    action = Action(ActionType.CLICK, Target("finish", "Finish"))
+    task_state = TaskState()
+    task_state.apply(
+        action,
+        TaskEffectResult(TaskEffect.BLOCKED, "Previous steps required"),
+        state,
+        state,
+    )
+
+    payload = reasoning_payload(build_reasoning_context("Tap Finish", state, [], task_state))
+
+    assert payload["task_state"]["last_effect"] == TaskEffect.BLOCKED.value
+    assert payload["task_state"]["last_effect_evidence"] == "Previous steps required"
+    assert payload["task_state"]["active_constraints"] == [
+        {
+            "action_type": "click",
+            "target_id": "finish",
+            "reason": "action blocked by observed task evidence",
+            "evidence": "Previous steps required",
+        }
+    ]
 
 
 def test_reasoning_payload_is_json_serializable():
