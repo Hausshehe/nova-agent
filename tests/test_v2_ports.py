@@ -1,10 +1,15 @@
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation
-from nova_core.ports import Executor, Observer, Reasoner, Verifier
+from nova_core.ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 
 
 class FakeObserver:
     def observe(self) -> Observation:
         return Observation(package="com.example", activity="MainActivity")
+
+
+class FakeFreshObserver:
+    def observe_fresh(self, previous: Observation) -> Observation:
+        return Observation(package=previous.package, activity=previous.activity, revision=previous.revision + 1)
 
 
 class FakeReasoner:
@@ -32,6 +37,12 @@ class FakeVerifier:
 def test_observer_port_is_structural():
     observer: Observer = FakeObserver()
     assert observer.observe().package == "com.example"
+
+
+def test_fresh_observer_port_is_structural():
+    observer: FreshObserver = FakeFreshObserver()
+    before = Observation(package="com.example", activity="MainActivity", revision=1)
+    assert observer.observe_fresh(before).revision == 2
 
 
 def test_reasoner_port_is_structural():
