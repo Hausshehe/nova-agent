@@ -129,7 +129,7 @@ class TaskExecutor:
             self.current_state = state
             if action_goal and verified and self.evaluator.action_goal_satisfied(goal, decision.action):
                 return True
-            if self.evaluator.evaluate(goal, state):
+            if not action_goal and self.evaluator.evaluate(goal, state):
                 return True
             if not verified and step < self.max_steps:
                 next_decision = self.recovery_engine.recover(
