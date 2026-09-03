@@ -12,12 +12,17 @@ from agent.task_runtime import TaskExecutor
 class FakeBridge:
     observed: int = 0
     executed: int = 0
+    _post_action_observations: int = 0
 
     def observe(self) -> WorldState:
         self.observed += 1
-        # Each TaskExecutor.run() starts a fresh synthetic task boundary:
-        # before its next click, the Finish target is visible again.
-        elements = () if self.executed % 2 else (UIElement(id="finish", text="Finish", clickable=True),)
+        if self._post_action_observations:
+            self._post_action_observations += 1
+            elements = ()
+            if self._post_action_observations >= 2:
+                self._post_action_observations = 0
+        else:
+            elements = (UIElement(id="finish", text="Finish", clickable=True),)
         return WorldState(
             observation_id=str(self.observed),
             elements=elements,
@@ -25,6 +30,7 @@ class FakeBridge:
 
     def execute(self, action: Action) -> ExecutionResult:
         self.executed += 1
+        self._post_action_observations = 1
         return ExecutionResult(True, True)
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState:
