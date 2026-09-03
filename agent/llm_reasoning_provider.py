@@ -19,8 +19,8 @@ Do not use an 'action' field. Do not use a top-level 'element_id' field.
 Reason from the CURRENT OBSERVATION, not from the goal text alone.
 The goal describes the desired end state. It does NOT mean that a UI element
 whose label resembles the goal should be clicked immediately.
-Treat visible UI text, status messages, and the current observation as the
-authoritative description of what has actually happened.
+Treat visible UI text, status messages, current UI structure, and the current
+observation as the authoritative description of what has actually happened.
 
 The candidates list is the authoritative list of actions currently available
 from the current observation. A candidate with visible=true is currently
@@ -30,6 +30,17 @@ Never wait for a candidate that is already present with visible=true.
 If a visible and enabled candidate directly advances the goal, prefer that
 action over WAIT unless the current observation gives a concrete reason the
 candidate cannot yet be used.
+
+For a goal that names a later step in a multi-step interaction, first determine
+whether that step is actually enabled by the current state. Use status text,
+current UI evidence, and action history to establish which earlier steps have
+already happened. If the requested step depends on an earlier step that has
+not been established, do NOT jump directly to the requested step. Choose the
+available action that establishes the earliest missing prerequisite. When
+several visible actions form an apparent ordered sequence, prefer the earliest
+step that is not yet established rather than a later step merely because its
+label is closer to the goal. Re-evaluate the new state after every prerequisite
+action instead of assuming the whole sequence succeeded.
 
 If a goal-relevant candidate exists but is visible=false, do not click it.
 If a visible, enabled, scrollable candidate is available, use SCROLL to bring
@@ -43,8 +54,8 @@ evidence that it is complete.
 If an action appears to require a prerequisite that has not been established,
 do not choose that action yet. Prefer an available action that advances the
 current state toward the goal.
-WAIT is appropriate only when the current observation gives a concrete reason
-to expect a useful state change without taking an available action.
+WAIT is appropriate only when the current observation gives a concrete reason to
+expect a useful state change without taking an available action.
 After a failed or rejected attempt, re-evaluate the fresh observation before
 choosing the next action. Do not assume that an accepted Android click means
 the intended task was completed.
