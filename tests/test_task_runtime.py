@@ -15,7 +15,9 @@ class FakeBridge:
 
     def observe(self) -> WorldState:
         self.observed += 1
-        elements = () if self.executed else (UIElement(id="finish", text="Finish", clickable=True),)
+        # Each TaskExecutor.run() starts a fresh synthetic task boundary:
+        # before its next click, the Finish target is visible again.
+        elements = () if self.executed % 2 else (UIElement(id="finish", text="Finish", clickable=True),)
         return WorldState(
             observation_id=str(self.observed),
             elements=elements,
