@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .core import Action, ActionType, Decision, ExecutionResult, WorldState
+from .deterministic_reasoner import DeterministicReasoner
 from .goal_evaluator import GoalEvaluator
 from .navigation import NavigationBridge
 from .reasoning_context import build_reasoning_context
@@ -69,6 +70,7 @@ class CleanTaskRuntime:
     evaluator: GoalEvaluator = field(default_factory=GoalEvaluator)
     max_steps: int = 5
     settle_timeout: float = 2.0
+    fallback_planner: Any = field(default_factory=DeterministicReasoner)
     runtime_state: RuntimeState = field(default_factory=RuntimeState, init=False)
     current_state: WorldState | None = field(default=None, init=False)
 
@@ -138,6 +140,37 @@ class CleanTaskRuntime:
             "effect_evidence": evidence,
         })
 
+    def _decide(self, context):
+        try:
+            primary = self.planner.decide if hasattr(self.planner, "decide") else self.planner.plan
+            return primary(context), False
+        except Exception as primary_exc:
+            # Provider outages are infrastructure failures, not task failures.
+            # Preserve the event in history, then make one bounded fallback
+            # decision from the same authoritative observation.
+            self.runtime_state.history.append({
+                "step": len(self.runtime_state.history) + 1,
+                "target_id": None,
+                "target_text": "",
+                "action_type": "reasoning_unavailable",
+                "accepted": False,
+                "changed": False,
+                "verified": False,
+                "error": f"primary reasoning error: {type(primary_exc).__name__}: {primary_exc}",
+                "task_effect": "unknown",
+                "effect_evidence": "primary reasoning provider unavailable; using bounded fallback",
+            })
+            fallback = self.fallback_planner
+            if fallback is None:
+                raise primary_exc
+            try:
+                fallback_fn = fallback.decide if hasattr(fallback, "decide") else fallback.plan
+                return fallback_fn(context), True
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    f"reasoning unavailable and fallback failed: {type(fallback_exc).__name__}: {fallback_exc}"
+                ) from fallback_exc
+
     def run(self, goal: str) -> bool:
         self.runtime_state.reset()
         self.current_state = self.bridge.observe()
@@ -150,7 +183,7 @@ class CleanTaskRuntime:
         for step in range(1, self.max_steps + 1):
             context = build_reasoning_context(goal, state, self.runtime_state.history)
             try:
-                decision = self.planner.decide(context) if hasattr(self.planner, "decide") else self.planner.plan(context)
+                decision, used_fallback = self._decide(context)
             except Exception as exc:
                 self.runtime_state.history.append({
                     "step": step,
@@ -162,7 +195,7 @@ class CleanTaskRuntime:
                     "verified": False,
                     "error": f"reasoning error: {type(exc).__name__}: {exc}",
                     "task_effect": "failed",
-                    "effect_evidence": "invalid reasoning decision",
+                    "effect_evidence": "primary and fallback reasoning unavailable",
                 })
                 return False
 
@@ -177,9 +210,6 @@ class CleanTaskRuntime:
                     "blocked",
                     blocked_evidence,
                 )
-                # Give the planner one fresh reasoning turn with explicit blocker
-                # history. If it insists on the same prohibited action again in
-                # the same state, stop rather than burning the runtime budget.
                 if guard_rejections[guard_key] >= 2:
                     return False
                 continue
