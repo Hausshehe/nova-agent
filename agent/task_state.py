@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from .core import Action, ActionType, WorldState
 from .task_effect import TaskEffect, TaskEffectResult
@@ -72,9 +72,8 @@ class TaskState:
         self.effect = effect.effect
         self.effect_evidence = effect.evidence
 
-        # A constraint is scoped to the exact observed UI state. It is not a
-        # permanent prohibition and therefore cannot turn into hidden app-specific
-        # workflow logic.
+        # Constraints are scoped to the exact observed UI state. They are not
+        # permanent prohibitions and cannot encode an app-specific workflow.
         if effect.effect is TaskEffect.BLOCKED and state_after is not None:
             constraint = ActionConstraint(
                 action_type=action.type,
@@ -85,17 +84,19 @@ class TaskState:
                 state_fingerprint=state_fingerprint(state_after),
             )
             self.constraints = [
-                existing
-                for existing in self.constraints
-                if not existing.matches(action)
+                existing for existing in self.constraints if not existing.matches(action)
             ]
             self.constraints.append(constraint)
-        else:
-            self.constraints = [
-                constraint
-                for constraint in self.constraints
-                if constraint.is_active(state_after) if state_after is not None
-            ]
+            return
+
+        if state_after is None:
+            return
+
+        self.constraints = [
+            constraint
+            for constraint in self.constraints
+            if constraint.is_active(state_after)
+        ]
 
     def active_constraints(self, state: WorldState) -> tuple[ActionConstraint, ...]:
         return tuple(constraint for constraint in self.constraints if constraint.is_active(state))
