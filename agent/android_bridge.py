@@ -107,8 +107,9 @@ class AndroidBridge:
     @staticmethod
     def _foreground_matches(output: str, package: str, component: str) -> bool:
         """Return whether ActivityManager reports the requested component foreground."""
+        foreground_markers = ("mFocusedApp=", "mResumedActivity=", "topResumedActivity=")
         for line in output.splitlines():
-            if "mFocusedApp=" not in line and "mResumedActivity=" not in line:
+            if not any(marker in line for marker in foreground_markers):
                 continue
             if component in line:
                 return True
