@@ -4,12 +4,12 @@ import re
 from typing import Any
 
 from .core import Action, ActionType, Decision, Target
-from .reasoning_context import ReasoningContext
+from .reasoning_context import ActionCandidate, ReasoningContext
 from .targeting import _score
 
 
 class DeterministicReasoner:
-    """Small, explainable planner used as the stable baseline before any LLM."""
+    """Small, explainable planner used as a stable fallback before any LLM."""
 
     @staticmethod
     def _meaningful_terms(goal: str) -> tuple[str, ...]:
@@ -24,21 +24,48 @@ class DeterministicReasoner:
             if item.get("target_id") is not None
         }
 
+    @staticmethod
+    def _target_score(context: ReasoningContext, candidate: ActionCandidate) -> float:
+        if candidate.target is None:
+            return 0.0
+        element = next(
+            (element for element in context.state.elements if element.id == candidate.target.element_id),
+            None,
+        )
+        return _score(context.goal, element) if element is not None else 0.0
+
     def plan(self, context: ReasoningContext) -> Decision:
-        candidates = [e for e in context.state.elements if e.enabled and e.clickable]
+        candidates = [
+            candidate
+            for candidate in context.candidates
+            if candidate.enabled and candidate.visible and candidate.target is not None
+        ]
         if not candidates:
-            raise RuntimeError("no clickable target available")
+            raise RuntimeError("no actionable candidate available")
 
         used = self._used_ids(context)
-        ranked = sorted(candidates, key=lambda e: _score(context.goal, e), reverse=True)
+        clicks = [candidate for candidate in candidates if candidate.action_type is ActionType.CLICK]
+        ranked = sorted(clicks, key=lambda candidate: self._target_score(context, candidate), reverse=True)
 
-        # Recovery: after an accepted-but-unverified action, prefer another
-        # matching target rather than blindly repeating the same node.
-        for element in ranked:
-            if element.id not in used and _score(context.goal, element) > 0:
-                target = Target(element.id, element.text, element.content_description)
-                return Decision(Action(ActionType.CLICK, target), f"selected matching target {element.id}")
+        # Recovery: after an accepted-but-blocked action, prefer another
+        # currently available matching target instead of repeating the same node.
+        for candidate in ranked:
+            score = self._target_score(context, candidate)
+            if candidate.target.element_id not in used and score > 0:
+                return Decision(
+                    Action(ActionType.CLICK, candidate.target),
+                    f"selected matching target {candidate.target.element_id}",
+                )
 
-        best = ranked[0]
-        target = Target(best.id, best.text, best.content_description)
-        return Decision(Action(ActionType.CLICK, target), f"reusing best matching target {best.id}")
+        # If no visible click is a new semantic match, use a visible scroll
+        # candidate rather than inventing an off-screen target or clicking a
+        # stale node. The runtime will observe again before the next decision.
+        for candidate in candidates:
+            if candidate.action_type is ActionType.SCROLL:
+                return Decision(Action(ActionType.SCROLL, candidate.target), "scroll to reveal more of the current UI")
+
+        if ranked:
+            best = ranked[0]
+            return Decision(Action(ActionType.CLICK, best.target), f"reusing best matching target {best.target.element_id}")
+
+        raise RuntimeError("no click or scroll candidate available")
