@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .models import Goal, RunResult, RunStatus
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
+from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
 
@@ -47,9 +48,12 @@ class Runtime:
 
         if state is RunState.DECIDING:
             assert self.controller.observation is not None
-            self.controller.record_decision(
-                self.reasoner.decide(self.controller.goal, self.controller.observation)
+            context = ReasoningContext(
+                goal=self.controller.goal,
+                observation=self.controller.observation,
+                history=self.controller.history,
             )
+            self.controller.record_decision(self.reasoner.decide(context))
             self.controller.move(RunState.EXECUTING)
             return self.controller.state
 
