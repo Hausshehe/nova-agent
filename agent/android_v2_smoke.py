@@ -18,7 +18,7 @@ def _find_element(observation, text: str):
     needle = " ".join(text.casefold().split())
     for element in observation.elements:
         haystack = " ".join(
-            part.casefold().split()
+            " ".join(part.casefold().split())
             for part in (element.text, element.content_description)
             if part
         )
