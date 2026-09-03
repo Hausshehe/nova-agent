@@ -1,0 +1,2626 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: tests/*, *.log, __pycache__, .git/*
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+agent/
+  __init__.py
+  android_bridge.py
+  android_clean_navigation_smoke.py
+  android_goal_smoke.py
+  android_multistep_smoke.py
+  bridge_smoke.py
+  core.py
+  deterministic_reasoner.py
+  goal_evaluator.py
+  groq.py
+  llm_reasoning_provider.py
+  llm_transport.py
+  navigation.py
+  reasoning_context.py
+  reasoning_payload.py
+  reasoning_provider.py
+  reasoning_response.py
+  runtime.py
+  targeting.py
+  task_runtime_clean.py
+app/
+  src/
+    main/
+      java/
+        com/
+          hausshehe/
+            nova/
+              BridgeHostService.kt
+              BridgeServer.kt
+              MainActivity.kt
+              NovaAccessibilityService.kt
+              NovaApplication.kt
+              ObservationStore.kt
+      res/
+        values/
+          ids.xml
+          strings.xml
+          styles.xml
+        xml/
+          accessibility_service_config.xml
+      AndroidManifest.xml
+  build.gradle
+docs/
+  REBUILD_ARCHITECTURE_RECON.md
+.gitignore
+build.gradle
+gradle.properties
+README.md
+REBUILD_RUNTIME.md
+settings.gradle
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="agent/__init__.py">
+
+</file>
+
+<file path="agent/goal_evaluator.py">
+from __future__ import annotations
+
+import re
+
+from .core import WorldState, element_text
+
+
+class GoalEvaluator:
+    """Conservative goal completion checks based on the current UI state."""
+
+    def evaluate(self, goal: str, state: WorldState) -> bool:
+        goal_norm = " ".join(re.findall(r"[a-z0-9]+", goal.lower()))
+        if not goal_norm:
+            return False
+
+        labels = [" ".join(re.findall(r"[a-z0-9]+", element_text(e).lower())) for e in state.elements]
+        # A goal is considered complete when its meaningful final phrase is
+        # represented by visible UI text. This deliberately avoids accepting
+        # an action merely because the action call itself succeeded.
+        meaningful = [t for t in re.findall(r"[a-z0-9]+", goal_norm) if t not in {"a", "an", "the", "to", "of", "and", "then", "please", "tap", "click", "open"}]
+        if not meaningful:
+            return False
+        return any(all(term in label for term in meaningful) for label in labels)
+</file>
+
+<file path="agent/navigation.py">
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Protocol, Sequence
+
+from .core import Action, Decision, ExecutionResult, TransitionVerifier, WorldState
+from .goal_evaluator import GoalEvaluator
+from .reasoning_context import ReasoningContext, build_reasoning_context
+
+
+class NavigationBridge(Protocol):
+    def observe(self) -> WorldState: ...
+    def execute(self, action: Action) -> ExecutionResult: ...
+    def wait_for_fresh_observation(self, previous: WorldState, timeout: float) -> WorldState: ...
+
+
+class Planner(Protocol):
+    def plan(self, context: ReasoningContext) -> Decision: ...
+
+
+@dataclass
+class NavigationLoop:
+    bridge: NavigationBridge
+    planner: Planner
+    evaluator: GoalEvaluator = field(default_factory=GoalEvaluator)
+    verifier: TransitionVerifier = field(default_factory=TransitionVerifier)
+    max_steps: int = 5
+    settle_timeout: float = 2.0
+
+    def run(self, goal: str) -> bool:
+        history: list[Mapping[str, Any]] = []
+        state = self.bridge.observe()
+
+        if self.evaluator.evaluate(goal, state):
+            return True
+
+        for step in range(1, self.max_steps + 1):
+            context = build_reasoning_context(goal, state, history)
+            decision = self.planner.plan(context)
+            result = self.bridge.execute(decision.action)
+
+            if not result.accepted:
+                history.append({"step": step, "accepted": False, "changed": False, "verified": False})
+                continue
+
+            try:
+                after = self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
+            except TimeoutError:
+                history.append({"step": step, "accepted": True, "changed": False, "verified": False})
+                continue
+
+            changed = after != state
+            verified = self.verifier.verify(state, after, ExecutionResult(True, changed, False))
+            history.append({
+                "step": step,
+                "target_id": decision.action.target.element_id if decision.action.target else None,
+                "target_text": decision.action.target.text if decision.action.target else "",
+                "target_content_description": decision.action.target.content_description if decision.action.target else "",
+                "accepted": True,
+                "changed": changed,
+                "verified": verified,
+            })
+
+            state = after
+            if self.evaluator.evaluate(goal, state):
+                return True
+
+        return False
+</file>
+
+<file path=".gitignore">
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+</file>
+
+<file path="README.md">
+# Nova Agent
+
+Goal-driven autonomous Android navigation agent.
+
+## Recovery status
+
+This repository is a reconstruction of the last verified working Nova Agent behavior. The original historical checkpoint is no longer available, so `c3833ec` is treated as a historical reference, not as a recoverable commit.
+
+## Verified architecture
+
+- Android Accessibility Service
+- Local Android command bridge on `127.0.0.1:18765`
+- UI observation and normalized snapshots
+- UI target resolution
+- Natural-language goal evaluation
+- Deterministic planning/reasoning
+- Action execution
+- Action/result verification
+- Multi-step navigation
+- Failure recovery and alternate-target selection
+- Bounded transition settling
+
+## Intended control loop
+
+`observe -> plan -> act -> observe -> verify -> evaluate -> complete/re-plan`
+
+## Recovery principles
+
+1. Preserve working behavior before adding capabilities.
+2. Verify every layer with tests and, where applicable, the real Android device.
+3. Avoid arbitrary sleeps; use bounded observation/settling behavior.
+4. Keep deterministic behavior stable before introducing an LLM planner.
+5. Commit every known-good milestone so failures can be rolled back safely.
+
+## Historical real-device checks
+
+The previous implementation successfully exercised:
+
+- `Tap Test Navigation Action`
+- `Complete Navigation Sequence`
+- recovery after a failed target
+
+The known sequence used the Nova test UI's navigation controls and verified completion after the final state transition.
+</file>
+
+<file path="agent/android_goal_smoke.py">
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+
+from .android_bridge import AndroidBridge, AndroidBridgeError
+from .deterministic_reasoner import DeterministicReasoner
+from .goal_evaluator import GoalEvaluator
+from .navigation import NavigationLoop
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Real-device Nova goal-driven navigation smoke test")
+    parser.add_argument("--goal", required=True)
+    parser.add_argument("--launch-nova", action="store_true")
+    parser.add_argument("--max-steps", type=int, default=5)
+    args = parser.parse_args()
+
+    bridge = AndroidBridge()
+
+    try:
+        if args.launch_nova:
+            launch = bridge.launch(root=True)
+            print(f"LAUNCH {launch}")
+            time.sleep(0.5)
+
+        before = bridge.observe()
+        print(f"OBSERVATION {before.observation_id}")
+        print(f"PACKAGE {before.package}")
+        print(f"ACTIVITY {before.activity}")
+        print(f"ELEMENTS {len(before.elements)}")
+
+        loop = NavigationLoop(
+            bridge=bridge,
+            planner=DeterministicReasoner(),
+            evaluator=GoalEvaluator(),
+            max_steps=args.max_steps,
+        )
+        achieved = loop.run(args.goal)
+        print(f"GOAL {'ACHIEVED' if achieved else 'NOT ACHIEVED'}")
+        return 0 if achieved else 1
+    except (AndroidBridgeError, TimeoutError, RuntimeError) as exc:
+        print(f"SMOKE FAILED: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+</file>
+
+<file path="agent/android_multistep_smoke.py">
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+
+from .android_bridge import AndroidBridge, AndroidBridgeError
+
+
+def _matches_text(element, target_text: str) -> bool:
+    return element.text == target_text or element.content_description == target_text
+
+
+def _print_elements(state) -> None:
+    for element in state.elements:
+        if element.text or element.content_description:
+            print(
+                f"{element.id} | text={element.text!r} | "
+                f"desc={element.content_description!r} | clickable={element.clickable}"
+            )
+
+
+def _find_text(state, target_text: str):
+    return next((e for e in state.elements if _matches_text(e, target_text)), None)
+
+
+def _click_and_wait(bridge: AndroidBridge, state, target_text: str):
+    target = _find_text(state, target_text)
+    if target is None:
+        raise RuntimeError(f"TARGET NOT FOUND: {target_text!r}")
+    bridge.click(target.id)
+    fresh = bridge.wait_for_fresh_observation(state)
+    print(f"CLICKED {target.id}")
+    print(f"FRESH_OBSERVATION {fresh.observation_id}")
+    return fresh
+
+
+def _require_status(state, expected: str) -> None:
+    if not any(element.text == expected for element in state.elements):
+        raise RuntimeError(f"EXPECTED STATUS NOT FOUND: {expected!r}")
+    print(f"STATUS OK: {expected}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Real-device Nova Android multi-step navigation smoke test"
+    )
+    parser.add_argument("--launch-nova", action="store_true")
+    args = parser.parse_args()
+
+    bridge = AndroidBridge()
+
+    try:
+        if args.launch_nova:
+            launch = bridge.launch(root=True)
+            print(f"LAUNCH {launch}")
+            time.sleep(0.5)
+
+        state = bridge.observe()
+        print(f"OBSERVATION {state.observation_id}")
+        print(f"PACKAGE {state.package}")
+        print(f"ACTIVITY {state.activity}")
+        print(f"ELEMENTS {len(state.elements)}")
+        _print_elements(state)
+
+        state = _click_and_wait(bridge, state, "Multi-Step Test")
+        _require_status(state, "Run 1: Step 1 started")
+
+        state = _click_and_wait(bridge, state, "Continue Multi-Step")
+        _require_status(state, "Step 2 started")
+
+        state = _click_and_wait(bridge, state, "Finish Multi-Step")
+        _require_status(state, "Multi-Step Test completed")
+
+        print("MULTI_STEP_SMOKE PASSED")
+        return 0
+    except (AndroidBridgeError, TimeoutError, RuntimeError) as exc:
+        print(f"MULTI_STEP_SMOKE FAILED: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+</file>
+
+<file path="agent/groq.py">
+from __future__ import annotations
+
+import os
+
+from .llm_transport import OpenAICompatibleTransport
+
+GROQ_BASE_URL = "https://api.groq.com/openai"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
+
+
+def groq_transport(*, model: str | None = None, timeout: float = 30.0, api_key: str | None = None) -> OpenAICompatibleTransport:
+    key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
+    if not key:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    selected_model = model or os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+    return OpenAICompatibleTransport(GROQ_BASE_URL, selected_model, timeout=timeout, api_key=key)
+</file>
+
+<file path="agent/llm_transport.py">
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+from typing import Any, Mapping
+
+
+class LLMTransportError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class OpenAICompatibleTransport:
+    base_url: str
+    model: str
+    timeout: float = 30.0
+    api_key: str | None = None
+    max_rate_limit_retries: int = 2
+    max_rate_limit_wait: float = 10.0
+
+    def complete(self, prompt: str) -> Mapping[str, Any]:
+        url = self.base_url.rstrip("/") + "/v1/chat/completions"
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "Respond with a valid JSON object.\n\n" + prompt}],
+            "response_format": {"type": "json_object"},
+            "stream": False,
+        }
+        headers = {"Content-Type": "application/json", "User-Agent": "Nova-Agent/1.0"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = Request(url, data=json.dumps(body, ensure_ascii=False).encode(), headers=headers, method="POST")
+        attempts = 0
+        while True:
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except HTTPError as exc:
+                if exc.code != 429 or attempts >= self.max_rate_limit_retries:
+                    raise LLMTransportError(f"LLM HTTP error: {exc.code}") from exc
+                wait = self._retry_after_seconds(exc)
+                if wait is None or wait > self.max_rate_limit_wait:
+                    raise LLMTransportError("LLM rate limited with no safe retry interval") from exc
+                attempts += 1
+                time.sleep(wait)
+            except URLError as exc:
+                raise LLMTransportError("LLM connection failed") from exc
+            except TimeoutError as exc:
+                raise LLMTransportError("LLM request timed out") from exc
+        try:
+            content = json.loads(raw)["choices"][0]["message"]["content"]
+            result = json.loads(content)
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            raise LLMTransportError("LLM response has unexpected JSON shape") from exc
+        if not isinstance(result, Mapping):
+            raise LLMTransportError("LLM JSON response must be an object")
+        return result
+
+    @staticmethod
+    def _retry_after_seconds(exc: HTTPError) -> float | None:
+        value = exc.headers.get("Retry-After") if exc.headers else None
+        try:
+            return float(value) if value is not None and float(value) >= 0 else None
+        except (TypeError, ValueError):
+            return None
+</file>
+
+<file path="agent/reasoning_payload.py">
+from __future__ import annotations
+
+from typing import Any
+
+from .reasoning_context import ReasoningContext
+
+
+def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
+    state = context.state
+    statuses = [
+        " ".join(part for part in (e.text, e.content_description) if part).strip()
+        for e in state.elements
+        if not e.clickable
+    ]
+    return {
+        "goal": context.goal,
+        "state": {
+            "package": state.package,
+            "activity": state.activity,
+            "observation_id": state.observation_id,
+            "status_text": [s for s in statuses if s],
+        },
+        "history": [dict(item) for item in context.history],
+        "candidates": [
+            {
+                "action_type": c.action_type.value,
+                "target": (
+                    {
+                        "element_id": c.target.element_id,
+                        "text": c.target.text,
+                        "content_description": c.target.content_description,
+                    }
+                    if c.target else None
+                ),
+                "enabled": c.enabled,
+                "visible": c.visible,
+            }
+            for c in context.candidates
+        ],
+    }
+</file>
+
+<file path="agent/reasoning_provider.py">
+from __future__ import annotations
+
+from typing import Protocol
+
+from .core import Decision
+from .reasoning_context import ReasoningContext
+
+
+class ReasoningProvider(Protocol):
+    def decide(self, context: ReasoningContext) -> Decision: ...
+</file>
+
+<file path="agent/targeting.py">
+from __future__ import annotations
+
+import re
+from difflib import SequenceMatcher
+
+from .core import Target, UIElement, element_text
+
+
+def _tokens(value: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _score(goal: str, element: UIElement) -> float:
+    goal_tokens = _tokens(goal)
+    label = element_text(element)
+    label_tokens = _tokens(label)
+    if not goal_tokens or not label_tokens:
+        return 0.0
+
+    # A fuzzy string ratio by itself can create dangerous false positives.
+    # Require at least one meaningful token overlap before treating a node as
+    # related to the requested goal.
+    overlap = len(goal_tokens & label_tokens) / len(goal_tokens)
+    if overlap == 0:
+        return 0.0
+
+    ratio = SequenceMatcher(None, goal.lower(), label.lower()).ratio()
+    exact = 1.0 if goal.strip().lower() == label.strip().lower() else 0.0
+    return exact * 10.0 + overlap * 4.0 + ratio
+
+
+def find_target(goal: str, elements: tuple[UIElement, ...] | list[UIElement]) -> Target | None:
+    candidates = [e for e in elements if e.enabled and e.clickable]
+    if not candidates:
+        return None
+    ranked = sorted(candidates, key=lambda e: _score(goal, e), reverse=True)
+    best = ranked[0]
+    if _score(goal, best) <= 0:
+        return None
+    return Target(best.id, best.text, best.content_description)
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/BridgeHostService.kt">
+package com.hausshehe.nova
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+
+class BridgeHostService : Service() {
+    companion object {
+        private const val CHANNEL_ID = "nova_bridge"
+        private const val NOTIFICATION_ID = 18765
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, notification())
+        BridgeServer.start(applicationContext)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int =
+        START_STICKY
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun notification(): Notification =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("Nova Agent")
+                .setContentText("Navigation bridge is running")
+                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                .setOngoing(true)
+                .build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+                .setContentTitle("Nova Agent")
+                .setContentText("Navigation bridge is running")
+                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                .setOngoing(true)
+                .build()
+        }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Nova bridge",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/NovaApplication.kt">
+package com.hausshehe.nova
+
+import android.app.Application
+
+class NovaApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        BridgeServer.start(this)
+    }
+}
+</file>
+
+<file path="app/src/main/res/values/strings.xml">
+<resources>
+    <string name="accessibility_service_description">Nova observes and controls Android UI for goal-driven navigation.</string>
+</resources>
+</file>
+
+<file path="app/src/main/res/values/styles.xml">
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#3F51B5</item>
+    </style>
+</resources>
+</file>
+
+<file path="docs/REBUILD_ARCHITECTURE_RECON.md">
+# Nova Rebuild Architecture Reconnaissance
+
+## Status
+
+This document records the architectural reconnaissance for the Nova rebuild. It is deliberately a design document, not a code transplant.
+
+## Strategic decision
+
+Nova will stop treating the existing `NavigationLoop` as the long-term navigation architecture. The existing implementation is a verified prototype and regression baseline, but its central loop remains a tightly coupled deterministic planner/executor/verifier cycle.
+
+The rebuild will use the architecture of the reference PrivateAgent project as the navigation design reference, while retaining Nova's Android bridge, accessibility integration, goal evaluation, testing discipline, and reliability requirements.
+
+Reference project: `orailnoor/private-agent`
+
+## Reference architecture discovered
+
+The reference project is organized around a task executor and service boundaries rather than Nova's current `NavigationLoop` abstraction.
+
+Important components observed:
+
+- `TaskExecutor`: owns the high-level task lifecycle and repeated observe -> reason -> act cycle.
+- `AiService`: provides the reasoning/model boundary.
+- `ScreenAutomationService`: owns the native Accessibility bridge, screen dumps, screenshots, coordinates, and interaction primitives.
+- `AppLauncherService`: app-launch capability.
+- `RecoveryEngine`: explicit failure diagnosis and recovery action selection.
+- `SkillMemoryService`: reusable successful task knowledge.
+- `TaskHistoryLogger`: operational history.
+- `ShizukuService`: optional privileged/device capabilities.
+
+The reference README describes the core feedback loop as:
+
+`goal -> screen hierarchy -> model decision -> native action -> fresh screen -> repeat until complete`
+
+## What is architecturally valuable
+
+### 1. A task executor owns the long-running task
+
+Instead of making the navigation kernel itself responsible for the entire task, the task executor coordinates the lifecycle.
+
+Nova should move toward:
+
+`Goal -> Task State -> Observe -> Reason -> Action -> Observe -> Evaluate -> Complete/Replan`
+
+The task lifecycle should be distinct from individual Android actions.
+
+### 2. Observation is a first-class service
+
+The reference implementation treats screen reading as a dedicated capability. Its screen service can expose:
+
+- accessibility tree data
+- current package
+- element text/content description
+- clickability/editability/scrollability
+- bounds and centers
+- screenshots
+- interaction primitives
+
+Nova already has much of this capability. It should be preserved and strengthened rather than rebuilt unnecessarily.
+
+### 3. The model reasons over fresh screen state
+
+The reference architecture gives the reasoning layer the current task, current screen representation, and previous action context, then asks for one next action.
+
+This is closer to the long-term Nova design than the current deterministic target scorer.
+
+### 4. Actions are capability-level operations
+
+The reference action vocabulary includes operations such as:
+
+- click by text
+- click by coordinates
+- type text
+- submit/enter
+- scroll
+- swipe
+- back
+- home
+- open app
+- wait
+- done
+
+Nova should expose a controlled action interface rather than allowing the reasoning layer to manipulate Android implementation details directly.
+
+### 5. Recovery is separated from normal execution
+
+The reference project has a dedicated `RecoveryEngine` that diagnoses failures and selects an alternate action.
+
+Nova should preserve this separation. Recovery should not become dozens of special cases inside the main navigation loop.
+
+### 6. Memory is outside the navigation primitive
+
+The reference project separates skill memory and task history from the core execution service.
+
+Nova should eventually do the same:
+
+- working task history
+- successful skill memory
+- failure history
+- app-specific knowledge
+
+Memory should be evidence, not unquestionable truth.
+
+## Important differences and lessons
+
+The reference project is not perfect and should not be copied blindly.
+
+Observed weaknesses include explicit fixed delays and heuristic recovery rules. Nova's existing bounded transition-settling work is stronger and should be retained.
+
+The reference implementation also contains application-specific shortcuts and fallback behavior. Nova should avoid turning those into a new hard-coded navigation system.
+
+The goal is to adopt the architecture, not reproduce every implementation detail.
+
+## Nova -> rebuilt architecture mapping
+
+| Current Nova | Rebuild direction |
+|---|---|
+| `NavigationLoop` | Replace as the long-term orchestration abstraction with a task executor/agent loop |
+| `WorldState` | Retain concept, expand into richer observation/task state |
+| `NavigationBridge` | Evolve into Android capability boundary |
+| `DeterministicReasoner` | Keep as baseline/fallback planner, not the ultimate brain |
+| `GoalEvaluator` | Retain and make goal completion a hard termination condition |
+| `TransitionVerifier` | Retain bounded state-transition verification |
+| `targeting.py` | Retain useful matching primitives, but do not let fuzzy matching become the entire planner |
+| `reasoning_context.py` | Evolve into structured task/observation context |
+| `android_bridge.py` | Preserve as the Android/Termux communication boundary |
+| recovery logic | Move toward a dedicated recovery subsystem |
+| smoke tests | Preserve as regression gates and expand around the new architecture |
+
+## Target architecture
+
+```text
+User Goal
+   |
+   v
+Task / Goal Model
+   |
+   v
+Task Executor / Agent Runtime
+   |
+   +--------------------+
+   |                    |
+   v                    v
+Observation         Working Memory
+   |
+   v
+Reasoner / Planner
+   |
+   v
+Structured Action
+   |
+   v
+Action Executor
+   |
+   v
+Android Capability Boundary
+   |
+   v
+Accessibility / Android
+   |
+   v
+Fresh Observation
+   |
+   v
+Goal Evaluator + Transition Verification
+   |
+   +----------+----------+
+              |          |
+           complete    failure
+              |          |
+              v          v
+            DONE      Recovery / Replan
+                           |
+                           +----> Observation
+```
+
+## Migration principles
+
+1. Do not delete working Android capabilities merely because the architecture changes.
+2. Do not copy reference-project code wholesale without checking compatibility and licensing.
+3. Keep the current deterministic planner as a regression/fallback asset until the new path proves itself.
+4. Replace orchestration before replacing low-level Android capabilities.
+5. Keep goal completion independent from action acceptance.
+6. Keep bounded observation/transition settling from the current Nova implementation.
+7. Test every migration layer independently and then on the real phone.
+8. Do not add an LLM until the new task/navigation boundary is stable enough to accept one.
+
+## Immediate implementation order
+
+### R0 — Reconnaissance
+
+Complete architecture mapping and baseline preservation.
+
+### R1 — New task runtime skeleton
+
+Introduce a task-executor boundary without changing Android behavior.
+
+### R2 — Observation boundary
+
+Adapt Nova's existing Android observation into the new task runtime.
+
+### R3 — Action boundary
+
+Adapt existing click/back/wait/other actions into a capability-level interface.
+
+### R4 — Goal verification
+
+Make completion evaluation independent of whether an action was accepted.
+
+### R5 — Recovery boundary
+
+Introduce explicit diagnosis/recovery/replan flow.
+
+### R6 — Deterministic compatibility planner
+
+Use the existing deterministic reasoner as the initial planner behind the new boundary.
+
+### R7 — Real-device migration tests
+
+Prove P0, P1, and P2 behavior through the rebuilt runtime.
+
+### R8 — LLM reasoner
+
+Only after R1-R7 are stable, add an LLM behind the same planner interface.
+
+### R9 — Memory and skill learning
+
+Add reusable task knowledge without turning memory into hard-coded macros.
+
+## Current conclusion
+
+The old Nova architecture successfully proved Android control, goal evaluation, multi-step navigation, recovery, and transition handling. Its job as a prototype is complete.
+
+The rebuild should now shift the center of gravity from a deterministic `NavigationLoop` to a task-oriented agent runtime with explicit observation, reasoning, action, verification, recovery, and memory boundaries.
+
+The reference architecture gives us the structural direction. Nova's existing reliability work supplies the parts that are stronger than the reference implementation, especially bounded transition verification and disciplined real-device testing.
+
+**Next coding milestone: R1 — introduce the new task-runtime boundary without breaking the existing Android bridge or tests.**
+</file>
+
+<file path="build.gradle">
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+}
+</file>
+
+<file path="REBUILD_RUNTIME.md">
+# Nova runtime rebuild
+
+This branch is intentionally based on `e6b63c23c7e65ad68bf3e2012f7bead137abe438`, before the accumulated task-runtime/recovery layers.
+
+## Architecture
+
+`WorldState -> ReasoningContext -> ReasoningProvider -> runtime guard -> AndroidBridge -> fresh WorldState -> effect evaluation -> repeat`
+
+There is one authoritative task loop: `agent.task_runtime_clean.CleanTaskRuntime`.
+
+Groq is a reasoning provider, not a task executor. It proposes one structured action from the current observation. Runtime validation remains deterministic.
+
+## Safety invariants
+
+1. Action-goal labels already visible in the UI do not count as completion before an action occurs.
+2. Every executed action is followed by a fresh observation before the next decision.
+3. An action producing prerequisite/failure evidence is marked blocked.
+4. A blocked action cannot be executed again while the same observable UI state remains unchanged.
+5. Observation identity is not used as a proxy for UI change.
+6. A bridge/observation timeout does not reuse the pre-action state as if it were fresh.
+
+## Intentionally not ported yet
+
+The later `TaskExecutor`, `TaskState`, `ActionGuard`, `RecoveryEngine`, and duplicate `NavigationLoop` layers are not copied into this branch. They were the source of the architecture drift being investigated.
+
+Scrolling, richer action types, and additional real-device smoke coverage should be ported one capability at a time after the clean loop is validated.
+</file>
+
+<file path="settings.gradle">
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'NovaAgent'
+include ':app'
+</file>
+
+<file path="agent/android_clean_navigation_smoke.py">
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+
+from .android_bridge import AndroidBridge, AndroidBridgeError
+from .core import Action, ActionType, Decision, WorldState, ExecutionResult
+from .runtime import create_task_runtime
+
+
+class TracingBridge(AndroidBridge):
+    """Android bridge that exposes the runtime's physical UI interaction in smoke output."""
+
+    def observe(self) -> WorldState:
+        state = super().observe()
+        print(f"OBSERVATION {state.observation_id} package={state.package!r} activity={state.activity!r}")
+        for index, element in enumerate(state.elements):
+            print(
+                "UI_ELEMENT "
+                f"#{index} id={element.id!r} text={element.text!r} "
+                f"description={element.content_description!r} "
+                f"clickable={element.clickable} enabled={element.enabled} "
+                f"scrollable={element.scrollable} bounds={element.bounds!r}"
+            )
+        return state
+
+    def execute(self, action: Action) -> ExecutionResult:
+        target = action.target
+        print(
+            "EXECUTE "
+            f"action={action.type.value!r} "
+            f"target_id={(target.element_id if target else None)!r} "
+            f"target_text={(target.text if target else None)!r}"
+        )
+        result = super().execute(action)
+        print(
+            "EXECUTION_RESULT "
+            f"accepted={result.accepted} changed={result.changed} "
+            f"verified={result.verified} error={result.error!r}"
+        )
+        return result
+
+
+class TracingProvider:
+    def __init__(self, provider):
+        self.provider = provider
+
+    def decide(self, context):
+        print(f"LLM_STEP goal={context.goal!r} observation={context.state.observation_id}")
+        decision = self.provider.decide(context)
+        print(f"LLM_ACTION {decision.action.type.value}")
+        if decision.action.target:
+            print(f"LLM_TARGET {decision.action.target.element_id}")
+            print(f"LLM_TARGET_TEXT {decision.action.target.text!r}")
+        print(f"LLM_RATIONALE {decision.rationale}")
+        return decision
+
+
+def wait_for_label(bridge: AndroidBridge, label: str, timeout: float = 3.0):
+    deadline = time.monotonic() + timeout
+    while True:
+        state = bridge.observe()
+        if any(e.text == label or e.content_description == label for e in state.elements):
+            return state
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"target {label!r} not observable")
+        time.sleep(0.2)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Nova clean runtime Groq navigation smoke")
+    parser.add_argument("--launch-nova", action="store_true")
+    parser.add_argument("--goal", required=True)
+    parser.add_argument("--max-steps", type=int, default=5)
+    parser.add_argument("--model", default=None)
+    args = parser.parse_args()
+
+    bridge = TracingBridge()
+    try:
+        if args.launch_nova:
+            print(f"LAUNCH {bridge.launch(root=True)}")
+        wait_for_label(bridge, "Multi-Step Test")
+        from .runtime import create_reasoning_provider
+        provider = TracingProvider(create_reasoning_provider("groq", model=args.model))
+        runtime = create_task_runtime(
+            bridge,
+            reasoning_provider=provider,
+            max_steps=args.max_steps,
+        )
+        achieved = runtime.run(args.goal)
+        print(f"TASK {'COMPLETED' if achieved else 'NOT COMPLETED'}")
+        print(f"HISTORY {runtime.runtime_state.history}")
+        if runtime.current_state:
+            print(f"FINAL_OBSERVATION {runtime.current_state.observation_id}")
+        return 0 if achieved else 1
+    except (AndroidBridgeError, RuntimeError, TimeoutError) as exc:
+        print(f"CLEAN RUNTIME SMOKE FAILED: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+</file>
+
+<file path="agent/core.py">
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Mapping, Sequence
+
+
+class ActionType(str, Enum):
+    CLICK = "click"
+    BACK = "back"
+    SCROLL = "scroll"
+    WAIT = "wait"
+
+
+@dataclass(frozen=True)
+class UIElement:
+    id: str
+    text: str = ""
+    content_description: str = ""
+    clickable: bool = False
+    enabled: bool = True
+    class_name: str = ""
+    bounds: str = ""
+    editable: bool = False
+    scrollable: bool = False
+    checkable: bool = False
+    checked: bool = False
+    focused: bool = False
+    visible: bool = True
+
+
+@dataclass(frozen=True)
+class WorldState:
+    package: str = ""
+    activity: str = ""
+    elements: tuple[UIElement, ...] = ()
+    observation_id: str = ""
+    timestamp_ms: int = 0
+
+
+@dataclass(frozen=True)
+class Target:
+    element_id: str
+    text: str = ""
+    content_description: str = ""
+
+
+@dataclass(frozen=True)
+class Action:
+    type: ActionType
+    target: Target | None = None
+
+
+@dataclass(frozen=True)
+class Decision:
+    action: Action
+    rationale: str = ""
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    accepted: bool
+    changed: bool
+    verified: bool = False
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class TransitionVerifier:
+    def verify(self, before: WorldState, after: WorldState, result: ExecutionResult) -> bool:
+        if not result.accepted:
+            return False
+        if not result.changed:
+            return False
+        return before != after
+
+
+def element_text(element: UIElement) -> str:
+    return " ".join(p for p in (element.text, element.content_description) if p).strip()
+
+
+def normalize_history(history: Sequence[Mapping[str, Any]]) -> tuple[Mapping[str, Any], ...]:
+    return tuple(history)
+</file>
+
+<file path="agent/runtime.py">
+from __future__ import annotations
+
+from typing import Literal
+
+from .deterministic_reasoner import DeterministicReasoner
+from .groq import groq_transport
+from .llm_reasoning_provider import LLMReasoningProvider
+from .reasoning_provider import ReasoningProvider
+from .task_runtime_clean import CleanTaskRuntime
+
+ProviderName = Literal["deterministic", "groq"]
+
+
+def create_reasoning_provider(provider: ProviderName = "deterministic", *, model: str | None = None, timeout: float = 30.0) -> ReasoningProvider:
+    if provider == "deterministic":
+        return DeterministicReasoner()
+    if provider == "groq":
+        return LLMReasoningProvider(groq_transport(model=model, timeout=timeout).complete)
+    raise ValueError(f"unsupported reasoning provider: {provider}")
+
+
+def create_task_runtime(
+    bridge,
+    *,
+    provider: ProviderName = "deterministic",
+    reasoning_provider: ReasoningProvider | None = None,
+    fallback_planner: ReasoningProvider | None = None,
+    model: str | None = None,
+    provider_timeout: float = 30.0,
+    max_steps: int = 5,
+    settle_timeout: float = 2.0,
+) -> CleanTaskRuntime:
+    selected = reasoning_provider or create_reasoning_provider(provider, model=model, timeout=provider_timeout)
+    fallback = fallback_planner
+    if fallback is None and provider == "groq":
+        fallback = DeterministicReasoner()
+    return CleanTaskRuntime(
+        bridge=bridge,
+        planner=selected,
+        fallback_planner=fallback,
+        max_steps=max_steps,
+        settle_timeout=settle_timeout,
+    )
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/NovaAccessibilityService.kt">
+package com.hausshehe.nova
+
+import android.accessibilityservice.AccessibilityService
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+
+class NovaAccessibilityService : AccessibilityService() {
+    companion object {
+        @Volatile
+        var instance: NovaAccessibilityService? = null
+            private set
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        ObservationStore.update(rootInActiveWindow)
+        BridgeServer.start(this)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        ObservationStore.update(rootInActiveWindow)
+    }
+
+    override fun onInterrupt() = Unit
+
+    fun clickNode(node: AccessibilityNodeInfo): Boolean =
+        node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+}
+</file>
+
+<file path="app/src/main/res/values/ids.xml">
+<resources>
+    <item name="test_navigation_action" type="id" />
+    <item name="recovery_test" type="id" />
+    <item name="recovery_primary" type="id" />
+    <item name="recovery_fallback" type="id" />
+    <item name="multi_step_test" type="id" />
+    <item name="multi_step_continue" type="id" />
+    <item name="multi_step_finish" type="id" />
+</resources>
+</file>
+
+<file path="gradle.properties">
+android.useAndroidX=true
+android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
+</file>
+
+<file path="agent/bridge_smoke.py">
+from __future__ import annotations
+
+import argparse
+
+from .android_bridge import AndroidBridge, AndroidBridgeError
+
+
+def _matches_text(element, target_text: str) -> bool:
+    return element.text == target_text or element.content_description == target_text
+
+
+def _print_elements(state) -> None:
+    for element in state.elements:
+        if element.text or element.content_description:
+            print(f"{element.id} | text={element.text!r} | desc={element.content_description!r} | clickable={element.clickable}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Check Nova Android bridge connectivity")
+    parser.add_argument("--launch-nova", action="store_true")
+    parser.add_argument("--click-text", default=None)
+    args = parser.parse_args()
+
+    bridge = AndroidBridge()
+    try:
+        if args.launch_nova:
+            bridge.launch()
+        state = bridge.observe()
+        print(f"OBSERVATION {state.observation_id}")
+        print(f"PACKAGE {state.package}")
+        print(f"ACTIVITY {state.activity}")
+        print(f"ELEMENTS {len(state.elements)}")
+        _print_elements(state)
+
+        if args.click_text is not None:
+            target = next((e for e in state.elements if _matches_text(e, args.click_text)), None)
+            if target is None:
+                print(f"TARGET NOT FOUND: {args.click_text!r}")
+                return 2
+            before = state
+            bridge.click(target.id)
+            fresh = bridge.wait_for_fresh_observation(before)
+            print(f"CLICKED {target.id}")
+            print(f"FRESH_OBSERVATION {fresh.observation_id}")
+            print(f"FRESH_ELEMENTS {len(fresh.elements)}")
+            _print_elements(fresh)
+        return 0
+    except AndroidBridgeError as exc:
+        print(f"BRIDGE ERROR: {exc}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+</file>
+
+<file path="agent/deterministic_reasoner.py">
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from .core import Action, ActionType, Decision, Target
+from .reasoning_context import ActionCandidate, ReasoningContext
+from .targeting import _score
+
+
+class DeterministicReasoner:
+    """Small, explainable planner used as a stable fallback before any LLM."""
+
+    _PREREQUISITE_WORDS = ("start", "begin", "initialize", "select", "choose", "enable")
+
+    @staticmethod
+    def _meaningful_terms(goal: str) -> tuple[str, ...]:
+        stop = {"a", "an", "the", "to", "of", "and", "then", "please", "tap", "click", "open"}
+        return tuple(t for t in re.findall(r"[a-z0-9]+", goal.lower()) if t not in stop)
+
+    @staticmethod
+    def _used_ids(context: ReasoningContext) -> set[str]:
+        return {
+            str(item.get("target_id"))
+            for item in context.history
+            if item.get("target_id") is not None and item.get("task_effect") != "blocked"
+        }
+
+    @staticmethod
+    def _target_score(context: ReasoningContext, candidate: ActionCandidate) -> float:
+        if candidate.target is None:
+            return 0.0
+        element = next(
+            (element for element in context.state.elements if element.id == candidate.target.element_id),
+            None,
+        )
+        return _score(context.goal, element) if element is not None else 0.0
+
+    @staticmethod
+    def _latest_blocked_target(context: ReasoningContext) -> str | None:
+        for item in reversed(context.history):
+            if item.get("task_effect") == "blocked":
+                target_id = item.get("target_id")
+                return str(target_id) if target_id is not None else None
+        return None
+
+    def plan(self, context: ReasoningContext) -> Decision:
+        candidates = [
+            candidate
+            for candidate in context.candidates
+            if candidate.enabled and candidate.visible and candidate.target is not None
+        ]
+        if not candidates:
+            raise RuntimeError("no actionable candidate available")
+
+        used = self._used_ids(context)
+        clicks = [candidate for candidate in candidates if candidate.action_type is ActionType.CLICK]
+        ranked = sorted(clicks, key=lambda candidate: self._target_score(context, candidate), reverse=True)
+        blocker = self._latest_blocked_target(context)
+        blocker_evidence = next(
+            (str(item.get("effect_evidence") or "").lower() for item in reversed(context.history) if item.get("task_effect") == "blocked"),
+            "",
+        )
+
+        # If the UI says a prerequisite must happen first, walk backward from
+        # the blocked target and choose the earliest unused semantic candidate.
+        # This uses current UI structure, not knowledge of a particular app.
+        if "first" in blocker_evidence and blocker:
+            element_ids = [element.id for element in context.state.elements]
+            try:
+                blocked_index = element_ids.index(blocker)
+            except ValueError:
+                blocked_index = len(element_ids)
+            for element in context.state.elements[:blocked_index]:
+                if not element.clickable or not element.enabled or element.id in used:
+                    continue
+                candidate = next(
+                    (item for item in ranked if item.target.element_id == element.id),
+                    None,
+                )
+                if candidate is not None and self._target_score(context, candidate) > 0:
+                    return Decision(
+                        Action(ActionType.CLICK, candidate.target),
+                        f"selected prerequisite candidate {candidate.target.element_id}",
+                    )
+
+        # Do not immediately retry the last blocked target while another new
+        # semantic action is available. Once the alternatives are exhausted,
+        # the previously blocked target becomes eligible after state progress.
+        fresh_matches = [
+            candidate
+            for candidate in ranked
+            if candidate.target.element_id not in used
+            and candidate.target.element_id != blocker
+            and self._target_score(context, candidate) > 0
+        ]
+        if fresh_matches:
+            candidate = fresh_matches[0]
+            return Decision(
+                Action(ActionType.CLICK, candidate.target),
+                f"selected matching target {candidate.target.element_id}",
+            )
+
+        if blocker:
+            blocked_candidate = next(
+                (candidate for candidate in ranked if candidate.target.element_id == blocker),
+                None,
+            )
+            if blocked_candidate is not None and self._target_score(context, blocked_candidate) > 0:
+                return Decision(
+                    Action(ActionType.CLICK, blocked_candidate.target),
+                    f"revisiting previously blocked target {blocked_candidate.target.element_id} after progress",
+                )
+
+        # If no visible click is a new semantic match, use a visible scroll
+        # candidate rather than inventing an off-screen target or stale node.
+        for candidate in candidates:
+            if candidate.action_type is ActionType.SCROLL:
+                return Decision(Action(ActionType.SCROLL, candidate.target), "scroll to reveal more of the current UI")
+
+        if ranked:
+            best = ranked[0]
+            return Decision(Action(ActionType.CLICK, best.target), f"reusing best matching target {best.target.element_id}")
+
+        raise RuntimeError("no click or scroll candidate available")
+</file>
+
+<file path="agent/llm_reasoning_provider.py">
+from __future__ import annotations
+
+import json
+from typing import Any, Callable, Mapping
+
+from .core import Decision
+from .reasoning_context import ReasoningContext
+from .reasoning_payload import reasoning_payload
+from .reasoning_response import InvalidReasoningResponse, decision_from_response
+
+
+_RESPONSE_CONTRACT = """Return ONLY one JSON object:
+{"action_type":"click|back|scroll","target":{"element_id":"<id>"}|null,"reason":"<short explanation>"}
+Use only an actionable candidate from the CURRENT observation. The current observation is authoritative.
+The goal describes the desired outcome, not an instruction to click a similarly named element immediately.
+Use history to understand what has already happened. After every executed action, reason again from the fresh observation.
+Never assume an accepted Android action completed the task. Never repeat an action just because it was previously chosen.
+A scroll action moves a currently scrollable container forward to reveal content that is not currently visible. Use scroll when the desired target is below the current viewport, rather than selecting an offscreen target.
+Do not invent or emit action types that are not present in the candidate list.
+"""
+
+
+class LLMReasoningProvider:
+    def __init__(self, responder: Callable[[str], Mapping[str, Any]]):
+        self._responder = responder
+
+    def decide(self, context: ReasoningContext) -> Decision:
+        prompt = _RESPONSE_CONTRACT + "\nObservation and goal:\n" + json.dumps(
+            reasoning_payload(context), ensure_ascii=False, separators=(",", ":")
+        )
+        try:
+            response = self._responder(prompt)
+        except Exception as exc:
+            raise RuntimeError(f"reasoning provider failed: {type(exc).__name__}: {exc}") from exc
+        if not isinstance(response, Mapping):
+            raise InvalidReasoningResponse("LLM response must be an object")
+        return decision_from_response(response, context)
+</file>
+
+<file path="agent/reasoning_response.py">
+from __future__ import annotations
+
+from typing import Any, Mapping
+
+from .core import Action, ActionType, Decision, Target
+from .reasoning_context import ReasoningContext
+
+
+class InvalidReasoningResponse(ValueError):
+    pass
+
+
+def decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
+    action_type = response.get("action_type")
+    try:
+        action = ActionType(action_type)
+    except (TypeError, ValueError) as exc:
+        raise InvalidReasoningResponse("invalid action_type") from exc
+
+    candidate_types = {candidate.action_type for candidate in context.candidates}
+    if action not in candidate_types:
+        raise InvalidReasoningResponse(f"action type is not currently available: {action.value}")
+
+    target_data = response.get("target")
+    if action is ActionType.BACK:
+        if target_data is not None:
+            raise InvalidReasoningResponse("target is not allowed for this action")
+        return Decision(Action(action), str(response.get("reason", "provider decision")))
+
+    if action is ActionType.WAIT:
+        raise InvalidReasoningResponse("unsupported action type")
+
+    if not isinstance(target_data, Mapping):
+        raise InvalidReasoningResponse(f"{action.value} action requires a target object")
+    element_id = target_data.get("element_id")
+    if not isinstance(element_id, str) or not element_id:
+        raise InvalidReasoningResponse(f"{action.value} target requires element_id")
+
+    candidate = next(
+        (
+            c for c in context.candidates
+            if c.action_type is action and c.target and c.target.element_id == element_id
+        ),
+        None,
+    )
+    if candidate is None or not candidate.enabled or not candidate.visible:
+        raise InvalidReasoningResponse(f"{action.value} target is not currently actionable")
+    target = Target(element_id, candidate.target.text, candidate.target.content_description)
+    return Decision(Action(action, target), str(response.get("reason", "provider decision")))
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/ObservationStore.kt">
+package com.hausshehe.nova
+
+import android.graphics.Rect
+import android.view.accessibility.AccessibilityNodeInfo
+import java.util.concurrent.atomic.AtomicLong
+
+object ObservationStore {
+    private val sequence = AtomicLong(0)
+
+    @Volatile
+    private var latest: UiSnapshot = UiSnapshot(0, emptyList())
+
+    fun update(root: AccessibilityNodeInfo?) {
+        if (root == null) return
+        val elements = mutableListOf<UiElementSnapshot>()
+        collect(root, elements, "0")
+        latest = UiSnapshot(sequence.incrementAndGet(), elements)
+    }
+
+    fun current(): UiSnapshot = latest
+
+    private fun collect(
+        node: AccessibilityNodeInfo,
+        out: MutableList<UiElementSnapshot>,
+        path: String
+    ) {
+        val resourceId = node.viewIdResourceName
+        val stableId = resourceId?.takeIf { it.isNotBlank() } ?: "path:$path"
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+
+        out += UiElementSnapshot(
+            id = stableId,
+            text = node.text?.toString() ?: "",
+            contentDescription = node.contentDescription?.toString() ?: "",
+            clickable = node.isClickable,
+            enabled = node.isEnabled,
+            className = node.className?.toString() ?: "",
+            bounds = bounds.toShortString(),
+            editable = node.isEditable,
+            scrollable = node.isScrollable,
+            checkable = node.isCheckable,
+            checked = node.isChecked,
+            focused = node.isFocused,
+            visible = node.isVisibleToUser
+        )
+
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { child ->
+                collect(child, out, "$path.$i")
+                child.recycle()
+            }
+        }
+    }
+}
+
+data class UiSnapshot(val observationId: Long, val elements: List<UiElementSnapshot>)
+
+data class UiElementSnapshot(
+    val id: String,
+    val text: String,
+    val contentDescription: String,
+    val clickable: Boolean,
+    val enabled: Boolean,
+    val className: String,
+    val bounds: String,
+    val editable: Boolean,
+    val scrollable: Boolean,
+    val checkable: Boolean,
+    val checked: Boolean,
+    val focused: Boolean,
+    val visible: Boolean
+)
+</file>
+
+<file path="app/src/main/AndroidManifest.xml">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application
+        android:name=".NovaApplication"
+        android:theme="@style/AppTheme"
+        android:label="Nova Agent"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".BridgeHostService"
+            android:exported="false"
+            android:stopWithTask="false" />
+
+        <service
+            android:name=".NovaAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+    </application>
+</manifest>
+</file>
+
+<file path="agent/reasoning_context.py">
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Any, Mapping, Sequence
+
+from .core import ActionType, Target, WorldState
+
+
+@dataclass(frozen=True)
+class ActionCandidate:
+    action_type: ActionType
+    target: Target | None = None
+    enabled: bool = True
+    visible: bool = True
+
+
+@dataclass(frozen=True)
+class ReasoningContext:
+    goal: str
+    state: WorldState
+    history: tuple[Mapping[str, Any], ...] = ()
+    candidates: tuple[ActionCandidate, ...] = ()
+
+
+def _bounds(element: Any) -> tuple[int, int, int, int] | None:
+    match = re.fullmatch(r"\[(\-?\d+),(\-?\d+)\]\[(\-?\d+),(\-?\d+)\]", element.bounds or "")
+    if not match:
+        return None
+    return tuple(int(value) for value in match.groups())
+
+
+def _intersects(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    left, top, right, bottom = a
+    other_left, other_top, other_right, other_bottom = b
+    return max(left, other_left) < min(right, other_right) and max(top, other_top) < min(bottom, other_bottom)
+
+
+def _effectively_visible(element: Any, state: WorldState) -> bool:
+    if not element.visible:
+        return False
+    element_bounds = _bounds(element)
+    if element_bounds is None:
+        return True
+    viewports = [_bounds(item) for item in state.elements if item.scrollable and item.visible]
+    viewports = [viewport for viewport in viewports if viewport is not None]
+    if not viewports:
+        return True
+    return any(_intersects(element_bounds, viewport) for viewport in viewports)
+
+
+def build_reasoning_context(
+    goal: str,
+    state: WorldState,
+    history: Sequence[Mapping[str, Any]],
+) -> ReasoningContext:
+    candidates = [
+        ActionCandidate(
+            action_type=ActionType.CLICK,
+            target=Target(element.id, element.text, element.content_description),
+            enabled=element.enabled,
+            visible=True,
+        )
+        for element in state.elements
+        if element.clickable and element.enabled and _effectively_visible(element, state)
+    ]
+
+    for element in state.elements:
+        if element.scrollable and element.visible:
+            candidates.append(
+                ActionCandidate(
+                    action_type=ActionType.SCROLL,
+                    target=Target(element.id, element.text, element.content_description),
+                    enabled=element.enabled,
+                    visible=True,
+                )
+            )
+
+    candidates.append(ActionCandidate(ActionType.BACK))
+    return ReasoningContext(
+        goal=goal,
+        state=state,
+        history=tuple(history),
+        candidates=tuple(candidates),
+    )
+</file>
+
+<file path="app/src/main/res/xml/accessibility_service_config.xml">
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:accessibilityFlags="flagReportViewIds"
+    android:description="@string/accessibility_service_description" />
+</file>
+
+<file path="app/build.gradle">
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.hausshehe.nova'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.hausshehe.nova'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/MainActivity.kt">
+package com.hausshehe.nova
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.os.Bundle
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+
+class MainActivity : Activity() {
+    private var navigationClicks = 0
+    private var recoveryRuns = 0
+    private var multiStepRuns = 0
+    private var multiStepStep = 0
+
+    private lateinit var navigationStatus: TextView
+    private lateinit var recoveryStatus: TextView
+    private lateinit var multiStepStatus: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        startService(Intent(this, BridgeHostService::class.java))
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 48, 32, 32)
+        }
+
+        root.addView(TextView(this).apply {
+            text = "Nova Agent"
+            textSize = 26f
+        })
+
+        root.addView(TextView(this).apply {
+            text = "Android navigation test harness"
+            textSize = 15f
+            setTextColor(Color.GRAY)
+            setPadding(0, 8, 0, 24)
+        })
+
+        root.addView(section("Navigation"))
+        val navigationButton = Button(this).apply {
+            id = R.id.test_navigation_action
+            text = "Test Navigation Action"
+            contentDescription = "Test Navigation Action"
+            setOnClickListener {
+                navigationClicks++
+                text = "Navigation Action Completed"
+                navigationStatus.text = "Clicked $navigationClicks time${if (navigationClicks == 1) "" else "s"}"
+            }
+        }
+        root.addView(navigationButton, buttonParams())
+        navigationStatus = status("Clicked 0 times")
+        root.addView(navigationStatus)
+
+        root.addView(section("Recovery"))
+        val recoveryButton = Button(this).apply {
+            id = R.id.recovery_test
+            text = "Recovery Test"
+            contentDescription = "Recovery Test"
+            setOnClickListener {
+                recoveryRuns++
+                recoveryStatus.text = "Recovery run $recoveryRuns: choose a recovery action"
+            }
+        }
+        root.addView(recoveryButton, buttonParams())
+
+        val recoveryPrimary = Button(this).apply {
+            id = R.id.recovery_primary
+            text = "Recovery Primary Action"
+            contentDescription = "Recovery Primary Action"
+            setOnClickListener {
+                recoveryStatus.text = "Primary action failed. Recovery required."
+            }
+        }
+        root.addView(recoveryPrimary, buttonParams())
+
+        val recoveryFallback = Button(this).apply {
+            id = R.id.recovery_fallback
+            text = "Recovery Fallback Action"
+            contentDescription = "Recovery Fallback Action"
+            setOnClickListener {
+                recoveryStatus.text = "Recovery completed"
+            }
+        }
+        root.addView(recoveryFallback, buttonParams())
+        recoveryStatus = status("Recovery ready")
+        root.addView(recoveryStatus)
+
+        root.addView(section("Multi-Step"))
+        val multiStepButton = Button(this).apply {
+            id = R.id.multi_step_test
+            text = "Multi-Step Test"
+            contentDescription = "Multi-Step Test"
+            setOnClickListener {
+                multiStepRuns++
+                multiStepStep = 1
+                multiStepStatus.text = "Run $multiStepRuns: Step 1 started"
+            }
+        }
+        root.addView(multiStepButton, buttonParams())
+
+        val continueButton = Button(this).apply {
+            id = R.id.multi_step_continue
+            text = "Continue Multi-Step"
+            contentDescription = "Continue Multi-Step"
+            setOnClickListener {
+                if (multiStepStep == 1) {
+                    multiStepStep = 2
+                    multiStepStatus.text = "Step 2 started"
+                } else {
+                    multiStepStatus.text = "Start a Multi-Step Test first"
+                }
+            }
+        }
+        root.addView(continueButton, buttonParams())
+
+        val finishButton = Button(this).apply {
+            id = R.id.multi_step_finish
+            text = "Finish Multi-Step"
+            contentDescription = "Finish Multi-Step"
+            setOnClickListener {
+                if (multiStepStep == 2) {
+                    multiStepStep = 3
+                    multiStepStatus.text = "Multi-Step Test completed"
+                } else {
+                    multiStepStatus.text = "Complete the previous steps first"
+                }
+            }
+        }
+        root.addView(finishButton, buttonParams())
+
+        multiStepStatus = status("Multi-Step ready")
+        root.addView(multiStepStatus)
+
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        setContentView(scrollView)
+    }
+
+    private fun section(title: String): TextView = TextView(this).apply {
+        text = title
+        textSize = 18f
+        setPadding(0, 20, 0, 4)
+    }
+
+    private fun status(textValue: String): TextView = TextView(this).apply {
+        text = textValue
+        textSize = 14f
+        setTextColor(Color.DKGRAY)
+        setPadding(0, 2, 0, 8)
+    }
+
+    private fun buttonParams() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    )
+}
+</file>
+
+<file path="agent/android_bridge.py">
+from __future__ import annotations
+
+import json
+import socket
+import subprocess
+import time
+from typing import Any
+
+from .core import Action, ActionType, ExecutionResult, UIElement, WorldState
+
+
+class AndroidBridgeError(RuntimeError):
+    pass
+
+
+class AndroidBridge:
+    """Client for Nova's localhost Android command server."""
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 18765, timeout: float = 3.0):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+
+    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raw = (json.dumps(payload) + "\n").encode()
+        deadline = time.monotonic() + self.timeout
+        try:
+            with socket.create_connection((self.host, self.port), self.timeout) as sock:
+                sock.settimeout(min(0.5, self.timeout))
+                sock.sendall(raw)
+                data = b""
+                while b"\n" not in data:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise AndroidBridgeError(
+                            f"Android bridge response timed out after {self.timeout:.1f}s"
+                        )
+                    sock.settimeout(min(0.5, remaining))
+                    try:
+                        chunk = sock.recv(65536)
+                    except socket.timeout as exc:
+                        if time.monotonic() >= deadline:
+                            raise AndroidBridgeError(
+                                f"Android bridge response timed out after {self.timeout:.1f}s"
+                            ) from exc
+                        continue
+                    if not chunk:
+                        break
+                    data += chunk
+        except AndroidBridgeError:
+            raise
+        except OSError as exc:
+            raise AndroidBridgeError(f"Android bridge unavailable: {exc}") from exc
+        if not data:
+            raise AndroidBridgeError("Android bridge returned no response")
+        try:
+            response = json.loads(data.split(b"\n", 1)[0].decode())
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise AndroidBridgeError("Invalid Android bridge response") from exc
+        if response.get("ok") is False:
+            raise AndroidBridgeError(str(response.get("error", "Android bridge request failed")))
+        return response
+
+    @staticmethod
+    def _elements(raw: Any) -> tuple[UIElement, ...]:
+        return tuple(
+            UIElement(
+                id=str(item.get("id", "")),
+                text=str(item.get("text", "")),
+                content_description=str(item.get("contentDescription", item.get("content_description", ""))),
+                clickable=bool(item.get("clickable", False)),
+                enabled=bool(item.get("enabled", True)),
+                class_name=str(item.get("className", item.get("class_name", ""))),
+                bounds=str(item.get("bounds", "")),
+                editable=bool(item.get("editable", False)),
+                scrollable=bool(item.get("scrollable", False)),
+                checkable=bool(item.get("checkable", False)),
+                checked=bool(item.get("checked", False)),
+                focused=bool(item.get("focused", False)),
+                visible=bool(item.get("visible", True)),
+            )
+            for item in (raw or [])
+        )
+
+    def observe(self) -> WorldState:
+        response = self._request({"command": "observe"})
+        state = response.get("state", response)
+        return WorldState(
+            observation_id=str(state.get("observationId", state.get("observation_id", ""))),
+            package=str(state.get("package", "")),
+            activity=str(state.get("activity", "")),
+            elements=self._elements(state.get("elements", [])),
+            timestamp_ms=int(state.get("timestampMs", state.get("timestamp_ms", 0)) or 0),
+        )
+
+    def click(self, element_id: str) -> dict[str, Any]:
+        return self._request({"command": "click", "elementId": element_id})
+
+    def scroll(self, element_id: str) -> dict[str, Any]:
+        return self._request({"command": "scroll", "elementId": element_id})
+
+    def execute(self, action: Action) -> ExecutionResult:
+        if action.type == ActionType.CLICK:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "click action has no target")
+            try:
+                response = self.click(action.target.element_id)
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.SCROLL:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "scroll action has no target")
+            try:
+                response = self.scroll(action.target.element_id)
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.BACK:
+            try:
+                response = self._request({"command": "back"})
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
+        return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
+
+    def launch(self, package: str = "com.hausshehe.nova", root: bool = True) -> dict[str, Any]:
+        try:
+            return self._request({"command": "launch", "package": package})
+        except AndroidBridgeError:
+            component = f"{package}/.MainActivity"
+            commands: list[list[str]] = []
+            if root:
+                commands.append(["su", "-c", f"am start -n {component}"])
+            commands.append(["am", "start", "-n", component])
+            last_error: Exception | None = None
+            for command in commands:
+                try:
+                    subprocess.run(command, check=True, timeout=self.timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return {"ok": True, "root": command[0] == "su"}
+                except Exception as exc:
+                    last_error = exc
+            raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
+
+    @staticmethod
+    def _same_ui(left: WorldState, right: WorldState) -> bool:
+        return (
+            left.package == right.package
+            and left.activity == right.activity
+            and left.elements == right.elements
+        )
+
+    def wait_for_fresh_observation(
+        self,
+        previous: WorldState,
+        timeout: float = 2.0,
+        poll_seconds: float = 0.2,
+    ) -> WorldState:
+        """Wait for a fresh observation whose UI has also stabilized.
+
+        A new accessibility observation ID only proves that an accessibility
+        event occurred. It does not prove that the post-action UI is settled.
+        Require two consecutive identical UI snapshots after the first fresh
+        observation, while keeping the whole wait bounded.
+        """
+        deadline = time.monotonic() + timeout
+        candidate: WorldState | None = None
+        while True:
+            state = self.observe()
+            if state.observation_id != previous.observation_id:
+                if candidate is not None and self._same_ui(candidate, state):
+                    return state
+                candidate = state
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"timed out waiting for fresh stable Android observation after {previous.observation_id}"
+                )
+            time.sleep(min(poll_seconds, remaining))
+</file>
+
+<file path="agent/task_runtime_clean.py">
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from typing import Any, Mapping
+
+from .core import Action, ActionType, Decision, ExecutionResult, WorldState
+from .deterministic_reasoner import DeterministicReasoner
+from .goal_evaluator import GoalEvaluator
+from .navigation import NavigationBridge
+from .reasoning_context import build_reasoning_context
+
+
+@dataclass(frozen=True)
+class BlockedAction:
+    action_type: ActionType
+    target_id: str | None
+    evidence: str
+    state_key: tuple[Any, ...]
+
+    def matches(self, action: Action, state_key: tuple[Any, ...]) -> bool:
+        return (
+            self.action_type is action.type
+            and self.target_id == (action.target.element_id if action.target else None)
+            and self.state_key == state_key
+        )
+
+
+@dataclass
+class RuntimeState:
+    blocked: list[BlockedAction] = field(default_factory=list)
+    history: list[Mapping[str, Any]] = field(default_factory=list)
+
+    def reset(self) -> None:
+        self.blocked.clear()
+        self.history.clear()
+
+
+_FAILURE_RE = re.compile(
+    r"\b(?:must|need(?:s)?|requires?|unable|cannot|can't|not allowed|not permitted|invalid|failed|failure|error|denied)\b"
+    r"|\b(?:start|do|complete|finish|perform|select|choose)\b.+\bfirst\b",
+    re.IGNORECASE,
+)
+_COMPLETION_RE = re.compile(
+    r"\b(?:completed|complete|finished|success(?:ful)?|done)\b",
+    re.IGNORECASE,
+)
+
+
+def _ui_key(state: WorldState) -> tuple[Any, ...]:
+    return (state.package, state.activity, tuple(state.elements))
+
+
+def _status_evidence(state: WorldState) -> str | None:
+    for element in state.elements:
+        if element.clickable:
+            continue
+        text = " ".join(p for p in (element.text, element.content_description) if p).strip()
+        if text and _FAILURE_RE.search(text):
+            return text
+    return None
+
+
+@dataclass
+class CleanTaskRuntime:
+    """One authoritative observe -> reason -> execute -> observe loop."""
+
+    bridge: NavigationBridge
+    planner: Any
+    evaluator: GoalEvaluator = field(default_factory=GoalEvaluator)
+    max_steps: int = 5
+    settle_timeout: float = 2.0
+    fallback_planner: Any = field(default_factory=DeterministicReasoner)
+    runtime_state: RuntimeState = field(default_factory=RuntimeState, init=False)
+    current_state: WorldState | None = field(default=None, init=False)
+
+    def _is_action_goal(self, goal: str) -> bool:
+        words = set(re.findall(r"[a-z0-9]+", goal.lower()))
+        return bool(words & {"tap", "click", "open"})
+
+    def _action_completed(self, goal: str, decision: Decision, before: WorldState, after: WorldState) -> bool:
+        if not self._is_action_goal(goal) or decision.action.type is not ActionType.CLICK:
+            return False
+        target = decision.action.target
+        if target is None:
+            return False
+
+        before_target = next((e for e in before.elements if e.id == target.element_id), None)
+        after_target = next((e for e in after.elements if e.id == target.element_id), None)
+
+        if before_target is not None and after_target is None:
+            return True
+
+        if after_target is not None:
+            after_text = " ".join(
+                p for p in (after_target.text, after_target.content_description) if p
+            ).strip()
+            if _COMPLETION_RE.search(after_text):
+                if before_target is None:
+                    return False
+                before_text = " ".join(
+                    p for p in (before_target.text, before_target.content_description) if p
+                ).strip()
+                return after_text != before_text
+
+        for e in after.elements:
+            if e.clickable:
+                continue
+            text = " ".join(p for p in (e.text, e.content_description) if p).lower()
+            if _COMPLETION_RE.search(text):
+                return True
+        return False
+
+    def _guard(self, action: Action, state: WorldState) -> str | None:
+        key = _ui_key(state)
+        for blocked in self.runtime_state.blocked:
+            if blocked.matches(action, key):
+                return blocked.evidence
+        return None
+
+    @staticmethod
+    def _guard_key(action: Action, state: WorldState) -> tuple[Any, ...]:
+        return (
+            _ui_key(state),
+            action.type.value,
+            action.target.element_id if action.target else None,
+        )
+
+    def _record(self, step: int, decision: Decision, result: ExecutionResult, effect: str, evidence: str = "") -> None:
+        self.runtime_state.history.append({
+            "step": step,
+            "target_id": decision.action.target.element_id if decision.action.target else None,
+            "target_text": decision.action.target.text if decision.action.target else "",
+            "action_type": decision.action.type.value,
+            "accepted": result.accepted,
+            "changed": result.changed,
+            "verified": result.verified,
+            "error": result.error,
+            "task_effect": effect,
+            "effect_evidence": evidence,
+        })
+
+    def _decide(self, context):
+        try:
+            primary = self.planner.decide if hasattr(self.planner, "decide") else self.planner.plan
+            return primary(context), False
+        except Exception as primary_exc:
+            # Provider outages are infrastructure failures, not task failures.
+            # Preserve the event in history, then make one bounded fallback
+            # decision from the same authoritative observation.
+            self.runtime_state.history.append({
+                "step": len(self.runtime_state.history) + 1,
+                "target_id": None,
+                "target_text": "",
+                "action_type": "reasoning_unavailable",
+                "accepted": False,
+                "changed": False,
+                "verified": False,
+                "error": f"primary reasoning error: {type(primary_exc).__name__}: {primary_exc}",
+                "task_effect": "unknown",
+                "effect_evidence": "primary reasoning provider unavailable; using bounded fallback",
+            })
+            fallback = self.fallback_planner
+            if fallback is None:
+                raise primary_exc
+            try:
+                fallback_fn = fallback.decide if hasattr(fallback, "decide") else fallback.plan
+                return fallback_fn(context), True
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    f"reasoning unavailable and fallback failed: {type(fallback_exc).__name__}: {fallback_exc}"
+                ) from fallback_exc
+
+    def run(self, goal: str) -> bool:
+        self.runtime_state.reset()
+        self.current_state = self.bridge.observe()
+        state = self.current_state
+        guard_rejections: dict[tuple[Any, ...], int] = {}
+
+        if not self._is_action_goal(goal) and self.evaluator.evaluate(goal, state):
+            return True
+
+        for step in range(1, self.max_steps + 1):
+            context = build_reasoning_context(goal, state, self.runtime_state.history)
+            try:
+                decision, used_fallback = self._decide(context)
+            except Exception as exc:
+                self.runtime_state.history.append({
+                    "step": step,
+                    "target_id": None,
+                    "target_text": "",
+                    "action_type": "invalid",
+                    "accepted": False,
+                    "changed": False,
+                    "verified": False,
+                    "error": f"reasoning error: {type(exc).__name__}: {exc}",
+                    "task_effect": "failed",
+                    "effect_evidence": "primary and fallback reasoning unavailable",
+                })
+                return False
+
+            blocked_evidence = self._guard(decision.action, state)
+            if blocked_evidence is not None:
+                guard_key = self._guard_key(decision.action, state)
+                guard_rejections[guard_key] = guard_rejections.get(guard_key, 0) + 1
+                self._record(
+                    step,
+                    decision,
+                    ExecutionResult(False, False, False, "action blocked by runtime"),
+                    "blocked",
+                    blocked_evidence,
+                )
+                if guard_rejections[guard_key] >= 2:
+                    return False
+                continue
+
+            try:
+                result = self.bridge.execute(decision.action)
+            except Exception as exc:
+                result = ExecutionResult(False, False, False, f"execution error: {type(exc).__name__}: {exc}")
+
+            if not result.accepted:
+                self._record(step, decision, result, "failed", result.error or "action rejected")
+                state = self._fresh_or_current(state)
+                continue
+
+            try:
+                after = self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
+            except TimeoutError as exc:
+                self._record(
+                    step,
+                    decision,
+                    ExecutionResult(True, False, False, str(exc)),
+                    "unknown",
+                    str(exc),
+                )
+                state = self.bridge.observe()
+                self.current_state = state
+                continue
+
+            changed = _ui_key(after) != _ui_key(state)
+            result = ExecutionResult(True, changed, changed, result.error)
+            failure = _status_evidence(after)
+
+            if failure:
+                self.runtime_state.blocked.append(
+                    BlockedAction(
+                        decision.action.type,
+                        decision.action.target.element_id if decision.action.target else None,
+                        failure,
+                        _ui_key(after),
+                    )
+                )
+                self._record(step, decision, result, "blocked", failure)
+            elif self._is_action_goal(goal):
+                if self._action_completed(goal, decision, state, after):
+                    self._record(step, decision, result, "completed")
+                    state = after
+                    self.current_state = after
+                    return True
+                elif changed:
+                    self._record(step, decision, result, "progressed")
+                else:
+                    self._record(step, decision, result, "unknown", "no observable UI change")
+            elif self.evaluator.evaluate(goal, after):
+                self._record(step, decision, result, "completed")
+                state = after
+                self.current_state = after
+                return True
+            elif changed:
+                self._record(step, decision, result, "progressed")
+            else:
+                self._record(step, decision, result, "unknown", "no observable UI change")
+
+            state = after
+            self.current_state = after
+
+        return False
+
+    def _fresh_or_current(self, previous: WorldState) -> WorldState:
+        try:
+            state = self.bridge.observe()
+        except Exception:
+            state = previous
+        self.current_state = state
+        return state
+</file>
+
+<file path="app/src/main/java/com/hausshehe/nova/BridgeServer.kt">
+package com.hausshehe.nova
+
+import android.content.Context
+import android.content.Intent
+import android.util.Log
+import android.view.accessibility.AccessibilityNodeInfo
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.PrintWriter
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.Executors
+
+object BridgeServer {
+    private const val TAG = "NovaBridgeServer"
+    private const val PORT = 18765
+    private const val PACKAGE = "com.hausshehe.nova"
+    private const val START_RETRIES = 20
+    private const val RETRY_DELAY_MS = 250L
+    private const val LAUNCH_WAIT_MS = 3000L
+    private const val OBSERVATION_POLL_MS = 100L
+    private val executor = Executors.newCachedThreadPool()
+    @Volatile private var started = false
+
+    @Synchronized
+    fun start(context: Context) {
+        if (started) return
+        started = true
+        executor.execute { serve(context.applicationContext) }
+    }
+
+    private fun serve(context: Context) {
+        var server: ServerSocket? = null
+        try {
+            for (attempt in 1..START_RETRIES) {
+                try {
+                    server = ServerSocket(PORT, 50, InetAddress.getByName("127.0.0.1"))
+                    break
+                } catch (e: Exception) {
+                    Log.e(TAG, "Bridge bind failed (attempt $attempt/$START_RETRIES): ${e.javaClass.simpleName}: ${e.message}", e)
+                    if (attempt < START_RETRIES) Thread.sleep(RETRY_DELAY_MS)
+                }
+            }
+            val listeningServer = server ?: return
+            listeningServer.use { boundServer ->
+                while (true) {
+                    val socket = boundServer.accept()
+                    executor.execute { handle(context, socket) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Bridge server stopped unexpectedly: ${e.javaClass.simpleName}: ${e.message}", e)
+        } finally {
+            server?.takeIf { !it.isClosed }?.close()
+            started = false
+        }
+    }
+
+    private fun handle(context: Context, socket: Socket) {
+        socket.use { s ->
+            try {
+                val reader = BufferedReader(InputStreamReader(s.getInputStream()))
+                val writer = PrintWriter(s.getOutputStream(), true)
+                val line = reader.readLine() ?: return
+                val request = JSONObject(line)
+                val response = when (request.optString("command")) {
+                    "observe" -> observe()
+                    "click" -> click(request.optString("elementId"))
+                    "scroll" -> scroll(request.optString("elementId"))
+                    "back" -> back()
+                    "launch" -> launch(context, request.optString("package", PACKAGE))
+                    else -> error("unknown command: ${request.optString("command")}")
+                }
+                writer.println(response.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Bridge request failed: ${e.javaClass.simpleName}: ${e.message}", e)
+                PrintWriter(s.getOutputStream(), true).println(error(e.message ?: "bridge error").toString())
+            }
+        }
+    }
+
+    private fun observe(): JSONObject {
+        val snapshot = ObservationStore.current()
+        val elements = JSONArray()
+        snapshot.elements.forEach { e ->
+            elements.put(JSONObject().apply {
+                put("id", e.id)
+                put("text", e.text)
+                put("contentDescription", e.contentDescription)
+                put("clickable", e.clickable)
+                put("enabled", e.enabled)
+                put("className", e.className)
+                put("bounds", e.bounds)
+                put("editable", e.editable)
+                put("scrollable", e.scrollable)
+                put("checkable", e.checkable)
+                put("checked", e.checked)
+                put("focused", e.focused)
+                put("visible", e.visible)
+            })
+        }
+        return JSONObject().apply {
+            put("ok", true)
+            put("state", JSONObject().apply {
+                put("observationId", snapshot.observationId.toString())
+                put("package", PACKAGE)
+                put("activity", "$PACKAGE.MainActivity")
+                put("timestampMs", System.currentTimeMillis())
+                put("elements", elements)
+            })
+        }
+    }
+
+    private fun click(elementId: String): JSONObject {
+        val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
+        val root = service.rootInActiveWindow ?: return error("No active accessibility window")
+        val node = findNode(root, elementId) ?: return error("element not found: $elementId")
+        val accepted = node.isEnabled && node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        node.recycle()
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", accepted)
+            put("changed", accepted)
+        }
+    }
+
+    private fun scroll(elementId: String): JSONObject {
+        val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
+        val root = service.rootInActiveWindow ?: return error("No active accessibility window")
+        val node = findNode(root, elementId) ?: return error("element not found: $elementId")
+        val accepted = node.isEnabled && node.isScrollable && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        node.recycle()
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", accepted)
+            put("changed", accepted)
+        }
+    }
+
+    private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? = findNode(root, id, "0")
+
+    private fun findNode(node: AccessibilityNodeInfo, id: String, path: String): AccessibilityNodeInfo? {
+        if (node.viewIdResourceName == id || "path:$path" == id) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findNode(child, id, "$path.$i")
+            if (result != null) {
+                if (result !== child) child.recycle()
+                return result
+            }
+            child.recycle()
+        }
+        return null
+    }
+
+    private fun back(): JSONObject {
+        val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
+        val accepted = service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        return JSONObject().apply { put("ok", true); put("accepted", accepted); put("changed", accepted) }
+    }
+
+    private fun launch(context: Context, packageName: String): JSONObject {
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return error("launch intent not found: $packageName")
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        context.startActivity(intent)
+        val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
+        val deadline = System.currentTimeMillis() + LAUNCH_WAIT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val root = service.rootInActiveWindow
+            val activePackage = root?.packageName?.toString()
+            if (activePackage == packageName) {
+                ObservationStore.update(root)
+                return JSONObject().apply { put("ok", true); put("accepted", true) }
+            }
+            root?.recycle()
+            Thread.sleep(OBSERVATION_POLL_MS)
+        }
+        val activePackage = service.rootInActiveWindow?.packageName?.toString()
+        return error("launch timed out waiting for accessibility window: expected=$packageName active=$activePackage")
+    }
+
+    private fun error(message: String): JSONObject = JSONObject().apply { put("ok", false); put("error", message) }
+}
+</file>
+
+</files>
