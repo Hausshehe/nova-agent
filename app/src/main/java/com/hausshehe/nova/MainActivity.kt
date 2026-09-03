@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 class MainActivity : Activity() {
@@ -52,7 +53,6 @@ class MainActivity : Activity() {
             }
         }
         root.addView(navigationButton, buttonParams())
-
         navigationStatus = status("Clicked 0 times")
         root.addView(navigationStatus)
 
@@ -87,7 +87,6 @@ class MainActivity : Activity() {
             }
         }
         root.addView(recoveryFallback, buttonParams())
-
         recoveryStatus = status("Recovery ready")
         root.addView(recoveryStatus)
 
@@ -137,7 +136,14 @@ class MainActivity : Activity() {
         multiStepStatus = status("Multi-Step ready")
         root.addView(multiStepStatus)
 
-        setContentView(root)
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+        }
+        setContentView(scrollView)
     }
 
     private fun section(title: String): TextView = TextView(this).apply {
