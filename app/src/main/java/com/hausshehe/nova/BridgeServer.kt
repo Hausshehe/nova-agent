@@ -263,7 +263,7 @@ object BridgeServer {
     private fun launch(context: Context, packageName: String): JSONObject {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
             ?: return error("launch intent not found: $packageName")
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         context.startActivity(intent)
         val service = NovaAccessibilityService.instance
             ?: return error("Nova accessibility service is not connected")
