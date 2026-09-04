@@ -69,6 +69,15 @@ def test_completion_goal_requires_target_and_completion_marker():
     )
 
 
+def test_completion_goal_matches_target_without_repeating_completion_verb():
+    verifier = SemanticGoalVerifier()
+    before = _observation(UiElement(id="status", text="Recovery ready"))
+    after = _observation(UiElement(id="status", text="Recovery completed"))
+    assert verifier.verify(
+        Goal("Recovery Completed"), before, _decision(), _tap_result(), after
+    )
+
+
 def test_completion_goal_does_not_accept_still_visible_finish_button():
     verifier = SemanticGoalVerifier()
     before = _observation(UiElement(id="finish", text="Finish Multi-Step", clickable=True))
