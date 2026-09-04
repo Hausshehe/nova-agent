@@ -69,8 +69,13 @@ class DeterministicReasoner:
         )
 
     @classmethod
-    def _prefer_progression_action(cls, context: ReasoningContext, goal_tokens: frozenset[str], candidates: list[tuple[int, UiElement]]) -> list[tuple[int, UiElement]]:
-        """Prefer continuation over terminal actions when an intermediate step is explicitly active."""
+    def _prefer_progression_action(
+        cls,
+        context: ReasoningContext,
+        goal_tokens: frozenset[str],
+        candidates: list[tuple[int, UiElement]],
+    ) -> list[tuple[int, UiElement]]:
+        """Prefer a visible continuation before a terminal action in a workflow."""
         if not goal_tokens & _TERMINAL_WORDS:
             return candidates
 
@@ -80,8 +85,6 @@ class DeterministicReasoner:
             if element.visible
         )
         current_step = _started_step(visible_text)
-        if current_step is None or current_step >= 2:
-            return candidates
 
         continuation = [
             item for item in candidates
@@ -91,7 +94,23 @@ class DeterministicReasoner:
             item for item in candidates
             if _tokens(f"{item[1].text} {item[1].content_description}") & _TERMINAL_WORDS
         ]
-        if continuation and terminal:
+        if not continuation or not terminal:
+            return candidates
+
+        if current_step is not None:
+            if current_step < 2:
+                return continuation
+            return candidates
+
+        completed_continuations = sum(
+            1
+            for step in context.history
+            if step.decision.action.type is ActionType.TAP
+            and step.decision.action.target_id is not None
+            and _CONTINUE_WORDS
+            & _tokens(f"{step.decision.action.target_id} {step.decision.reason}")
+        )
+        if completed_continuations == 0:
             return continuation
         return candidates
 
