@@ -81,10 +81,10 @@ def _target_tokens(words: list[str]) -> set[str]:
 
 def _completion_target_tokens(words: list[str]) -> set[str]:
     return {
-        word for word in words[1:]
+        word for word in words
         if word not in _STOP_WORDS
-        and word not in {"up", "off", "down"}
         and word not in _COMPLETION_MARKERS
+        and word not in {"up", "off", "down"}
     }
 
 
