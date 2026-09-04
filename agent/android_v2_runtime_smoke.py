@@ -43,6 +43,17 @@ def main() -> int:
     print(f"V2_RUNTIME_STEPS={result.steps}")
     print(f"V2_RUNTIME_ERROR={result.error!r}")
 
+    print("V2_ACTION_TRACE_START")
+    for index, step in enumerate(runtime.controller.history, start=1):
+        action = step.decision.action
+        print(
+            f"V2_ACTION_{index}=type:{action.type.value} "
+            f"target_id:{action.target_id!r} value:{action.value!r} "
+            f"accepted:{step.execution.accepted} changed:{step.execution.changed} "
+            f"error:{step.execution.error!r} reason:{step.decision.reason!r}"
+        )
+    print("V2_ACTION_TRACE_END")
+
     if result.status is RunStatus.SUCCEEDED:
         print("V2_ANDROID_RUNTIME_SMOKE=PASS")
         return 0
