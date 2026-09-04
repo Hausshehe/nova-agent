@@ -81,7 +81,8 @@ class GroqResponder:
                 }
             ],
             "temperature": 0,
-            "max_completion_tokens": 256,
+            "reasoning_effort": "low",
+            "max_completion_tokens": 512,
             "response_format": _RESPONSE_SCHEMA,
             "stream": False,
         }
