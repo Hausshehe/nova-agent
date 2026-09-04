@@ -16,19 +16,8 @@ from .reasoning import ReasoningContext
 
 _STOP_WORDS = frozenset(
     {
-        "a",
-        "an",
-        "and",
-        "at",
-        "button",
-        "for",
-        "in",
-        "me",
-        "of",
-        "on",
-        "please",
-        "the",
-        "to",
+        "a", "an", "and", "at", "button", "for", "in", "me", "of",
+        "on", "please", "the", "to",
     }
 )
 
@@ -56,27 +45,34 @@ class DeterministicReasoner:
             and step.decision.action.target_id is not None
         }
 
-        candidates = [
-            element
-            for element in context.observation.elements
-            if self._is_viable(element)
-        ]
-
         scored = [
             (self._score(goal_tokens, element), element)
-            for element in candidates
+            for element in context.observation.elements
+            if self._is_viable(element)
         ]
         scored = [(score, element) for score, element in scored if score > 0]
         if not scored:
             raise ValueError("no visible enabled clickable element matches the goal")
 
-        untried = [(score, element) for score, element in scored if element.id not in attempted_ids]
-        pool = untried if untried else scored
+        untried = [
+            (score, element)
+            for score, element in scored
+            if element.id not in attempted_ids
+        ]
+        if not untried:
+            raise ValueError("all matching targets have already been attempted")
 
-        score, target = max(pool, key=lambda item: (item[0], -self._position(item[1], context.observation.elements)))
+        score, target = max(
+            untried,
+            key=lambda item: (
+                item[0],
+                -self._position(item[1], context.observation.elements),
+            ),
+        )
+        label = target.text or target.content_description
         return Decision(
             action=Action(type=ActionType.TAP, target_id=target.id),
-            reason=f"matched goal to visible target '{target.text or target.content_description}' with score {score}",
+            reason=f"matched goal to visible target '{label}' with score {score}",
         )
 
     @staticmethod
