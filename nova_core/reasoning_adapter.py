@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Mapping, Protocol
 
-from .models import Action, ActionType, Decision
+from .models import Action, ActionType, Decision, Observation
 from .ports import Reasoner
 from .reasoning import ReasoningContext
 
@@ -80,33 +80,45 @@ class LLMReasoner:
         return _decision_from_response(response, context)
 
 
+def _observation_payload(observation: Observation) -> dict[str, Any]:
+    return {
+        "package": observation.package,
+        "activity": observation.activity,
+        "revision": observation.revision,
+        "elements": [
+            {
+                "id": element.id,
+                "text": element.text,
+                "content_description": element.content_description,
+                "clickable": element.clickable,
+                "enabled": element.enabled,
+                "class_name": element.class_name,
+                "editable": element.editable,
+                "scrollable": element.scrollable,
+                "checkable": element.checkable,
+                "checked": element.checked,
+                "focused": element.focused,
+                "visible": element.visible,
+            }
+            for element in observation.elements
+        ],
+    }
+
+
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Serialize v2 context into a stable provider-neutral model payload."""
 
     return {
         "goal": context.goal.text,
-        "observation": {
-            "package": context.observation.package,
-            "activity": context.observation.activity,
-            "revision": context.observation.revision,
-            "elements": [
-                {
-                    "id": element.id,
-                    "text": element.text,
-                    "content_description": element.content_description,
-                    "clickable": element.clickable,
-                    "enabled": element.enabled,
-                    "class_name": element.class_name,
-                    "editable": element.editable,
-                    "scrollable": element.scrollable,
-                    "checkable": element.checkable,
-                    "checked": element.checked,
-                    "focused": element.focused,
-                    "visible": element.visible,
-                }
-                for element in context.observation.elements
-            ],
-        },
+        "reasoning_guidance": [
+            "Determine the current UI state before choosing an action.",
+            "Respect prerequisites and perform earlier required steps before later steps.",
+            "Use visible status text and prior post-action observations as state evidence.",
+            "After an action changes the UI, reassess the new state instead of repeating or skipping ahead.",
+            "Prefer the smallest safe action that advances the goal from the current state.",
+            "Do not assume an action succeeded semantically just because execution was accepted or changed the UI.",
+        ],
+        "observation": _observation_payload(context.observation),
         "history": [
             {
                 "action_type": step.decision.action.type.value,
@@ -117,6 +129,11 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
                 "accepted": step.execution.accepted,
                 "changed": step.execution.changed,
                 "error": step.execution.error,
+                "post_observation": (
+                    _observation_payload(step.post_observation)
+                    if step.post_observation is not None
+                    else None
+                ),
             }
             for step in context.history
         ],
