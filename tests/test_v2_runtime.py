@@ -41,6 +41,11 @@ class RejectingReasoner:
         raise ValueError("no safe target matches the goal")
 
 
+class ProviderFailureReasoner:
+    def decide(self, context: ReasoningContext):
+        raise RuntimeError("reasoning provider failed: Groq request failed with HTTP 429")
+
+
 class FakeExecutor:
     def __init__(self):
         self.calls = 0
@@ -230,4 +235,24 @@ def test_runtime_turns_reasoning_rejection_into_terminal_failure():
     assert result.status is RunStatus.FAILED
     assert result.steps == 0
     assert result.error == "no safe target matches the goal"
+    assert executor.calls == 0
+
+
+def test_runtime_turns_provider_failure_into_terminal_failure():
+    observer = FakeObserver()
+    executor = FakeExecutor()
+    runtime = Runtime(
+        Goal("Finish Multi-Step Test"),
+        observer,
+        ProviderFailureReasoner(),
+        executor,
+        FakeVerifier(),
+        max_steps=3,
+    )
+
+    result = runtime.run()
+
+    assert result.status is RunStatus.FAILED
+    assert result.steps == 0
+    assert result.error == "reasoning provider failed: Groq request failed with HTTP 429"
     assert executor.calls == 0
