@@ -37,6 +37,12 @@ class AndroidBridgeAdapter:
                     content_description=element.content_description,
                     clickable=element.clickable,
                     enabled=element.enabled,
+                    class_name=element.class_name,
+                    editable=element.editable,
+                    scrollable=element.scrollable,
+                    checkable=element.checkable,
+                    checked=element.checked,
+                    focused=element.focused,
                     visible=element.visible,
                 )
                 for element in state.elements
