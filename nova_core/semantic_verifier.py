@@ -49,7 +49,10 @@ class SemanticGoalVerifier:
         if verb in {"tap", "click", "back", "scroll", "type", "swipe", "wait"}:
             return self._action_verifier.verify(goal, before, decision, result, after)
 
-        target_words = _target_tokens(words)
+        if verb in _COMPLETION_VERBS:
+            target_words = _completion_target_tokens(words)
+        else:
+            target_words = _target_tokens(words)
         if not target_words:
             return False
 
