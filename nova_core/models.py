@@ -71,6 +71,7 @@ class Action:
 class Decision:
     action: Action
     reason: str = ""
+    target_label: str = ""
 
 
 @dataclass(frozen=True)
