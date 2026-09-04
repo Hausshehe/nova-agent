@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 
 from agent.android_bridge import AndroidBridge
 from agent.fallback_responder import FallbackResponder
@@ -15,6 +16,33 @@ from nova_core.models import Goal, RunStatus
 from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
+
+
+PACKAGE_NAME = "com.hausshehe.nova"
+
+
+def _reset_nova_process(timeout_seconds: float) -> None:
+    """Stop Nova so Activity-local state cannot leak between smoke runs."""
+    command = ["am", "force-stop", PACKAGE_NAME]
+    try:
+        subprocess.run(
+            ["su", "-c", " ".join(command)],
+            check=True,
+            timeout=timeout_seconds,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+
+    subprocess.run(
+        command,
+        check=True,
+        timeout=timeout_seconds,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _configured_responders(model: str | None) -> list[tuple[str, object]]:
@@ -30,7 +58,7 @@ def _configured_responders(model: str | None) -> list[tuple[str, object]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
-    parser.add_argument("--launch-nova", action="store_true", help="launch Nova before running")
+    parser.add_argument("--launch-nova", action="store_true", help="reset and launch Nova before running")
     parser.add_argument("--goal", default="Tap Test Navigation Action")
     parser.add_argument("--model", default=None, help="override NOVA_GROQ_MODEL for the Groq provider")
     parser.add_argument(
@@ -50,6 +78,7 @@ def main() -> int:
 
     bridge = AndroidBridge()
     if args.launch_nova:
+        _reset_nova_process(bridge.timeout)
         bridge.launch()
 
     adapter = AndroidBridgeAdapter(bridge)
