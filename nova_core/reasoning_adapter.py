@@ -74,7 +74,7 @@ class LLMReasoner:
         try:
             response = self._responder(prompt)
         except Exception as exc:
-            raise RuntimeError("reasoning provider failed") from exc
+            raise RuntimeError(f"reasoning provider failed: {exc}") from exc
         if not isinstance(response, Mapping):
             raise ValueError("LLM response must be an object")
         return _decision_from_response(response, context)
