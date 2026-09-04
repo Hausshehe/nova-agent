@@ -1,9 +1,4 @@
-"""Bounded runtime orchestration for Nova Agent v2.
-
-The runtime coordinates injected ports. Android-specific freshness behavior is
-exposed through the optional FreshObserver capability rather than hidden waits
-or sleeps in the core loop.
-"""
+"""Bounded runtime orchestration for Nova Agent v2."""
 
 from __future__ import annotations
 
@@ -15,7 +10,7 @@ from .state_machine import RunState
 
 
 class Runtime:
-    """Drive one bounded controller step using injected capabilities."""
+    """Drive one bounded controller lifecycle."""
 
     def __init__(
         self,
@@ -34,7 +29,6 @@ class Runtime:
         self.verifier = verifier
 
     def step(self) -> RunState:
-        """Advance through one lifecycle phase or execute one action."""
         state = self.controller.state
 
         if state is RunState.CREATED:
@@ -66,18 +60,21 @@ class Runtime:
             return self.controller.state
 
         if state is RunState.VERIFYING:
-            assert self.controller.observation is not None
-            assert self.controller.decision is not None
-            assert self.controller.last_execution is not None
+            before = self.controller.observation
+            decision = self.controller.decision
+            execution = self.controller.last_execution
+            assert before is not None and decision is not None and execution is not None
+
             if isinstance(self.observer, FreshObserver):
-                after = self.observer.observe_fresh(self.controller.observation)
+                after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
+
             achieved = self.verifier.verify(
                 self.controller.goal,
-                self.controller.observation,
-                self.controller.decision,
-                self.controller.last_execution,
+                before,
+                decision,
+                execution,
                 after,
             )
             if achieved:
@@ -91,7 +88,6 @@ class Runtime:
         return self.controller.state
 
     def run(self) -> RunResult:
-        """Complete the run using a finite lifecycle budget."""
         phase_budget = self.controller.max_steps * 4 + 1
         for _ in range(phase_budget):
             result = self.controller.result()
