@@ -19,17 +19,17 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 
 
 PACKAGE_NAME = "com.hausshehe.nova"
+MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
     """Stop Nova so Activity-local state cannot leak between smoke runs."""
-    # Some Termux/Android builds reject `am force-stop` from the app shell.
-    # `cmd activity force-stop` reaches the same ActivityManager service and
-    # is the preferred shell-compatible command for this smoke harness.
+    # This Android build does not expose a usable force-stop shell command from
+    # Termux. `am start -S` is supported by the local `am` implementation and
+    # atomically force-stops the target package before starting its Activity.
     commands = [
-        ["su", "-c", f"cmd activity force-stop {PACKAGE_NAME}"],
-        ["cmd", "activity", "force-stop", PACKAGE_NAME],
-        ["am", "force-stop", PACKAGE_NAME],
+        ["su", "-c", f"am start -S -n {MAIN_ACTIVITY}"],
+        ["am", "start", "-S", "-n", MAIN_ACTIVITY],
     ]
     errors: list[str] = []
 
@@ -61,7 +61,7 @@ def _reset_nova_process(timeout_seconds: float) -> None:
                 errors.append(f"{command[0]}: {exc}")
 
     raise RuntimeError(
-        "unable to force-stop Nova; refusing to run a stateful smoke test without a reset: "
+        "unable to reset and launch Nova; refusing to run a stateful smoke test without a reset: "
         + "; ".join(errors)
     )
 
@@ -100,6 +100,7 @@ def main() -> int:
     bridge = AndroidBridge()
     if args.launch_nova:
         _reset_nova_process(bridge.timeout)
+    else:
         bridge.launch()
 
     adapter = AndroidBridgeAdapter(bridge)
