@@ -1,4 +1,4 @@
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, RunStatus
+from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, RunStatus, UiElement
 from nova_core.reasoning import ReasoningContext
 from nova_core.runtime import Runtime
 from nova_core.state_machine import RunState
@@ -186,3 +186,21 @@ def test_reasoner_receives_previous_attempt_history_after_recovery_cycle():
     assert reasoner.contexts[1].history[0].decision.action.target_id == "button"
     assert reasoner.contexts[1].history[0].execution.accepted is True
     assert reasoner.contexts[1].history[0].execution.changed is True
+
+
+def test_runtime_passes_post_action_observation_to_verifier():
+    class ObservationVerifier:
+        def __init__(self):
+            self.after = None
+
+        def verify(self, goal, before, decision, result, after):
+            self.after = after
+            return True
+
+    observer = FakeObserver()
+    verifier = ObservationVerifier()
+    runtime = Runtime(Goal("done"), observer, FakeReasoner(), FakeExecutor(), verifier, max_steps=1)
+
+    runtime.run()
+
+    assert verifier.after.revision == 2
