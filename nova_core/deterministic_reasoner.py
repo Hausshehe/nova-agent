@@ -20,6 +20,7 @@ _STOP_WORDS = frozenset(
         "on", "please", "the", "to",
     }
 )
+_STATE_VERBS = frozenset({"open", "show", "display", "navigate", "go", "select", "choose"})
 
 
 def _tokens(value: str) -> frozenset[str]:
@@ -28,6 +29,11 @@ def _tokens(value: str) -> frozenset[str]:
         for token in re.findall(r"[\w]+", value.casefold())
         if token not in _STOP_WORDS
     )
+
+
+def _state_target_tokens(value: str) -> frozenset[str]:
+    tokens = _tokens(value)
+    return frozenset(token for token in tokens if token not in _STATE_VERBS)
 
 
 class DeterministicReasoner:
@@ -45,12 +51,12 @@ class DeterministicReasoner:
             and step.decision.action.target_id is not None
         }
 
-        scored = [
-            (self._score(goal_tokens, element), element)
-            for element in context.observation.elements
-            if self._is_viable(element)
-        ]
-        scored = [(score, element) for score, element in scored if score > 0]
+        state_tokens = _state_target_tokens(context.goal.text)
+        if state_tokens != goal_tokens and state_tokens:
+            scored = self._score_state_targets(state_tokens, context.observation.elements)
+        else:
+            scored = self._score_targets(goal_tokens, context.observation.elements)
+
         if not scored:
             raise ValueError("no visible enabled clickable element matches the goal")
 
@@ -74,6 +80,41 @@ class DeterministicReasoner:
             action=Action(type=ActionType.TAP, target_id=target.id),
             reason=f"matched goal to visible target '{label}' with score {score}",
         )
+
+    @classmethod
+    def _score_targets(
+        cls, goal_tokens: frozenset[str], elements: tuple[UiElement, ...]
+    ) -> list[tuple[int, UiElement]]:
+        scored = [
+            (cls._score(goal_tokens, element), element)
+            for element in elements
+            if cls._is_viable(element)
+        ]
+        return [(score, element) for score, element in scored if score > 0]
+
+    @classmethod
+    def _score_state_targets(
+        cls, target_tokens: frozenset[str], elements: tuple[UiElement, ...]
+    ) -> list[tuple[int, UiElement]]:
+        """Select a direct visible target for a state-transition goal.
+
+        State verbs such as ``open`` or ``navigate`` describe the intended
+        outcome, not necessarily the label of the control that initiates it.
+        We therefore require every meaningful target token to be present in the
+        visible label, while still rejecting merely related partial matches.
+        """
+        scored: list[tuple[int, UiElement]] = []
+        for element in elements:
+            if not cls._is_viable(element):
+                continue
+            label_tokens = _tokens(f"{element.text} {element.content_description}")
+            if not target_tokens <= label_tokens:
+                continue
+            score = len(target_tokens) + 2
+            if target_tokens == label_tokens:
+                score += 1
+            scored.append((score, element))
+        return scored
 
     @staticmethod
     def _is_viable(element: UiElement) -> bool:
