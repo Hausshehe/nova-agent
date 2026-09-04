@@ -35,16 +35,30 @@ def _reset_nova_process(timeout_seconds: float) -> None:
 
     for command in commands:
         try:
-            subprocess.run(
+            completed = subprocess.run(
                 command,
                 check=True,
                 timeout=timeout_seconds,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
             )
+            if completed.stdout.strip() or completed.stderr.strip():
+                print(
+                    f"RESET_COMMAND_OUTPUT={command!r} "
+                    f"stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}"
+                )
             return
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            errors.append(f"{command[0]}: {exc}")
+            if isinstance(exc, subprocess.CalledProcessError):
+                stdout = exc.stdout.strip() if isinstance(exc.stdout, str) else ""
+                stderr = exc.stderr.strip() if isinstance(exc.stderr, str) else ""
+                errors.append(
+                    f"{command[0]}: exit={exc.returncode} stdout={stdout!r} stderr={stderr!r}"
+                )
+            elif isinstance(exc, subprocess.TimeoutExpired):
+                errors.append(f"{command[0]}: timeout after {timeout_seconds}s")
+            else:
+                errors.append(f"{command[0]}: {exc}")
 
     raise RuntimeError(
         "unable to force-stop Nova; refusing to run a stateful smoke test without a reset: "
