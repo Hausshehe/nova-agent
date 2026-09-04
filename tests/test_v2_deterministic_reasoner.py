@@ -41,12 +41,32 @@ def test_state_goal_can_select_direct_target_without_state_verb_in_label():
         context(
             "Open Navigation",
             [
-                UiElement("unrelated", text="Navigate to Settings", clickable=True),
+                UiElement("related", text="Navigate to Settings", clickable=True),
                 UiElement("navigation", text="Navigation", clickable=True),
             ],
         )
     )
     assert decision.action == Action(ActionType.TAP, target_id="navigation")
+
+
+def test_state_goal_accepts_matching_control_with_state_verb_in_label():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Open Settings",
+            [UiElement("settings", text="Open Settings", clickable=True)],
+        )
+    )
+    assert decision.action.target_id == "settings"
+
+
+def test_state_goal_rejects_related_partial_label():
+    with pytest.raises(ValueError, match="no visible enabled clickable element"):
+        DeterministicReasoner().decide(
+            context(
+                "Open Navigation",
+                [UiElement("test", text="Test Navigation Action", clickable=True)],
+            )
+        )
 
 
 def test_state_goal_requires_all_meaningful_target_tokens():
