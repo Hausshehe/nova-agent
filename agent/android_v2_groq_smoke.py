@@ -23,25 +23,30 @@ PACKAGE_NAME = "com.hausshehe.nova"
 
 def _reset_nova_process(timeout_seconds: float) -> None:
     """Stop Nova so Activity-local state cannot leak between smoke runs."""
-    command = ["am", "force-stop", PACKAGE_NAME]
-    try:
-        subprocess.run(
-            ["su", "-c", " ".join(command)],
-            check=True,
-            timeout=timeout_seconds,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        return
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        pass
+    commands = [
+        ["su", "-c", f"am force-stop --user 0 {PACKAGE_NAME}"],
+        ["su", "-c", f"am force-stop {PACKAGE_NAME}"],
+        ["am", "force-stop", "--user", "0", PACKAGE_NAME],
+        ["am", "force-stop", PACKAGE_NAME],
+    ]
+    errors: list[str] = []
 
-    subprocess.run(
-        command,
-        check=True,
-        timeout=timeout_seconds,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    for command in commands:
+        try:
+            subprocess.run(
+                command,
+                check=True,
+                timeout=timeout_seconds,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"{command[0]}: {exc}")
+
+    raise RuntimeError(
+        "unable to force-stop Nova; refusing to run a stateful smoke test without a reset: "
+        + "; ".join(errors)
     )
 
 
