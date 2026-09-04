@@ -70,6 +70,7 @@ def test_controller_enforces_step_budget():
     controller = RunController(Goal("finish"), max_steps=1)
     controller.move(RunState.OBSERVING)
     controller.move(RunState.DECIDING)
+    controller.record_decision(decision())
     controller.move(RunState.EXECUTING)
     controller.record_execution(ExecutionResult(accepted=True, changed=True))
 
