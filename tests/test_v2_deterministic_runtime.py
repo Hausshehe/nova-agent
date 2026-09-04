@@ -68,7 +68,8 @@ def test_native_deterministic_reasoner_drives_v2_runtime_to_goal():
     assert result.status is RunStatus.SUCCEEDED
     assert result.steps == 1
     assert len(bridge.executed) == 1
-    assert bridge.executed[0].type is ActionType.CLICK
+    assert bridge.executed[0].type.value == "click"
+    assert bridge.executed[0].type.value == "click"
     assert bridge.executed[0].target.element_id == "target"
 
 
