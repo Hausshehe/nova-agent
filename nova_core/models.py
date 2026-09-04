@@ -43,6 +43,12 @@ class UiElement:
     content_description: str = ""
     clickable: bool = False
     enabled: bool = True
+    class_name: str = ""
+    editable: bool = False
+    scrollable: bool = False
+    checkable: bool = False
+    checked: bool = False
+    focused: bool = False
     visible: bool = True
 
 
