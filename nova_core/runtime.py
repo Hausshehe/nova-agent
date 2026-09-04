@@ -47,7 +47,12 @@ class Runtime:
                 observation=self.controller.observation,
                 history=self.controller.history,
             )
-            self.controller.record_decision(self.reasoner.decide(context))
+            try:
+                decision = self.reasoner.decide(context)
+            except ValueError as exc:
+                self.controller.finish(RunStatus.FAILED, str(exc))
+                return self.controller.state
+            self.controller.record_decision(decision)
             self.controller.move(RunState.EXECUTING)
             return self.controller.state
 
