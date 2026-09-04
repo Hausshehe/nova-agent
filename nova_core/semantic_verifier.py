@@ -76,6 +76,15 @@ def _target_tokens(words: list[str]) -> set[str]:
     }
 
 
+def _completion_target_tokens(words: list[str]) -> set[str]:
+    return {
+        word for word in words[1:]
+        if word not in _STOP_WORDS
+        and word not in {"up", "off", "down"}
+        and word not in _COMPLETION_MARKERS
+    }
+
+
 def _element_tokens(element: UiElement) -> set[str]:
     return set(_tokens(f"{element.text} {element.content_description}"))
 
@@ -115,10 +124,10 @@ def _completion_state_visible(
 ) -> bool:
     """Require explicit completion evidence for a finish/complete goal.
 
-    Matching the original button label is not enough: a button named
-    ``Finish Multi-Step`` can remain visible before the workflow is complete.
-    The observation must expose both the requested target and a completion
-    marker in the same visible element, such as ``Multi-Step Test completed``.
+    Completion verbs describe the required state, rather than belonging to the
+    target's identity. The observation must expose the requested target and a
+    completion marker in the same visible element, such as
+    ``Multi-Step Test completed``.
     """
     return any(
         element.visible
