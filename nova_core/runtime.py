@@ -75,6 +75,8 @@ class Runtime:
             else:
                 after = self.observer.observe()
 
+            self.controller.record_post_observation(after)
+
             achieved = self.verifier.verify(
                 self.controller.goal,
                 before,
