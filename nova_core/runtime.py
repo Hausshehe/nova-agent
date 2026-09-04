@@ -52,6 +52,9 @@ class Runtime:
             except ValueError as exc:
                 self.controller.finish(RunStatus.FAILED, str(exc))
                 return self.controller.state
+            except RuntimeError as exc:
+                self.controller.finish(RunStatus.FAILED, str(exc))
+                return self.controller.state
             self.controller.record_decision(decision)
             self.controller.move(RunState.EXECUTING)
             return self.controller.state
