@@ -18,7 +18,16 @@ def main() -> int:
     parser.add_argument("--launch-nova", action="store_true", help="launch Nova before running")
     parser.add_argument("--goal", default="Tap Test Navigation Action")
     parser.add_argument("--model", default=None, help="override NOVA_GROQ_MODEL for this run")
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=1,
+        help="maximum number of actions the runtime may execute",
+    )
     args = parser.parse_args()
+
+    if args.max_steps < 1:
+        parser.error("--max-steps must be at least 1")
 
     bridge = AndroidBridge()
     if args.launch_nova:
@@ -32,7 +41,7 @@ def main() -> int:
         LLMReasoner(responder),
         adapter,
         SemanticGoalVerifier(),
-        max_steps=1,
+        max_steps=args.max_steps,
     )
 
     result = runtime.run()
