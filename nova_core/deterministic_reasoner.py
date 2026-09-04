@@ -61,11 +61,15 @@ class DeterministicReasoner:
             raise ValueError("all matching targets have already been attempted")
 
         untried = self._prefer_progression_action(context, goal_tokens, untried)
-        score, target = max(untried, key=lambda item: (item[0], -self._position(item[1], context.observation.elements)))
+        score, target = max(
+            untried,
+            key=lambda item: (item[0], -self._position(item[1], context.observation.elements)),
+        )
         label = target.text or target.content_description
         return Decision(
             action=Action(type=ActionType.TAP, target_id=target.id),
             reason=f"matched goal to visible target '{label}' with score {score}",
+            target_label=label,
         )
 
     @classmethod
@@ -75,16 +79,9 @@ class DeterministicReasoner:
         goal_tokens: frozenset[str],
         candidates: list[tuple[int, UiElement]],
     ) -> list[tuple[int, UiElement]]:
-        """Prefer a visible continuation before a terminal action in a workflow."""
+        """Prefer workflow progression over a terminal action when the goal is terminal."""
         if not goal_tokens & _TERMINAL_WORDS:
             return candidates
-
-        visible_text = " ".join(
-            f"{element.text} {element.content_description}"
-            for element in context.observation.elements
-            if element.visible
-        )
-        current_step = _started_step(visible_text)
 
         continuation = [
             item for item in candidates
@@ -97,22 +94,29 @@ class DeterministicReasoner:
         if not continuation or not terminal:
             return candidates
 
+        visible_text = " ".join(
+            f"{element.text} {element.content_description}"
+            for element in context.observation.elements
+            if element.visible
+        )
+        current_step = _started_step(visible_text)
         if current_step is not None:
             if current_step < 2:
                 return continuation
             return candidates
 
-        completed_continuations = sum(
-            1
-            for step in context.history
-            if step.decision.action.type is ActionType.TAP
-            and step.decision.action.target_id is not None
-            and _CONTINUE_WORDS
-            & _tokens(f"{step.decision.action.target_id} {step.decision.reason}")
-        )
-        if completed_continuations == 0:
-            return continuation
-        return candidates
+        if not context.history:
+            start = [
+                item
+                for item in candidates
+                if not _tokens(f"{item[1].text} {item[1].content_description}") & (_CONTINUE_WORDS | _TERMINAL_WORDS)
+            ]
+            return start or candidates
+
+        last_label = _tokens(context.history[-1].decision.target_label)
+        if last_label & _CONTINUE_WORDS:
+            return candidates
+        return continuation
 
     @classmethod
     def _score_targets(cls, goal_tokens: frozenset[str], elements: tuple[UiElement, ...]) -> list[tuple[int, UiElement]]:
