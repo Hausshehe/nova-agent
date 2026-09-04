@@ -1,3 +1,5 @@
+import pytest
+
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, RunStatus, UiElement
 from nova_core.reasoning import ReasoningContext
 from nova_core.runtime import Runtime
@@ -32,6 +34,11 @@ class FakeReasoner:
         self.calls += 1
         self.contexts.append(context)
         return Decision(Action(ActionType.TAP, target_id="button"), reason=context.goal.text)
+
+
+class RejectingReasoner:
+    def decide(self, context: ReasoningContext):
+        raise ValueError("no safe target matches the goal")
 
 
 class FakeExecutor:
@@ -204,3 +211,23 @@ def test_runtime_passes_post_action_observation_to_verifier():
     runtime.run()
 
     assert verifier.after.revision == 2
+
+
+def test_runtime_turns_reasoning_rejection_into_terminal_failure():
+    observer = FakeObserver()
+    executor = FakeExecutor()
+    runtime = Runtime(
+        Goal("Open Navigation"),
+        observer,
+        RejectingReasoner(),
+        executor,
+        FakeVerifier(),
+        max_steps=3,
+    )
+
+    result = runtime.run()
+
+    assert result.status is RunStatus.FAILED
+    assert result.steps == 0
+    assert result.error == "no safe target matches the goal"
+    assert executor.calls == 0
