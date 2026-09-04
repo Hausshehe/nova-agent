@@ -23,10 +23,12 @@ PACKAGE_NAME = "com.hausshehe.nova"
 
 def _reset_nova_process(timeout_seconds: float) -> None:
     """Stop Nova so Activity-local state cannot leak between smoke runs."""
+    # Some Termux/Android builds reject `am force-stop` from the app shell.
+    # `cmd activity force-stop` reaches the same ActivityManager service and
+    # is the preferred shell-compatible command for this smoke harness.
     commands = [
-        ["su", "-c", f"am force-stop --user 0 {PACKAGE_NAME}"],
-        ["su", "-c", f"am force-stop {PACKAGE_NAME}"],
-        ["am", "force-stop", "--user", "0", PACKAGE_NAME],
+        ["su", "-c", f"cmd activity force-stop {PACKAGE_NAME}"],
+        ["cmd", "activity", "force-stop", PACKAGE_NAME],
         ["am", "force-stop", PACKAGE_NAME],
     ]
     errors: list[str] = []
