@@ -52,6 +52,8 @@ def test_groq_responder_builds_bounded_structured_request():
     assert captured["timeout"] == 7
     assert captured["request"].full_url == "https://api.groq.com/openai/v1/chat/completions"
     assert captured["request"].get_header("Authorization") == "Bearer test-key"
+    assert captured["request"].get_header("User-agent") == "Nova-Agent/1.0"
+    assert captured["request"].get_header("Accept") == "application/json"
     body = json.loads(captured["request"].data.decode("utf-8"))
     assert body["model"] == "test-model"
     assert body["temperature"] == 0
