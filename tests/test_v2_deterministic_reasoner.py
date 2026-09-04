@@ -112,6 +112,47 @@ def test_ignores_invisible_disabled_and_non_clickable_matches():
     assert decision.action.target_id == "usable"
 
 
+def test_terminal_goal_prefers_continuation_when_first_step_is_active():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Finish Multi-Step Test",
+            [
+                UiElement("continue", text="Continue Multi-Step", clickable=True),
+                UiElement("finish", text="Finish Multi-Step", clickable=True),
+                UiElement("status", text="Run 1: Step 1 started"),
+            ],
+        )
+    )
+    assert decision.action.target_id == "continue"
+
+
+def test_terminal_goal_selects_finish_after_intermediate_step():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Finish Multi-Step Test",
+            [
+                UiElement("continue", text="Continue Multi-Step", clickable=True),
+                UiElement("finish", text="Finish Multi-Step", clickable=True),
+                UiElement("status", text="Step 2 started"),
+            ],
+        )
+    )
+    assert decision.action.target_id == "finish"
+
+
+def test_terminal_goal_does_not_require_progression_without_explicit_step_state():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Finish Multi-Step Test",
+            [
+                UiElement("continue", text="Continue Multi-Step", clickable=True),
+                UiElement("finish", text="Finish Multi-Step", clickable=True),
+            ],
+        )
+    )
+    assert decision.action.target_id == "finish"
+
+
 def test_history_avoids_previously_attempted_matching_target():
     history = (
         ReasoningStep(
