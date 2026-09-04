@@ -36,6 +36,18 @@ def _state_target_tokens(value: str) -> frozenset[str]:
     return frozenset(token for token in tokens if token not in _STATE_VERBS)
 
 
+def _semantic_label_tokens(value: str) -> frozenset[str]:
+    """Return label tokens after removing state intent words.
+
+    This lets a control labelled ``Open Settings`` satisfy the target
+    ``Settings`` while preventing a generic partial match such as
+    ``Test Navigation Action`` from being treated as the ``Navigation``
+    destination.
+    """
+    tokens = _tokens(value)
+    return frozenset(token for token in tokens if token not in _STATE_VERBS)
+
+
 class DeterministicReasoner:
     """Choose a viable visible target without hidden recovery loops."""
 
@@ -100,18 +112,24 @@ class DeterministicReasoner:
 
         State verbs such as ``open`` or ``navigate`` describe the intended
         outcome, not necessarily the label of the control that initiates it.
-        We therefore require every meaningful target token to be present in the
-        visible label, while still rejecting merely related partial matches.
+        A candidate is accepted only when its meaningful label exactly matches
+        the requested target. This prevents related but different controls
+        such as ``Test Navigation Action`` from being selected for ``Open
+        Navigation`` merely because they share one token.
         """
         scored: list[tuple[int, UiElement]] = []
         for element in elements:
             if not cls._is_viable(element):
                 continue
-            label_tokens = _tokens(f"{element.text} {element.content_description}")
-            if not target_tokens <= label_tokens:
+            label_tokens = _semantic_label_tokens(
+                f"{element.text} {element.content_description}"
+            )
+            if label_tokens != target_tokens:
                 continue
+
             score = len(target_tokens) + 2
-            if target_tokens == label_tokens:
+            raw_label_tokens = _tokens(f"{element.text} {element.content_description}")
+            if raw_label_tokens == target_tokens:
                 score += 1
             scored.append((score, element))
         return scored
