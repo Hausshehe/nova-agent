@@ -36,6 +36,47 @@ def test_content_description_can_match_goal():
     assert decision.action.target_id == "settings"
 
 
+def test_state_goal_can_select_direct_target_without_state_verb_in_label():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Open Navigation",
+            [
+                UiElement("unrelated", text="Navigate to Settings", clickable=True),
+                UiElement("navigation", text="Navigation", clickable=True),
+            ],
+        )
+    )
+    assert decision.action == Action(ActionType.TAP, target_id="navigation")
+
+
+def test_state_goal_requires_all_meaningful_target_tokens():
+    with pytest.raises(ValueError, match="no visible enabled clickable element"):
+        DeterministicReasoner().decide(
+            context(
+                "Open Navigation Settings",
+                [
+                    UiElement("navigation", text="Navigation", clickable=True),
+                    UiElement("settings", text="Settings", clickable=True),
+                ],
+            )
+        )
+
+
+def test_state_goal_ignores_non_viable_matching_target():
+    decision = DeterministicReasoner().decide(
+        context(
+            "Open Navigation",
+            [
+                UiElement("hidden", text="Navigation", clickable=True, visible=False),
+                UiElement("disabled", text="Navigation", clickable=True, enabled=False),
+                UiElement("label", text="Navigation", clickable=False),
+                UiElement("usable", text="Navigation", clickable=True),
+            ],
+        )
+    )
+    assert decision.action.target_id == "usable"
+
+
 def test_ignores_invisible_disabled_and_non_clickable_matches():
     decision = DeterministicReasoner().decide(
         context(
@@ -69,6 +110,19 @@ def test_history_avoids_previously_attempted_matching_target():
         )
     )
     assert decision.action.target_id == "second"
+
+
+def test_history_avoids_previously_attempted_state_target():
+    history = (
+        ReasoningStep(
+            decision=Decision(Action(ActionType.TAP, target_id="navigation")),
+            execution=ExecutionResult(accepted=True, changed=True),
+        ),
+    )
+    with pytest.raises(ValueError, match="already been attempted"):
+        DeterministicReasoner().decide(
+            context("Open Navigation", [UiElement("navigation", text="Navigation", clickable=True)], history)
+        )
 
 
 def test_exhausted_matching_targets_fail_closed():
