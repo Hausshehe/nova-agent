@@ -1,6 +1,6 @@
 from nova_core.adapters.android import AndroidBridgeAdapter, AndroidGoalVerifier
 from nova_core.deterministic_reasoner import DeterministicReasoner
-from nova_core.models import Action, ActionType, ExecutionResult, Goal, RunStatus
+from nova_core.models import ActionType, ExecutionResult, Goal, Observation, RunStatus, UiElement
 from nova_core.runtime import Runtime
 
 
@@ -55,7 +55,11 @@ def test_native_deterministic_reasoner_drives_v2_runtime_to_goal():
         adapter,
         DeterministicReasoner(),
         adapter,
-        AndroidGoalVerifier(lambda goal, observation: any(e.text == "Navigation Completed" for e in observation.elements)),
+        AndroidGoalVerifier(
+            lambda goal, observation: any(
+                element.text == "Navigation Completed" for element in observation.elements
+            )
+        ),
         max_steps=1,
     )
 
@@ -64,7 +68,7 @@ def test_native_deterministic_reasoner_drives_v2_runtime_to_goal():
     assert result.status is RunStatus.SUCCEEDED
     assert result.steps == 1
     assert len(bridge.executed) == 1
-    assert bridge.executed[0].type is ActionType.TAP
+    assert bridge.executed[0].type is ActionType.CLICK
     assert bridge.executed[0].target.element_id == "target"
 
 
@@ -83,18 +87,25 @@ def test_native_reasoner_history_drives_alternate_target_on_recovery():
 
         def observe(self):
             self.calls += 1
-            return __import__("nova_core.models", fromlist=["Observation"]).Observation(
+            return Observation(
                 "pkg",
                 "MainActivity",
                 (
-                    __import__("nova_core.models", fromlist=["UiElement"]).UiElement("first", text="Continue", clickable=True),
-                    __import__("nova_core.models", fromlist=["UiElement"]).UiElement("second", text="Continue", clickable=True),
+                    UiElement("first", text="Continue", clickable=True),
+                    UiElement("second", text="Continue", clickable=True),
                 ),
                 self.calls,
             )
 
         def observe_fresh(self, previous):
             return self.observe()
+
+    class RecoveryVerifier:
+        def __init__(self, executor):
+            self.executor = executor
+
+        def verify(self, goal, before, decision, result, after):
+            return len(self.executor.actions) == 2
 
     observer = RecoveryObserver()
     executor = RecoveryExecutor()
@@ -103,7 +114,7 @@ def test_native_reasoner_history_drives_alternate_target_on_recovery():
         observer,
         DeterministicReasoner(),
         executor,
-        lambda goal, before, decision, result, after: len(executor.actions) == 2,
+        RecoveryVerifier(executor),
         max_steps=2,
     )
 
