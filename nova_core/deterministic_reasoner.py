@@ -1,10 +1,4 @@
-"""Deterministic reasoning for Nova Agent v2.
-
-This module is intentionally small and local. It turns an explicit goal,
-current observation, and completed attempt history into one auditable Decision.
-It does not execute actions, poll Android, retry internally, or hide mutable
-state.
-"""
+"""Deterministic reasoning for Nova Agent v2."""
 
 from __future__ import annotations
 
@@ -13,39 +7,30 @@ import re
 from .models import Action, ActionType, Decision, UiElement
 from .reasoning import ReasoningContext
 
-
-_STOP_WORDS = frozenset(
-    {
-        "a", "an", "and", "at", "button", "for", "in", "me", "of",
-        "on", "please", "the", "to",
-    }
-)
+_STOP_WORDS = frozenset({
+    "a", "an", "and", "at", "button", "for", "in", "me", "of", "on", "please", "the", "to",
+})
 _STATE_VERBS = frozenset({"open", "show", "display", "navigate", "go", "select", "choose"})
+_TERMINAL_WORDS = frozenset({"finish", "complete", "completed", "done"})
+_CONTINUE_WORDS = frozenset({"continue", "next", "proceed"})
 
 
 def _tokens(value: str) -> frozenset[str]:
-    return frozenset(
-        token
-        for token in re.findall(r"[\w]+", value.casefold())
-        if token not in _STOP_WORDS
-    )
+    return frozenset(token for token in re.findall(r"[\w]+", value.casefold()) if token not in _STOP_WORDS)
 
 
 def _state_target_tokens(value: str) -> frozenset[str]:
-    tokens = _tokens(value)
-    return frozenset(token for token in tokens if token not in _STATE_VERBS)
+    return frozenset(token for token in _tokens(value) if token not in _STATE_VERBS)
 
 
 def _semantic_label_tokens(value: str) -> frozenset[str]:
-    """Return label tokens after removing state intent words.
-
-    This lets a control labelled ``Open Settings`` satisfy the target
-    ``Settings`` while preventing a generic partial match such as
-    ``Test Navigation Action`` from being treated as the ``Navigation``
-    destination.
-    """
     tokens = _tokens(value)
     return frozenset(token for token in tokens if token not in _STATE_VERBS)
+
+
+def _started_step(observation_text: str) -> int | None:
+    match = re.search(r"\bstep\s+(\d+)\s+started\b", observation_text.casefold())
+    return int(match.group(1)) if match else None
 
 
 class DeterministicReasoner:
@@ -59,8 +44,7 @@ class DeterministicReasoner:
         attempted_ids = {
             step.decision.action.target_id
             for step in context.history
-            if step.decision.action.type is ActionType.TAP
-            and step.decision.action.target_id is not None
+            if step.decision.action.type is ActionType.TAP and step.decision.action.target_id is not None
         }
 
         state_tokens = _state_target_tokens(context.goal.text)
@@ -72,21 +56,12 @@ class DeterministicReasoner:
         if not scored:
             raise ValueError("no visible enabled clickable element matches the goal")
 
-        untried = [
-            (score, element)
-            for score, element in scored
-            if element.id not in attempted_ids
-        ]
+        untried = [(score, element) for score, element in scored if element.id not in attempted_ids]
         if not untried:
             raise ValueError("all matching targets have already been attempted")
 
-        score, target = max(
-            untried,
-            key=lambda item: (
-                item[0],
-                -self._position(item[1], context.observation.elements),
-            ),
-        )
+        untried = self._prefer_progression_action(context, goal_tokens, untried)
+        score, target = max(untried, key=lambda item: (item[0], -self._position(item[1], context.observation.elements)))
         label = target.text or target.content_description
         return Decision(
             action=Action(type=ActionType.TAP, target_id=target.id),
@@ -94,42 +69,48 @@ class DeterministicReasoner:
         )
 
     @classmethod
-    def _score_targets(
-        cls, goal_tokens: frozenset[str], elements: tuple[UiElement, ...]
-    ) -> list[tuple[int, UiElement]]:
-        scored = [
-            (cls._score(goal_tokens, element), element)
-            for element in elements
-            if cls._is_viable(element)
+    def _prefer_progression_action(cls, context: ReasoningContext, goal_tokens: frozenset[str], candidates: list[tuple[int, UiElement]]) -> list[tuple[int, UiElement]]:
+        """Prefer continuation over terminal actions when an intermediate step is explicitly active."""
+        if not goal_tokens & _TERMINAL_WORDS:
+            return candidates
+
+        visible_text = " ".join(
+            f"{element.text} {element.content_description}"
+            for element in context.observation.elements
+            if element.visible
+        )
+        current_step = _started_step(visible_text)
+        if current_step is None or current_step >= 2:
+            return candidates
+
+        continuation = [
+            item for item in candidates
+            if _tokens(f"{item[1].text} {item[1].content_description}") & _CONTINUE_WORDS
         ]
+        terminal = [
+            item for item in candidates
+            if _tokens(f"{item[1].text} {item[1].content_description}") & _TERMINAL_WORDS
+        ]
+        if continuation and terminal:
+            return continuation
+        return candidates
+
+    @classmethod
+    def _score_targets(cls, goal_tokens: frozenset[str], elements: tuple[UiElement, ...]) -> list[tuple[int, UiElement]]:
+        scored = [(cls._score(goal_tokens, element), element) for element in elements if cls._is_viable(element)]
         return [(score, element) for score, element in scored if score > 0]
 
     @classmethod
-    def _score_state_targets(
-        cls, target_tokens: frozenset[str], elements: tuple[UiElement, ...]
-    ) -> list[tuple[int, UiElement]]:
-        """Select a direct visible target for a state-transition goal.
-
-        State verbs such as ``open`` or ``navigate`` describe the intended
-        outcome, not necessarily the label of the control that initiates it.
-        A candidate is accepted only when its meaningful label exactly matches
-        the requested target. This prevents related but different controls
-        such as ``Test Navigation Action`` from being selected for ``Open
-        Navigation`` merely because they share one token.
-        """
+    def _score_state_targets(cls, target_tokens: frozenset[str], elements: tuple[UiElement, ...]) -> list[tuple[int, UiElement]]:
         scored: list[tuple[int, UiElement]] = []
         for element in elements:
             if not cls._is_viable(element):
                 continue
-            label_tokens = _semantic_label_tokens(
-                f"{element.text} {element.content_description}"
-            )
+            label_tokens = _semantic_label_tokens(f"{element.text} {element.content_description}")
             if label_tokens != target_tokens:
                 continue
-
             score = len(target_tokens) + 2
-            raw_label_tokens = _tokens(f"{element.text} {element.content_description}")
-            if raw_label_tokens == target_tokens:
+            if _tokens(f"{element.text} {element.content_description}") == target_tokens:
                 score += 1
             scored.append((score, element))
         return scored
