@@ -27,26 +27,28 @@ class AndroidBridgeAdapter:
 
     @staticmethod
     def _to_observation(state, revision: int) -> Observation:
+        elements = []
+        for element in state.elements:
+            elements.append(
+                UiElement(
+                    id=element.id,
+                    text=getattr(element, "text", ""),
+                    content_description=getattr(element, "content_description", ""),
+                    clickable=getattr(element, "clickable", False),
+                    enabled=getattr(element, "enabled", True),
+                    class_name=getattr(element, "class_name", ""),
+                    editable=getattr(element, "editable", False),
+                    scrollable=getattr(element, "scrollable", False),
+                    checkable=getattr(element, "checkable", False),
+                    checked=getattr(element, "checked", False),
+                    focused=getattr(element, "focused", False),
+                    visible=getattr(element, "visible", True),
+                )
+            )
         return Observation(
             package=state.package,
             activity=state.activity,
-            elements=tuple(
-                UiElement(
-                    id=element.id,
-                    text=element.text,
-                    content_description=element.content_description,
-                    clickable=element.clickable,
-                    enabled=element.enabled,
-                    class_name=element.class_name,
-                    editable=element.editable,
-                    scrollable=element.scrollable,
-                    checkable=element.checkable,
-                    checked=element.checked,
-                    focused=element.focused,
-                    visible=element.visible,
-                )
-                for element in state.elements
-            ),
+            elements=tuple(elements),
             revision=revision,
         )
 
