@@ -61,7 +61,7 @@ class GroqResponder:
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
-        self._api_key = api_key or os.environ.get("GROQ_API_KEY")
+        self._api_key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
         self._model = model or os.environ.get("NOVA_GROQ_MODEL", DEFAULT_MODEL)
         self._timeout_seconds = timeout_seconds
         self._opener = opener
