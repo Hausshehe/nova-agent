@@ -7,7 +7,7 @@ or execute actions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .models import Goal, Observation, Decision, ExecutionResult, RunResult, RunStatus
 from .reasoning import ReasoningStep
@@ -50,7 +50,7 @@ class RunController:
         self.decision = decision
 
     def record_execution(self, result: ExecutionResult) -> None:
-        """Attach an execution result, consume one step, and close its history entry."""
+        """Attach an execution result and consume one bounded step."""
         if self.state != RunState.EXECUTING:
             raise InvalidTransition("execution can only be recorded while executing")
         if self.steps >= self.max_steps:
@@ -60,6 +60,16 @@ class RunController:
         self.last_execution = result
         self.steps += 1
         self.history = self.history + (ReasoningStep(self.decision, result),)
+
+    def record_post_observation(self, observation: Observation) -> None:
+        """Attach the fresh result of the current action to its history entry."""
+        if self.state != RunState.VERIFYING:
+            raise InvalidTransition("post-observation can only be recorded while verifying")
+        if not self.history:
+            raise RuntimeError("post-observation cannot be recorded without execution history")
+        self.history = self.history[:-1] + (
+            replace(self.history[-1], post_observation=observation),
+        )
 
     def finish(self, status: RunStatus, error: str | None = None) -> RunResult:
         """Enter one terminal state explicitly and return the run result."""
