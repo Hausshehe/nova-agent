@@ -28,7 +28,10 @@ def test_reset_nova_process_tries_variants_after_failure(monkeypatch):
     def run(command, **kwargs):
         calls.append(command)
         if len(calls) < 2:
-            raise subprocess.CalledProcessError(1, command, stdout="", stderr="permission denied")
+            error = subprocess.CalledProcessError(1, command)
+            error.stdout = ""
+            error.stderr = "permission denied"
+            raise error
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(android_v2_groq_smoke.subprocess, "run", run)
@@ -46,7 +49,10 @@ def test_reset_nova_process_refuses_to_continue_if_all_variants_fail(monkeypatch
 
     def run(command, **kwargs):
         calls.append(command)
-        raise subprocess.CalledProcessError(1, command, stdout="", stderr="permission denied")
+        error = subprocess.CalledProcessError(1, command)
+        error.stdout = ""
+        error.stderr = "permission denied"
+        raise error
 
     monkeypatch.setattr(android_v2_groq_smoke.subprocess, "run", run)
 
