@@ -9,12 +9,14 @@ from .models import Decision, ExecutionResult, Goal, Observation, UiElement
 
 
 _STATE_VERBS = {"open", "show", "display", "navigate", "go", "select", "choose"}
+_COMPLETION_VERBS = {"finish", "complete", "completed", "done"}
 _CHECK_ON_VERBS = {"enable", "turn", "check", "activate"}
 _CHECK_OFF_VERBS = {"disable", "uncheck", "deactivate"}
 _STOP_WORDS = {
     "a", "an", "the", "to", "into", "on", "in", "at", "for", "and",
     "please", "then", "screen", "page",
 }
+_COMPLETION_MARKERS = {"complete", "completed", "completion", "finished", "finish", "done"}
 
 
 class SemanticGoalVerifier:
@@ -57,6 +59,8 @@ class SemanticGoalVerifier:
             return _checkable_state(after, target_words, expected=False)
         if verb in _STATE_VERBS:
             return _state_target_visible(before, after, target_words)
+        if verb in _COMPLETION_VERBS:
+            return _completion_state_visible(after, target_words)
 
         return False
 
@@ -103,6 +107,25 @@ def _state_target_visible(
         for element in before.elements
     )
     return not before_visible
+
+
+def _completion_state_visible(
+    observation: Observation,
+    target_words: set[str],
+) -> bool:
+    """Require explicit completion evidence for a finish/complete goal.
+
+    Matching the original button label is not enough: a button named
+    ``Finish Multi-Step`` can remain visible before the workflow is complete.
+    The observation must expose both the requested target and a completion
+    marker in the same visible element, such as ``Multi-Step Test completed``.
+    """
+    return any(
+        element.visible
+        and _matches(element, target_words)
+        and bool(_element_tokens(element) & _COMPLETION_MARKERS)
+        for element in observation.elements
+    )
 
 
 def _checkable_state(
