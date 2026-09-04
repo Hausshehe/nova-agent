@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 
 from agent.android_bridge import AndroidBridge
-from nova_core.action_verifier import ActionExecutionVerifier
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.deterministic_reasoner import DeterministicReasoner
 from nova_core.models import Goal, RunStatus
 from nova_core.runtime import Runtime
+from nova_core.semantic_verifier import SemanticGoalVerifier
 
 
 def main() -> int:
@@ -17,7 +17,7 @@ def main() -> int:
         description="Run the native v2 deterministic runtime against a real Android device"
     )
     parser.add_argument("--launch-nova", action="store_true", help="launch Nova before running")
-    parser.add_argument("--goal", required=True, help="explicit action goal, e.g. 'Tap Test Navigation Action'")
+    parser.add_argument("--goal", required=True, help="goal, e.g. 'Tap Test Navigation Action'")
     parser.add_argument("--max-steps", type=int, default=1, help="maximum action steps")
     args = parser.parse_args()
 
@@ -34,7 +34,7 @@ def main() -> int:
         adapter,
         DeterministicReasoner(),
         adapter,
-        ActionExecutionVerifier(),
+        SemanticGoalVerifier(),
         max_steps=args.max_steps,
     )
 
