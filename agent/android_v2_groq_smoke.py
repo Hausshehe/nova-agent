@@ -1,11 +1,15 @@
-"""Single bounded real-Groq smoke test for Nova's v2 runtime."""
+"""Single bounded real-provider smoke test for Nova's v2 runtime."""
 
 from __future__ import annotations
 
 import argparse
+import os
 
 from agent.android_bridge import AndroidBridge
+from agent.fallback_responder import FallbackResponder
+from agent.gemini_responder import GeminiResponder
 from agent.groq_responder import GroqResponder
+from agent.openrouter_responder import OpenRouterResponder
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.models import Goal, RunStatus
 from nova_core.reasoning_adapter import LLMReasoner
@@ -13,11 +17,22 @@ from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
 
 
+def _configured_responders(model: str | None) -> list[tuple[str, object]]:
+    responders: list[tuple[str, object]] = []
+    if os.environ.get("GROQ_API_KEY"):
+        responders.append(("groq", GroqResponder(model=model)))
+    if os.environ.get("OPENROUTER_API_KEY"):
+        responders.append(("openrouter", OpenRouterResponder()))
+    if os.environ.get("GEMINI_API_KEY"):
+        responders.append(("gemini", GeminiResponder()))
+    return responders
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run one real Groq-backed v2 Android navigation test")
+    parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
     parser.add_argument("--launch-nova", action="store_true", help="launch Nova before running")
     parser.add_argument("--goal", default="Tap Test Navigation Action")
-    parser.add_argument("--model", default=None, help="override NOVA_GROQ_MODEL for this run")
+    parser.add_argument("--model", default=None, help="override NOVA_GROQ_MODEL for the Groq provider")
     parser.add_argument(
         "--max-steps",
         type=int,
@@ -29,12 +44,16 @@ def main() -> int:
     if args.max_steps < 1:
         parser.error("--max-steps must be at least 1")
 
+    responders = _configured_responders(args.model)
+    if not responders:
+        parser.error("set at least one of GROQ_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY")
+
     bridge = AndroidBridge()
     if args.launch_nova:
         bridge.launch()
 
     adapter = AndroidBridgeAdapter(bridge)
-    responder = GroqResponder(model=args.model)
+    responder = FallbackResponder(responders)
     runtime = Runtime(
         Goal(args.goal),
         adapter,
