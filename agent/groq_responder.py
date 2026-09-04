@@ -15,6 +15,7 @@ from urllib import error, request
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TIMEOUT_SECONDS = 20.0
+USER_AGENT = "Nova-Agent/1.0"
 
 _SYSTEM_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
 Return exactly one JSON object with these fields:
@@ -93,6 +94,8 @@ class GroqResponder:
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json",
             },
             method="POST",
         )
