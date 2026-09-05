@@ -22,26 +22,10 @@ Return exactly one JSON object with these fields:
 - reason: a short explanation
 Never invent an element id. Use only the supplied observation. Choose the
 smallest safe action that advances the user's goal. Nova will independently
-validate your response before execution."""
+validate your response before execution. Do not output markdown, commentary,
+analysis, or any text outside the JSON object."""
 
-_RESPONSE_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "nova_navigation_decision",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "action_type": {"type": "string", "enum": ["tap", "back", "scroll", "type", "swipe", "wait"]},
-                "target_id": {"type": ["string", "null"]},
-                "value": {"type": ["string", "null"]},
-                "reason": {"type": "string"},
-            },
-            "required": ["action_type", "target_id", "value", "reason"],
-            "additionalProperties": False,
-        },
-    },
-}
+_RESPONSE_FORMAT = {"type": "json_object"}
 
 
 class OpenRouterResponder:
@@ -72,7 +56,7 @@ class OpenRouterResponder:
             "messages": [{"role": "user", "content": f"{_SYSTEM_INSTRUCTION}\n\nLive Nova reasoning context:\n{prompt}"}],
             "temperature": 0,
             "max_tokens": DEFAULT_MAX_TOKENS,
-            "response_format": _RESPONSE_SCHEMA,
+            "response_format": _RESPONSE_FORMAT,
             "stream": False,
         }
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
