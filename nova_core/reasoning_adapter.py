@@ -96,7 +96,10 @@ def _observation_history_summary(observation: Observation | None) -> dict[str, A
     if observation is None:
         return None
     visible_elements = [
-        {"text": element.text, "content_description": element.content_description}
+        {
+            "text": element.text or None,
+            "content_description": element.content_description or None,
+        }
         for element in observation.elements
         if element.visible and (element.text or element.content_description)
     ]
