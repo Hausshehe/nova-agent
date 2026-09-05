@@ -84,6 +84,7 @@ class OpenRouterResponder:
                 "Content-Type": "application/json",
                 "User-Agent": USER_AGENT,
                 "Accept": "application/json",
+                "Connection": "close",
             },
             method="POST",
         )
