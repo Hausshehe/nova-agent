@@ -23,10 +23,7 @@ MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
-    """Stop Nova so Activity-local state cannot leak between smoke runs."""
-    # This Android build does not expose a usable force-stop shell command from
-    # Termux. `am start -S` is supported by the local `am` implementation and
-    # atomically force-stops the target package before starting its Activity.
+    """Reset and launch Nova so Activity-local state cannot leak between runs."""
     commands = [
         ["su", "-c", f"am start -S -n {MAIN_ACTIVITY}"],
         ["am", "start", "-S", "-n", MAIN_ACTIVITY],
@@ -96,6 +93,10 @@ def main() -> int:
     responders = _configured_responders(args.model)
     if not responders:
         parser.error("set at least one of GROQ_API_KEY, OPENROUTER_API_KEY, or GEMINI_API_KEY")
+
+    print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
+    if len(responders) == 1:
+        print("V2_REASONING_PROVIDER_BACKUP=NONE")
 
     bridge = AndroidBridge()
     if args.launch_nova:
