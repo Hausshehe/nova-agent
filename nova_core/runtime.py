@@ -38,6 +38,11 @@ class Runtime:
         self.invalid_decisions = 0
         self.max_invalid_decisions = max_invalid_decisions
 
+    def _record_invalid_decision(self, error: str) -> None:
+        """Record one model/guard rejection without consuming action progress."""
+        self.invalid_decisions += 1
+        self.evidence.record_rejection(self.controller.decision, error)
+
     def step(self) -> RunState:
         state = self.controller.state
 
@@ -63,8 +68,7 @@ class Runtime:
             try:
                 decision = self.reasoner.decide(context)
             except ValueError as exc:
-                self.invalid_decisions += 1
-                self.evidence.record_rejection(self.controller.decision, str(exc))
+                self._record_invalid_decision(str(exc))
                 if self.invalid_decisions > self.max_invalid_decisions:
                     self.controller.finish(RunStatus.FAILED, str(exc))
                 else:
@@ -83,6 +87,7 @@ class Runtime:
                 self.controller.decision, self.controller.observation  # type: ignore[arg-type]
             )
             if not guard.allowed:
+                self._record_invalid_decision(guard.reason)
                 execution = ExecutionResult(False, False, guard.reason)
             else:
                 execution = self.executor.execute(self.controller.decision.action)
@@ -112,6 +117,11 @@ class Runtime:
             )
             if achieved:
                 self.controller.finish(RunStatus.SUCCEEDED)
+            elif self.invalid_decisions > self.max_invalid_decisions:
+                self.controller.finish(
+                    RunStatus.FAILED,
+                    "invalid decision budget exhausted",
+                )
             elif self.controller.steps >= self.controller.max_steps and execution.accepted and execution.changed:
                 self.controller.finish(RunStatus.FAILED, "step budget exhausted")
             else:
@@ -121,7 +131,9 @@ class Runtime:
         return self.controller.state
 
     def run(self) -> RunResult:
-        # Invalid decisions and guarded actions are bounded recovery events.
+        # The phase budget is a final containment boundary. Per-step invalid
+        # decisions are also bounded so repeated rejected actions cannot leave
+        # a manually stepped Runtime non-terminal forever.
         phase_budget = self.controller.max_steps * 8 + self.max_invalid_decisions * 2 + 1
         for _ in range(phase_budget):
             result = self.controller.result()
