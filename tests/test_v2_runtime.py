@@ -12,7 +12,7 @@ class FakeObserver:
 
     def observe(self):
         self.calls += 1
-        return Observation("pkg", "MainActivity", revision=self.calls)
+        return Observation("pkg", "MainActivity", elements=(UiElement(id="button", text="Button", clickable=True, enabled=True),), revision=self.calls)
 
 
 class FreshFakeObserver(FakeObserver):
@@ -22,7 +22,7 @@ class FreshFakeObserver(FakeObserver):
 
     def observe_fresh(self, previous):
         self.fresh_calls += 1
-        return Observation("pkg", "MainActivity", revision=previous.revision + 1)
+        return Observation("pkg", "MainActivity", elements=(UiElement(id="button", text="Button", clickable=True, enabled=True),), revision=previous.revision + 1)
 
 
 class FakeReasoner:
@@ -182,14 +182,7 @@ def test_reasoner_receives_empty_history_on_first_decision():
 def test_reasoner_receives_previous_attempt_history_after_recovery_cycle():
     observer = FakeObserver()
     reasoner = FakeReasoner()
-    runtime = Runtime(
-        Goal("recover"),
-        observer,
-        reasoner,
-        FakeExecutor(),
-        FakeVerifier(achieved=False),
-        max_steps=2,
-    )
+    runtime = Runtime(Goal("recover"), observer, reasoner, FakeExecutor(), FakeVerifier(achieved=False), max_steps=2)
 
     runtime.run()
 
@@ -218,17 +211,10 @@ def test_runtime_passes_post_action_observation_to_verifier():
     assert verifier.after.revision == 2
 
 
-def test_runtime_turns_reasoning_rejection_into_terminal_failure():
+def test_runtime_turns_reasoning_rejection_into_bounded_terminal_failure():
     observer = FakeObserver()
     executor = FakeExecutor()
-    runtime = Runtime(
-        Goal("Open Navigation"),
-        observer,
-        RejectingReasoner(),
-        executor,
-        FakeVerifier(),
-        max_steps=3,
-    )
+    runtime = Runtime(Goal("Open Navigation"), observer, RejectingReasoner(), executor, FakeVerifier(), max_steps=3, max_invalid_decisions=2)
 
     result = runtime.run()
 
@@ -241,14 +227,7 @@ def test_runtime_turns_reasoning_rejection_into_terminal_failure():
 def test_runtime_turns_provider_failure_into_terminal_failure():
     observer = FakeObserver()
     executor = FakeExecutor()
-    runtime = Runtime(
-        Goal("Finish Multi-Step Test"),
-        observer,
-        ProviderFailureReasoner(),
-        executor,
-        FakeVerifier(),
-        max_steps=3,
-    )
+    runtime = Runtime(Goal("Finish Multi-Step Test"), observer, ProviderFailureReasoner(), executor, FakeVerifier(), max_steps=3)
 
     result = runtime.run()
 
