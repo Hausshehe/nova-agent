@@ -1,8 +1,4 @@
-"""Generic evidence extraction for bounded Nova Agent v2 reasoning.
-
-This module deliberately records evidence instead of pretending that every UI
-transition can be reduced to a hard-coded application state machine.
-"""
+"""Generic evidence extraction for bounded Nova Agent v2 reasoning."""
 
 from __future__ import annotations
 
@@ -13,18 +9,7 @@ from .models import Observation
 from .reasoning import ReasoningStep
 
 
-_STAGE_WORDS = {
-    "start": 10,
-    "begin": 10,
-    "launch": 10,
-    "continue": 20,
-    "next": 20,
-    "proceed": 20,
-    "finish": 30,
-    "complete": 30,
-    "done": 30,
-    "submit": 40,
-}
+_STAGE_WORDS = {"start": 10, "begin": 10, "launch": 10, "continue": 20, "next": 20, "proceed": 20, "finish": 30, "complete": 30, "done": 30, "submit": 40}
 _BLOCKING_PATTERNS = (
     re.compile(r"^(?P<required>.+?)\s+first(?:\b|$)", re.IGNORECASE),
     re.compile(r"^(?P<required>.+?)\s+(?:must|needs to|need to)\s+be\s+.+$", re.IGNORECASE),
@@ -35,7 +20,6 @@ _BLOCKING_PATTERNS = (
 @dataclass(frozen=True)
 class StateEvidence:
     """Evidence available to a reasoner; fields are observations, not beliefs."""
-
     current_revision: int
     previous_revision: int | None
     visible_labels: tuple[str, ...] = ()
@@ -53,15 +37,14 @@ class StateEvidence:
 
 class EvidenceTracker:
     """Maintain a bounded, observation-derived evidence record."""
-
     def __init__(self, *, max_rejections: int = 8) -> None:
         if max_rejections < 1:
             raise ValueError("max_rejections must be at least 1")
-        self._previous: Observation | None = None
-        self._current: Observation | None = None
-        self._added_labels: tuple[str, ...] = ()
-        self._removed_labels: tuple[str, ...] = ()
-        self._rejections: list[tuple[str, str | None, str]] = []
+        self._previous = None
+        self._current = None
+        self._added_labels = ()
+        self._removed_labels = ()
+        self._rejections = []
         self._max_rejections = max_rejections
 
     def observe(self, observation: Observation) -> None:
@@ -79,11 +62,9 @@ class EvidenceTracker:
 
     def record_rejection(self, decision, error: str) -> None:
         if decision is None:
-            key = "unknown"
-            target = None
+            key, target = "unknown", None
         else:
-            key = decision.action.type.value
-            target = decision.target_label or decision.action.target_id
+            key, target = decision.action.type.value, decision.target_label or decision.action.target_id
         self._rejections.append((key, target, error))
         if len(self._rejections) > self._max_rejections:
             del self._rejections[0]
@@ -94,45 +75,34 @@ class EvidenceTracker:
         labels = _labels(self._current)
         blocking = tuple(label for label in labels if _looks_blocking(label))
         hints = _stage_hints(self._current)
-        prerequisites = _unsatisfied_prerequisites(self._current, blocking, hints)
-        last_action = None
-        accepted = None
-        changed = None
-        consequence: tuple[str, ...] = ()
+        last_action = accepted = changed = None
+        consequence = ()
         if history:
             step = history[-1]
-            last_action = step.decision.action.type.value
-            accepted = step.execution.accepted
-            changed = step.execution.changed
+            last_action, accepted, changed = step.decision.action.type.value, step.execution.accepted, step.execution.changed
             if step.post_observation is not None:
                 previous = _labels(self._previous) if self._previous is not None else ()
                 current = _labels(step.post_observation)
                 consequence = tuple(label for label in current if label not in previous)
         return StateEvidence(
-            current_revision=self._current.revision,
-            previous_revision=self._previous.revision if self._previous else None,
-            visible_labels=labels,
-            added_labels=self._added_labels,
-            removed_labels=self._removed_labels,
-            blocking_messages=blocking,
-            action_stage_hints=hints,
-            unsatisfied_prerequisites=prerequisites,
-            last_action=last_action,
-            last_execution_accepted=accepted,
-            last_execution_changed=changed,
-            last_consequence=consequence,
-            rejected_actions=tuple(self._rejections),
+            self._current.revision,
+            self._previous.revision if self._previous else None,
+            labels, self._added_labels, self._removed_labels, blocking, hints,
+            _unsatisfied_prerequisites(self._current, blocking, hints),
+            last_action, accepted, changed, consequence, tuple(self._rejections),
         )
 
 
+def infer_unsatisfied_prerequisites(observation: Observation) -> tuple[tuple[str, str, str, int], ...]:
+    """Return only high-confidence blockers explicitly supported by the UI."""
+    labels = _labels(observation)
+    blocking = tuple(label for label in labels if _looks_blocking(label))
+    hints = _stage_hints(observation)
+    return _unsatisfied_prerequisites(observation, blocking, hints)
+
+
 def _labels(observation: Observation) -> tuple[str, ...]:
-    return tuple(
-        value
-        for element in observation.elements
-        if element.visible
-        for value in (element.text, element.content_description)
-        if value
-    )
+    return tuple(value for element in observation.elements if element.visible for value in (element.text, element.content_description) if value)
 
 
 def _normalize(label: str) -> str:
@@ -144,50 +114,35 @@ def _looks_blocking(label: str) -> bool:
 
 
 def _stage_hints(observation: Observation) -> tuple[tuple[str, str, int], ...]:
-    hints: list[tuple[str, str, int]] = []
+    hints = []
     for element in observation.elements:
         if not element.visible or not element.enabled or not element.clickable:
             continue
         label = element.text or element.content_description
         if not label:
             continue
-        words = re.findall(r"[a-z]+", label.lower())
-        stages = [_STAGE_WORDS[word] for word in words if word in _STAGE_WORDS]
+        stages = [_STAGE_WORDS[word] for word in re.findall(r"[a-z]+", label.lower()) if word in _STAGE_WORDS]
         if stages:
             hints.append((element.id, label, min(stages)))
     return tuple(hints)
 
 
-def _unsatisfied_prerequisites(
-    observation: Observation,
-    blocking: tuple[str, ...],
-    hints: tuple[tuple[str, str, int], ...],
-) -> tuple[tuple[str, str, str, int], ...]:
-    """Infer only high-confidence stage prerequisites from explicit UI blockers.
-
-    A blocker such as "Start Task first" is useful only when a visible clickable
-    Start Task action exists and another visible clickable action is explicitly a
-    later generic stage. No application IDs or goal-specific workflow are used.
-    """
+def _unsatisfied_prerequisites(observation, blocking, hints):
     if not blocking or not hints:
         return ()
-    normalized_hints = [(item_id, label, stage, _normalize(label)) for item_id, label, stage in hints]
-    result: list[tuple[str, str, str, int]] = []
+    normalized = [(i, l, s, _normalize(l)) for i, l, s in hints]
+    result = []
     for message in blocking:
         match = next((pattern.search(message) for pattern in _BLOCKING_PATTERNS if pattern.search(message)), None)
         if not match:
             continue
         required = match.group("required").strip()
         required_norm = _normalize(required)
-        prerequisite = next(
-            (item_id, label, stage) for item_id, label, stage, norm in normalized_hints
-            if norm == required_norm or required_norm in norm or norm in required_norm
-        , None)
+        prerequisite = next(((i, l, s) for i, l, s, norm in normalized if norm == required_norm or required_norm in norm or norm in required_norm), None)
         if prerequisite is None:
             continue
         required_id, required_label, required_stage = prerequisite
-        for candidate_id, candidate_label, candidate_stage, _ in normalized_hints:
-            if candidate_id == required_id or candidate_stage <= required_stage:
-                continue
-            result.append((candidate_id, candidate_label, required_label, required_stage))
+        for candidate_id, candidate_label, candidate_stage, _ in normalized:
+            if candidate_id != required_id and candidate_stage > required_stage:
+                result.append((candidate_id, candidate_label, required_label, required_stage))
     return tuple(dict.fromkeys(result))
