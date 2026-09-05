@@ -99,10 +99,39 @@ class OpenRouterResponder:
 
         try:
             envelope = json.loads(raw.decode("utf-8"))
-            content = envelope["choices"][0]["message"]["content"]
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"OpenRouter returned invalid JSON envelope: {raw[:500]!r}"
+            ) from exc
+
+        try:
+            choice = envelope["choices"][0]
+            message = choice["message"]
+            content = message.get("content")
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError(
+                "OpenRouter response missing choices/message: "
+                f"{json.dumps(envelope, ensure_ascii=False)[:1200]}"
+            ) from exc
+
+        if not isinstance(content, str) or not content.strip():
+            reasoning = message.get("reasoning")
+            reasoning_details = message.get("reasoning_details")
+            finish_reason = choice.get("finish_reason")
+            raise RuntimeError(
+                "OpenRouter returned no usable reasoning content: "
+                f"finish_reason={finish_reason!r}, "
+                f"reasoning={str(reasoning)[:500]!r}, "
+                f"reasoning_details={str(reasoning_details)[:800]!r}, "
+                f"message_keys={list(message.keys())!r}"
+            )
+
+        try:
             result = json.loads(content)
-        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("OpenRouter returned an invalid reasoning response") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"OpenRouter returned non-JSON content: {content[:1000]!r}"
+            ) from exc
         if not isinstance(result, Mapping):
             raise RuntimeError("OpenRouter reasoning response must be an object")
         return result
