@@ -9,13 +9,28 @@ class FakeState:
         self.elements = elements
 
 
+class FakeElement:
+    id = "button"
+    text = "Button"
+    content_description = ""
+    clickable = True
+    enabled = True
+    class_name = "Button"
+    editable = False
+    scrollable = False
+    checkable = False
+    checked = False
+    focused = False
+    visible = True
+
+
 class FakeBridge:
     def __init__(self):
         self.calls = 0
 
     def observe(self):
         self.calls += 1
-        return FakeState([] if self.calls == 1 else [object()])
+        return FakeState([] if self.calls == 1 else [FakeElement()])
 
 
 def test_initial_observation_polls_until_ui_tree_is_available():
