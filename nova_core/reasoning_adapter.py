@@ -19,24 +19,16 @@ class LegacyReasoner(Protocol):
 
 
 class LegacyReasoningAdapter:
-    def __init__(self, provider: LegacyReasoner) -> None:
-        self._provider = provider
-
-    def decide(self, context: ReasoningContext) -> Decision:
-        raw = self._provider.decide(context.goal.text, context.observation, context.history)
-        return self._translate(raw)
-
+    def __init__(self, provider: LegacyReasoner) -> None: self._provider = provider
+    def decide(self, context: ReasoningContext) -> Decision: return self._translate(self._provider.decide(context.goal.text, context.observation, context.history))
     @staticmethod
     def _translate(raw: object) -> Decision:
-        if not isinstance(raw, dict):
-            raise ValueError("legacy reasoner must return a mapping")
-        action_type = raw.get("action_type")
-        target = raw.get("target")
+        if not isinstance(raw, dict): raise ValueError("legacy reasoner must return a mapping")
+        action_type, target = raw.get("action_type"), raw.get("target")
         target_id = target.get("element_id") if isinstance(target, dict) else None
         reason = str(raw.get("reason", "legacy provider decision"))
         if action_type == "click":
-            if not isinstance(target_id, str) or not target_id:
-                raise ValueError("legacy click decision requires target.element_id")
+            if not isinstance(target_id, str) or not target_id: raise ValueError("legacy click decision requires target.element_id")
             return Decision(Action(ActionType.TAP, target_id=target_id), reason)
         if action_type == "back": return Decision(Action(ActionType.BACK), reason)
         if action_type == "scroll": return Decision(Action(ActionType.SCROLL, target_id=target_id), reason)
@@ -44,23 +36,18 @@ class LegacyReasoningAdapter:
 
 
 class LLMReasoner:
-    def __init__(self, responder: Callable[[str], Mapping[str, Any]]) -> None:
-        self._responder = responder
-
+    def __init__(self, responder: Callable[[str], Mapping[str, Any]]) -> None: self._responder = responder
     def decide(self, context: ReasoningContext) -> Decision:
         prompt = json.dumps(_reasoning_payload(context), ensure_ascii=False, separators=(",", ":"))
-        try:
-            response = self._responder(prompt)
-        except Exception as exc:
-            raise RuntimeError(f"reasoning provider failed: {exc}") from exc
+        try: response = self._responder(prompt)
+        except Exception as exc: raise RuntimeError(f"reasoning provider failed: {exc}") from exc
         if not isinstance(response, Mapping): raise ValueError("LLM response must be an object")
         return _decision_from_response(response, context)
 
 
 def _observation_payload(observation: Observation) -> dict[str, Any]:
     return {"package": observation.package, "activity": observation.activity, "revision": observation.revision, "elements": [
-        {"id": e.id, "text": e.text, "content_description": e.content_description, "clickable": e.clickable, "enabled": e.enabled, "class_name": e.class_name, "editable": e.editable, "scrollable": e.scrollable, "checkable": e.checkable, "checked": e.checked, "focused": e.focused, "visible": e.visible}
-        for e in observation.elements]}
+        {"id": e.id, "text": e.text, "content_description": e.content_description, "clickable": e.clickable, "enabled": e.enabled, "class_name": e.class_name, "editable": e.editable, "scrollable": e.scrollable, "checkable": e.checkable, "checked": e.checked, "focused": e.focused, "visible": e.visible} for e in observation.elements]}
 
 
 def _observation_history_summary(observation: Observation | None) -> dict[str, Any] | None:
@@ -70,36 +57,30 @@ def _observation_history_summary(observation: Observation | None) -> dict[str, A
             "visible_text": [text for e in observation.elements if e.visible for text in (e.text, e.content_description) if text]}
 
 
-def _normalize(text: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+def _normalize(text: str) -> str: return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
 
 
 def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
-    """Derive candidate prerequisites from the goal's stage verb and object.
-
-    This is deliberately generic: it matches the goal object to visible actions
-    and uses stage vocabulary only to order candidates. It does not know any
-    application, resource ID, or fixture-specific workflow.
-    """
     goal_words = re.findall(r"[a-z]+", context.goal.text.lower())
-    goal_stages = [_STAGE_WORDS[word] for word in goal_words if word in _STAGE_WORDS]
-    if not goal_stages: return []
-    target_stage = max(goal_stages)
-    stage_verbs = set(_STAGE_WORDS)
-    object_words = [word for word in goal_words if word not in stage_verbs]
+    stages = [_STAGE_WORDS[w] for w in goal_words if w in _STAGE_WORDS]
+    if not stages: return []
+    target_stage = max(stages)
+    object_words = [w for w in goal_words if w not in _STAGE_WORDS]
     if not object_words: return []
     object_norm = " ".join(object_words)
+    completed = {_normalize(s.decision.target_label) for s in context.history if s.execution.accepted and s.execution.changed and s.decision.target_label}
     candidates = []
     for element in context.observation.elements:
         if not element.visible or not element.enabled or not element.clickable: continue
         label = element.text or element.content_description
         if not label: continue
         label_norm = _normalize(label)
+        if label_norm in completed: continue
         if object_norm not in label_norm and label_norm not in object_norm: continue
-        stages = [_STAGE_WORDS[word] for word in re.findall(r"[a-z]+", label.lower()) if word in _STAGE_WORDS]
-        stage = min(stages) if stages else 10 if target_stage > 10 else target_stage
+        label_stages = [_STAGE_WORDS[w] for w in re.findall(r"[a-z]+", label.lower()) if w in _STAGE_WORDS]
+        stage = min(label_stages) if label_stages else 10 if target_stage > 10 else target_stage
         if stage < target_stage:
-            candidates.append({"id": element.id, "label": label, "stage": stage, "reason": "visible goal-object action is an earlier stage than the requested goal stage"})
+            candidates.append({"id": element.id, "label": label, "stage": stage, "reason": "visible goal-object action is an earlier stage than the requested goal stage and has not been completed successfully"})
     return candidates
 
 
@@ -107,33 +88,25 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     evidence = context.evidence
     evidence_payload = None
     if evidence is not None:
-        evidence_payload = {
-            "current_revision": evidence.current_revision, "previous_revision": evidence.previous_revision,
+        evidence_payload = {"current_revision": evidence.current_revision, "previous_revision": evidence.previous_revision,
             "visible_labels": list(evidence.visible_labels), "added_labels": list(evidence.added_labels), "removed_labels": list(evidence.removed_labels),
-            "blocking_messages": list(evidence.blocking_messages),
-            "action_stage_hints": [{"id": i, "label": l, "stage": s} for i, l, s in evidence.action_stage_hints],
+            "blocking_messages": list(evidence.blocking_messages), "action_stage_hints": [{"id": i, "label": l, "stage": s} for i, l, s in evidence.action_stage_hints],
             "unsatisfied_prerequisites": [{"candidate_id": i, "candidate_label": l, "required_label": r, "required_stage": s} for i, l, r, s in evidence.unsatisfied_prerequisites],
             "last_action": evidence.last_action, "last_execution_accepted": evidence.last_execution_accepted, "last_execution_changed": evidence.last_execution_changed,
-            "last_consequence": list(evidence.last_consequence), "rejected_actions": [{"action_type": t, "target": target, "error": error} for t, target, error in evidence.rejected_actions],
-        }
-    return {
-        "goal": context.goal.text,
-        "reasoning_guidance": [
-            "Determine the current UI state before choosing an action.",
-            "Treat current observation as authoritative; history is evidence, not current state.",
-            "Use unsatisfied_prerequisites as high-confidence blockers derived from explicit UI evidence.",
-            "Use goal_stage_candidates as generic goal-derived prerequisite candidates. Prefer an earlier-stage candidate when the requested later stage has not yet been reached.",
-            "Use blocking messages as evidence about what must happen before another action.",
-            "Use action_stage_hints only as generic ordering evidence, never as a hard-coded workflow.",
-            "After an action changes the UI, reassess the new state instead of repeating or skipping ahead.",
-            "Prefer the smallest safe action that advances the goal from the current state.",
-            "Never invent an element id or execute an action that the current observation does not support.",
-        ],
-        "observation": _observation_payload(context.observation),
-        "evidence": evidence_payload,
+            "last_consequence": list(evidence.last_consequence), "rejected_actions": [{"action_type": t, "target": target, "error": error} for t, target, error in evidence.rejected_actions]}
+    return {"goal": context.goal.text, "reasoning_guidance": [
+        "Determine the current UI state before choosing an action.",
+        "Treat current observation as authoritative; history is evidence, not current state.",
+        "Use unsatisfied_prerequisites as high-confidence blockers derived from explicit UI evidence.",
+        "Use goal_stage_candidates as generic goal-derived prerequisite candidates. If an earlier-stage candidate matches the goal object and has not been successfully completed, prefer it before a later-stage action.",
+        "Use blocking messages as evidence about what must happen before another action.",
+        "Use action_stage_hints only as generic ordering evidence, never as a hard-coded workflow.",
+        "After an action changes the UI, reassess the new state instead of repeating or skipping ahead.",
+        "Prefer the smallest safe action that advances the goal from the current state.",
+        "Never invent an element id or execute an action that the current observation does not support."],
+        "observation": _observation_payload(context.observation), "evidence": evidence_payload,
         "goal_stage_candidates": _goal_stage_guidance(context),
-        "history": [{"action_type": s.decision.action.type.value, "target_id": s.decision.action.target_id, "value": s.decision.action.value, "reason": s.decision.reason, "target_label": s.decision.target_label, "accepted": s.execution.accepted, "changed": s.execution.changed, "error": s.execution.error, "post_observation": _observation_history_summary(s.post_observation)} for s in context.history],
-    }
+        "history": [{"action_type": s.decision.action.type.value, "target_id": s.decision.action.target_id, "value": s.decision.action.value, "reason": s.decision.reason, "target_label": s.decision.target_label, "accepted": s.execution.accepted, "changed": s.execution.changed, "error": s.execution.error, "post_observation": _observation_history_summary(s.post_observation)} for s in context.history]}
 
 
 def _decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
