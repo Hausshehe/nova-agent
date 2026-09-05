@@ -15,17 +15,15 @@ from urllib import error, request
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TIMEOUT_SECONDS = 20.0
+DEFAULT_MAX_COMPLETION_TOKENS = 256
 USER_AGENT = "Nova-Agent/1.0"
 
 _SYSTEM_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
-Return exactly one JSON object with these fields:
-- action_type: one of tap, back, scroll, type, swipe, wait
-- target_id: a live element id from the supplied observation, or null
-- value: a string when required by the action, otherwise null
-- reason: a short explanation
-Never invent an element id. Use only the supplied observation. Choose the
-smallest safe action that advances the user's goal. Nova will independently
-validate your response before execution."""
+Return exactly one JSON object with action_type, target_id, value, reason.
+Use only live element ids from the observation. Never invent ids. Choose one
+small safe action that advances the goal. Respect visible prerequisites and
+previous action results. Reassess the current UI before skipping ahead.
+Nova validates your decision before execution."""
 
 _RESPONSE_SCHEMA = {
     "type": "json_schema",
@@ -104,7 +102,7 @@ class GroqResponder:
             ],
             "temperature": 0,
             "reasoning_effort": "low",
-            "max_completion_tokens": 512,
+            "max_completion_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
             "response_format": _RESPONSE_SCHEMA,
             "stream": False,
         }
