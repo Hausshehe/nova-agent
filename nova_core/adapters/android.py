@@ -83,6 +83,16 @@ class AndroidBridgeAdapter:
         return self._to_observation(state, self._revision)
 
     def execute(self, action: Action) -> ExecutionResult:
+        # WAIT is a control-level recovery request. It does not map to an
+        # Android bridge action, so report a non-progress result rather than
+        # pretending the bridge executed it.
+        if action.type is ActionType.WAIT:
+            return ExecutionResult(
+                accepted=False,
+                changed=False,
+                error=None,
+            )
+
         legacy_action = self._to_legacy_action(action)
         if legacy_action is None:
             return ExecutionResult(
