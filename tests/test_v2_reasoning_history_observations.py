@@ -5,7 +5,7 @@ from nova_core.reasoning import ReasoningContext, ReasoningStep
 from nova_core.reasoning_adapter import LLMReasoner
 
 
-def test_llm_reasoner_serializes_post_action_observation():
+def test_llm_reasoner_serializes_post_action_observation_compactly():
     before = Observation(
         package="com.example",
         activity="MainActivity",
@@ -45,5 +45,9 @@ def test_llm_reasoner_serializes_post_action_observation():
 
     payload = received[0]
     assert payload["reasoning_guidance"]
-    assert payload["history"][0]["post_observation"]["revision"] == 2
-    assert payload["history"][0]["post_observation"]["elements"][0]["text"] == "Step 2 started"
+    post_observation = payload["history"][0]["post_observation"]
+    assert post_observation["revision"] == 2
+    assert post_observation["visible_text"] == ["Step 2 started"]
+    assert post_observation["elements"] == [
+        {"text": "Step 2 started", "content_description": None}
+    ]
