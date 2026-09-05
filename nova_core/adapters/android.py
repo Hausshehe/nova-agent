@@ -7,6 +7,7 @@ v2 receives only its own models and port contracts.
 
 from __future__ import annotations
 
+import time
 from typing import Callable
 
 from agent.android_bridge import AndroidBridge
@@ -53,10 +54,23 @@ class AndroidBridgeAdapter:
         )
 
     def observe(self) -> Observation:
-        state = self.bridge.observe()
+        state = self._observe_initial_ready() if self._revision == 0 else self.bridge.observe()
         self._last_legacy_state = state
         self._revision += 1
         return self._to_observation(state, self._revision)
+
+    def _observe_initial_ready(self):
+        """Wait briefly for the launched Activity to expose a usable UI tree."""
+        state = self.bridge.observe()
+        if state.elements:
+            return state
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            time.sleep(0.2)
+            state = self.bridge.observe()
+            if state.elements:
+                return state
+        return state
 
     def observe_fresh(self, previous: Observation) -> Observation:
         if self._last_legacy_state is None:
