@@ -11,18 +11,11 @@ from .reasoning import ReasoningContext
 
 
 class LegacyReasoner(Protocol):
-    """Minimal legacy capability retained for compatibility during migration."""
-
     def decide(self, goal: str, observation: object, history: tuple) -> object:
         ...
 
 
 class LegacyReasoningAdapter:
-    """Translate a small legacy decision shape into a v2 Decision.
-
-    Malformed or unsupported provider output fails closed.
-    """
-
     def __init__(self, provider: LegacyReasoner) -> None:
         self._provider = provider
 
@@ -50,8 +43,6 @@ class LegacyReasoningAdapter:
 
 
 class LLMReasoner:
-    """Use an injected model responder through the v2 Reasoner protocol."""
-
     def __init__(self, responder: Callable[[str], Mapping[str, Any]]) -> None:
         self._responder = responder
 
@@ -92,14 +83,10 @@ def _observation_payload(observation: Observation) -> dict[str, Any]:
 
 
 def _observation_history_summary(observation: Observation | None) -> dict[str, Any] | None:
-    """Keep prior state evidence compact; the current observation is authoritative."""
     if observation is None:
         return None
     visible_elements = [
-        {
-            "text": element.text or None,
-            "content_description": element.content_description or None,
-        }
+        {"text": element.text or None, "content_description": element.content_description or None}
         for element in observation.elements
         if element.visible and (element.text or element.content_description)
     ]
@@ -119,18 +106,43 @@ def _observation_history_summary(observation: Observation | None) -> dict[str, A
 
 
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
-    """Serialize v2 context while keeping repeated history state compact."""
+    evidence = context.evidence
+    evidence_payload = None
+    if evidence is not None:
+        evidence_payload = {
+            "current_revision": evidence.current_revision,
+            "previous_revision": evidence.previous_revision,
+            "visible_labels": list(evidence.visible_labels),
+            "added_labels": list(evidence.added_labels),
+            "removed_labels": list(evidence.removed_labels),
+            "blocking_messages": list(evidence.blocking_messages),
+            "action_stage_hints": [
+                {"id": item_id, "label": label, "stage": stage}
+                for item_id, label, stage in evidence.action_stage_hints
+            ],
+            "last_action": evidence.last_action,
+            "last_execution_accepted": evidence.last_execution_accepted,
+            "last_execution_changed": evidence.last_execution_changed,
+            "last_consequence": list(evidence.last_consequence),
+            "rejected_actions": [
+                {"action_type": action_type, "target": target, "error": error}
+                for action_type, target, error in evidence.rejected_actions
+            ],
+        }
     return {
         "goal": context.goal.text,
         "reasoning_guidance": [
             "Determine the current UI state before choosing an action.",
-            "Respect prerequisites and perform earlier required steps before later steps.",
-            "Use visible status text and prior post-action observations as state evidence.",
+            "Treat current observation as authoritative; history is evidence, not current state.",
+            "Use prerequisites and transition evidence to avoid premature later-stage actions.",
+            "Use blocking messages as evidence about what must happen before another action.",
+            "Use action_stage_hints only as generic ordering evidence, never as a hard-coded workflow.",
             "After an action changes the UI, reassess the new state instead of repeating or skipping ahead.",
             "Prefer the smallest safe action that advances the goal from the current state.",
-            "Never invent an element id or choose a later prerequisite action without state evidence.",
+            "Never invent an element id or execute an action that the current observation does not support.",
         ],
         "observation": _observation_payload(context.observation),
+        "evidence": evidence_payload,
         "history": [
             {
                 "action_type": step.decision.action.type.value,
@@ -149,7 +161,6 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
 
 
 def _decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
-    """Validate one model decision against the live v2 observation."""
     action_type = response.get("action_type")
     try:
         action = ActionType(action_type)
@@ -197,6 +208,9 @@ def _decision_from_response(response: Mapping[str, Any], context: ReasoningConte
     if action is ActionType.SWIPE:
         if target_id is None or value is None:
             raise ValueError("swipe requires target_id and value")
+        element = next((item for item in context.observation.elements if item.id == target_id), None)
+        if element is None or not element.visible or not element.enabled:
+            raise ValueError("swipe target is not available in the current observation")
         return Decision(Action(action, target_id=target_id, value=value), reason)
 
     raise ValueError("unsupported action type")
