@@ -9,9 +9,7 @@ def _observation(revision: int) -> Observation:
     return Observation(
         package="test.package",
         activity="test.Activity",
-        elements=(
-            UiElement(id="target", text="Target", clickable=True, enabled=True),
-        ),
+        elements=(UiElement(id="target", text="Target", clickable=True, enabled=True),),
         revision=revision,
     )
 
@@ -24,7 +22,6 @@ def test_rejected_execution_does_not_consume_action_budget():
     controller.record_decision(Decision(Action(ActionType.TAP, target_id="bad")))
     controller.move(RunState.EXECUTING)
     controller.record_execution(ExecutionResult(accepted=False, changed=False, error="rejected"))
-
     assert controller.steps == 0
     assert len(controller.history) == 1
 
@@ -37,11 +34,10 @@ def test_successful_changed_actions_still_consume_action_budget():
     controller.record_decision(Decision(Action(ActionType.TAP, target_id="target")))
     controller.move(RunState.EXECUTING)
     controller.record_execution(ExecutionResult(accepted=True, changed=True))
-
     assert controller.steps == 1
 
 
-def test_runtime_recovers_from_rejection_without_losing_the_action_slot():
+def test_runtime_recovers_from_guard_rejection_without_losing_the_action_slot():
     class Observer:
         def __init__(self):
             self.calls = 0
@@ -71,8 +67,6 @@ def test_runtime_recovers_from_rejection_without_losing_the_action_slot():
 
         def execute(self, action):
             self.calls += 1
-            if self.calls == 1:
-                return ExecutionResult(False, False, "element not found")
             return ExecutionResult(True, True)
 
     class Verifier:
@@ -88,21 +82,18 @@ def test_runtime_recovers_from_rejection_without_losing_the_action_slot():
     executor = Executor()
     verifier = Verifier()
     runtime = Runtime(Goal("finish"), observer, reasoner, executor, verifier, max_steps=3)
-
     result = runtime.run()
 
     assert result.status is RunStatus.SUCCEEDED
     assert result.steps == 3
     assert reasoner.calls == 4
-    assert executor.calls == 4
+    assert executor.calls == 3
     assert verifier.calls == 4
 
 
 def test_android_wait_is_non_progress_instead_of_unsupported_execution():
     adapter = AndroidBridgeAdapter.__new__(AndroidBridgeAdapter)
-
     result = adapter.execute(Action(ActionType.WAIT))
-
     assert result.accepted is False
     assert result.changed is False
     assert result.error is None
