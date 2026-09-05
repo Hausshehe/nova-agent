@@ -1,7 +1,7 @@
 """Minimal Groq HTTP responder for Nova's v2 reasoning boundary.
 
 This module owns only provider transport and response decoding. It does not
-choose targets, execute actions, retry requests, or bypass v2 validation.
+choose targets, execute actions, retry requests, or orchestrate providers.
 """
 
 from __future__ import annotations
@@ -48,6 +48,27 @@ _RESPONSE_SCHEMA = {
         },
     },
 }
+
+
+def _http_error_detail(exc: error.HTTPError) -> str:
+    """Return a compact provider error detail without exposing credentials."""
+    try:
+        raw = exc.read().decode("utf-8", errors="replace")
+        payload = json.loads(raw)
+        if isinstance(payload, Mapping):
+            provider_error = payload.get("error")
+            if isinstance(provider_error, Mapping):
+                message = provider_error.get("message")
+                code = provider_error.get("code")
+                parts = [str(part) for part in (message, code) if part]
+                if parts:
+                    return ": ".join(parts)
+            message = payload.get("message")
+            if message:
+                return str(message)
+        return raw.strip()[:300]
+    except Exception:
+        return ""
 
 
 class GroqResponder:
@@ -104,7 +125,9 @@ class GroqResponder:
             with self._opener(req, timeout=self._timeout_seconds) as response:
                 raw = response.read()
         except error.HTTPError as exc:
-            raise RuntimeError(f"Groq request failed with HTTP {exc.code}") from exc
+            detail = _http_error_detail(exc)
+            suffix = f": {detail}" if detail else ""
+            raise RuntimeError(f"Groq request failed with HTTP {exc.code}{suffix}") from exc
         except error.URLError as exc:
             raise RuntimeError("Groq request failed") from exc
         except TimeoutError as exc:
