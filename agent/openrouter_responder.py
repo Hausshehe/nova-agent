@@ -11,6 +11,7 @@ from urllib import error, request
 OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TIMEOUT_SECONDS = 20.0
+DEFAULT_MAX_TOKENS = 1024
 USER_AGENT = "Nova-Agent/1.0"
 
 _SYSTEM_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
@@ -70,7 +71,7 @@ class OpenRouterResponder:
             "model": self._model,
             "messages": [{"role": "user", "content": f"{_SYSTEM_INSTRUCTION}\n\nLive Nova reasoning context:\n{prompt}"}],
             "temperature": 0,
-            "max_tokens": 512,
+            "max_tokens": DEFAULT_MAX_TOKENS,
             "response_format": _RESPONSE_SCHEMA,
             "stream": False,
         }
