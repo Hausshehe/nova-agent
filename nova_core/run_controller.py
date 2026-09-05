@@ -1,8 +1,8 @@
 """Small orchestration boundary for Nova Agent v2.
 
-The controller owns run-state progression, the step budget, and the completed
-reasoning history, but it does not observe Android, call a reasoning provider,
-or execute actions.
+The controller owns run-state progression, the successful-action step budget,
+and the completed reasoning history, but it does not observe Android, call a
+reasoning provider, or execute actions.
 """
 
 from __future__ import annotations
@@ -50,15 +50,16 @@ class RunController:
         self.decision = decision
 
     def record_execution(self, result: ExecutionResult) -> None:
-        """Attach an execution result and consume one bounded step."""
+        """Attach an execution result and consume budget only for real progress."""
         if self.state != RunState.EXECUTING:
             raise InvalidTransition("execution can only be recorded while executing")
-        if self.steps >= self.max_steps:
-            raise RuntimeError("step budget exhausted")
         if self.decision is None:
             raise RuntimeError("execution cannot be recorded without a decision")
+        if self.steps >= self.max_steps and result.accepted and result.changed:
+            raise RuntimeError("step budget exhausted")
         self.last_execution = result
-        self.steps += 1
+        if result.accepted and result.changed:
+            self.steps += 1
         self.history = self.history + (ReasoningStep(self.decision, result),)
 
     def record_post_observation(self, observation: Observation) -> None:
