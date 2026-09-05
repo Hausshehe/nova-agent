@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .models import ActionType, Decision, ExecutionResult, Observation
+from .models import Observation
 from .reasoning import ReasoningStep
 
 
@@ -43,6 +43,7 @@ class StateEvidence:
     removed_labels: tuple[str, ...] = ()
     blocking_messages: tuple[str, ...] = ()
     action_stage_hints: tuple[tuple[str, str, int], ...] = ()
+    unsatisfied_prerequisites: tuple[tuple[str, str, str, int], ...] = ()
     last_action: str | None = None
     last_execution_accepted: bool | None = None
     last_execution_changed: bool | None = None
@@ -76,7 +77,7 @@ class EvidenceTracker:
         self._added_labels = tuple(label for label in after if label not in before)
         self._removed_labels = tuple(label for label in before if label not in after)
 
-    def record_rejection(self, decision: Decision | None, error: str) -> None:
+    def record_rejection(self, decision, error: str) -> None:
         if decision is None:
             key = "unknown"
             target = None
@@ -93,6 +94,7 @@ class EvidenceTracker:
         labels = _labels(self._current)
         blocking = tuple(label for label in labels if _looks_blocking(label))
         hints = _stage_hints(self._current)
+        prerequisites = _unsatisfied_prerequisites(self._current, blocking, hints)
         last_action = None
         accepted = None
         changed = None
@@ -114,6 +116,7 @@ class EvidenceTracker:
             removed_labels=self._removed_labels,
             blocking_messages=blocking,
             action_stage_hints=hints,
+            unsatisfied_prerequisites=prerequisites,
             last_action=last_action,
             last_execution_accepted=accepted,
             last_execution_changed=changed,
@@ -130,6 +133,10 @@ def _labels(observation: Observation) -> tuple[str, ...]:
         for value in (element.text, element.content_description)
         if value
     )
+
+
+def _normalize(label: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", label.lower()))
 
 
 def _looks_blocking(label: str) -> bool:
@@ -149,3 +156,38 @@ def _stage_hints(observation: Observation) -> tuple[tuple[str, str, int], ...]:
         if stages:
             hints.append((element.id, label, min(stages)))
     return tuple(hints)
+
+
+def _unsatisfied_prerequisites(
+    observation: Observation,
+    blocking: tuple[str, ...],
+    hints: tuple[tuple[str, str, int], ...],
+) -> tuple[tuple[str, str, str, int], ...]:
+    """Infer only high-confidence stage prerequisites from explicit UI blockers.
+
+    A blocker such as "Start Task first" is useful only when a visible clickable
+    Start Task action exists and another visible clickable action is explicitly a
+    later generic stage. No application IDs or goal-specific workflow are used.
+    """
+    if not blocking or not hints:
+        return ()
+    normalized_hints = [(item_id, label, stage, _normalize(label)) for item_id, label, stage in hints]
+    result: list[tuple[str, str, str, int]] = []
+    for message in blocking:
+        match = next((pattern.search(message) for pattern in _BLOCKING_PATTERNS if pattern.search(message)), None)
+        if not match:
+            continue
+        required = match.group("required").strip()
+        required_norm = _normalize(required)
+        prerequisite = next(
+            (item_id, label, stage) for item_id, label, stage, norm in normalized_hints
+            if norm == required_norm or required_norm in norm or norm in required_norm
+        , None)
+        if prerequisite is None:
+            continue
+        required_id, required_label, required_stage = prerequisite
+        for candidate_id, candidate_label, candidate_stage, _ in normalized_hints:
+            if candidate_id == required_id or candidate_stage <= required_stage:
+                continue
+            result.append((candidate_id, candidate_label, required_label, required_stage))
+    return tuple(dict.fromkeys(result))
