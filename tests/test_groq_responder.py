@@ -58,7 +58,7 @@ def test_groq_responder_builds_bounded_structured_request():
     assert body["model"] == "test-model"
     assert body["temperature"] == 0
     assert body["reasoning_effort"] == "low"
-    assert body["max_completion_tokens"] == 512
+    assert body["max_completion_tokens"] == 256
     assert body["stream"] is False
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
