@@ -100,7 +100,9 @@ class Runtime:
         return self.controller.state
 
     def run(self) -> RunResult:
-        phase_budget = self.controller.max_steps * 4 + 1
+        # Non-progress decisions may need another full lifecycle cycle without
+        # consuming the successful-action budget. Keep that recovery bounded.
+        phase_budget = self.controller.max_steps * 8 + 1
         for _ in range(phase_budget):
             result = self.controller.result()
             if result is not None:
