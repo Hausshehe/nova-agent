@@ -7,9 +7,11 @@ import os
 import subprocess
 
 from agent.android_bridge import AndroidBridge
+from agent.cerebras_responder import CerebrasResponder
 from agent.fallback_responder import FallbackResponder
 from agent.gemini_responder import GeminiResponder
 from agent.groq_responder import GroqResponder
+from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.models import Goal, RunStatus
@@ -20,7 +22,7 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
-SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini")
+SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
@@ -56,8 +58,12 @@ def _configured_responders(model: str | None) -> list[tuple[str, object]]:
         available["openrouter"] = OpenRouterResponder()
     if os.environ.get("GEMINI_API_KEY"):
         available["gemini"] = GeminiResponder()
+    if os.environ.get("MISTRAL_API_KEY"):
+        available["mistral"] = MistralResponder()
+    if os.environ.get("CEREBRAS_API_KEY"):
+        available["cerebras"] = CerebrasResponder()
 
-    raw_order = os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini")
+    raw_order = os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini,mistral,cerebras")
     requested = [name.strip().lower() for name in raw_order.split(",") if name.strip()]
     unknown = [name for name in requested if name not in SUPPORTED_PROVIDERS]
     if unknown:
