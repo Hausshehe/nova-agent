@@ -1,6 +1,6 @@
 from nova_core.action_guard import ActionGuard
 from nova_core.evidence import EvidenceTracker
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
+from nova_core.models import Action, ActionType, Decision, Observation, UiElement
 
 
 def obs(revision, *elements):
@@ -25,6 +25,22 @@ def test_evidence_tracks_transition_and_generic_workflow_hints():
     assert second.previous_revision == 1
     assert "Start Task first" in second.blocking_messages
     assert "Start Task" in second.removed_labels
+
+
+def test_explicit_blocker_infers_later_stage_prerequisite():
+    tracker = EvidenceTracker()
+    tracker.observe(obs(1, button("start", "Start Task"), button("cont", "Continue Task"), button("finish", "Finish Task"), button("msg", "Start Task first")))
+    evidence = tracker.snapshot()
+    assert ("cont", "Continue Task", "Start Task", 10) in evidence.unsatisfied_prerequisites
+    assert ("finish", "Finish Task", "Start Task", 10) in evidence.unsatisfied_prerequisites
+    assert all(item[0] != "start" for item in evidence.unsatisfied_prerequisites)
+
+
+def test_action_guard_blocks_later_stage_when_ui_explicitly_requires_prerequisite():
+    observation = obs(1, button("start", "Start Task"), button("cont", "Continue Task"), button("msg", "Start Task first"))
+    guard = ActionGuard()
+    assert guard.check(Decision(Action(ActionType.TAP, "cont")), observation).allowed is False
+    assert guard.check(Decision(Action(ActionType.TAP, "start")), observation).allowed is True
 
 
 def test_action_guard_rejects_stale_or_unsupported_targets_before_execution():
