@@ -89,9 +89,11 @@ class Runtime:
             )
             if achieved:
                 self.controller.finish(RunStatus.SUCCEEDED)
-            elif self.controller.steps >= self.controller.max_steps:
+            elif self.controller.steps >= self.controller.max_steps and execution.accepted and execution.changed:
                 self.controller.finish(RunStatus.FAILED, "step budget exhausted")
             else:
+                # Rejected, unchanged, and WAIT decisions are recovery events,
+                # not successful progress. They do not consume the action budget.
                 self.controller.move(RunState.OBSERVING)
             return self.controller.state
 
