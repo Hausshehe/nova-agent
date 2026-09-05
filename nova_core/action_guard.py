@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .evidence import StateEvidence
 from .models import ActionType, Decision, Observation
 
 
@@ -14,9 +15,14 @@ class GuardResult:
 
 
 class ActionGuard:
-    """Validate an already-selected action against the live observation."""
+    """Validate an already-selected action against live observation/evidence."""
 
-    def check(self, decision: Decision, observation: Observation) -> GuardResult:
+    def check(
+        self,
+        decision: Decision,
+        observation: Observation,
+        evidence: StateEvidence | None = None,
+    ) -> GuardResult:
         action = decision.action
         if action.type in (ActionType.BACK, ActionType.WAIT):
             if action.target_id is not None or action.value is not None:
@@ -35,6 +41,20 @@ class ActionGuard:
                 return GuardResult(False, "tap target is not clickable")
             if action.value is not None:
                 return GuardResult(False, "tap cannot carry a value")
+            if evidence is not None:
+                blocked = next(
+                    (
+                        (candidate, prerequisite)
+                        for candidate, _label, prerequisite, _stage in evidence.unsatisfied_prerequisites
+                        if candidate == action.target_id
+                    ),
+                    None,
+                )
+                if blocked is not None:
+                    return GuardResult(
+                        False,
+                        f"tap target has unsatisfied prerequisite: {blocked[1]}",
+                    )
             return GuardResult(True)
 
         if action.type is ActionType.TYPE:
