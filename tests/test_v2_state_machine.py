@@ -16,12 +16,15 @@ def test_verification_can_return_to_observing_for_another_bounded_step() -> None
     assert transition(RunState.VERIFYING, RunState.OBSERVING) is RunState.OBSERVING
 
 
+def test_invalid_decision_can_return_to_observing_for_bounded_recovery() -> None:
+    assert transition(RunState.DECIDING, RunState.OBSERVING) is RunState.OBSERVING
+
+
 @pytest.mark.parametrize(
     ("current", "target"),
     [
         (RunState.CREATED, RunState.EXECUTING),
         (RunState.OBSERVING, RunState.SUCCEEDED),
-        (RunState.DECIDING, RunState.OBSERVING),
         (RunState.EXECUTING, RunState.DECIDING),
         (RunState.SUCCEEDED, RunState.OBSERVING),
         (RunState.FAILED, RunState.CREATED),
