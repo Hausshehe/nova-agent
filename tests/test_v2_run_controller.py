@@ -44,7 +44,7 @@ def test_controller_can_reobserve_after_verification_failure():
     controller.record_observation(observation(revision=2))
 
     assert controller.state is RunState.OBSERVING
-    assert controller.steps == 1
+    assert controller.steps == 0
     assert controller.observation.revision == 2
 
 
