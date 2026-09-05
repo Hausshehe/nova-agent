@@ -95,10 +95,16 @@ def _observation_history_summary(observation: Observation | None) -> dict[str, A
     """Keep prior state evidence compact; the current observation is authoritative."""
     if observation is None:
         return None
+    visible_elements = [
+        {"text": element.text, "content_description": element.content_description}
+        for element in observation.elements
+        if element.visible and (element.text or element.content_description)
+    ]
     return {
         "package": observation.package,
         "activity": observation.activity,
         "revision": observation.revision,
+        "elements": visible_elements,
         "visible_text": [
             text
             for element in observation.elements
