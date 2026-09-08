@@ -20,7 +20,7 @@ _TERMINAL_STATES = frozenset({RunState.SUCCEEDED, RunState.FAILED, RunState.ABOR
 
 _ALLOWED_TRANSITIONS = {
     RunState.CREATED: frozenset({RunState.OBSERVING, RunState.ABORTED}),
-    RunState.OBSERVING: frozenset({RunState.DECIDING, RunState.SUCCEEDED, RunState.FAILED, RunState.ABORTED}),
+    RunState.OBSERVING: frozenset({RunState.DECIDING, RunState.FAILED, RunState.ABORTED}),
     RunState.DECIDING: frozenset({RunState.EXECUTING, RunState.OBSERVING, RunState.FAILED, RunState.ABORTED}),
     RunState.EXECUTING: frozenset({RunState.VERIFYING, RunState.FAILED, RunState.ABORTED}),
     RunState.VERIFYING: frozenset({RunState.OBSERVING, RunState.SUCCEEDED, RunState.FAILED, RunState.ABORTED}),
