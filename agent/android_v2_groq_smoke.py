@@ -111,7 +111,7 @@ def main() -> int:
     else:
         bridge.launch()
 
-    adapter = AndroidBridgeAdapter(bridge)
+    adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
     runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps)
     result = runtime.run()
