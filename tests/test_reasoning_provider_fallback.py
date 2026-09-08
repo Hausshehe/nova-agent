@@ -3,8 +3,9 @@ import pytest
 from agent.fallback_responder import FallbackResponder
 
 
-def test_fallback_uses_next_provider_after_failure():
+def test_fallback_retries_transient_failure_before_using_next_provider():
     calls = []
+    sleeps = []
 
     def groq(prompt):
         calls.append("groq")
@@ -14,14 +15,19 @@ def test_fallback_uses_next_provider_after_failure():
         calls.append("backup")
         return {"action_type": "tap", "target_id": "target", "value": None, "reason": "backup"}
 
-    result = FallbackResponder([("groq", groq), ("backup", backup)])("context")
+    result = FallbackResponder(
+        [("groq", groq), ("backup", backup)],
+        sleeper=sleeps.append,
+    )("context")
 
     assert result["target_id"] == "target"
-    assert calls == ["groq", "backup"]
+    assert calls == ["groq", "groq", "backup"]
+    assert sleeps == [1.25]
 
 
 def test_fallback_is_bounded_and_reports_all_failures():
     calls = []
+    sleeps = []
 
     def fail(name):
         def responder(prompt):
@@ -31,11 +37,15 @@ def test_fallback_is_bounded_and_reports_all_failures():
         return responder
 
     with pytest.raises(RuntimeError, match="all reasoning providers failed") as exc_info:
-        FallbackResponder([("groq", fail("groq")), ("gemini", fail("gemini"))])("context")
+        FallbackResponder(
+            [("groq", fail("groq")), ("gemini", fail("gemini"))],
+            sleeper=sleeps.append,
+        )("context")
 
-    assert calls == ["groq", "gemini"]
+    assert calls == ["groq", "groq", "gemini", "gemini"]
     assert "groq: groq failed" in str(exc_info.value)
     assert "gemini: gemini failed" in str(exc_info.value)
+    assert sleeps == [1.25, 1.25]
 
 
 def test_fallback_requires_at_least_one_provider():
