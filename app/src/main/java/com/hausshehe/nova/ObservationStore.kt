@@ -8,13 +8,20 @@ object ObservationStore {
     private val sequence = AtomicLong(0)
 
     @Volatile
-    private var latest: UiSnapshot = UiSnapshot(0, emptyList())
+    private var latest: UiSnapshot = UiSnapshot(0, "", "", emptyList())
 
     fun update(root: AccessibilityNodeInfo?) {
         if (root == null) return
         val elements = mutableListOf<UiElementSnapshot>()
         collect(root, elements, "0")
-        latest = UiSnapshot(sequence.incrementAndGet(), elements)
+        val packageName = root.packageName?.toString() ?: ""
+        val className = root.className?.toString() ?: ""
+        latest = UiSnapshot(
+            observationId = sequence.incrementAndGet(),
+            packageName = packageName,
+            activity = className,
+            elements = elements
+        )
     }
 
     fun current(): UiSnapshot = latest
@@ -54,7 +61,12 @@ object ObservationStore {
     }
 }
 
-data class UiSnapshot(val observationId: Long, val elements: List<UiElementSnapshot>)
+data class UiSnapshot(
+    val observationId: Long,
+    val packageName: String,
+    val activity: String,
+    val elements: List<UiElementSnapshot>
+)
 
 data class UiElementSnapshot(
     val id: String,
