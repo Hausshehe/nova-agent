@@ -19,11 +19,13 @@ class FakeBridge:
             })(),
         ]
         self.executions = []
+        self.waited = False
 
     def observe(self):
-        return self.states[0]
+        return self.states[1] if self.waited else self.states[0]
 
     def wait_for_fresh_observation(self, previous, timeout, poll_seconds):
+        self.waited = True
         return self.states[1]
 
     def execute(self, action):
