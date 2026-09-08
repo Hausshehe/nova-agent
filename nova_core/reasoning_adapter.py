@@ -12,6 +12,9 @@ from .reasoning import ReasoningContext
 
 
 _STAGE_WORDS = {"start": 10, "begin": 10, "launch": 10, "continue": 20, "next": 20, "proceed": 20, "finish": 30, "complete": 30, "done": 30, "submit": 40}
+_MAX_HISTORY_ITEMS = 3
+_MAX_VISIBLE_LABELS = 24
+_MAX_REASON_LENGTH = 160
 
 
 class LegacyReasoner(Protocol):
@@ -45,16 +48,38 @@ class LLMReasoner:
         return _decision_from_response(response, context)
 
 
+def _label(element: Any) -> str:
+    return element.text or element.content_description
+
+
 def _observation_payload(observation: Observation) -> dict[str, Any]:
-    return {"package": observation.package, "activity": observation.activity, "revision": observation.revision, "elements": [
-        {"id": e.id, "text": e.text, "content_description": e.content_description, "clickable": e.clickable, "enabled": e.enabled, "class_name": e.class_name, "editable": e.editable, "scrollable": e.scrollable, "checkable": e.checkable, "checked": e.checked, "focused": e.focused, "visible": e.visible} for e in observation.elements]}
+    """Serialize only information useful for selecting the next action."""
+    elements = []
+    visible_labels = []
+    for element in observation.elements:
+        if not element.visible:
+            continue
+        label = _label(element)
+        if label and len(visible_labels) < _MAX_VISIBLE_LABELS:
+            visible_labels.append(label)
+        actionable = element.enabled and (element.clickable or element.editable or element.scrollable)
+        if not actionable:
+            continue
+        item = {"id": element.id, "label": label or None}
+        if element.clickable: item["tap"] = True
+        if element.editable: item["type"] = True
+        if element.scrollable: item["scroll"] = True
+        if element.checkable: item["checked"] = element.checked
+        if element.focused: item["focused"] = True
+        elements.append(item)
+    return {"package": observation.package, "activity": observation.activity, "revision": observation.revision,
+            "actions": elements, "visible_labels": visible_labels}
 
 
 def _observation_history_summary(observation: Observation | None) -> dict[str, Any] | None:
     if observation is None: return None
-    return {"package": observation.package, "activity": observation.activity, "revision": observation.revision,
-            "elements": [{"text": e.text or None, "content_description": e.content_description or None} for e in observation.elements if e.visible and (e.text or e.content_description)],
-            "visible_text": [text for e in observation.elements if e.visible for text in (e.text, e.content_description) if text]}
+    labels = [_label(e) for e in observation.elements if e.visible and _label(e)]
+    return {"revision": observation.revision, "labels": labels[:_MAX_VISIBLE_LABELS]}
 
 
 def _normalize(text: str) -> str: return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
@@ -72,7 +97,7 @@ def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
     candidates = []
     for element in context.observation.elements:
         if not element.visible or not element.enabled or not element.clickable: continue
-        label = element.text or element.content_description
+        label = _label(element)
         if not label: continue
         label_norm = _normalize(label)
         if label_norm in completed: continue
@@ -80,33 +105,61 @@ def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
         label_stages = [_STAGE_WORDS[w] for w in re.findall(r"[a-z]+", label.lower()) if w in _STAGE_WORDS]
         stage = min(label_stages) if label_stages else 10 if target_stage > 10 else target_stage
         if stage < target_stage:
-            candidates.append({"id": element.id, "label": label, "stage": stage, "reason": "visible goal-object action is an earlier stage than the requested goal stage and has not been completed successfully"})
+            candidates.append({"id": element.id, "label": label, "stage": stage})
     return candidates
 
 
+def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
+    if evidence is None: return None
+    # StateEvidence is intentionally read by attributes so the adapter remains
+    # independent of the evidence module's concrete type.
+    payload: dict[str, Any] = {}
+    for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
+        value = getattr(evidence, name, None)
+        if value is not None: payload[name] = value
+    for name, limit in (("visible_labels", _MAX_VISIBLE_LABELS), ("added_labels", 12), ("removed_labels", 12),
+                        ("blocking_messages", 8), ("last_consequence", 12)):
+        values = getattr(evidence, name, ())
+        if values: payload[name] = list(values)[:limit]
+    hints = getattr(evidence, "action_stage_hints", ())
+    if hints: payload["action_stage_hints"] = [{"id": i, "label": l, "stage": s} for i, l, s in hints[:12]]
+    prerequisites = getattr(evidence, "unsatisfied_prerequisites", ())
+    if prerequisites:
+        payload["unsatisfied_prerequisites"] = [{"id": i, "label": l, "required": r, "stage": s} for i, l, r, s in prerequisites[:8]]
+    rejected = getattr(evidence, "rejected_actions", ())
+    if rejected:
+        payload["rejected_actions"] = [{"action": t, "target": target, "error": error[:_MAX_REASON_LENGTH]} for t, target, error in rejected[-4:]]
+    return payload
+
+
+def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
+    """Keep only recent, decision-relevant history to prevent prompt growth."""
+    result = []
+    for step in context.history[-_MAX_HISTORY_ITEMS:]:
+        item: dict[str, Any] = {"action": step.decision.action.type.value, "target": step.decision.action.target_id,
+                                "value": step.decision.action.value, "accepted": step.execution.accepted,
+                                "changed": step.execution.changed}
+        if step.execution.error: item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
+        if step.decision.target_label: item["label"] = step.decision.target_label
+        if step.post_observation is not None: item["after"] = _observation_history_summary(step.post_observation)
+        result.append(item)
+    return result
+
+
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
-    evidence = context.evidence
-    evidence_payload = None
-    if evidence is not None:
-        evidence_payload = {"current_revision": evidence.current_revision, "previous_revision": evidence.previous_revision,
-            "visible_labels": list(evidence.visible_labels), "added_labels": list(evidence.added_labels), "removed_labels": list(evidence.removed_labels),
-            "blocking_messages": list(evidence.blocking_messages), "action_stage_hints": [{"id": i, "label": l, "stage": s} for i, l, s in evidence.action_stage_hints],
-            "unsatisfied_prerequisites": [{"candidate_id": i, "candidate_label": l, "required_label": r, "required_stage": s} for i, l, r, s in evidence.unsatisfied_prerequisites],
-            "last_action": evidence.last_action, "last_execution_accepted": evidence.last_execution_accepted, "last_execution_changed": evidence.last_execution_changed,
-            "last_consequence": list(evidence.last_consequence), "rejected_actions": [{"action_type": t, "target": target, "error": error} for t, target, error in evidence.rejected_actions]}
-    return {"goal": context.goal.text, "reasoning_guidance": [
-        "Determine the current UI state before choosing an action.",
-        "Treat current observation as authoritative; history is evidence, not current state.",
-        "Use unsatisfied_prerequisites as high-confidence blockers derived from explicit UI evidence.",
-        "Use goal_stage_candidates as generic goal-derived prerequisite candidates. If an earlier-stage candidate matches the goal object and has not been successfully completed, prefer it before a later-stage action.",
-        "Use blocking messages as evidence about what must happen before another action.",
-        "Use action_stage_hints only as generic ordering evidence, never as a hard-coded workflow.",
-        "After an action changes the UI, reassess the new state instead of repeating or skipping ahead.",
-        "Prefer the smallest safe action that advances the goal from the current state.",
-        "Never invent an element id or execute an action that the current observation does not support."],
-        "observation": _observation_payload(context.observation), "evidence": evidence_payload,
+    """Build a compact, bounded prompt so every reasoning call stays cheap."""
+    return {
+        "goal": context.goal.text,
+        "rules": [
+            "Choose one action supported by the current UI.",
+            "Prefer the smallest safe action that advances the goal.",
+            "Never invent an element id; reassess after UI changes.",
+        ],
+        "observation": _observation_payload(context.observation),
+        "evidence": _evidence_payload(context.evidence),
         "goal_stage_candidates": _goal_stage_guidance(context),
-        "history": [{"action_type": s.decision.action.type.value, "target_id": s.decision.action.target_id, "value": s.decision.action.value, "reason": s.decision.reason, "target_label": s.decision.target_label, "accepted": s.execution.accepted, "changed": s.execution.changed, "error": s.execution.error, "post_observation": _observation_history_summary(s.post_observation)} for s in context.history]}
+        "history": _history_payload(context),
+    }
 
 
 def _decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
@@ -123,7 +176,7 @@ def _decision_from_response(response: Mapping[str, Any], context: ReasoningConte
         if target_id is None or value is not None: raise ValueError("tap requires target_id and no value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled or not element.clickable: raise ValueError("tap target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id), reason, target_label=element.text or element.content_description)
+        return Decision(Action(action, target_id=target_id), reason, target_label=_label(element))
     if action is ActionType.SCROLL:
         if target_id is not None:
             element = next((item for item in context.observation.elements if item.id == target_id), None)
