@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+from typing import Any, Callable, Mapping
 
 from agent.android_bridge import AndroidBridge
 from agent.cerebras_responder import CerebrasResponder
@@ -72,6 +73,17 @@ def _configured_responders(model: str | None) -> list[tuple[str, object]]:
     return [(name, available[name]) for name in requested if name in available]
 
 
+def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[str, Callable[[str], Mapping[str, Any]]]]:
+    """Wrap providers with zero-behavior-change prompt-size instrumentation."""
+    instrumented: list[tuple[str, Callable[[str], Mapping[str, Any]]]] = []
+    for name, responder in responders:
+        def measured(prompt: str, *, _name=name, _responder=responder) -> Mapping[str, Any]:
+            print(f"V2_REASONING_PROMPT_CHARS provider={_name} chars={len(prompt)}")
+            return _responder(prompt)  # type: ignore[operator]
+        instrumented.append((name, measured))
+    return instrumented
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
     parser.add_argument("--launch-nova", action="store_true", help="reset and launch Nova before running")
@@ -88,6 +100,7 @@ def main() -> int:
         parser.error(str(exc))
     if not responders:
         parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
+    responders = _instrument_responders(responders)
 
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
