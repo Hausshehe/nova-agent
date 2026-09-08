@@ -64,4 +64,4 @@ def test_fallback_reports_all_provider_failures() -> None:
     message = str(exc.value)
     assert "groq: 429" in message
     assert "gemini: timeout" in message
-    assert sleeps == [1.25, 1.25]
+    assert sleeps == [1.25]
