@@ -45,9 +45,6 @@ def test_llm_reasoner_serializes_post_action_observation_compactly():
 
     payload = received[0]
     assert payload["rules"]
-    post_observation = payload["history"][0]["post_observation"]
-    assert post_observation["revision"] == 2
-    assert post_observation["visible_text"] == ["Step 2 started"]
-    assert post_observation["elements"] == [
-        {"text": "Step 2 started", "content_description": None}
-    ]
+    after_payload = payload["history"][0]["after"]
+    assert after_payload["revision"] == 2
+    assert after_payload["labels"] == ["Step 2 started"]
