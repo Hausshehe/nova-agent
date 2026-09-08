@@ -42,10 +42,10 @@ def test_fallback_is_bounded_and_reports_all_failures():
             sleeper=sleeps.append,
         )("context")
 
-    assert calls == ["groq", "groq", "gemini", "gemini"]
+    assert calls == ["groq", "gemini"]
     assert "groq: groq failed" in str(exc_info.value)
     assert "gemini: gemini failed" in str(exc_info.value)
-    assert sleeps == [1.25, 1.25]
+    assert sleeps == []
 
 
 def test_fallback_requires_at_least_one_provider():
