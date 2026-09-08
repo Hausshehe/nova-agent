@@ -40,7 +40,7 @@ class FakeLaunchBridge:
     def observe(self):
         self.calls += 1
         if self.calls == 1:
-            return FakeState([FakeElement()], package="com.android.shell")
+            return FakeState([FakeElement()], package="com.termux")
         return FakeState([FakeElement()], package="com.hausshehe.nova")
 
 
