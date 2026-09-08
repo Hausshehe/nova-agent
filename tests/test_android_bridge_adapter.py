@@ -3,8 +3,8 @@ from nova_core.models import Observation
 
 
 class FakeState:
-    def __init__(self, elements):
-        self.package = "pkg"
+    def __init__(self, elements, package="pkg"):
+        self.package = package
         self.activity = "MainActivity"
         self.elements = elements
 
@@ -33,6 +33,17 @@ class FakeBridge:
         return FakeState([] if self.calls == 1 else [FakeElement()])
 
 
+class FakeLaunchBridge:
+    def __init__(self):
+        self.calls = 0
+
+    def observe(self):
+        self.calls += 1
+        if self.calls == 1:
+            return FakeState([FakeElement()], package="com.android.shell")
+        return FakeState([FakeElement()], package="com.hausshehe.nova")
+
+
 def test_initial_observation_polls_until_ui_tree_is_available():
     bridge = FakeBridge()
     adapter = AndroidBridgeAdapter(bridge)
@@ -41,4 +52,14 @@ def test_initial_observation_polls_until_ui_tree_is_available():
 
     assert isinstance(observation, Observation)
     assert len(observation.elements) == 1
+    assert bridge.calls == 2
+
+
+def test_initial_observation_ignores_non_expected_package():
+    bridge = FakeLaunchBridge()
+    adapter = AndroidBridgeAdapter(bridge, expected_package="com.hausshehe.nova")
+
+    observation = adapter.observe()
+
+    assert observation.package == "com.hausshehe.nova"
     assert bridge.calls == 2
