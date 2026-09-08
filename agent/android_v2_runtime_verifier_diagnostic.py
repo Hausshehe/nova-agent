@@ -1,4 +1,4 @@
-"""Diagnose verifier decisions inside the real-provider v2 runtime."""
+"""Diagnose the exact observations passed through the real v2 runtime verifier."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from agent.groq_responder import GroqResponder
 from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from nova_core.adapters.android import AndroidBridgeAdapter
-from nova_core.models import Goal, RunStatus
+from nova_core.models import Goal, Observation, RunStatus
 from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
@@ -33,7 +33,9 @@ def _reset_nova_process(timeout_seconds: float) -> None:
     errors: list[str] = []
     for command in commands:
         try:
-            subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
+            completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
+            if completed.stdout.strip() or completed.stderr.strip():
+                print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
             return
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             if isinstance(exc, subprocess.CalledProcessError):
@@ -76,20 +78,35 @@ def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[s
 
 
 class _LoggingVerifier:
+    """Log every field relevant to completion verification, then delegate unchanged."""
+
     def __init__(self) -> None:
         self.inner = SemanticGoalVerifier()
 
+    @staticmethod
+    def _visible_elements(observation: Observation) -> list[dict[str, object]]:
+        return [
+            {
+                "id": e.id,
+                "text": e.text,
+                "content_description": e.content_description,
+                "visible": e.visible,
+                "clickable": e.clickable,
+                "enabled": e.enabled,
+            }
+            for e in observation.elements
+            if e.visible
+        ]
+
     def verify(self, goal, before, decision, result, after) -> bool:
         verdict = self.inner.verify(goal, before, decision, result, after)
-        before_text = [e.text for e in before.elements if e.text and not e.clickable]
-        after_text = [e.text for e in after.elements if e.text and not e.clickable]
         print(
-            f"V2_VERIFIER goal={goal.text!r} action={decision.action.type.value} "
+            f"V2_VERIFIER goal={goal.text!r} action={decision.action.type.value!r} "
             f"target={decision.action.target_id!r} accepted={result.accepted} changed={result.changed} "
             f"before_revision={before.revision} after_revision={after.revision} verdict={verdict}"
         )
-        print(f"V2_VERIFIER_BEFORE statuses={before_text!r}")
-        print(f"V2_VERIFIER_AFTER statuses={after_text!r}")
+        print(f"V2_VERIFIER_BEFORE_VISIBLE={self._visible_elements(before)!r}")
+        print(f"V2_VERIFIER_AFTER_VISIBLE={self._visible_elements(after)!r}")
         return verdict
 
 
@@ -107,6 +124,9 @@ def main() -> int:
     if not responders:
         parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER")
     responders = _instrument_responders(responders)
+
+    print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
+    print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
 
     bridge = AndroidBridge()
     if args.launch_nova:
@@ -131,7 +151,8 @@ def main() -> int:
         action = step.decision.action
         print(
             f"V2_ACTION_{index}=type:{action.type.value} target_id:{action.target_id!r} "
-            f"accepted:{step.execution.accepted} changed:{step.execution.changed} reason:{step.decision.reason!r}"
+            f"accepted:{step.execution.accepted} changed:{step.execution.changed} "
+            f"error:{step.execution.error!r} reason:{step.decision.reason!r}"
         )
     return 0 if result.status is RunStatus.SUCCEEDED else 1
 
