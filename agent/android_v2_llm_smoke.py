@@ -20,15 +20,14 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 
 def _controlled_responder(prompt: str) -> dict[str, object]:
     payload = json.loads(prompt)
-    elements = payload["observation"]["elements"]
+    actions = payload["observation"]["actions"]
     target = next(
         (
-            element
-            for element in elements
-            if element["text"].casefold() == "test navigation action"
-            and element["clickable"]
-            and element["enabled"]
-            and element["visible"]
+            action
+            for action in actions
+            if action["label"]
+            and action["label"].casefold() == "test navigation action"
+            and action.get("tap") is True
         ),
         None,
     )
