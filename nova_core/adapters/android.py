@@ -54,6 +54,11 @@ class AndroidBridgeAdapter:
             revision=revision,
         )
 
+    @staticmethod
+    def _same_ui(before: Observation, after: Observation) -> bool:
+        """Compare UI content while ignoring v2 revision numbers."""
+        return before.package == after.package and before.activity == after.activity and before.elements == after.elements
+
     def observe(self) -> Observation:
         state = self._observe_initial_ready() if self._revision == 0 else self.bridge.observe()
         self._last_legacy_state = state
@@ -83,9 +88,27 @@ class AndroidBridgeAdapter:
     def observe_fresh(self, previous: Observation) -> Observation:
         if self._last_legacy_state is None:
             raise ValueError("cannot observe fresh state before an initial observation")
+
         state = self.bridge.wait_for_fresh_observation(
             self._last_legacy_state, timeout=2.0, poll_seconds=0.2
         )
+        candidate = self._to_observation(state, self._revision + 1)
+
+        # A changed observation ID only proves that Accessibility emitted a
+        # newer snapshot. Android can emit an intermediate tree before the
+        # post-action UI settles. Require one consecutive identical UI sample
+        # before returning the fresh observation to the runtime verifier.
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            time.sleep(0.2)
+            state = self.bridge.observe()
+            settled = self._to_observation(state, candidate.revision)
+            if self._same_ui(candidate, settled):
+                self._last_legacy_state = state
+                self._revision += 1
+                return self._to_observation(state, self._revision)
+            candidate = settled
+
         self._last_legacy_state = state
         self._revision += 1
         return self._to_observation(state, self._revision)
