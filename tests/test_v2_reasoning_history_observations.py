@@ -44,7 +44,7 @@ def test_llm_reasoner_serializes_post_action_observation_compactly():
     LLMReasoner(responder).decide(context)
 
     payload = received[0]
-    assert payload["reasoning_guidance"]
+    assert payload["rules"]
     post_observation = payload["history"][0]["post_observation"]
     assert post_observation["revision"] == 2
     assert post_observation["visible_text"] == ["Step 2 started"]
