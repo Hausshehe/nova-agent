@@ -6,13 +6,13 @@ from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
 from .models import ExecutionResult, Goal, RunResult, RunStatus
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
-from .reasoning import ReasoningContext
 from .run_controller import RunController
+from .runtime_brain import RuntimeBrain
 from .state_machine import RunState
 
 
 class Runtime:
-    """Drive one bounded controller lifecycle with evidence and action guarding."""
+    """Drive one bounded Android mission through the runtime brain."""
 
     def __init__(
         self,
@@ -28,7 +28,8 @@ class Runtime:
     ) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
-        self.controller = RunController(goal, max_steps=max_steps)
+        self.brain = RuntimeBrain.create(goal, max_steps=max_steps)
+        self.controller: RunController = self.brain.controller
         self.observer = observer
         self.reasoner = reasoner
         self.executor = executor
@@ -44,25 +45,20 @@ class Runtime:
         self.evidence.record_rejection(self.controller.decision, error)
 
     def step(self) -> RunState:
-        state = self.controller.state
+        state = self.brain.state
 
         if state is RunState.CREATED:
-            self.controller.move(RunState.OBSERVING)
-            return self.controller.state
+            self.brain.start()
+            return self.brain.state
 
         if state is RunState.OBSERVING:
             observation = self.observer.observe()
             self.evidence.observe(observation)
-            self.controller.record_observation(observation)
-            self.controller.move(RunState.DECIDING)
-            return self.controller.state
+            self.brain.record_observation(observation)
+            return self.brain.state
 
         if state is RunState.DECIDING:
-            assert self.controller.observation is not None
-            context = ReasoningContext(
-                goal=self.controller.goal,
-                observation=self.controller.observation,
-                history=self.controller.history,
+            context = self.brain.reasoning_context(
                 evidence=self.evidence.snapshot(self.controller.history),
             )
             try:
@@ -70,16 +66,15 @@ class Runtime:
             except ValueError as exc:
                 self._record_invalid_decision(str(exc))
                 if self.invalid_decisions > self.max_invalid_decisions:
-                    self.controller.finish(RunStatus.FAILED, str(exc))
+                    self.brain.fail(str(exc))
                 else:
-                    self.controller.move(RunState.OBSERVING)
-                return self.controller.state
+                    self.brain.start()
+                return self.brain.state
             except RuntimeError as exc:
-                self.controller.finish(RunStatus.FAILED, str(exc))
-                return self.controller.state
-            self.controller.record_decision(decision)
-            self.controller.move(RunState.EXECUTING)
-            return self.controller.state
+                self.brain.fail(str(exc))
+                return self.brain.state
+            self.brain.record_decision(decision)
+            return self.brain.state
 
         if state is RunState.EXECUTING:
             assert self.controller.decision is not None
@@ -91,9 +86,8 @@ class Runtime:
                 execution = ExecutionResult(False, False, guard.reason)
             else:
                 execution = self.executor.execute(self.controller.decision.action)
-            self.controller.record_execution(execution)
-            self.controller.move(RunState.VERIFYING)
-            return self.controller.state
+            self.brain.record_execution(execution)
+            return self.brain.state
 
         if state is RunState.VERIFYING:
             before = self.controller.observation
@@ -106,7 +100,6 @@ class Runtime:
             else:
                 after = self.observer.observe()
             self.evidence.observe(after)
-            self.controller.record_post_observation(after)
 
             achieved = self.verifier.verify(
                 self.controller.goal,
@@ -116,19 +109,16 @@ class Runtime:
                 after,
             )
             if achieved:
-                self.controller.finish(RunStatus.SUCCEEDED)
+                self.brain.finish_verification(after, goal_achieved=True)
             elif self.invalid_decisions > self.max_invalid_decisions:
-                self.controller.finish(
-                    RunStatus.FAILED,
-                    "invalid decision budget exhausted",
-                )
+                self.brain.fail("invalid decision budget exhausted")
             elif self.controller.steps >= self.controller.max_steps and execution.accepted and execution.changed:
-                self.controller.finish(RunStatus.FAILED, "step budget exhausted")
+                self.brain.fail("step budget exhausted")
             else:
-                self.controller.move(RunState.OBSERVING)
-            return self.controller.state
+                self.brain.finish_verification(after, goal_achieved=False)
+            return self.brain.state
 
-        return self.controller.state
+        return self.brain.state
 
     def run(self) -> RunResult:
         # The phase budget is a final containment boundary. Per-step invalid
@@ -142,7 +132,7 @@ class Runtime:
             self.step()
 
         if self.controller.result() is None:
-            self.controller.finish(RunStatus.FAILED, "runtime phase budget exhausted")
+            self.brain.fail("runtime phase budget exhausted")
         result = self.controller.result()
         assert result is not None
         return result
