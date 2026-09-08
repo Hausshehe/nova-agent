@@ -66,13 +66,25 @@ class RuntimeBrain:
         self.controller.record_execution(result)
         self.controller.move(RunState.VERIFYING)
 
-    def record_post_observation(self, observation: Observation) -> None:
-        """Record the fresh UI after an action and return to observation."""
+    def verify_post_observation(
+        self, observation: Observation, *, goal_achieved: bool
+    ) -> RunResult | None:
+        """Record fresh UI and either finish or return to the feedback loop."""
         self.controller.record_post_observation(observation)
+        if goal_achieved:
+            self.goal_verified = True
+            return self.controller.finish(RunStatus.SUCCEEDED)
         self.controller.move(RunState.OBSERVING)
+        return None
+
+    def record_post_observation(self, observation: Observation) -> None:
+        """Record fresh UI when verification says the mission is not complete."""
+        self.verify_post_observation(observation, goal_achieved=False)
 
     def complete(self) -> RunResult:
-        """Mark the mission successful only after the caller verified its goal."""
+        """Mark success only while the controller is in the verification state."""
+        if self.state is not RunState.VERIFYING:
+            raise RuntimeError("goal completion must be verified from the verifying state")
         self.goal_verified = True
         return self.controller.finish(RunStatus.SUCCEEDED)
 
