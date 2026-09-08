@@ -21,8 +21,9 @@ from ..models import Action, ActionType, ExecutionResult, Goal, Observation, UiE
 class AndroidBridgeAdapter:
     """Expose the existing localhost Android bridge through v2 ports."""
 
-    def __init__(self, bridge: AndroidBridge | None = None) -> None:
+    def __init__(self, bridge: AndroidBridge | None = None, expected_package: str | None = None) -> None:
         self.bridge = bridge or AndroidBridge()
+        self.expected_package = expected_package
         self._revision = 0
         self._last_legacy_state = None
 
@@ -60,17 +61,24 @@ class AndroidBridgeAdapter:
         return self._to_observation(state, self._revision)
 
     def _observe_initial_ready(self):
-        """Wait briefly for the launched Activity to expose a usable UI tree."""
+        """Wait briefly for the expected app to expose a usable UI tree."""
         state = self.bridge.observe()
-        if state.elements:
+        if self._initial_state_ready(state):
             return state
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline:
             time.sleep(0.2)
             state = self.bridge.observe()
-            if state.elements:
+            if self._initial_state_ready(state):
                 return state
         return state
+
+    def _initial_state_ready(self, state) -> bool:
+        if not state.elements:
+            return False
+        if self.expected_package is not None and state.package != self.expected_package:
+            return False
+        return True
 
     def observe_fresh(self, previous: Observation) -> Observation:
         if self._last_legacy_state is None:
