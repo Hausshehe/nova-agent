@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
+from .models import Decision, ExecutionResult, Goal, RunResult, RunStatus, Observation
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
@@ -45,7 +45,7 @@ class RuntimeBrain:
         self.controller.record_observation(observation)
         self.controller.move(RunState.DECIDING)
 
-    def reasoning_context(self) -> ReasoningContext:
+    def reasoning_context(self, *, evidence: object | None = None) -> ReasoningContext:
         """Build the provider-neutral context for the next decision."""
         observation = self.controller.observation
         if self.state != RunState.DECIDING or observation is None:
@@ -54,6 +54,7 @@ class RuntimeBrain:
             goal=self.goal,
             observation=observation,
             history=self.controller.history,
+            evidence=evidence,
         )
 
     def record_decision(self, decision: Decision) -> None:
