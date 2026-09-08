@@ -62,6 +62,9 @@ def test_groq_responder_builds_bounded_structured_request():
     assert body["stream"] is False
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
+    instruction = body["messages"][0]["content"]
+    assert "target_id MUST be exactly one of the id values listed in" in instruction
+    assert "Do not create, transform, or infer an id from paths" in instruction
 
 
 def test_groq_responder_requires_api_key():
