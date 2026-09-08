@@ -41,12 +41,13 @@ def test_adapter_rejects_click_without_target_id():
     with pytest.raises(ValueError, match="target.element_id"): LegacyReasoningAdapter(FakeProvider({"action_type": "click", "target": {}})).decide(context())
 
 
-def test_llm_reasoner_serializes_v2_context_and_validates_live_target():
+def test_llm_reasoner_serializes_compact_v2_context_and_validates_live_target():
     received = []
     def responder(prompt):
         received.append(prompt); payload = json.loads(prompt)
         assert payload["goal"] == "tap the button" and payload["observation"]["revision"] == 0
-        assert payload["observation"]["elements"][0]["id"] == "button" and payload["observation"]["elements"][0]["clickable"] is True
+        element = payload["observation"]["actionable_elements"][0]
+        assert element["id"] == "button" and element["tap"] is True
         assert payload["history"] == [] and "goal_stage_candidates" in payload
         return {"action_type": "tap", "target_id": "button", "reason": "selected the visible button"}
     decision = LLMReasoner(responder).decide(context())
