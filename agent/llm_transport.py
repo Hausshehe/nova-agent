@@ -24,13 +24,17 @@ class OpenAICompatibleTransport:
     model: str
     timeout: float = 30.0
     api_key: str | None = None
+    max_output_tokens: int = 256
 
     def complete(self, prompt: str) -> Mapping[str, Any]:
+        if self.max_output_tokens < 1:
+            raise ValueError("max_output_tokens must be positive")
         url = self.base_url.rstrip("/") + "/v1/chat/completions"
         body = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"},
+            "max_tokens": self.max_output_tokens,
             "stream": False,
         }
         headers = {"Content-Type": "application/json"}
