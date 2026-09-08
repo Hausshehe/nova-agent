@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Decision, ExecutionResult, Goal, RunResult, RunStatus, Observation
+from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
@@ -18,7 +18,7 @@ from .state_machine import RunState
 
 @dataclass
 class RuntimeBrain:
-    """Own the mission-level feedback loop for a single bounded run."""
+    """Own the mission-level lifecycle for a single bounded run."""
 
     controller: RunController
     goal_verified: bool = False
@@ -67,10 +67,10 @@ class RuntimeBrain:
         self.controller.record_execution(result)
         self.controller.move(RunState.VERIFYING)
 
-    def verify_post_observation(
+    def finish_verification(
         self, observation: Observation, *, goal_achieved: bool
     ) -> RunResult | None:
-        """Record fresh UI and either finish or return to the feedback loop."""
+        """Record fresh UI and finish or return to the observation loop."""
         self.controller.record_post_observation(observation)
         if goal_achieved:
             self.goal_verified = True
@@ -78,9 +78,15 @@ class RuntimeBrain:
         self.controller.move(RunState.OBSERVING)
         return None
 
+    def verify_post_observation(
+        self, observation: Observation, *, goal_achieved: bool
+    ) -> RunResult | None:
+        """Compatibility alias for the explicit verification lifecycle method."""
+        return self.finish_verification(observation, goal_achieved=goal_achieved)
+
     def record_post_observation(self, observation: Observation) -> None:
         """Record fresh UI when verification says the mission is not complete."""
-        self.verify_post_observation(observation, goal_achieved=False)
+        self.finish_verification(observation, goal_achieved=False)
 
     def complete(self) -> RunResult:
         """Mark success only while the controller is in the verification state."""
