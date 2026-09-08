@@ -132,11 +132,14 @@ def _completion_state_visible(
 
     Completion verbs describe the required state, rather than belonging to the
     target's identity. The observation must expose the requested target and a
-    completion marker in the same visible element, such as
-    ``Multi-Step Test completed``.
+    completion marker in the same visible, non-actionable element, such as
+    ``Multi-Step Test completed``. A visible action such as ``FINISH MULTI-STEP``
+    is an instruction for reaching completion, not evidence that completion has
+    already occurred.
     """
     return any(
         element.visible
+        and not element.clickable
         and _matches(element, target_words)
         and bool(_element_tokens(element) & _COMPLETION_MARKERS)
         for element in observation.elements
