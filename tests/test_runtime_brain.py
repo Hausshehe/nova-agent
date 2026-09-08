@@ -39,23 +39,33 @@ def test_runtime_brain_owns_observe_decide_execute_verify_loop():
     assert brain.controller.history[-1].post_observation == second
 
 
-def test_runtime_brain_success_explicitly_requires_goal_completion_call():
+def test_runtime_brain_success_is_decided_during_post_observation_verification():
     brain = RuntimeBrain.create(Goal("Finish the task"))
     brain.start()
     brain.record_observation(_observation(1))
     brain.record_decision(_decision())
     brain.record_execution(ExecutionResult(accepted=True, changed=True))
-    brain.record_post_observation(_observation(2))
 
-    assert brain.goal_verified is False
-    assert brain.controller.result() is None
+    result = brain.verify_post_observation(_observation(2), goal_achieved=True)
 
-    result = brain.complete()
-
+    assert result is not None
     assert result.status is RunStatus.SUCCEEDED
     assert result.steps == 1
     assert brain.goal_verified is True
     assert brain.state is RunState.SUCCEEDED
+    assert brain.controller.history[-1].post_observation == _observation(2)
+
+
+def test_runtime_brain_completion_requires_verification_state():
+    brain = RuntimeBrain.create(Goal("Finish the task"))
+    brain.start()
+
+    try:
+        brain.complete()
+    except RuntimeError as exc:
+        assert "verifying state" in str(exc)
+    else:
+        raise AssertionError("complete() must not bypass verification")
 
 
 def test_runtime_brain_failure_does_not_claim_goal_completion():
