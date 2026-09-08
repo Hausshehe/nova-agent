@@ -132,8 +132,8 @@ object BridgeServer {
             put("ok", true)
             put("state", JSONObject().apply {
                 put("observationId", snapshot.observationId.toString())
-                put("package", PACKAGE)
-                put("activity", "$PACKAGE.MainActivity")
+                put("package", snapshot.packageName)
+                put("activity", snapshot.activity)
                 put("timestampMs", System.currentTimeMillis())
                 put("elements", elements)
             })
