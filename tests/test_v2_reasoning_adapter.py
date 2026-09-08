@@ -46,7 +46,7 @@ def test_llm_reasoner_serializes_compact_v2_context_and_validates_live_target():
     def responder(prompt):
         received.append(prompt); payload = json.loads(prompt)
         assert payload["goal"] == "tap the button" and payload["observation"]["revision"] == 0
-        element = payload["observation"]["actionable_elements"][0]
+        element = payload["observation"]["actions"][0]
         assert element["id"] == "button" and element["tap"] is True
         assert payload["history"] == [] and "goal_stage_candidates" in payload
         return {"action_type": "tap", "target_id": "button", "reason": "selected the visible button"}
