@@ -16,17 +16,18 @@ def test_candidate_rejects_unsafe_paths() -> None:
 def test_sandbox_does_not_modify_source(tmp_path: Path) -> None:
     source = tmp_path / "repo"
     source.mkdir()
-    (source / "value.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (source / "nova_core").mkdir()
+    (source / "nova_core" / "value.py").write_text("VALUE = 1\n", encoding="utf-8")
     candidate = RepairCandidate(
         "change value",
-        "--- a/value.py\n+++ b/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-        ("value.py",),
+        "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
+        ("nova_core/value.py",),
     )
     result = RepairSandbox(source).evaluate(candidate)
     assert result.accepted is True
     assert result.report.reason == "all required validations passed"
     assert result.report.records[0].status is ValidationStatus.PASSED
-    assert (source / "value.py").read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert (source / "nova_core" / "value.py").read_text(encoding="utf-8") == "VALUE = 1\n"
 
 
 def test_sandbox_rejects_bad_patch(tmp_path: Path) -> None:
@@ -40,11 +41,12 @@ def test_sandbox_rejects_bad_patch(tmp_path: Path) -> None:
 def test_failed_required_validation_is_recorded(tmp_path: Path) -> None:
     source = tmp_path / "repo"
     source.mkdir()
-    (source / "value.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (source / "nova_core").mkdir()
+    (source / "nova_core" / "value.py").write_text("VALUE = 1\n", encoding="utf-8")
     candidate = RepairCandidate(
         "change value",
-        "--- a/value.py\n+++ b/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-        ("value.py",),
+        "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
+        ("nova_core/value.py",),
     )
     policy = ValidationPolicy(commands=(("python", "-c", "raise SystemExit(3)"),))
     result = RepairSandbox(source, policy).evaluate(candidate)
