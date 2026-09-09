@@ -1,13 +1,15 @@
 """Controlled promotion gate for validated Nova self-repair candidates.
 
-A candidate is promoted only after repository validation has already accepted it
-and a policy-controlled real-device validation command succeeds. Promotion is
-transactional: a known-good baseline is captured first and restored on failure.
+Candidates are validated from an isolated git worktree before the live checkout
+is changed. Only a candidate that passes the trusted device gate is applied to
+the live checkout and committed. The repair model never controls commands.
 """
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -28,8 +30,8 @@ class PromotionStatus(str, Enum):
 class PromotionPolicy:
     """Fixed device-gate command and resource bounds.
 
-    The command is deliberately supplied by trusted Nova configuration rather
-    than by the repair model. The repair model has no command authority.
+    The command is supplied by trusted Nova configuration rather than by the
+    repair model. The repair model has no command authority.
     """
 
     device_command: tuple[str, ...]
@@ -58,24 +60,28 @@ class PromotionResult:
 
 
 class RepairPromotionGate:
-    """Promote an already sandbox-accepted candidate with rollback protection."""
+    """Promote an already sandbox-accepted candidate with isolated device testing."""
 
     def __init__(self, source_root: str | Path, policy: PromotionPolicy) -> None:
         self.source_root = Path(source_root).resolve()
         self.policy = policy
 
-    def _git(self, *args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
+    def _git(
+        self,
+        *args: str,
+        cwd: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ("git", *args),
-            cwd=self.source_root,
+            cwd=cwd or self.source_root,
             text=True,
             capture_output=True,
             timeout=self.policy.timeout_seconds,
-            check=check,
+            check=False,
         )
 
-    def _revision(self) -> str:
-        result = self._git("rev-parse", "HEAD")
+    def _revision(self, cwd: Path | None = None) -> str:
+        result = self._git("rev-parse", "HEAD", cwd=cwd)
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError("could not determine source revision")
         return result.stdout.strip()
@@ -84,20 +90,48 @@ class RepairPromotionGate:
         result = self._git("status", "--porcelain")
         return result.returncode == 0 and not result.stdout.strip()
 
-    def _output(self, stdout: str, stderr: str) -> str:
-        return (stdout + stderr)[-self.policy.max_output_chars :]
+    def _output(self, stdout: str | bytes, stderr: str | bytes) -> str:
+        def text(value: str | bytes) -> str:
+            return value.decode(errors="replace") if isinstance(value, bytes) else value
+
+        return (text(stdout) + text(stderr))[-self.policy.max_output_chars :]
 
     def _rollback(self, baseline: str) -> None:
         result = self._git("reset", "--hard", baseline)
         if result.returncode != 0:
             raise RuntimeError(f"rollback failed: {self._output(result.stdout, result.stderr)}")
 
+    def _create_worktree(self, baseline: str) -> Path:
+        parent = Path(tempfile.mkdtemp(prefix="nova-promotion-"))
+        worktree = parent / "candidate"
+        result = self._git("worktree", "add", "--detach", str(worktree), baseline)
+        if result.returncode != 0:
+            shutil.rmtree(parent, ignore_errors=True)
+            raise RuntimeError(f"could not create promotion worktree: {self._output(result.stdout, result.stderr)}")
+        return worktree
+
+    def _remove_worktree(self, worktree: Path) -> None:
+        self._git("worktree", "remove", "--force", str(worktree))
+        shutil.rmtree(worktree.parent, ignore_errors=True)
+
+    def _apply_patch(self, root: Path, candidate: RepairCandidate) -> bool:
+        patch_file = root / ".nova-promotion.patch"
+        try:
+            patch_file.write_text(candidate.patch, encoding="utf-8")
+            preflight = self._git("apply", "--check", str(patch_file), cwd=root)
+            if preflight.returncode != 0:
+                return False
+            applied = self._git("apply", str(patch_file), cwd=root)
+            return applied.returncode == 0
+        finally:
+            patch_file.unlink(missing_ok=True)
+
     def promote(
         self,
         candidate: RepairCandidate,
         sandbox: SandboxResult,
     ) -> PromotionResult:
-        """Apply, device-test, and commit a trusted candidate or restore baseline."""
+        """Test the candidate outside the live checkout, then promote atomically."""
         baseline = self._revision()
 
         if not sandbox.accepted:
@@ -116,29 +150,20 @@ class RepairPromotionGate:
                 reason="source tree must be clean before promotion",
             )
 
-        patch_file = self.source_root / ".nova-promotion.patch"
+        worktree: Path | None = None
         try:
-            patch_file.write_text(candidate.patch, encoding="utf-8")
-            preflight = self._git("apply", "--check", str(patch_file))
-            if preflight.returncode != 0:
+            worktree = self._create_worktree(baseline)
+            if not self._apply_patch(worktree, candidate):
                 return PromotionResult(
                     PromotionStatus.REJECTED,
                     baseline,
-                    reason="candidate failed promotion preflight",
-                )
-
-            applied = self._git("apply", str(patch_file))
-            if applied.returncode != 0:
-                return PromotionResult(
-                    PromotionStatus.REJECTED,
-                    baseline,
-                    reason="candidate could not be applied for promotion",
+                    reason="candidate failed promotion preflight in isolated worktree",
                 )
 
             try:
                 device = subprocess.run(
                     self.policy.device_command,
-                    cwd=self.source_root,
+                    cwd=worktree,
                     text=True,
                     capture_output=True,
                     timeout=self.policy.timeout_seconds,
@@ -151,12 +176,11 @@ class RepairPromotionGate:
                     -1,
                     self._output(exc.stdout or "", exc.stderr or ""),
                 )
-                self._rollback(baseline)
                 return PromotionResult(
                     PromotionStatus.ROLLED_BACK,
                     baseline,
                     device_validation=record,
-                    reason="device validation timed out; baseline restored",
+                    reason="device validation timed out; live source was not changed",
                 )
 
             record = ValidationRecord(
@@ -167,44 +191,68 @@ class RepairPromotionGate:
             )
 
             if device.returncode != 0:
-                self._rollback(baseline)
                 return PromotionResult(
                     PromotionStatus.ROLLED_BACK,
                     baseline,
                     device_validation=record,
-                    reason="device validation failed; baseline restored",
+                    reason="device validation failed; live source was not changed",
                 )
 
-            committed = self._git("add", "--", *candidate.paths)
-            if committed.returncode != 0:
-                self._rollback(baseline)
+            # The device gate can take time. Refuse to overwrite work committed
+            # by another process while this candidate was being validated.
+            if self._revision() != baseline or not self._clean():
                 return PromotionResult(
-                    PromotionStatus.ROLLED_BACK,
+                    PromotionStatus.REJECTED,
                     baseline,
                     device_validation=record,
-                    reason="could not stage promoted files; baseline restored",
+                    reason="live source changed during promotion validation",
                 )
 
-            committed = self._git(
-                "-c", "user.name=Nova Agent",
-                "-c", "user.email=nova-agent@localhost",
-                "commit", "-m", self.policy.commit_message,
-            )
-            if committed.returncode != 0:
-                self._rollback(baseline)
+            patch_file = self.source_root / ".nova-promotion.patch"
+            try:
+                patch_file.write_text(candidate.patch, encoding="utf-8")
+                applied = self._git("apply", str(patch_file))
+                if applied.returncode != 0:
+                    return PromotionResult(
+                        PromotionStatus.ROLLED_BACK,
+                        baseline,
+                        device_validation=record,
+                        reason="candidate could not be applied after device validation",
+                    )
+
+                staged = self._git("add", "--", *candidate.paths)
+                if staged.returncode != 0:
+                    self._rollback(baseline)
+                    return PromotionResult(
+                        PromotionStatus.ROLLED_BACK,
+                        baseline,
+                        device_validation=record,
+                        reason="could not stage promoted files; baseline restored",
+                    )
+
+                committed = self._git(
+                    "-c", "user.name=Nova Agent",
+                    "-c", "user.email=nova-agent@localhost",
+                    "commit", "-m", self.policy.commit_message,
+                )
+                if committed.returncode != 0:
+                    self._rollback(baseline)
+                    return PromotionResult(
+                        PromotionStatus.ROLLED_BACK,
+                        baseline,
+                        device_validation=record,
+                        reason="could not commit promotion; baseline restored",
+                    )
+
                 return PromotionResult(
-                    PromotionStatus.ROLLED_BACK,
+                    PromotionStatus.PROMOTED,
                     baseline,
+                    promoted_revision=self._revision(),
                     device_validation=record,
-                    reason="could not commit promotion; baseline restored",
+                    reason="device validation passed and candidate was promoted",
                 )
-
-            return PromotionResult(
-                PromotionStatus.PROMOTED,
-                baseline,
-                promoted_revision=self._revision(),
-                device_validation=record,
-                reason="device validation passed and candidate was promoted",
-            )
+            finally:
+                patch_file.unlink(missing_ok=True)
         finally:
-            patch_file.unlink(missing_ok=True)
+            if worktree is not None:
+                self._remove_worktree(worktree)
