@@ -18,7 +18,6 @@ class MissionState:
     successful_actions: int = 0
     changed_actions: int = 0
     failed_actions: int = 0
-    recovery_count: int = 0
     goal_verified: bool = False
 
     @property
@@ -40,7 +39,6 @@ class MissionState:
             f"successful_actions={self.successful_actions}",
             f"changed_actions={self.changed_actions}",
             f"failed_actions={self.failed_actions}",
-            f"recovery_count={self.recovery_count}",
             f"goal_verified={self.goal_verified}",
         ))
         return tuple(evidence)
@@ -49,14 +47,14 @@ class MissionState:
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.recovery_count, self.goal_verified,
+            self.goal_verified,
         )
 
     def decided(self, decision: Decision) -> "MissionState":
         return MissionState(
             self.goal, self.observation, decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.recovery_count, False,
+            False,
         )
 
     def executed(self, result: ExecutionResult) -> "MissionState":
@@ -65,7 +63,6 @@ class MissionState:
             self.successful_actions + int(result.accepted),
             self.changed_actions + int(result.accepted and result.changed),
             self.failed_actions + int(not result.accepted),
-            self.recovery_count + int(not result.accepted),
             False,
         )
 
@@ -73,5 +70,5 @@ class MissionState:
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.recovery_count, goal_achieved,
+            goal_achieved,
         )
