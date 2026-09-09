@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import socket
 import subprocess
 import time
@@ -15,7 +14,11 @@ class AndroidBridgeError(RuntimeError):
 
 
 class AndroidBridge:
-    """Client for Nova's localhost Android command server."""
+    """Client for Nova's localhost Android command server.
+
+    Normal navigation is deliberately non-root. Privileged recovery, if ever
+    needed, must be an explicit separate capability.
+    """
 
     def __init__(self, host: str = "127.0.0.1", port: int = 18765, timeout: float = 3.0):
         self.host = host
@@ -69,7 +72,6 @@ class AndroidBridge:
 
     @staticmethod
     def _same_ui(before: WorldState, after: WorldState) -> bool:
-        """Compare observable UI content without depending on event sequencing."""
         return (
             before.package == after.package
             and before.activity == after.activity
@@ -87,8 +89,10 @@ class AndroidBridge:
             timestamp_ms=int(state.get("timestampMs", state.get("timestamp_ms", 0)) or 0),
         )
 
+    def health(self) -> dict[str, Any]:
+        return self._request({"command": "health"})
+
     def click(self, element_id: str) -> dict[str, Any]:
-        """Execute a direct click through Nova's Android bridge."""
         return self._request({"command": "click", "elementId": element_id})
 
     def execute(self, action: Action) -> ExecutionResult:
@@ -113,42 +117,25 @@ class AndroidBridge:
             return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
         return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
-    def launch(self, package: str = "com.hausshehe.nova", root: bool = True) -> dict[str, Any]:
-        """Launch Nova without adb. When falling back to am, prefer root."""
+    def launch(self, package: str = "com.hausshehe.nova", root: bool = False) -> dict[str, Any]:
         try:
             return self._request({"command": "launch", "package": package})
         except AndroidBridgeError:
             component = f"{package}/.MainActivity"
-            commands: list[list[str]] = []
-            if root:
-                commands.append(["su", "-c", f"am start -n {component}"])
-            commands.append(["am", "start", "-n", component])
-
-            last_error: Exception | None = None
-            for command in commands:
-                try:
-                    subprocess.run(
-                        command,
-                        check=True,
-                        timeout=self.timeout,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    return {"ok": True, "root": command[0] == "su"}
-                except Exception as exc:
-                    last_error = exc
-            raise AndroidBridgeError(f"Unable to launch Nova: {last_error}") from last_error
+            try:
+                subprocess.run(
+                    ["am", "start", "-n", component],
+                    check=True,
+                    timeout=self.timeout,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return {"ok": True, "root": False}
+            except Exception as exc:
+                raise AndroidBridgeError(f"Unable to launch Nova without root: {exc}") from exc
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
-        """Wait for an observable UI change after an action.
-
-        Accessibility event IDs are evidence that a newer snapshot exists, not
-        evidence that the UI changed. Some Android builds can emit no event at
-        all for a successful action, while others can emit duplicate snapshots.
-        Freshness for the verifier therefore means observable package/activity/
-        element content changed from the pre-action state.
-        """
         deadline = time.monotonic() + timeout
         while True:
             state = self.observe()
