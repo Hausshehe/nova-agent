@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from .models import Goal
-from .reasoning import ReasoningContext
+if TYPE_CHECKING:
+    from .reasoning import ReasoningContext
 
 
 _MAX_PLAN_STEPS = 8
@@ -66,7 +66,7 @@ class Planner(Protocol):
 class GoalPlanner:
     """Minimal safe planner used when no model-backed planner is configured.
 
-    It deliberately does not pretend to decompose arbitrary natural language.
+    It deliberately does not decompose arbitrary natural language.
     The plan is one intent, leaving concrete action selection to the reasoner.
     """
 
