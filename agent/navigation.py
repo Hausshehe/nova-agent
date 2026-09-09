@@ -113,11 +113,15 @@ class NavigationLoop:
                     failure=True,
                     error=result.error,
                 )
-                # A rejected action does not establish a verified transition,
-                # but the live UI may have changed independently. Re-observe so
-                # the next reasoning pass is based on current state, while the
-                # failure remains available in bounded history.
-                runtime_state = runtime_state.transition(world=observe_fn())
+                # A rejected action is not a verified transition, but the bridge
+                # must still provide the next fresh observation before replanning.
+                # Calling observe() here can return the same cached snapshot and
+                # would make valid recovery targets invisible to the provider.
+                try:
+                    refreshed = refresh_fn(runtime_state.world)
+                except TimeoutError:
+                    refreshed = observe_fn()
+                runtime_state = runtime_state.transition(world=refreshed)
                 continue
 
             try:
