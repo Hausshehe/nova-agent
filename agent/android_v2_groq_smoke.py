@@ -32,8 +32,21 @@ def _reset_nova_process(timeout_seconds: float) -> None:
     command = ["am", "start", "-S", "-n", MAIN_ACTIVITY]
     try:
         completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f"unable to reset and launch Nova without root: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "unable to reset and launch Nova without root: Android 'am' command was not found"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"unable to reset and launch Nova without root: reset timed out after {timeout_seconds}s"
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        stdout = (exc.stdout or "").strip()
+        details = stderr or stdout or f"exit={exc.returncode}"
+        raise RuntimeError(
+            f"unable to reset and launch Nova without root: exit={exc.returncode}; {details}"
+        ) from exc
     if completed.stdout.strip() or completed.stderr.strip():
         print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
 
