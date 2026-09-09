@@ -41,10 +41,16 @@ def test_llm_planner_parses_bounded_intents_and_never_creates_actions():
 
 def test_llm_planner_replan_increments_revision_and_includes_previous_plan():
     prompts = []
+    responses = iter(
+        (
+            '{"steps":["start the task","continue until the target state"]}',
+            '{"steps":["recover from the blocked state"]}',
+        )
+    )
 
     def complete(prompt: str) -> str:
         prompts.append(prompt)
-        return '{"steps":["recover from the blocked state"]}'
+        return next(responses)
 
     planner = LLMPlanner(complete)
     previous = planner.plan(_context())
