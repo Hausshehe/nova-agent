@@ -96,6 +96,8 @@ def test_groq_responder_builds_repair_schema_without_command_authority():
     assert result["paths"] == ["nova_core/value.py"]
     body = json.loads(captured["request"].data.decode("utf-8"))
     assert body["max_completion_tokens"] == 1024
+    assert body["reasoning_effort"] == "medium"
+    assert body["model"] == "test-model"
     schema = body["response_format"]["json_schema"]
     assert schema["name"] == "nova_repair_proposal"
     assert schema["strict"] is True
@@ -103,6 +105,35 @@ def test_groq_responder_builds_repair_schema_without_command_authority():
     assert "no authority to execute commands" in instruction
     assert "validation commands" in instruction
     assert "minimal unified diff" in instruction
+
+
+def test_groq_responder_uses_stronger_default_model_for_repair():
+    captured = {}
+
+    def opener(req, timeout):
+        captured["request"] = req
+        return _Response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "description": "Fix the broken predicate",
+                                    "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
+                                    "paths": ["nova_core/value.py"],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        )
+
+    GroqResponder(api_key="test-key", opener=opener, task="repair")("{}")
+    body = json.loads(captured["request"].data.decode("utf-8"))
+    assert body["model"] == "openai/gpt-oss-120b"
+    assert body["reasoning_effort"] == "medium"
 
 
 def test_groq_responder_retries_repair_diff_missing_terminal_newline():
