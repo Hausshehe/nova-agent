@@ -36,7 +36,7 @@ def test_controlled_bug_is_repaired_without_mutating_baseline(tmp_path: Path) ->
         ),
     ).improve(
         RunResult(status=RunStatus.FAILED, steps=1, error="step budget exhausted"),
-        observation=None,
+        source_paths=("nova_core/bug.py",),
     )
 
     assert result.decision is ImprovementDecision.PROPOSE
