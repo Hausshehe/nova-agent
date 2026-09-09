@@ -109,6 +109,16 @@ object BridgeServer {
     }
 
     private fun observe(): JSONObject {
+        // Accessibility callbacks are not guaranteed after every successful
+        // action. Refresh the snapshot from the current active window whenever
+        // the bridge is polled so Python can detect observable UI changes
+        // without depending on callback/event sequencing.
+        val service = NovaAccessibilityService.instance
+        val root = service?.rootInActiveWindow
+        if (root != null) {
+            ObservationStore.update(root)
+            root.recycle()
+        }
         val snapshot = ObservationStore.current()
         val elements = JSONArray()
         snapshot.elements.forEach { e ->
