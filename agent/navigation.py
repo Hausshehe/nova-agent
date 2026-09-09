@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
+from .agent_state import AgentState
 from .core import Action, ActionType, Decision, ExecutionResult, TransitionVerifier, WorldState
 from .goal_evaluator import GoalEvaluator
 from .reasoning_context import ReasoningContext, build_reasoning_context
@@ -56,16 +57,39 @@ class NavigationLoop:
     max_steps: int = 5
     settle_timeout: float = 2.0
 
-    def run(self, goal: str) -> bool:
-        history: list[Mapping[str, Any]] = []
-        state = self.bridge.observe()
+    def run(
+        self,
+        goal: str,
+        *,
+        initial_state: WorldState | None = None,
+        observe: Callable[[], WorldState] | None = None,
+        refresh: Callable[[WorldState], WorldState] | None = None,
+    ) -> bool:
+        """Run navigation with an explicit, bounded working state.
+
+        The callbacks let TaskExecutor own observation acquisition/refresh while
+        preserving this loop as a compatibility planner/execution engine.
+        Direct callers still use the bridge when callbacks are omitted.
+        """
+        observe_fn = observe or self.bridge.observe
+        refresh_fn = refresh or (
+            lambda previous: self.bridge.wait_for_fresh_observation(previous, self.settle_timeout)
+        )
+        world = initial_state if initial_state is not None else observe_fn()
+        runtime_state = AgentState(goal=goal, world=world)
         action_goal = self.evaluator.is_action_goal(goal)
 
-        if not action_goal and self.evaluator.evaluate(goal, state):
+        if not action_goal and self.evaluator.evaluate(goal, world):
+            runtime_state = runtime_state.transition(status="complete")
             return True
 
         for step in range(1, self.max_steps + 1):
-            context = build_reasoning_context(goal, state, history)
+            context = build_reasoning_context(
+                goal,
+                runtime_state.world,
+                runtime_state.history,
+                agent_state=runtime_state,
+            )
             decision = _decide(self.planner, context)
 
             # WAIT is a synchronization/observation primitive, not an Android
@@ -77,7 +101,7 @@ class NavigationLoop:
                 result = self.bridge.execute(decision.action)
 
             if not result.accepted:
-                history.append(
+                runtime_state = runtime_state.record(
                     _action_history(
                         decision,
                         step,
@@ -85,21 +109,24 @@ class NavigationLoop:
                         changed=False,
                         verified=False,
                         error=result.error,
-                    )
+                    ),
+                    failure=True,
+                    error=result.error,
                 )
+                # A rejected action does not establish a verified transition,
+                # but the live UI may have changed independently. Re-observe so
+                # the next reasoning pass is based on current state, while the
+                # failure remains available in bounded history.
+                runtime_state = runtime_state.transition(world=observe_fn())
                 continue
 
             try:
                 # Real state-changing actions require a fresh observation whose
                 # identity differs from the previous state. WAIT only requires
                 # a successful observation; an unchanged UI is valid.
-                after = (
-                    self.bridge.observe()
-                    if is_wait
-                    else self.bridge.wait_for_fresh_observation(state, self.settle_timeout)
-                )
+                after = observe_fn() if is_wait else refresh_fn(runtime_state.world)
             except TimeoutError:
-                history.append(
+                runtime_state = runtime_state.record(
                     _action_history(
                         decision,
                         step,
@@ -107,28 +134,33 @@ class NavigationLoop:
                         changed=False,
                         verified=False,
                         error="fresh observation timeout",
-                    )
+                    ),
+                    failure=True,
+                    error="fresh observation timeout",
                 )
                 continue
 
-            changed = after != state
+            changed = after != runtime_state.world
             verified = True if is_wait else self.verifier.verify(
-                state, after, ExecutionResult(True, changed, False)
+                runtime_state.world, after, ExecutionResult(True, changed, False)
             )
-            history.append(
+            runtime_state = runtime_state.record(
                 _action_history(
                     decision,
                     step,
                     accepted=True,
                     changed=changed,
                     verified=verified,
-                )
+                ),
+                world=after,
+                error=None,
             )
 
-            state = after
             if action_goal and verified:
+                runtime_state = runtime_state.transition(status="complete")
                 return True
-            if self.evaluator.evaluate(goal, state):
+            if self.evaluator.evaluate(goal, runtime_state.world):
+                runtime_state = runtime_state.transition(status="complete")
                 return True
 
         return False
