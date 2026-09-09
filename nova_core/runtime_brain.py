@@ -34,8 +34,7 @@ class RuntimeBrain:
     ) -> "RuntimeBrain":
         """Create a fresh mission without starting Android work."""
         brain = cls(RunController(goal=goal, max_steps=max_steps))
-        brain.memory.max_history = max_memory_history
-        brain.memory.__post_init__()
+        brain.memory = WorkingMemory(goal=goal, max_history=max_memory_history)
         return brain
 
     @property
