@@ -129,6 +129,48 @@ def test_trusted_path_placeholders_render_for_root_install_command(tmp_path: Pat
     assert rendered == ("su", "-c", f"pm install -r {__import__('shlex').quote(str(apk))}")
 
 
+def test_interactive_root_command_enters_shell_runs_trusted_command_and_exits(tmp_path: Path, monkeypatch) -> None:
+    repo = _repo(tmp_path)
+    gate = RepairPromotionGate(repo, PromotionPolicy((("su", "-c", "pm install -r {candidate_apk}"),)))
+    worktree = tmp_path / "candidate worktree"
+    worktree.mkdir()
+    rendered = gate._render_command(gate.policy.validation_commands[0], worktree)
+    events: list[tuple[str, object]] = []
+
+    class FakeStdin:
+        def write(self, value: str) -> None:
+            events.append(("write", value))
+
+        def flush(self) -> None:
+            events.append(("flush", None))
+
+        def close(self) -> None:
+            events.append(("close", None))
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdin = FakeStdin()
+            self.returncode = 0
+
+        def wait(self, timeout: int) -> int:
+            events.append(("wait", timeout))
+            return self.returncode
+
+    def fake_popen(command, **kwargs):
+        events.append(("popen", (command, kwargs)))
+        return FakeProcess()
+
+    monkeypatch.setattr("nova_core.improvement.promotion.subprocess.Popen", fake_popen)
+    return_code, output = gate._run_root_command(rendered, worktree)
+    assert return_code == 0
+    assert "attached to the terminal" in output
+    assert events[0][0] == "popen"
+    assert events[0][1][0] == ("su",)
+    assert ("write", rendered[2] + "\n") in events
+    assert ("write", "exit\n") in events
+    assert ("close", None) in events
+
+
 def test_successful_device_gate_promotes_and_commits(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     baseline = subprocess.run(("git", "rev-parse", "HEAD"), cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
