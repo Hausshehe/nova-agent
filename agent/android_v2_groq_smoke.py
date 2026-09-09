@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import time
@@ -16,6 +17,7 @@ from agent.groq_responder import GroqResponder
 from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from nova_core.adapters.android import AndroidBridgeAdapter
+from nova_core.llm_planner import LLMPlanner
 from nova_core.models import Goal, RunStatus
 from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
@@ -33,20 +35,14 @@ def _reset_nova_process(timeout_seconds: float) -> None:
     try:
         completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
     except FileNotFoundError as exc:
-        raise RuntimeError(
-            "unable to reset and launch Nova without root: Android 'am' command was not found"
-        ) from exc
+        raise RuntimeError("unable to reset and launch Nova without root: Android 'am' command was not found") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"unable to reset and launch Nova without root: reset timed out after {timeout_seconds}s"
-        ) from exc
+        raise RuntimeError(f"unable to reset and launch Nova without root: reset timed out after {timeout_seconds}s") from exc
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         stdout = (exc.stdout or "").strip()
         details = stderr or stdout or f"exit={exc.returncode}"
-        raise RuntimeError(
-            f"unable to reset and launch Nova without root: exit={exc.returncode}; {details}"
-        ) from exc
+        raise RuntimeError(f"unable to reset and launch Nova without root: exit={exc.returncode}; {details}") from exc
     if completed.stdout.strip() or completed.stderr.strip():
         print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
 
@@ -90,6 +86,19 @@ def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[s
     return instrumented
 
 
+def _groq_planner(model: str | None, provider_names: list[str]) -> LLMPlanner | None:
+    """Use Groq for mission planning when Groq is actually in the active provider set."""
+    if "groq" not in provider_names:
+        return None
+    responder = GroqResponder(model=model, task="planning")
+
+    def complete(prompt: str) -> str:
+        print(f"V2_PLANNING_PROMPT_CHARS provider=groq chars={len(prompt)}")
+        return json.dumps(responder(prompt), ensure_ascii=False, separators=(",", ":"))
+
+    return LLMPlanner(complete)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
     parser.add_argument("--launch-nova", action="store_true")
@@ -101,16 +110,19 @@ def main() -> int:
     try: responders = _configured_responders(args.model)
     except ValueError as exc: parser.error(str(exc))
     if not responders: parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
+    provider_names = [name for name, _ in responders]
     responders = _instrument_responders(responders)
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
+    planner = _groq_planner(args.model, provider_names)
+    print("V2_MISSION_PLANNER=" + ("groq" if planner is not None else "goal-default"))
     bridge = AndroidBridge()
     if args.launch_nova: _reset_nova_process(bridge.timeout)
     else: bridge.launch(root=False)
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
-    runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps)
+    runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps, planner=planner)
     result = runtime.run()
     print(f"V2_RUNTIME_STATUS={result.status.value}")
     print(f"V2_RUNTIME_STEPS={result.steps}")
