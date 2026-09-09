@@ -33,9 +33,10 @@ Validation commands are selected by Nova's fixed validation policy, not by you.
 The patch is applied only inside an isolated sandbox and is rejected if it fails
 policy validation.
 
-The patch field MUST be a complete, standard unified diff accepted by `git apply`.
-For every changed file include both `--- a/path` and `+++ b/path` headers and a
-valid unified-diff hunk header with line ranges, such as `@@ -1,2 +1,2 @@`.
+Return a minimal unified diff that is a complete, standard unified diff accepted
+by `git apply`. For every changed file include both `--- a/path` and `+++ b/path`
+headers and a valid unified-diff hunk header with line ranges, such as
+`@@ -1,2 +1,2 @@`.
 Do not emit an abbreviated diff, prose around the diff, markdown fences, or an
 `@@` header without valid line ranges. Paths must exactly match the paths list.
 Make the smallest change that directly addresses the supplied failure evidence.
