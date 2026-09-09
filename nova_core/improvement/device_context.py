@@ -8,6 +8,7 @@ from ..models import Decision, ExecutionResult, Observation
 
 MAX_ELEMENTS = 32
 MAX_TEXT_CHARS = 240
+MAX_VISIBLE_LINE_CHARS = 1_200
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class DeviceEvidence:
         )
 
     def bounded_lines(self) -> tuple[str, ...]:
+        visible = " | ".join(self.visible_elements)[:MAX_VISIBLE_LINE_CHARS]
         lines = [
             f"device.package={self.package}",
             f"device.activity={self.activity}",
@@ -63,6 +65,6 @@ class DeviceEvidence:
             f"device.action_accepted={self.action_accepted}",
             f"device.action_changed={self.action_changed}",
             f"device.action_error={(self.action_error or '')[:MAX_TEXT_CHARS]}",
-            "device.visible_elements=" + " | ".join(self.visible_elements),
+            f"device.visible_elements={visible}",
         ]
         return tuple(lines)
