@@ -47,7 +47,7 @@ def test_promotion_requires_accepted_sandbox(tmp_path: Path) -> None:
     assert "not passed" in result.reason
 
 
-def test_device_failure_rolls_back_live_source(tmp_path: Path) -> None:
+def test_device_failure_does_not_touch_live_source(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     baseline = subprocess.run(("git", "rev-parse", "HEAD"), cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
     gate = RepairPromotionGate(repo, PromotionPolicy(("python", "-c", "raise SystemExit(3)")))
@@ -55,8 +55,27 @@ def test_device_failure_rolls_back_live_source(tmp_path: Path) -> None:
     assert result.status is PromotionStatus.ROLLED_BACK
     assert result.baseline_revision == baseline
     assert result.promoted_revision is None
-    assert (repo / "nova_core" / "bug.py").read_text(encoding="utf-8").endswith("return False\n")
+    assert "return False" in (repo / "nova_core" / "bug.py").read_text(encoding="utf-8")
     assert subprocess.run(("git", "rev-parse", "HEAD"), cwd=repo, check=True, capture_output=True, text=True).stdout.strip() == baseline
+    assert subprocess.run(("git", "status", "--porcelain"), cwd=repo, check=True, capture_output=True, text=True).stdout == ""
+
+
+def test_device_gate_sees_candidate_while_live_source_stays_baseline(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    command = (
+        "python",
+        "-c",
+        "from pathlib import Path; "
+        "p=Path('nova_core/bug.py'); "
+        "assert 'return True' in p.read_text(); "
+        "raise SystemExit(0)",
+    )
+    gate = RepairPromotionGate(repo, PromotionPolicy(command, commit_message="test promotion"))
+    result = gate.promote(_candidate(), _accepted())
+    assert result.status is PromotionStatus.PROMOTED
+    assert result.device_validation is not None
+    assert result.device_validation.status.value == "passed"
+    assert "return True" in (repo / "nova_core" / "bug.py").read_text(encoding="utf-8")
 
 
 def test_successful_device_gate_promotes_and_commits(tmp_path: Path) -> None:
