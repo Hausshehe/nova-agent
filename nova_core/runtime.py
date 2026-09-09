@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
-from .models import ExecutionResult, Goal, RunResult, RunStatus
+from .models import ExecutionResult, Goal, RunResult
+from .planning import GoalPlanner, Plan, Planner
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
 from .runtime_brain import RuntimeBrain
@@ -25,6 +26,7 @@ class Runtime:
         max_steps: int = 20,
         max_invalid_decisions: int = 3,
         action_guard: ActionGuard | None = None,
+        planner: Planner | None = None,
     ) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
@@ -38,11 +40,27 @@ class Runtime:
         self.evidence = EvidenceTracker(max_rejections=max(1, max_invalid_decisions + 2))
         self.invalid_decisions = 0
         self.max_invalid_decisions = max_invalid_decisions
+        self.planner = planner or GoalPlanner()
+        self._replan_requested = False
 
     def _record_invalid_decision(self, error: str) -> None:
         """Record one model/guard rejection without consuming action progress."""
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
+
+    def _update_plan_after_observation(self) -> None:
+        """Create or replace the bounded plan only from fresh runtime evidence."""
+        context = self.brain.reasoning_context(
+            evidence=self.evidence.snapshot(self.controller.history),
+        )
+        try:
+            if self.brain.plan is None:
+                self.brain.set_plan(self.planner.plan(context))
+            elif self._replan_requested:
+                self.brain.set_plan(self.planner.replan(context, self.brain.plan))
+                self._replan_requested = False
+        except (ValueError, RuntimeError) as exc:
+            self.brain.fail(f"planning failed: {exc}")
 
     def step(self) -> RunState:
         state = self.brain.state
@@ -55,6 +73,8 @@ class Runtime:
             observation = self.observer.observe()
             self.evidence.observe(observation)
             self.brain.record_observation(observation)
+            if self.brain.state is RunState.DECIDING:
+                self._update_plan_after_observation()
             return self.brain.state
 
         if state is RunState.DECIDING:
@@ -115,6 +135,9 @@ class Runtime:
             elif self.controller.steps >= self.controller.max_steps and execution.accepted and execution.changed:
                 self.brain.fail("step budget exhausted")
             else:
+                self._replan_requested = not (execution.accepted and execution.changed)
+                if execution.accepted and execution.changed:
+                    self.brain.advance_plan()
                 self.brain.finish_verification(after, goal_achieved=False)
             return self.brain.state
 
