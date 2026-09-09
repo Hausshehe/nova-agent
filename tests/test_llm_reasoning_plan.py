@@ -44,4 +44,4 @@ def test_llm_reasoner_prompt_makes_current_plan_intent_explicit():
     assert payload["plan"]["current"] == "finish the test"
     assert "The plan's current intent is the immediate mission objective for this decision." in payload["rules"]
     assert "Choose the current UI element that best advances that intent, not a later plan step." in payload["rules"]
-    assert "Your reason must describe the actual selected target/action" in payload["rules"]
+    assert "Your reason must describe the actual selected target/action." in payload["rules"]
