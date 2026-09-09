@@ -68,6 +68,24 @@ def test_runtime_brain_completion_requires_verification_state():
         raise AssertionError("complete() must not bypass verification")
 
 
+def test_runtime_brain_completion_requires_fresh_post_observation():
+    brain = RuntimeBrain.create(Goal("Finish the task"))
+    brain.start()
+    brain.record_observation(_observation(1))
+    brain.record_decision(_decision())
+    brain.record_execution(ExecutionResult(accepted=True, changed=True))
+
+    try:
+        brain.complete()
+    except RuntimeError as exc:
+        assert "post-observation" in str(exc)
+    else:
+        raise AssertionError("complete() must not bypass post-observation verification")
+
+    assert brain.state is RunState.VERIFYING
+    assert brain.goal_verified is False
+
+
 def test_runtime_brain_failure_does_not_claim_goal_completion():
     brain = RuntimeBrain.create(Goal("Finish the task"))
     brain.start()
