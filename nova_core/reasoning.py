@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation
 
 
@@ -18,3 +19,4 @@ class ReasoningContext:
     observation: Observation
     history: tuple[ReasoningStep, ...] = ()
     evidence: object | None = None
+    mission_state: MissionState | None = None
