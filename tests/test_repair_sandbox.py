@@ -23,7 +23,8 @@ def test_sandbox_does_not_modify_source(tmp_path: Path) -> None:
         "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
         ("nova_core/value.py",),
     )
-    result = RepairSandbox(source).evaluate(candidate)
+    policy = ValidationPolicy(commands=(("python", "-m", "py_compile", "nova_core/value.py"),))
+    result = RepairSandbox(source, policy).evaluate(candidate)
     assert result.accepted is True
     assert result.report.reason == "all required validations passed"
     assert result.report.records[0].status is ValidationStatus.PASSED
