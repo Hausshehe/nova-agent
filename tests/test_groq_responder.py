@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from urllib import error
 
 from agent.groq_responder import GroqResponder
 
@@ -65,6 +66,70 @@ def test_groq_responder_builds_bounded_structured_request():
     instruction = body["messages"][0]["content"]
     assert "target_id MUST be exactly one of the id values listed in" in instruction
     assert "Do not create, transform, or infer an id from paths" in instruction
+
+
+def test_groq_responder_retries_navigation_json_validation_failure():
+    calls = 0
+    instructions = []
+
+    def opener(req, timeout):
+        nonlocal calls
+        calls += 1
+        body = json.loads(req.data.decode("utf-8"))
+        instructions.append(body["messages"][0]["content"])
+        if calls == 1:
+            raise error.HTTPError(
+                req.full_url,
+                400,
+                "Bad Request",
+                {},
+                _Response({"error": {"message": "Failed to validate JSON", "code": "json_validate_failed"}}),
+            )
+        return _Response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "action_type": "tap",
+                                    "target_id": "target",
+                                    "value": None,
+                                    "reason": "retry with strict JSON",
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        )
+
+    responder = GroqResponder(api_key="test-key", model="test-model", opener=opener)
+    result = responder('{"goal":"Tap target"}')
+
+    assert calls == 2
+    assert result["target_id"] == "target"
+    assert "could not be validated as structured JSON" in instructions[1]
+
+
+def test_groq_responder_does_not_retry_other_http_failure():
+    calls = 0
+
+    def opener(req, timeout):
+        nonlocal calls
+        calls += 1
+        raise error.HTTPError(
+            req.full_url,
+            500,
+            "Server Error",
+            {},
+            _Response({"error": {"message": "server unavailable", "code": "internal_error"}}),
+        )
+
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        GroqResponder(api_key="test-key", opener=opener)("{}")
+
+    assert calls == 1
 
 
 def test_groq_responder_builds_repair_schema_without_command_authority():
