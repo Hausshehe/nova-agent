@@ -76,3 +76,27 @@ def test_llm_provider_reasons_again_after_failed_action_and_reaches_goal():
     assert len(bridge.executed) == 2
     assert all(action.type is ActionType.CLICK for action in bridge.executed)
     assert bridge.executed[1].target.element_id == "retry"
+
+
+def test_llm_recovery_uses_fresh_observation_after_rejected_action():
+    """A rejected action must not cause replanning from a stale observation."""
+    bridge = RecoveryBridge()
+    prompts = []
+
+    def responder(prompt):
+        prompts.append(prompt)
+        return {
+            "action_type": "click",
+            "target": {"element_id": "wrong" if len(prompts) == 1 else "retry"},
+            "reason": "recovery",
+        }
+
+    achieved = NavigationLoop(
+        bridge=bridge,
+        planner=LLMReasoningProvider(responder),
+        max_steps=2,
+    ).run("Recovery completed")
+
+    assert achieved is True
+    assert bridge.states[1].observation_id == "after-failure"
+    assert '"observation_id":"after-failure"' in prompts[1]
