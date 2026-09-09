@@ -7,6 +7,7 @@ from pathlib import Path
 
 MAX_FILES = 4
 MAX_FILE_CHARS = 8_000
+MAX_FILE_LINES = 400
 ALLOWED_ROOTS = ("nova_core/", "agent/", "tests/")
 
 
@@ -30,12 +31,13 @@ class SourceEvidence:
                 raise ValueError(f"source path escapes root: {raw_path!r}")
             if not file_path.is_file():
                 raise ValueError(f"source file not found: {raw_path!r}")
-            selected.append((path, file_path.read_text(encoding="utf-8")[:MAX_FILE_CHARS]))
+            content = file_path.read_text(encoding="utf-8")[:MAX_FILE_CHARS]
+            selected.append((path, content))
         return cls(revision=revision, files=tuple(selected))
 
     def bounded_lines(self) -> tuple[str, ...]:
         lines: list[str] = [f"source.revision={self.revision}"]
         for path, content in self.files:
             lines.append(f"source.file={path}")
-            lines.extend(content.splitlines()[:MAX_FILE_CHARS])
+            lines.extend(content.splitlines()[:MAX_FILE_LINES])
         return tuple(lines)
