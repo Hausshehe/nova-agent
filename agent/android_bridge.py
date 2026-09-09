@@ -141,22 +141,21 @@ class AndroidBridge:
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
-        """Wait for either a new snapshot ID or observable UI change.
+        """Wait for an observable UI change after an action.
 
-        Accessibility does not guarantee that every action produces a new
-        callback before the bridge is polled. The snapshot ID is therefore
-        useful evidence, but it is not the sole definition of freshness.
-        A changed package/activity/UI tree is also a fresh observation.
+        Accessibility event IDs are evidence that a newer snapshot exists, not
+        evidence that the UI changed. Some Android builds can emit no event at
+        all for a successful action, while others can emit duplicate snapshots.
+        Freshness for the verifier therefore means observable package/activity/
+        element content changed from the pre-action state.
         """
         deadline = time.monotonic() + timeout
-        last_state: WorldState | None = None
         while True:
             state = self.observe()
-            last_state = state
-            if state.observation_id != previous.observation_id or not self._same_ui(previous, state):
+            if not self._same_ui(previous, state):
                 return state
             if time.monotonic() >= deadline:
                 raise TimeoutError(
-                    f"timed out waiting for fresh Android observation after {previous.observation_id}"
+                    f"timed out waiting for observable Android UI change after {previous.observation_id}"
                 )
             time.sleep(poll_seconds)
