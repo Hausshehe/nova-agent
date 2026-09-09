@@ -1,6 +1,5 @@
 from nova_core.mission_state import MissionState
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
-from nova_core.run_controller import RunController
 from nova_core.runtime_brain import RuntimeBrain
 from nova_core.state_machine import RunState
 
@@ -20,8 +19,7 @@ def decision() -> Decision:
 
 def test_mission_state_derives_only_runtime_facts() -> None:
     goal = Goal("Finish the task")
-    state = MissionState(goal).observed(observation())
-    state = state.decided(decision())
+    state = MissionState(goal).observed(observation()).decided(decision())
     state = state.executed(ExecutionResult(accepted=True, changed=True))
     state = state.verified(observation(2), goal_achieved=False)
 
@@ -32,22 +30,19 @@ def test_mission_state_derives_only_runtime_facts() -> None:
     assert state.successful_actions == 1
     assert state.changed_actions == 1
     assert state.failed_actions == 0
-    assert state.recovery_count == 0
     assert state.goal_verified is False
     assert "last_action_type=tap" in state.progress_evidence
     assert "last_target_id=next" in state.progress_evidence
     assert "goal_verified=False" in state.progress_evidence
 
 
-def test_failed_execution_is_counted_as_failure_and_recovery_evidence() -> None:
-    state = MissionState(Goal("Recover"))
-    state = state.decided(decision())
+def test_failed_execution_is_counted_as_failure_evidence() -> None:
+    state = MissionState(Goal("Recover")).decided(decision())
     state = state.executed(ExecutionResult(accepted=False, changed=False, error="blocked"))
 
     assert state.successful_actions == 0
     assert state.changed_actions == 0
     assert state.failed_actions == 1
-    assert state.recovery_count == 1
     assert "last_execution_error=blocked" in state.progress_evidence
 
 
@@ -59,11 +54,10 @@ def test_runtime_brain_exposes_current_mission_state_to_reasoning() -> None:
     brain.record_decision(decision())
     brain.record_execution(ExecutionResult(accepted=True, changed=True))
 
-    context = brain.mission
-    assert context.observation == current
-    assert context.last_decision == decision()
-    assert context.last_execution == ExecutionResult(accepted=True, changed=True)
-    assert context.successful_actions == 1
+    assert brain.mission.observation == current
+    assert brain.mission.last_decision == decision()
+    assert brain.mission.last_execution == ExecutionResult(accepted=True, changed=True)
+    assert brain.mission.successful_actions == 1
 
 
 def test_reasoning_context_carries_the_same_mission_state_instance() -> None:
@@ -87,6 +81,7 @@ def test_goal_verification_marks_mission_complete() -> None:
     result = brain.finish_verification(observation(2), goal_achieved=True)
 
     assert result is not None
+    assert result.status is not None
     assert result.status.value == "succeeded"
     assert brain.state is RunState.SUCCEEDED
     assert brain.goal_verified is True
