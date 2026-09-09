@@ -18,6 +18,7 @@ from .policy import ImprovementDecision, ImprovementPolicy
 from .proposer import LLMRepairProposer, RepairProposalContext, RepairResponder
 from .repair import RepairCandidate
 from .sandbox import RepairSandbox, SandboxResult
+from .source_context import SourceEvidence
 from .validation import ValidationPolicy
 
 
@@ -76,6 +77,7 @@ class SelfImprovementOrchestrator:
         observation: Observation | None = None,
         previous_observation: Observation | None = None,
         proposals_used: int = 0,
+        source_paths: tuple[str, ...] = (),
     ) -> ImprovementResult:
         diagnosis = diagnose_run(result, history)
         if diagnosis is None:
@@ -95,7 +97,8 @@ class SelfImprovementOrchestrator:
                     history[-1].execution if history else None,
                     previous_observation,
                 )
-            context = RepairProposalContext(diagnosis, revision, device)
+            source = SourceEvidence.from_files(self.source_root, revision, source_paths) if source_paths else None
+            context = RepairProposalContext(diagnosis, revision, device, source)
             candidate = self.proposer.propose(context)
             sandbox = RepairSandbox(self.source_root, self.validation_policy).evaluate(candidate)
             return ImprovementResult(
