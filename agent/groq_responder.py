@@ -47,6 +47,14 @@ Never modify files outside the supplied source evidence unless the evidence
 explicitly contains them. Do not modify secrets, workflows, binaries, or config.
 """
 
+_REPAIR_DIFF_RETRY_INSTRUCTION = """Your previous repair proposal contained an invalid unified diff hunk header.
+Return the same repair proposal again, but correct ONLY the patch formatting.
+Every hunk header MUST contain valid line ranges, for example `@@ -1,2 +1,2 @@`.
+Do not use a bare `@@`. Do not change the intended code fix, paths, or description.
+Return exactly one JSON object with description, patch, and paths.
+The patch must be a complete standard unified diff accepted by `git apply`.
+"""
+
 _RESPONSE_SCHEMAS = {
     "reasoning": {
         "type": "json_schema",
@@ -106,6 +114,16 @@ def _http_error_detail(exc: error.HTTPError) -> str:
         return ""
 
 
+def _repair_patch_needs_retry(result: Mapping[str, Any]) -> bool:
+    patch = result.get("patch")
+    if not isinstance(patch, str):
+        return False
+    for line in patch.splitlines():
+        if line.startswith("@@") and not line.startswith("@@ -"):
+            return True
+    return False
+
+
 class GroqResponder:
     """Callable adapter from Nova's prompt string to a structured mapping."""
 
@@ -120,12 +138,7 @@ class GroqResponder:
         self._opener = opener
         self._task = task
 
-    def __call__(self, prompt: str) -> Mapping[str, Any]:
-        if not self._api_key:
-            raise RuntimeError("GROQ_API_KEY is not set")
-        if not prompt.strip():
-            raise ValueError(f"{self._task} prompt must not be blank")
-        instruction = _REPAIR_INSTRUCTION if self._task == "repair" else _NAVIGATION_INSTRUCTION
+    def _request(self, instruction: str, prompt: str) -> Mapping[str, Any]:
         payload = {
             "model": self._model,
             "messages": [{"role": "user", "content": f"{instruction}\n\nLive Nova context:\n{prompt}"}],
@@ -161,4 +174,15 @@ class GroqResponder:
             raise RuntimeError(f"Groq returned an invalid {self._task} response") from exc
         if not isinstance(result, Mapping):
             raise RuntimeError(f"Groq {self._task} response must be an object")
+        return result
+
+    def __call__(self, prompt: str) -> Mapping[str, Any]:
+        if not self._api_key:
+            raise RuntimeError("GROQ_API_KEY is not set")
+        if not prompt.strip():
+            raise ValueError(f"{self._task} prompt must not be blank")
+        instruction = _REPAIR_INSTRUCTION if self._task == "repair" else _NAVIGATION_INSTRUCTION
+        result = self._request(instruction, prompt)
+        if self._task == "repair" and _repair_patch_needs_retry(result):
+            result = self._request(_REPAIR_DIFF_RETRY_INSTRUCTION, prompt)
         return result
