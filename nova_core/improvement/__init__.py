@@ -6,6 +6,7 @@ from .orchestrator import ImprovementResult, SelfImprovementOrchestrator
 from .policy import ImprovementDecision, ImprovementPolicy
 from .proposer import LLMRepairProposer, RepairProposalContext, build_repair_prompt
 from .repair import RepairCandidate
+from .source_context import SourceEvidence
 from .validation import ValidationPolicy, ValidationRecord, ValidationReport, ValidationStatus
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "RepairCandidate",
     "RepairProposalContext",
     "SelfImprovementOrchestrator",
+    "SourceEvidence",
     "ValidationPolicy",
     "ValidationRecord",
     "ValidationReport",
