@@ -155,37 +155,78 @@ class RepairPromotionGate:
             for part in command
         )
 
+    def _run_root_command(self, rendered: tuple[str, ...], worktree: Path) -> tuple[int, str]:
+        """Enter an interactive root shell, run the trusted command, then exit.
+
+        The trusted install command is currently represented as ``su -c CMD``.
+        We deliberately turn that into an interactive ``su`` shell so Magisk
+        can present its normal authorization UI and the user can see the
+        install operation live. Only the fixed trusted CMD is sent to root,
+        followed by ``exit``. The repair model never supplies this command.
+        """
+        if len(rendered) != 3 or rendered[0] != "su" or rendered[1] != "-c":
+            raise ValueError("interactive root validation requires trusted 'su -c CMD' command")
+
+        print("PROMOTION_ROOT_ENTER=starting interactive root shell", flush=True)
+        process = subprocess.Popen(
+            ("su",),
+            cwd=worktree,
+            stdin=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert process.stdin is not None
+            process.stdin.write(rendered[2] + "\n")
+            process.stdin.write("exit\n")
+            process.stdin.flush()
+            process.stdin.close()
+            return_code = process.wait(timeout=self.policy.timeout_seconds)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            print(f"PROMOTION_ROOT_EXIT=return_code={process.returncode}", flush=True)
+
+        return return_code, "interactive root command output was attached to the terminal"
+
     def _run_validation_commands(self, worktree: Path) -> tuple[ValidationRecord, ...]:
         records: list[ValidationRecord] = []
-        for command in self.policy.validation_commands:
+        for index, command in enumerate(self.policy.validation_commands, start=1):
             rendered = self._render_command(command, worktree)
+            print(f"PROMOTION_STAGE_{index}_START={rendered!r}", flush=True)
             try:
-                completed = subprocess.run(
-                    rendered,
-                    cwd=worktree,
-                    text=True,
-                    capture_output=True,
-                    timeout=self.policy.timeout_seconds,
-                    check=False,
-                )
-            except subprocess.TimeoutExpired as exc:
-                records.append(
-                    ValidationRecord(
+                if rendered and rendered[0] == "su":
+                    completed_return_code, output = self._run_root_command(rendered, worktree)
+                else:
+                    completed = subprocess.run(
                         rendered,
-                        ValidationStatus.TIMED_OUT,
-                        -1,
-                        self._output(exc.stdout or "", exc.stderr or ""),
+                        cwd=worktree,
+                        text=True,
+                        capture_output=True,
+                        timeout=self.policy.timeout_seconds,
+                        check=False,
                     )
-                )
+                    completed_return_code = completed.returncode
+                    output = self._output(completed.stdout, completed.stderr)
+            except subprocess.TimeoutExpired as exc:
+                output = self._output(getattr(exc, "stdout", "") or "", getattr(exc, "stderr", "") or "")
+                record = ValidationRecord(rendered, ValidationStatus.TIMED_OUT, -1, output)
+                records.append(record)
+                print(f"PROMOTION_STAGE_{index}_END=timed_out", flush=True)
                 break
 
             record = ValidationRecord(
                 rendered,
-                ValidationStatus.PASSED if completed.returncode == 0 else ValidationStatus.FAILED,
-                completed.returncode,
-                self._output(completed.stdout, completed.stderr),
+                ValidationStatus.PASSED if completed_return_code == 0 else ValidationStatus.FAILED,
+                completed_return_code,
+                output,
             )
             records.append(record)
+            print(
+                f"PROMOTION_STAGE_{index}_END={record.status.value}:return_code={record.return_code}",
+                flush=True,
+            )
             if record.status is not ValidationStatus.PASSED:
                 break
         return tuple(records)
@@ -236,8 +277,6 @@ class RepairPromotionGate:
                     reason = "promotion validation failed; live source was not changed"
                 return PromotionResult(status, baseline, validations=validations, reason=reason)
 
-            # Validation can take time. Refuse to overwrite work committed by
-            # another process while this candidate was being tested.
             if self._revision() != baseline or not self._clean():
                 return PromotionResult(
                     PromotionStatus.REJECTED,
