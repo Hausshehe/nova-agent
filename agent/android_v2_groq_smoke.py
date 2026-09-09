@@ -27,28 +27,14 @@ SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
-    """Reset and launch Nova so Activity-local state cannot leak between runs."""
-    commands = [
-        ["su", "-c", f"am start -S -n {MAIN_ACTIVITY}"],
-        ["am", "start", "-S", "-n", MAIN_ACTIVITY],
-    ]
-    errors: list[str] = []
-    for command in commands:
-        try:
-            completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
-            if completed.stdout.strip() or completed.stderr.strip():
-                print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
-            return
-        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            if isinstance(exc, subprocess.CalledProcessError):
-                stdout = exc.stdout.strip() if isinstance(exc.stdout, str) else ""
-                stderr = exc.stderr.strip() if isinstance(exc.stderr, str) else ""
-                errors.append(f"{command[0]}: exit={exc.returncode} stdout={stdout!r} stderr={stderr!r}")
-            elif isinstance(exc, subprocess.TimeoutExpired):
-                errors.append(f"{command[0]}: timeout after {timeout_seconds}s")
-            else:
-                errors.append(f"{command[0]}: {exc}")
-    raise RuntimeError("unable to reset and launch Nova; refusing to run a stateful smoke test without a reset: " + "; ".join(errors))
+    """Reset and launch Nova without ever invoking su/root."""
+    command = ["am", "start", "-S", "-n", MAIN_ACTIVITY]
+    try:
+        completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"unable to reset and launch Nova without root: {exc}") from exc
+    if completed.stdout.strip() or completed.stderr.strip():
+        print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
 
 
 def _configured_responders(model: str | None) -> list[tuple[str, object]]:
@@ -109,7 +95,7 @@ def main() -> int:
     if args.launch_nova:
         _reset_nova_process(bridge.timeout)
     else:
-        bridge.launch()
+        bridge.launch(root=False)
 
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
