@@ -158,15 +158,23 @@ def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
 
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Build a compact, bounded prompt so every reasoning call stays cheap."""
+    plan = _plan_payload(context)
+    rules = [
+        "Choose one action supported by the current UI.",
+        "Prefer the smallest safe action that advances the goal.",
+        "Treat the plan as guidance, not proof of success.",
+        "Never invent an element id; reassess after UI changes.",
+    ]
+    if plan is not None and plan["current"] is not None:
+        rules.extend([
+            "The plan's current intent is the immediate mission objective for this decision.",
+            "Choose the current UI element that best advances that intent, not a later plan step.",
+            "Your reason must describe the actual selected target/action, using its current label when one exists. Never call one UI element by another element's label.",
+        ])
     return {
         "goal": context.goal.text,
-        "rules": [
-            "Choose one action supported by the current UI.",
-            "Prefer the smallest safe action that advances the goal.",
-            "Treat the plan as guidance, not proof of success.",
-            "Never invent an element id; reassess after UI changes.",
-        ],
-        "plan": _plan_payload(context),
+        "rules": rules,
+        "plan": plan,
         "observation": _observation_payload(context.observation),
         "evidence": _evidence_payload(context.evidence),
         "goal_stage_candidates": _goal_stage_guidance(context),
@@ -198,10 +206,10 @@ def _decision_from_response(response: Mapping[str, Any], context: ReasoningConte
         if target_id is None or value is None: raise ValueError("type requires target_id and value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled or not element.editable: raise ValueError("type target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason)
+        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
     if action is ActionType.SWIPE:
         if target_id is None or value is None: raise ValueError("swipe requires target_id and value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled: raise ValueError("swipe target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason)
+        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
     raise ValueError("unsupported action type")
