@@ -105,6 +105,34 @@ def test_groq_responder_builds_repair_schema_without_command_authority():
     assert "minimal unified diff" in instruction
 
 
+def test_groq_responder_retries_repair_diff_missing_terminal_newline():
+    calls = 0
+    responses = [
+        {
+            "description": "Fix the broken predicate",
+            "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2",
+            "paths": ["nova_core/value.py"],
+        },
+        {
+            "description": "Fix the broken predicate",
+            "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
+            "paths": ["nova_core/value.py"],
+        },
+    ]
+
+    def opener(req, timeout):
+        nonlocal calls
+        result = responses[calls]
+        calls += 1
+        return _Response({"choices": [{"message": {"content": json.dumps(result)}}]})
+
+    responder = GroqResponder(api_key="test-key", opener=opener, task="repair")
+    result = responder('{"failure_category":"step_budget"}')
+
+    assert calls == 2
+    assert result["patch"].endswith("\n")
+
+
 def test_groq_responder_rejects_unknown_task():
     with pytest.raises(ValueError, match="task must be"):
         GroqResponder(api_key="test-key", task="planning")
