@@ -10,6 +10,7 @@ from urllib import error, request
 
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
+DEFAULT_REPAIR_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 DEFAULT_MAX_COMPLETION_TOKENS = 256
 REPAIR_MAX_COMPLETION_TOKENS = 1024
@@ -135,7 +136,9 @@ class GroqResponder:
         if task not in _RESPONSE_SCHEMAS:
             raise ValueError(f"task must be one of: {', '.join(_RESPONSE_SCHEMAS)}")
         self._api_key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
-        self._model = model or os.environ.get("NOVA_GROQ_MODEL", DEFAULT_MODEL)
+        default_model = DEFAULT_REPAIR_MODEL if task == "repair" else DEFAULT_MODEL
+        env_model = os.environ.get("NOVA_GROQ_REPAIR_MODEL" if task == "repair" else "NOVA_GROQ_MODEL")
+        self._model = model or env_model or default_model
         self._timeout_seconds = timeout_seconds
         self._opener = opener
         self._task = task
@@ -145,7 +148,7 @@ class GroqResponder:
             "model": self._model,
             "messages": [{"role": "user", "content": f"{instruction}\n\nLive Nova context:\n{prompt}"}],
             "temperature": 0,
-            "reasoning_effort": "low",
+            "reasoning_effort": "medium" if self._task == "repair" else "low",
             "max_completion_tokens": REPAIR_MAX_COMPLETION_TOKENS if self._task == "repair" else DEFAULT_MAX_COMPLETION_TOKENS,
             "response_format": _RESPONSE_SCHEMAS[self._task],
             "stream": False,
