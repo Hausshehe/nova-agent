@@ -1,147 +1,124 @@
-"""Adapters that keep legacy and model-backed reasoning behind the v2 port."""
-
 from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping
 
 from .models import Action, ActionType, Decision, Observation
-from .ports import Reasoner
 from .reasoning import ReasoningContext
 
 
-_STAGE_WORDS = {"start": 10, "begin": 10, "launch": 10, "continue": 20, "next": 20, "proceed": 20, "finish": 30, "complete": 30, "done": 30, "submit": 40}
-_MAX_HISTORY_ITEMS = 3
-_MAX_VISIBLE_LABELS = 24
-_MAX_REASON_LENGTH = 160
+_MAX_VISIBLE_ELEMENTS = 24
+_MAX_HISTORY_STEPS = 6
+_MAX_REASON_LENGTH = 500
 
 
-class LegacyReasoner(Protocol):
-    def decide(self, goal: str, observation: object, history: tuple) -> object: ...
-
-
-class LegacyReasoningAdapter:
-    def __init__(self, provider: LegacyReasoner) -> None: self._provider = provider
-    def decide(self, context: ReasoningContext) -> Decision: return self._translate(self._provider.decide(context.goal.text, context.observation, context.history))
-    @staticmethod
-    def _translate(raw: object) -> Decision:
-        if not isinstance(raw, dict): raise ValueError("legacy reasoner must return a mapping")
-        action_type, target = raw.get("action_type"), raw.get("target")
-        target_id = target.get("element_id") if isinstance(target, dict) else None
-        reason = str(raw.get("reason", "legacy provider decision"))
-        if action_type == "click":
-            if not isinstance(target_id, str) or not target_id: raise ValueError("legacy click decision requires target.element_id")
-            return Decision(Action(ActionType.TAP, target_id=target_id), reason)
-        if action_type == "back": return Decision(Action(ActionType.BACK), reason)
-        if action_type == "scroll": return Decision(Action(ActionType.SCROLL, target_id=target_id), reason)
-        raise ValueError(f"unsupported legacy action type: {action_type!r}")
-
-
-class LLMReasoner:
-    def __init__(self, responder: Callable[[str], Mapping[str, Any]]) -> None: self._responder = responder
-    def decide(self, context: ReasoningContext) -> Decision:
-        prompt = json.dumps(_reasoning_payload(context), ensure_ascii=False, separators=(",", ":"))
-        try: response = self._responder(prompt)
-        except Exception as exc: raise RuntimeError(f"reasoning provider failed: {exc}") from exc
-        if not isinstance(response, Mapping): raise ValueError("LLM response must be an object")
-        return _decision_from_response(response, context)
+def _normalize(value: str) -> str:
+    return " ".join(value.lower().split())
 
 
 def _label(element: Any) -> str:
-    return element.text or element.content_description
+    return element.text or element.content_description or element.id
 
 
 def _observation_payload(observation: Observation) -> dict[str, Any]:
-    """Serialize only information useful for selecting the next action."""
     elements = []
-    visible_labels = []
     for element in observation.elements:
-        if not element.visible:
+        if not element.visible or not element.enabled:
             continue
-        label = _label(element)
-        if label and len(visible_labels) < _MAX_VISIBLE_LABELS:
-            visible_labels.append(label)
-        actionable = element.enabled and (element.clickable or element.editable or element.scrollable)
-        if not actionable:
+        if not (element.clickable or element.editable or element.scrollable):
             continue
-        item = {"id": element.id, "label": label or None}
-        if element.clickable: item["tap"] = True
-        if element.editable: item["type"] = True
-        if element.scrollable: item["scroll"] = True
-        if element.checkable: item["checked"] = element.checked
-        if element.focused: item["focused"] = True
-        elements.append(item)
-    return {"package": observation.package, "activity": observation.activity, "revision": observation.revision,
-            "actions": elements, "visible_labels": visible_labels}
+        elements.append({
+            "id": element.id,
+            "label": _label(element),
+            "clickable": element.clickable,
+            "editable": element.editable,
+            "scrollable": element.scrollable,
+            "class_name": element.class_name,
+        })
+        if len(elements) >= _MAX_VISIBLE_ELEMENTS:
+            break
+    return {
+        "package": observation.package,
+        "activity": observation.activity,
+        "revision": observation.revision,
+        "elements": elements,
+    }
 
 
-def _observation_history_summary(observation: Observation | None) -> dict[str, Any] | None:
-    if observation is None: return None
-    labels = [_label(e) for e in observation.elements if e.visible and _label(e)]
-    return {"revision": observation.revision, "labels": labels[:_MAX_VISIBLE_LABELS]}
+def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
+    payload = []
+    for step in context.history[-_MAX_HISTORY_STEPS:]:
+        payload.append({
+            "action": step.decision.action.type.value,
+            "target_id": step.decision.action.target_id,
+            "target_label": step.decision.target_label,
+            "reason": step.decision.reason,
+            "accepted": step.execution.accepted,
+            "changed": step.execution.changed,
+            "error": step.execution.error,
+        })
+    return payload
 
 
-def _normalize(text: str) -> str: return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
+    if evidence is None:
+        return None
+    payload: dict[str, Any] = {}
+    for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
+        value = getattr(evidence, name, None)
+        if value is not None:
+            payload[name] = value
+    for name, limit in (("visible_labels", 24), ("added_labels", 12), ("removed_labels", 12),
+                        ("blocking_messages", 8), ("last_consequence", 12)):
+        values = getattr(evidence, name, ())
+        if values:
+            payload[name] = list(values)[:limit]
+    hints = getattr(evidence, "action_stage_hints", ())
+    if hints:
+        payload["action_stage_hints"] = [{"id": i, "label": l, "stage": s} for i, l, s in hints[:12]]
+    prerequisites = getattr(evidence, "unsatisfied_prerequisites", ())
+    if prerequisites:
+        payload["unsatisfied_prerequisites"] = list(prerequisites)[:8]
+    rejected = getattr(evidence, "rejected_actions", ())
+    if rejected:
+        payload["rejected_actions"] = list(rejected)[-8:]
+    return payload
 
 
 def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
+    stage_words = {
+        "start": 1, "begin": 1, "launch": 1,
+        "continue": 2, "next": 2, "proceed": 2,
+        "finish": 3, "complete": 3, "done": 3, "submit": 3,
+    }
     goal_words = re.findall(r"[a-z]+", context.goal.text.lower())
-    stages = [_STAGE_WORDS[w] for w in goal_words if w in _STAGE_WORDS]
-    if not stages: return []
+    stages = [stage_words[w] for w in goal_words if w in stage_words]
+    if not stages:
+        return []
     target_stage = max(stages)
-    object_words = [w for w in goal_words if w not in _STAGE_WORDS]
-    if not object_words: return []
+    object_words = [w for w in goal_words if w not in stage_words]
+    if not object_words:
+        return []
     object_norm = " ".join(object_words)
     completed = {_normalize(s.decision.target_label) for s in context.history if s.execution.accepted and s.execution.changed and s.decision.target_label}
     candidates = []
     for element in context.observation.elements:
-        if not element.visible or not element.enabled or not element.clickable: continue
+        if not element.visible or not element.enabled or not element.clickable:
+            continue
         label = _label(element)
-        if not label: continue
+        if not label:
+            continue
         label_norm = _normalize(label)
-        if label_norm in completed: continue
-        if object_norm not in label_norm and label_norm not in object_norm: continue
-        label_stages = [_STAGE_WORDS[w] for w in re.findall(r"[a-z]+", label.lower()) if w in _STAGE_WORDS]
+        if label_norm in completed:
+            continue
+        if object_norm not in label_norm and label_norm not in object_norm:
+            continue
+        label_stages = [stage_words[w] for w in re.findall(r"[a-z]+", label.lower()) if w in stage_words]
         stage = min(label_stages) if label_stages else 10 if target_stage > 10 else target_stage
         if stage < target_stage:
             candidates.append({"id": element.id, "label": label, "stage": stage})
     return candidates
-
-
-def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
-    if evidence is None: return None
-    payload: dict[str, Any] = {}
-    for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
-        value = getattr(evidence, name, None)
-        if value is not None: payload[name] = value
-    for name, limit in (("visible_labels", _MAX_VISIBLE_LABELS), ("added_labels", 12), ("removed_labels", 12),
-                        ("blocking_messages", 8), ("last_consequence", 12)):
-        values = getattr(evidence, name, ())
-        if values: payload[name] = list(values)[:limit]
-    hints = getattr(evidence, "action_stage_hints", ())
-    if hints: payload["action_stage_hints"] = [{"id": i, "label": l, "stage": s} for i, l, s in hints[:12]]
-    prerequisites = getattr(evidence, "unsatisfied_prerequisites", ())
-    if prerequisites:
-        payload["unsatisfied_prerequisites"] = [{"id": i, "label": l, "required": r, "stage": s} for i, l, r, s in prerequisites[:8]]
-    rejected = getattr(evidence, "rejected_actions", ())
-    if rejected:
-        payload["rejected_actions"] = [{"action": t, "target": target, "error": error[:_MAX_REASON_LENGTH]} for t, target, error in rejected[-4:]]
-    return payload
-
-
-def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
-    """Keep only recent, decision-relevant history to prevent prompt growth."""
-    result = []
-    for step in context.history[-_MAX_HISTORY_ITEMS:]:
-        item: dict[str, Any] = {"action": step.decision.action.type.value, "target": step.decision.action.target_id,
-                                "value": step.decision.action.value, "accepted": step.execution.accepted,
-                                "changed": step.execution.changed}
-        if step.execution.error: item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
-        if step.decision.target_label: item["label"] = step.decision.target_label
-        if step.post_observation is not None: item["after"] = _observation_history_summary(step.post_observation)
-        result.append(item)
-    return result
 
 
 def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
@@ -169,7 +146,8 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         rules.extend([
             "The plan's current intent is the immediate mission objective for this decision.",
             "Choose the current UI element that best advances that intent, not a later plan step.",
-            "Your reason must describe the actual selected target/action, using its current label when one exists. Never call one UI element by another element's label.",
+            "Your reason must describe the actual selected target/action.",
+            "Use the selected target's current label when one exists; never call one UI element by another element's label.",
         ])
     return {
         "goal": context.goal.text,
@@ -182,34 +160,50 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     }
 
 
-def _decision_from_response(response: Mapping[str, Any], context: ReasoningContext) -> Decision:
-    action_type = response.get("action_type")
-    try: action = ActionType(action_type)
-    except (TypeError, ValueError) as exc: raise ValueError("invalid action_type") from exc
-    target_id, value, reason = response.get("target_id"), response.get("value"), str(response.get("reason", "model decision"))
-    if target_id is not None and (not isinstance(target_id, str) or not target_id): raise ValueError("target_id must be a non-empty string or null")
-    if value is not None and not isinstance(value, str): raise ValueError("value must be a string or null")
-    if action in (ActionType.BACK, ActionType.WAIT):
-        if target_id is not None or value is not None: raise ValueError("target_id and value are not allowed for this action")
-        return Decision(Action(action), reason)
-    if action is ActionType.TAP:
-        if target_id is None or value is not None: raise ValueError("tap requires target_id and no value")
-        element = next((item for item in context.observation.elements if item.id == target_id), None)
-        if element is None or not element.visible or not element.enabled or not element.clickable: raise ValueError("tap target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id), reason, target_label=_label(element))
-    if action is ActionType.SCROLL:
+class LLMReasoner:
+    def __init__(self, responder: Callable[[str], Mapping[str, Any]]):
+        self._responder = responder
+
+    def decide(self, context: ReasoningContext) -> Decision:
+        prompt = json.dumps(_reasoning_payload(context), ensure_ascii=False, separators=(",", ":"))
+        response = self._responder(prompt)
+        return self._decision_from_response(context, response)
+
+    def _decision_from_response(self, context: ReasoningContext, response: Mapping[str, Any]) -> Decision:
+        action_name = response.get("action_type")
+        try:
+            action_type = ActionType(str(action_name))
+        except ValueError as exc:
+            raise ValueError(f"unsupported action_type: {action_name!r}") from exc
+        reason = response.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("reason must be a non-empty string")
+        reason = reason.strip()[:_MAX_REASON_LENGTH]
+        target_id = response.get("target_id")
+        value = response.get("value")
+        target = None
         if target_id is not None:
-            element = next((item for item in context.observation.elements if item.id == target_id), None)
-            if element is None or not element.visible or not element.enabled or not element.scrollable: raise ValueError("scroll target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id), reason)
-    if action is ActionType.TYPE:
-        if target_id is None or value is None: raise ValueError("type requires target_id and value")
-        element = next((item for item in context.observation.elements if item.id == target_id), None)
-        if element is None or not element.visible or not element.enabled or not element.editable: raise ValueError("type target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
-    if action is ActionType.SWIPE:
-        if target_id is None or value is None: raise ValueError("swipe requires target_id and value")
-        element = next((item for item in context.observation.elements if item.id == target_id), None)
-        if element is None or not element.visible or not element.enabled: raise ValueError("swipe target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
-    raise ValueError("unsupported action type")
+            target = next((element for element in context.observation.elements if element.id == target_id), None)
+            if target is None:
+                raise ValueError(f"unknown target_id: {target_id!r}")
+            if not target.visible or not target.enabled:
+                raise ValueError(f"target is not currently enabled and visible: {target_id!r}")
+        if action_type is ActionType.TAP:
+            if target is None or not target.clickable:
+                raise ValueError("tap requires a current clickable target")
+        elif action_type is ActionType.TYPE:
+            if target is None or not target.editable:
+                raise ValueError("type requires a current editable target")
+            if not isinstance(value, str):
+                raise ValueError("type requires a string value")
+        elif action_type in (ActionType.SCROLL, ActionType.SWIPE):
+            if target is not None and not target.scrollable:
+                raise ValueError("scroll/swipe target must be scrollable")
+        elif action_type in (ActionType.BACK, ActionType.WAIT):
+            if target_id is not None:
+                raise ValueError(f"{action_type.value} does not accept target_id")
+        return Decision(
+            action=Action(type=action_type, target_id=target_id, value=value),
+            reason=reason,
+            target_label=_label(target) if target is not None else None,
+        )
