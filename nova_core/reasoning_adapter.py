@@ -111,8 +111,6 @@ def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
 
 def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     if evidence is None: return None
-    # StateEvidence is intentionally read by attributes so the adapter remains
-    # independent of the evidence module's concrete type.
     payload: dict[str, Any] = {}
     for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
         value = getattr(evidence, name, None)
@@ -146,6 +144,18 @@ def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
     return result
 
 
+def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
+    plan = context.plan
+    if plan is None:
+        return None
+    return {
+        "revision": plan.revision,
+        "cursor": plan.cursor,
+        "current": plan.current.description if plan.current else None,
+        "remaining": [step.description for step in plan.remaining],
+    }
+
+
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Build a compact, bounded prompt so every reasoning call stays cheap."""
     return {
@@ -153,8 +163,10 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         "rules": [
             "Choose one action supported by the current UI.",
             "Prefer the smallest safe action that advances the goal.",
+            "Treat the plan as guidance, not proof of success.",
             "Never invent an element id; reassess after UI changes.",
         ],
+        "plan": _plan_payload(context),
         "observation": _observation_payload(context.observation),
         "evidence": _evidence_payload(context.evidence),
         "goal_stage_candidates": _goal_stage_guidance(context),
