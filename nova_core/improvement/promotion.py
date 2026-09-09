@@ -8,6 +8,7 @@ commands.
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -34,6 +35,11 @@ class PromotionPolicy:
     Commands are supplied by trusted Nova configuration rather than by the
     repair model. Each command runs in order inside the disposable candidate
     worktree. A non-zero exit or timeout stops the gate immediately.
+
+    Trusted commands may use ``{worktree}`` and ``{candidate_apk}`` placeholders.
+    They are rendered by the gate from its own paths, never from model output.
+    Root should be used only for operations that actually require Android
+    privileges, such as installing a candidate APK.
     """
 
     validation_commands: tuple[tuple[str, ...], ...]
@@ -136,12 +142,26 @@ class RepairPromotionGate:
         finally:
             patch_file.unlink(missing_ok=True)
 
+    def _render_command(self, command: tuple[str, ...], worktree: Path) -> tuple[str, ...]:
+        """Render only trusted path placeholders into a trusted command."""
+        candidate_apk = worktree / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+        replacements = {
+            "{worktree}": shlex.quote(str(worktree)),
+            "{candidate_apk}": shlex.quote(str(candidate_apk)),
+        }
+        return tuple(
+            part.replace("{worktree}", replacements["{worktree}"])
+            .replace("{candidate_apk}", replacements["{candidate_apk}"])
+            for part in command
+        )
+
     def _run_validation_commands(self, worktree: Path) -> tuple[ValidationRecord, ...]:
         records: list[ValidationRecord] = []
         for command in self.policy.validation_commands:
+            rendered = self._render_command(command, worktree)
             try:
                 completed = subprocess.run(
-                    command,
+                    rendered,
                     cwd=worktree,
                     text=True,
                     capture_output=True,
@@ -151,7 +171,7 @@ class RepairPromotionGate:
             except subprocess.TimeoutExpired as exc:
                 records.append(
                     ValidationRecord(
-                        command,
+                        rendered,
                         ValidationStatus.TIMED_OUT,
                         -1,
                         self._output(exc.stdout or "", exc.stderr or ""),
@@ -160,7 +180,7 @@ class RepairPromotionGate:
                 break
 
             record = ValidationRecord(
-                command,
+                rendered,
                 ValidationStatus.PASSED if completed.returncode == 0 else ValidationStatus.FAILED,
                 completed.returncode,
                 self._output(completed.stdout, completed.stderr),
