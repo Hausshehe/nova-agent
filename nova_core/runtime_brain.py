@@ -89,9 +89,11 @@ class RuntimeBrain:
         self.finish_verification(observation, goal_achieved=False)
 
     def complete(self) -> RunResult:
-        """Mark success only while the controller is in the verification state."""
+        """Mark success only after a fresh post-action observation was recorded."""
         if self.state is not RunState.VERIFYING:
             raise RuntimeError("goal completion must be verified from the verifying state")
+        if not self.controller.history or self.controller.history[-1].post_observation is None:
+            raise RuntimeError("goal completion requires a verified post-observation")
         self.goal_verified = True
         return self.controller.finish(RunStatus.SUCCEEDED)
 
