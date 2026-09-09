@@ -2,7 +2,8 @@
 
 The Groq model proposes the repair. Nova owns every validation command:
 1. build the candidate APK in the isolated promotion worktree,
-2. install that APK on the connected Android device,
+2. install that APK on the connected Android device using root only because
+   package installation requires the privileged Android shell in this setup,
 3. run the existing bounded LLM navigation smoke against the candidate source.
 
 The model cannot choose, edit, reorder, or skip these commands. The live
@@ -38,7 +39,7 @@ def _promotion_commands(goal: str) -> tuple[tuple[str, ...], ...]:
     build = _command("NOVA_PROMOTION_BUILD_COMMAND", "gradle :app:assembleDebug")
     install = _command(
         "NOVA_PROMOTION_INSTALL_COMMAND",
-        "adb install -r app/build/outputs/apk/debug/app-debug.apk",
+        "su -c 'pm install -r {candidate_apk}'",
     )
     smoke_raw = os.environ.get(
         "NOVA_PROMOTION_SMOKE_COMMAND",
