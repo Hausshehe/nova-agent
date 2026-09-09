@@ -21,7 +21,6 @@ from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
 
-
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
@@ -30,33 +29,17 @@ BRIDGE_READY_POLL_SECONDS = 0.2
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
-    """Reset and launch Nova so Activity-local state cannot leak between runs."""
-    commands = [
-        ["su", "-c", f"am start -S -n {MAIN_ACTIVITY}"],
-        ["am", "start", "-S", "-n", MAIN_ACTIVITY],
-    ]
-    errors: list[str] = []
-    for command in commands:
-        try:
-            completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
-            if completed.stdout.strip() or completed.stderr.strip():
-                print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
-            return
-        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            if isinstance(exc, subprocess.CalledProcessError):
-                stdout = exc.stdout.strip() if isinstance(exc.stdout, str) else ""
-                stderr = exc.stderr.strip() if isinstance(exc.stderr, str) else ""
-                errors.append(f"{command[0]}: exit={exc.returncode} stdout={stdout!r} stderr={stderr!r}")
-            elif isinstance(exc, subprocess.TimeoutExpired):
-                errors.append(f"{command[0]}: timeout after {timeout_seconds}s")
-            else:
-                errors.append(f"{command[0]}: {exc}")
-    raise RuntimeError("unable to reset and launch Nova; refusing to run a stateful smoke test without a reset: " + "; ".join(errors))
+    command = ["am", "start", "-S", "-n", MAIN_ACTIVITY]
+    try:
+        completed = subprocess.run(command, check=True, timeout=timeout_seconds, capture_output=True, text=True)
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"unable to reset and launch Nova without root: {exc}") from exc
+    if completed.stdout.strip() or completed.stderr.strip():
+        print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
 
 
 def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READY_TIMEOUT_SECONDS,
                      poll_seconds: float = BRIDGE_READY_POLL_SECONDS) -> None:
-    """Wait for the Activity-owned bridge service to finish starting after launch."""
     deadline = time.monotonic() + timeout_seconds
     last_error: Exception | None = None
     while True:
@@ -73,29 +56,19 @@ def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READ
 
 def _configured_responders(model: str | None) -> list[tuple[str, object]]:
     available: dict[str, object] = {}
-    if os.environ.get("GROQ_API_KEY"):
-        available["groq"] = GroqResponder(model=model)
-    if os.environ.get("OPENROUTER_API_KEY"):
-        available["openrouter"] = OpenRouterResponder()
-    if os.environ.get("GEMINI_API_KEY"):
-        available["gemini"] = GeminiResponder()
-    if os.environ.get("MISTRAL_API_KEY"):
-        available["mistral"] = MistralResponder()
-    if os.environ.get("CEREBRAS_API_KEY"):
-        available["cerebras"] = CerebrasResponder()
-
-    raw_order = os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini,mistral,cerebras")
-    requested = [name.strip().lower() for name in raw_order.split(",") if name.strip()]
+    if os.environ.get("GROQ_API_KEY"): available["groq"] = GroqResponder(model=model)
+    if os.environ.get("OPENROUTER_API_KEY"): available["openrouter"] = OpenRouterResponder()
+    if os.environ.get("GEMINI_API_KEY"): available["gemini"] = GeminiResponder()
+    if os.environ.get("MISTRAL_API_KEY"): available["mistral"] = MistralResponder()
+    if os.environ.get("CEREBRAS_API_KEY"): available["cerebras"] = CerebrasResponder()
+    requested = [name.strip().lower() for name in os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini,mistral,cerebras").split(",") if name.strip()]
     unknown = [name for name in requested if name not in SUPPORTED_PROVIDERS]
-    if unknown:
-        raise ValueError("unknown reasoning providers: " + ", ".join(unknown))
-
+    if unknown: raise ValueError("unknown reasoning providers: " + ", ".join(unknown))
     return [(name, available[name]) for name in requested if name in available]
 
 
 def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[str, Callable[[str], Mapping[str, Any]]]]:
-    """Wrap providers with zero-behavior-change prompt-size instrumentation."""
-    instrumented: list[tuple[str, Callable[[str], Mapping[str, Any]]]] = []
+    instrumented = []
     for name, responder in responders:
         def measured(prompt: str, *, _name=name, _responder=responder) -> Mapping[str, Any]:
             print(f"V2_REASONING_PROMPT_CHARS provider={_name} chars={len(prompt)}")
@@ -106,37 +79,26 @@ def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[s
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
-    parser.add_argument("--launch-nova", action="store_true", help="reset and launch Nova before running")
+    parser.add_argument("--launch-nova", action="store_true")
     parser.add_argument("--goal", default="Tap Test Navigation Action")
-    parser.add_argument("--model", default=None, help="override the default Groq model")
-    parser.add_argument("--max-steps", type=int, default=1, help="maximum number of successful state-changing actions")
+    parser.add_argument("--model", default=None)
+    parser.add_argument("--max-steps", type=int, default=1)
     args = parser.parse_args()
-    if args.max_steps < 1:
-        parser.error("--max-steps must be at least 1")
-
-    try:
-        responders = _configured_responders(args.model)
-    except ValueError as exc:
-        parser.error(str(exc))
-    if not responders:
-        parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
+    if args.max_steps < 1: parser.error("--max-steps must be at least 1")
+    try: responders = _configured_responders(args.model)
+    except ValueError as exc: parser.error(str(exc))
+    if not responders: parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
     responders = _instrument_responders(responders)
-
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
-
     bridge = AndroidBridge()
-    if args.launch_nova:
-        _reset_nova_process(bridge.timeout)
-    else:
-        bridge.launch()
+    if args.launch_nova: _reset_nova_process(bridge.timeout)
+    else: bridge.launch(root=False)
     _wait_for_bridge(bridge)
-
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
     runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps)
     result = runtime.run()
-
     print(f"V2_RUNTIME_STATUS={result.status.value}")
     print(f"V2_RUNTIME_STEPS={result.steps}")
     print(f"V2_RUNTIME_ERROR={result.error!r}")
