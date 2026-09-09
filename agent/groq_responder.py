@@ -11,7 +11,8 @@ from urllib import error, request
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TIMEOUT_SECONDS = 20.0
-DEFAULT_MAX_COMPLETION_TOKENS = 512
+DEFAULT_MAX_COMPLETION_TOKENS = 256
+REPAIR_MAX_COMPLETION_TOKENS = 1024
 USER_AGENT = "Nova-Agent/1.0"
 
 _NAVIGATION_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
@@ -105,7 +106,7 @@ class GroqResponder:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         if task not in _RESPONSE_SCHEMAS:
-            raise ValueError(f"unsupported Groq task: {task}")
+            raise ValueError(f"task must be one of: {', '.join(_RESPONSE_SCHEMAS)}")
         self._api_key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
         self._model = model or os.environ.get("NOVA_GROQ_MODEL", DEFAULT_MODEL)
         self._timeout_seconds = timeout_seconds
@@ -123,7 +124,7 @@ class GroqResponder:
             "messages": [{"role": "user", "content": f"{instruction}\n\nLive Nova context:\n{prompt}"}],
             "temperature": 0,
             "reasoning_effort": "low",
-            "max_completion_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
+            "max_completion_tokens": REPAIR_MAX_COMPLETION_TOKENS if self._task == "repair" else DEFAULT_MAX_COMPLETION_TOKENS,
             "response_format": _RESPONSE_SCHEMAS[self._task],
             "stream": False,
         }
