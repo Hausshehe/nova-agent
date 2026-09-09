@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
+from .planning import Plan
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
@@ -14,12 +15,13 @@ from .working_memory import WorkingMemory
 
 @dataclass
 class RuntimeBrain:
-    """Own the mission lifecycle and evidence-backed mission state."""
+    """Own the mission lifecycle, evidence-backed state, memory, and plan."""
 
     controller: RunController
     goal_verified: bool = False
     memory: WorkingMemory = field(init=False)
     mission: MissionState = field(init=False)
+    plan: Plan | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         self.memory = WorkingMemory(goal=self.controller.goal)
@@ -49,6 +51,13 @@ class RuntimeBrain:
         self.mission = self.mission.observed(observation)
         self.controller.move(RunState.DECIDING)
 
+    def set_plan(self, plan: Plan) -> None:
+        self.plan = plan
+
+    def advance_plan(self) -> None:
+        if self.plan is not None:
+            self.plan = self.plan.advance()
+
     def reasoning_context(self, *, evidence: object | None = None) -> ReasoningContext:
         observation = self.memory.observation
         if self.state != RunState.DECIDING or observation is None:
@@ -59,6 +68,7 @@ class RuntimeBrain:
             history=self.memory.history,
             evidence=evidence,
             mission_state=self.mission,
+            plan=self.plan,
         )
 
     def record_decision(self, decision: Decision) -> None:
