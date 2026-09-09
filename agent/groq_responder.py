@@ -25,6 +25,14 @@ Choose one smallest safe action that advances the goal from the CURRENT state.
 After each action, reassess the new UI state instead of assuming the next step.
 Nova validates your decision before execution."""
 
+_PLANNING_INSTRUCTION = """You are Nova's mission planning engine.
+Produce a short sequence of mission intents, NOT concrete UI actions.
+The action reasoner will choose executable actions later from the live UI.
+Return exactly one JSON object with a steps array of non-empty intent strings.
+Use at most the requested number of steps. Keep the plan focused on the goal and
+current evidence. Do not invent UI element ids, coordinates, commands, or actions.
+The runtime validates and bounds the plan before using it."""
+
 _NAVIGATION_RETRY_INSTRUCTION = """Your previous navigation response could not be validated as structured JSON.
 Return exactly one JSON object matching the required schema: action_type, target_id,
 value, reason. Do not emit markdown, prose, code fences, or extra fields.
@@ -81,6 +89,21 @@ _RESPONSE_SCHEMAS = {
                     "reason": {"type": "string"},
                 },
                 "required": ["action_type", "target_id", "value", "reason"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "planning": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "nova_mission_plan",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "steps": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                },
+                "required": ["steps"],
                 "additionalProperties": False,
             },
         },
@@ -194,6 +217,8 @@ class GroqResponder:
             raise RuntimeError("GROQ_API_KEY is not set")
         if not prompt.strip():
             raise ValueError(f"{self._task} prompt must not be blank")
+        if self._task == "planning":
+            return self._request(_PLANNING_INSTRUCTION, prompt)
         instruction = _REPAIR_INSTRUCTION if self._task == "repair" else _NAVIGATION_INSTRUCTION
         try:
             result = self._request(instruction, prompt)
