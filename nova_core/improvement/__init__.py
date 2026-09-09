@@ -3,7 +3,7 @@
 from .diagnosis import FailureCategory, FailureDiagnosis, diagnose_run
 from .policy import ImprovementDecision, ImprovementPolicy
 from .repair import RepairCandidate
-from .validation import ValidationPolicy
+from .validation import ValidationPolicy, ValidationRecord, ValidationReport, ValidationStatus
 
 __all__ = [
     "FailureCategory",
@@ -12,5 +12,8 @@ __all__ = [
     "ImprovementPolicy",
     "RepairCandidate",
     "ValidationPolicy",
+    "ValidationRecord",
+    "ValidationReport",
+    "ValidationStatus",
     "diagnose_run",
 ]
