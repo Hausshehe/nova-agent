@@ -64,7 +64,14 @@ def run(model: str | None = None, goal: str = "Finish Multi-Step Test") -> int:
         source,
         responder,
         validation_policy=ValidationPolicy(
-            commands=(("python", "-m", "pytest", "-q"),),
+            commands=(
+                (
+                    "python",
+                    "-c",
+                    "from tests.fixtures.self_repair.bug import is_ready; "
+                    "assert is_ready(), 'self-repair fixture is still not ready'",
+                ),
+            ),
         ),
     )
     improvement = orchestrator.improve(
@@ -79,6 +86,15 @@ def run(model: str | None = None, goal: str = "Finish Multi-Step Test") -> int:
     if improvement.candidate:
         print(f"SELF_REPAIR_DESCRIPTION={improvement.candidate.description!r}")
         print(f"SELF_REPAIR_PATHS={improvement.candidate.paths!r}")
+    if improvement.sandbox:
+        print(f"SELF_REPAIR_VALIDATION_REASON={improvement.sandbox.report.reason!r}")
+        for index, record in enumerate(improvement.sandbox.report.records, start=1):
+            print(
+                f"SELF_REPAIR_VALIDATION_{index}="
+                f"{record.status.value}:return_code={record.return_code}:command={record.command!r}"
+            )
+            if record.output:
+                print(f"SELF_REPAIR_VALIDATION_{index}_OUTPUT={record.output!r}")
 
     if improvement.decision is not ImprovementDecision.PROPOSE or not improvement.accepted:
         print("SELF_REPAIR_PROMOTION=NOT_ATTEMPTED")
