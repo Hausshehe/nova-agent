@@ -185,7 +185,11 @@ class RepairPromotionGate:
                     reason="could not stage promoted files; baseline restored",
                 )
 
-            committed = self._git("commit", "-m", self.policy.commit_message)
+            committed = self._git(
+                "-c", "user.name=Nova Agent",
+                "-c", "user.email=nova-agent@localhost",
+                "commit", "-m", self.policy.commit_message,
+            )
             if committed.returncode != 0:
                 self._rollback(baseline)
                 return PromotionResult(
