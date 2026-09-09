@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -18,6 +19,9 @@ class MainActivity : Activity() {
     private lateinit var navigationStatus: TextView
     private lateinit var recoveryStatus: TextView
     private lateinit var multiStepStatus: TextView
+    private lateinit var accessibilityStatus: TextView
+    private lateinit var continueButton: Button
+    private lateinit var finishButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,18 +31,22 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 48, 32, 32)
         }
-
-        root.addView(TextView(this).apply {
-            text = "Nova Agent"
-            textSize = 26f
-        })
-
+        root.addView(TextView(this).apply { text = "Nova Agent"; textSize = 26f })
         root.addView(TextView(this).apply {
             text = "Android navigation test harness"
             textSize = 15f
             setTextColor(Color.GRAY)
             setPadding(0, 8, 0, 24)
         })
+
+        root.addView(section("Accessibility"))
+        accessibilityStatus = status(accessibilityStatusText())
+        root.addView(accessibilityStatus)
+        root.addView(Button(this).apply {
+            text = "Open Accessibility Settings"
+            contentDescription = "Open Accessibility Settings"
+            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }, buttonParams())
 
         root.addView(section("Navigation"))
         val navigationButton = Button(this).apply {
@@ -52,7 +60,6 @@ class MainActivity : Activity() {
             }
         }
         root.addView(navigationButton, buttonParams())
-
         navigationStatus = status("Clicked 0 times")
         root.addView(navigationStatus)
 
@@ -67,27 +74,20 @@ class MainActivity : Activity() {
             }
         }
         root.addView(recoveryButton, buttonParams())
-
         val recoveryPrimary = Button(this).apply {
             id = R.id.recovery_primary
             text = "Recovery Primary Action"
             contentDescription = "Recovery Primary Action"
-            setOnClickListener {
-                recoveryStatus.text = "Primary action failed. Recovery required."
-            }
+            setOnClickListener { recoveryStatus.text = "Primary action failed. Recovery required." }
         }
         root.addView(recoveryPrimary, buttonParams())
-
         val recoveryFallback = Button(this).apply {
             id = R.id.recovery_fallback
             text = "Recovery Fallback Action"
             contentDescription = "Recovery Fallback Action"
-            setOnClickListener {
-                recoveryStatus.text = "Recovery completed"
-            }
+            setOnClickListener { recoveryStatus.text = "Recovery completed" }
         }
         root.addView(recoveryFallback, buttonParams())
-
         recoveryStatus = status("Recovery ready")
         root.addView(recoveryStatus)
 
@@ -100,44 +100,57 @@ class MainActivity : Activity() {
                 multiStepRuns++
                 multiStepStep = 1
                 multiStepStatus.text = "Run $multiStepRuns: Step 1 started"
+                updateMultiStepAffordances()
             }
         }
         root.addView(multiStepButton, buttonParams())
-
-        val continueButton = Button(this).apply {
+        continueButton = Button(this).apply {
             id = R.id.multi_step_continue
             text = "Continue Multi-Step"
             contentDescription = "Continue Multi-Step"
+            isEnabled = false
             setOnClickListener {
                 if (multiStepStep == 1) {
                     multiStepStep = 2
                     multiStepStatus.text = "Step 2 started"
-                } else {
-                    multiStepStatus.text = "Start a Multi-Step Test first"
+                    updateMultiStepAffordances()
                 }
             }
         }
         root.addView(continueButton, buttonParams())
-
-        val finishButton = Button(this).apply {
+        finishButton = Button(this).apply {
             id = R.id.multi_step_finish
             text = "Finish Multi-Step"
             contentDescription = "Finish Multi-Step"
+            isEnabled = false
             setOnClickListener {
                 if (multiStepStep == 2) {
                     multiStepStep = 3
                     multiStepStatus.text = "Multi-Step Test completed"
-                } else {
-                    multiStepStatus.text = "Complete the previous steps first"
+                    updateMultiStepAffordances()
                 }
             }
         }
         root.addView(finishButton, buttonParams())
-
         multiStepStatus = status("Multi-Step ready")
         root.addView(multiStepStatus)
 
         setContentView(root)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::accessibilityStatus.isInitialized) accessibilityStatus.text = accessibilityStatusText()
+    }
+
+    private fun accessibilityStatusText(): String =
+        if (NovaAccessibilityService.instance != null) "Accessibility service connected"
+        else "Accessibility service is not connected"
+
+    private fun updateMultiStepAffordances() {
+        if (!::continueButton.isInitialized || !::finishButton.isInitialized) return
+        continueButton.isEnabled = multiStepStep == 1
+        finishButton.isEnabled = multiStepStep == 2
     }
 
     private fun section(title: String): TextView = TextView(this).apply {
