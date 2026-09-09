@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from .agent_state import AgentState
 from .core import ActionType, Target, WorldState
 
 
@@ -29,6 +30,7 @@ class ReasoningContext:
     state: WorldState
     history: tuple[Mapping[str, Any], ...] = ()
     candidates: tuple[ActionCandidate, ...] = ()
+    agent_state: AgentState | None = None
 
 
 def _build_candidates(state: WorldState) -> tuple[ActionCandidate, ...]:
@@ -58,10 +60,13 @@ def build_reasoning_context(
     goal: str,
     state: WorldState,
     history: Sequence[Mapping[str, Any]],
+    *,
+    agent_state: AgentState | None = None,
 ) -> ReasoningContext:
     return ReasoningContext(
         goal=goal,
         state=state,
         history=tuple(history),
         candidates=_build_candidates(state),
+        agent_state=agent_state,
     )
