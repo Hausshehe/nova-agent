@@ -39,6 +39,7 @@ headers and a valid unified-diff hunk header with line ranges, such as
 `@@ -1,2 +1,2 @@`.
 A valid one-line replacement looks like this:
 `--- a/example.py\n+++ b/example.py\n@@ -1 +1 @@\n-old_value\n+new_value\n`
+The patch string MUST end with a newline after the final changed line.
 Replace the example paths and lines with the actual supplied source. Do not emit
 an abbreviated diff, prose around the diff, markdown fences, or an `@@` header
 without valid line ranges. Paths must exactly match the paths list.
@@ -47,10 +48,11 @@ Never modify files outside the supplied source evidence unless the evidence
 explicitly contains them. Do not modify secrets, workflows, binaries, or config.
 """
 
-_REPAIR_DIFF_RETRY_INSTRUCTION = """Your previous repair proposal contained an invalid unified diff hunk header.
+_REPAIR_DIFF_RETRY_INSTRUCTION = """Your previous repair proposal contained invalid unified-diff formatting.
 Return the same repair proposal again, but correct ONLY the patch formatting.
 Every hunk header MUST contain valid line ranges, for example `@@ -1,2 +1,2 @@`.
-Do not use a bare `@@`. Do not change the intended code fix, paths, or description.
+Do not use a bare `@@`. The patch string MUST end with a newline after the final
+changed line. Do not change the intended code fix, paths, or description.
 Return exactly one JSON object with description, patch, and paths.
 The patch must be a complete standard unified diff accepted by `git apply`.
 """
@@ -121,7 +123,7 @@ def _repair_patch_needs_retry(result: Mapping[str, Any]) -> bool:
     for line in patch.splitlines():
         if line.startswith("@@") and not line.startswith("@@ -"):
             return True
-    return False
+    return not patch.endswith("\n")
 
 
 class GroqResponder:
