@@ -35,6 +35,7 @@ class FakeVerifier:
 class FakeReasoner:
     def decide(self, context: ReasoningContext):
         assert context.plan is not None
+        assert context.plan.current is not None
         return Decision(Action(ActionType.TAP, target_id="button"), reason=context.plan.current.description)
 
 
@@ -72,11 +73,12 @@ def test_runtime_requests_replan_after_unchanged_execution():
     planner = RecordingPlanner()
     runtime = Runtime(
         Goal("Finish the task"), FakeObserver(), FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
-        max_steps=2, max_invalid_decisions=3, planner=planner,
+        max_steps=2, max_invalid_decisions=3, max_replans=1, planner=planner,
     )
 
-    runtime.run()
+    result = runtime.run()
 
+    assert result.error == "replan budget exhausted"
     assert planner.plan_calls == 1
     assert planner.replan_calls == 1
     assert runtime.brain.plan is not None
