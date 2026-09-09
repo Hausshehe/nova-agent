@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import time
 from typing import Any, Callable, Mapping
 
 from agent.android_bridge import AndroidBridge
@@ -24,6 +25,8 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
+BRIDGE_READY_TIMEOUT_SECONDS = 3.0
+BRIDGE_READY_POLL_SECONDS = 0.2
 
 
 def _reset_nova_process(timeout_seconds: float) -> None:
@@ -49,6 +52,23 @@ def _reset_nova_process(timeout_seconds: float) -> None:
             else:
                 errors.append(f"{command[0]}: {exc}")
     raise RuntimeError("unable to reset and launch Nova; refusing to run a stateful smoke test without a reset: " + "; ".join(errors))
+
+
+def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READY_TIMEOUT_SECONDS,
+                     poll_seconds: float = BRIDGE_READY_POLL_SECONDS) -> None:
+    """Wait for the Activity-owned bridge service to finish starting after launch."""
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while True:
+        try:
+            bridge.observe()
+            return
+        except Exception as exc:
+            last_error = exc
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(poll_seconds)
+    raise RuntimeError(f"Nova Android bridge did not become ready within {timeout_seconds}s: {last_error}")
 
 
 def _configured_responders(model: str | None) -> list[tuple[str, object]]:
@@ -110,6 +130,7 @@ def main() -> int:
         _reset_nova_process(bridge.timeout)
     else:
         bridge.launch()
+    _wait_for_bridge(bridge)
 
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
