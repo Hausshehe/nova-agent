@@ -3,6 +3,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+
+
+class ValidationStatus(str, Enum):
+    PASSED = "passed"
+    FAILED = "failed"
+    TIMED_OUT = "timed_out"
+
+
+@dataclass(frozen=True)
+class ValidationRecord:
+    command: tuple[str, ...]
+    status: ValidationStatus
+    return_code: int
+    output: str
+
+
+@dataclass(frozen=True)
+class ValidationReport:
+    records: tuple[ValidationRecord, ...]
+    accepted: bool
+    reason: str
 
 
 @dataclass(frozen=True)
