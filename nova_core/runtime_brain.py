@@ -1,19 +1,20 @@
 """Mission-level runtime brain for Nova Agent v2.
 
-The brain owns the lifecycle of one Android task. It coordinates observation,
-reasoning, execution, and verification without knowing how Android or an LLM
-provider performs those operations. This keeps the continuous feedback loop
-explicit while preserving the existing RunController as the state authority.
+The brain owns the mission lifecycle for one bounded run. It coordinates
+observation, reasoning, execution, verification, and a bounded working-memory
+window without knowing how Android or an LLM provider performs those operations.
+The existing RunController remains the authoritative state owner.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
+from .working_memory import WorkingMemory
 
 
 @dataclass
@@ -22,11 +23,20 @@ class RuntimeBrain:
 
     controller: RunController
     goal_verified: bool = False
+    memory: WorkingMemory = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.memory = WorkingMemory(goal=self.controller.goal)
 
     @classmethod
-    def create(cls, goal: Goal, max_steps: int = 20) -> "RuntimeBrain":
+    def create(
+        cls, goal: Goal, max_steps: int = 20, max_memory_history: int = 6
+    ) -> "RuntimeBrain":
         """Create a fresh mission without starting Android work."""
-        return cls(RunController(goal=goal, max_steps=max_steps))
+        brain = cls(RunController(goal=goal, max_steps=max_steps))
+        brain.memory.max_history = max_memory_history
+        brain.memory.__post_init__()
+        return brain
 
     @property
     def state(self) -> RunState:
@@ -43,17 +53,18 @@ class RuntimeBrain:
     def record_observation(self, observation: Observation) -> None:
         """Record the current UI and move to reasoning."""
         self.controller.record_observation(observation)
+        self.memory.observe(observation)
         self.controller.move(RunState.DECIDING)
 
     def reasoning_context(self, *, evidence: object | None = None) -> ReasoningContext:
-        """Build the provider-neutral context for the next decision."""
-        observation = self.controller.observation
+        """Build provider-neutral context from bounded working memory."""
+        observation = self.memory.observation
         if self.state != RunState.DECIDING or observation is None:
             raise RuntimeError("reasoning context requires a current observation")
         return ReasoningContext(
             goal=self.goal,
             observation=observation,
-            history=self.controller.history,
+            history=self.memory.history,
             evidence=evidence,
         )
 
@@ -63,8 +74,9 @@ class RuntimeBrain:
         self.controller.move(RunState.EXECUTING)
 
     def record_execution(self, result: ExecutionResult) -> None:
-        """Record the native execution result and move to verification."""
+        """Record execution, then add its reasoning step to working memory."""
         self.controller.record_execution(result)
+        self.memory.remember_step(self.controller.history[-1])
         self.controller.move(RunState.VERIFYING)
 
     def finish_verification(
@@ -72,6 +84,7 @@ class RuntimeBrain:
     ) -> RunResult | None:
         """Record fresh UI and finish or return to the observation loop."""
         self.controller.record_post_observation(observation)
+        self.memory.remember_post_observation(observation)
         if goal_achieved:
             self.goal_verified = True
             return self.controller.finish(RunStatus.SUCCEEDED)
