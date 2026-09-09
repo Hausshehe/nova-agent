@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -18,6 +19,8 @@ class MainActivity : Activity() {
     private lateinit var navigationStatus: TextView
     private lateinit var recoveryStatus: TextView
     private lateinit var multiStepStatus: TextView
+    private lateinit var continueButton: Button
+    private lateinit var finishButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +42,28 @@ class MainActivity : Activity() {
             setTextColor(Color.GRAY)
             setPadding(0, 8, 0, 24)
         })
+
+        root.addView(section("Accessibility"))
+        val accessibilityStatus = TextView(this).apply {
+            text = if (NovaAccessibilityService.instance != null) {
+                "Accessibility service connected"
+            } else {
+                "Accessibility service is not connected"
+            }
+            textSize = 14f
+            setTextColor(Color.DKGRAY)
+            setPadding(0, 2, 0, 8)
+        }
+        root.addView(accessibilityStatus)
+
+        val accessibilitySettings = Button(this).apply {
+            text = "Open Accessibility Settings"
+            contentDescription = "Open Accessibility Settings"
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+        root.addView(accessibilitySettings, buttonParams())
 
         root.addView(section("Navigation"))
         val navigationButton = Button(this).apply {
@@ -100,35 +125,36 @@ class MainActivity : Activity() {
                 multiStepRuns++
                 multiStepStep = 1
                 multiStepStatus.text = "Run $multiStepRuns: Step 1 started"
+                updateMultiStepAffordances()
             }
         }
         root.addView(multiStepButton, buttonParams())
 
-        val continueButton = Button(this).apply {
+        continueButton = Button(this).apply {
             id = R.id.multi_step_continue
             text = "Continue Multi-Step"
             contentDescription = "Continue Multi-Step"
+            isEnabled = false
             setOnClickListener {
                 if (multiStepStep == 1) {
                     multiStepStep = 2
                     multiStepStatus.text = "Step 2 started"
-                } else {
-                    multiStepStatus.text = "Start a Multi-Step Test first"
+                    updateMultiStepAffordances()
                 }
             }
         }
         root.addView(continueButton, buttonParams())
 
-        val finishButton = Button(this).apply {
+        finishButton = Button(this).apply {
             id = R.id.multi_step_finish
             text = "Finish Multi-Step"
             contentDescription = "Finish Multi-Step"
+            isEnabled = false
             setOnClickListener {
                 if (multiStepStep == 2) {
                     multiStepStep = 3
                     multiStepStatus.text = "Multi-Step Test completed"
-                } else {
-                    multiStepStatus.text = "Complete the previous steps first"
+                    updateMultiStepAffordances()
                 }
             }
         }
@@ -138,6 +164,33 @@ class MainActivity : Activity() {
         root.addView(multiStepStatus)
 
         setContentView(root)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::navigationStatus.isInitialized) {
+            val connected = NovaAccessibilityService.instance != null
+            val accessibilityViews = (window.decorView as? ViewGroup)?.let { findTextViews(it) } ?: emptyList()
+            accessibilityViews.firstOrNull { it.text.toString().contains("Accessibility service") }?.text =
+                if (connected) "Accessibility service connected" else "Accessibility service is not connected"
+        }
+    }
+
+    private fun findTextViews(parent: ViewGroup): List<TextView> {
+        val result = mutableListOf<TextView>()
+        for (i in 0 until parent.childCount) {
+            when (val child = parent.getChildAt(i)) {
+                is TextView -> result += child
+                is ViewGroup -> result += findTextViews(child)
+            }
+        }
+        return result
+    }
+
+    private fun updateMultiStepAffordances() {
+        if (!::continueButton.isInitialized || !::finishButton.isInitialized) return
+        continueButton.isEnabled = multiStepStep == 1
+        finishButton.isEnabled = multiStepStep == 2
     }
 
     private fun section(title: String): TextView = TextView(this).apply {
