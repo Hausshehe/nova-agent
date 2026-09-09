@@ -4,7 +4,9 @@ The Groq model proposes the repair. Nova owns every validation command:
 1. build the candidate APK in the isolated promotion worktree,
 2. install that APK on the connected Android device using root only because
    package installation requires the privileged Android shell in this setup,
-3. run the existing bounded LLM navigation smoke against the candidate source.
+3. clear the candidate app's persisted state while still in the trusted root
+   command so the bounded navigation smoke starts from a known UI state,
+4. run the existing bounded LLM navigation smoke as the normal Termux user.
 
 The repair target is a controlled fixture, not a production Nova module. This
 lets the smoke prove the complete promotion mechanism without manufacturing a
@@ -29,6 +31,7 @@ from nova_core.improvement.validation import ValidationPolicy
 from nova_core.models import RunResult, RunStatus
 
 REPAIR_FIXTURE = "tests/fixtures/self_repair/bug.py"
+PACKAGE_NAME = "com.hausshehe.nova"
 
 
 def _command(name: str, default: str) -> tuple[str, ...]:
@@ -45,7 +48,7 @@ def _promotion_commands(goal: str) -> tuple[tuple[str, ...], ...]:
     build = _command("NOVA_PROMOTION_BUILD_COMMAND", "gradle :app:assembleDebug")
     install = _command(
         "NOVA_PROMOTION_INSTALL_COMMAND",
-        "su -c 'pm install -r {candidate_apk}'",
+        f"su -c 'pm install -r {{candidate_apk}} && pm clear {PACKAGE_NAME}'",
     )
     smoke_raw = os.environ.get(
         "NOVA_PROMOTION_SMOKE_COMMAND",
