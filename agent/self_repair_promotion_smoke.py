@@ -6,6 +6,10 @@ The Groq model proposes the repair. Nova owns every validation command:
    package installation requires the privileged Android shell in this setup,
 3. run the existing bounded LLM navigation smoke against the candidate source.
 
+The repair target is a controlled fixture, not a production Nova module. This
+lets the smoke prove the complete promotion mechanism without manufacturing a
+production bug or promoting a meaningless change to runtime code.
+
 The model cannot choose, edit, reorder, or skip these commands. The live
 checkout is changed only after every stage passes.
 """
@@ -23,6 +27,8 @@ from nova_core.improvement.policy import ImprovementDecision
 from nova_core.improvement.promotion import PromotionPolicy, RepairPromotionGate
 from nova_core.improvement.validation import ValidationPolicy
 from nova_core.models import RunResult, RunStatus
+
+REPAIR_FIXTURE = "tests/fixtures/self_repair/bug.py"
 
 
 def _command(name: str, default: str) -> tuple[str, ...]:
@@ -63,7 +69,7 @@ def run(model: str | None = None, goal: str = "Finish Multi-Step Test") -> int:
     )
     improvement = orchestrator.improve(
         RunResult(status=RunStatus.FAILED, steps=1, error="step budget exhausted"),
-        source_paths=("nova_core/bug.py",),
+        source_paths=(REPAIR_FIXTURE,),
     )
 
     print(f"SELF_REPAIR_DECISION={improvement.decision.value}")
