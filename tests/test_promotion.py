@@ -116,19 +116,17 @@ def test_device_gate_sees_candidate_while_live_source_stays_baseline(tmp_path: P
     assert "return True" in (repo / "nova_core" / "bug.py").read_text(encoding="utf-8")
 
 
-def test_trusted_path_placeholders_render_to_candidate_worktree(tmp_path: Path) -> None:
+def test_trusted_path_placeholders_render_for_root_install_command(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     gate = RepairPromotionGate(
         repo,
-        PromotionPolicy((("python", "-c", "print('{worktree}|{candidate_apk}')"),)),
+        PromotionPolicy((("su", "-c", "pm install -r {candidate_apk}"),)),
     )
     worktree = tmp_path / "candidate worktree"
     worktree.mkdir()
     rendered = gate._render_command(gate.policy.validation_commands[0], worktree)
-    assert rendered[2] == (
-        f"print('{worktree.resolve()}|"
-        f"{(worktree / 'app/build/outputs/apk/debug/app-debug.apk').resolve()}')"
-    )
+    apk = (worktree / "app/build/outputs/apk/debug/app-debug.apk").resolve()
+    assert rendered == ("su", "-c", f"pm install -r {__import__('shlex').quote(str(apk))}")
 
 
 def test_successful_device_gate_promotes_and_commits(tmp_path: Path) -> None:
