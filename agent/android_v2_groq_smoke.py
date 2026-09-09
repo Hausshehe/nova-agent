@@ -124,6 +124,11 @@ def main() -> int:
     responder = FallbackResponder(responders)
     runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps, planner=planner)
     result = runtime.run()
+    if runtime.brain.plan is not None:
+        plan = runtime.brain.plan
+        print(f"V2_MISSION_PLAN revision={plan.revision} cursor={plan.cursor} complete={plan.complete}")
+        for index, plan_step in enumerate(plan.steps, start=1):
+            print(f"V2_MISSION_PLAN_{index}={plan_step.description!r}")
     print(f"V2_RUNTIME_STATUS={result.status.value}")
     print(f"V2_RUNTIME_STEPS={result.steps}")
     print(f"V2_RUNTIME_ERROR={result.error!r}")
