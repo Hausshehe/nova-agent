@@ -22,13 +22,13 @@ def test_proposer_returns_valid_candidate() -> None:
         assert "step_budget" in prompt
         return {
             "description": "Increase the bounded test budget",
-            "patch": "--- a/value.py\n+++ b/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-            "paths": ["value.py"],
+            "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
+            "paths": ["nova_core/value.py"],
         }
 
     candidate = LLMRepairProposer(responder).propose(RepairProposalContext(diagnosis, "abc123"))
     assert candidate.description == "Increase the bounded test budget"
-    assert candidate.paths == ("value.py",)
+    assert candidate.paths == ("nova_core/value.py",)
 
 
 def test_proposer_rejects_malformed_response() -> None:
