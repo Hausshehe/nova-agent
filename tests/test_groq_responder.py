@@ -14,10 +14,14 @@ class _Response:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        self.close()
         return False
 
     def read(self):
         return json.dumps(self._payload).encode("utf-8")
+
+    def close(self):
+        pass
 
 
 def test_groq_responder_builds_bounded_structured_request():
