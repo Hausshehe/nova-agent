@@ -1,9 +1,10 @@
 """Controlled real-Groq smoke for Nova's isolated self-repair boundary.
 
 The experiment creates a disposable git repository containing one deliberately
-broken Python file. Groq may propose a patch, but the candidate is validated
-and applied only inside RepairSandbox. The real nova-agent checkout is never
-used as the repair target and is never mutated.
+broken Python file and a regression test that exposes the bug. Groq may propose
+a patch, but the candidate is validated and applied only inside RepairSandbox.
+The real nova-agent checkout is never used as the repair target and is never
+mutated.
 """
 
 from __future__ import annotations
@@ -28,15 +29,31 @@ def run(model: str | None = None) -> int:
     with tempfile.TemporaryDirectory(prefix="nova-self-repair-") as directory:
         source = Path(directory)
         package = source / "nova_core"
+        tests = source / "tests"
         package.mkdir()
+        tests.mkdir()
+
         target = package / "bug.py"
         baseline = "def is_ready():\n    return False\n"
         target.write_text(baseline, encoding="utf-8")
+        (tests / "test_bug.py").write_text(
+            "from nova_core.bug import is_ready\n\n\ndef test_readiness():\n    assert is_ready() is True\n",
+            encoding="utf-8",
+        )
 
         _git(source, "init")
         _git(source, "add", ".")
         subprocess.run(
-            ("git", "-c", "user.email=test@example.com", "-c", "user.name=Nova Smoke", "commit", "-m", "baseline"),
+            (
+                "git",
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=Nova Smoke",
+                "commit",
+                "-m",
+                "baseline",
+            ),
             cwd=source,
             check=True,
             capture_output=True,
@@ -51,7 +68,7 @@ def run(model: str | None = None) -> int:
             source,
             responder,
             validation_policy=ValidationPolicy(
-                commands=(("python", "-m", "py_compile", "nova_core/bug.py"),),
+                commands=(("python", "-m", "pytest", "-q", "tests/test_bug.py"),),
             ),
         )
         result = orchestrator.improve(
