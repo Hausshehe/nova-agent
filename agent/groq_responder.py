@@ -37,8 +37,11 @@ Return a minimal unified diff that is a complete, standard unified diff accepted
 by `git apply`. For every changed file include both `--- a/path` and `+++ b/path`
 headers and a valid unified-diff hunk header with line ranges, such as
 `@@ -1,2 +1,2 @@`.
-Do not emit an abbreviated diff, prose around the diff, markdown fences, or an
-`@@` header without valid line ranges. Paths must exactly match the paths list.
+A valid one-line replacement looks like this:
+`--- a/example.py\n+++ b/example.py\n@@ -1 +1 @@\n-old_value\n+new_value\n`
+Replace the example paths and lines with the actual supplied source. Do not emit
+an abbreviated diff, prose around the diff, markdown fences, or an `@@` header
+without valid line ranges. Paths must exactly match the paths list.
 Make the smallest change that directly addresses the supplied failure evidence.
 Never modify files outside the supplied source evidence unless the evidence
 explicitly contains them. Do not modify secrets, workflows, binaries, or config.
