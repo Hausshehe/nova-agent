@@ -141,13 +141,13 @@ class Runtime:
                 self.brain.finish_verification(after, goal_achieved=True)
             elif self.invalid_decisions > self.max_invalid_decisions:
                 self.brain.fail("invalid decision budget exhausted")
-            elif self.controller.steps >= self.controller.max_steps and execution.accepted and execution.changed:
-                self.brain.fail("step budget exhausted")
             else:
                 self._replan_requested = not (execution.accepted and execution.changed)
                 if execution.accepted and execution.changed:
                     self.brain.advance_plan()
                 self.brain.finish_verification(after, goal_achieved=False)
+                if self.controller.steps >= self.controller.max_steps:
+                    self.brain.fail("step budget exhausted")
             return self.brain.state
 
         return self.brain.state
