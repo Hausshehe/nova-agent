@@ -1,8 +1,9 @@
 """Diagnostic for the launch-to-accessibility observation window.
 
 This intentionally does not modify Nova runtime behavior. It launches Nova with
--S, then samples the bridge observations for a short period so we can determine
-whether the first accessibility snapshot still reflects the previous app.
+-S using the normal Android shell command only, then samples bridge observations
+for a short period so we can determine whether the first accessibility snapshot
+still reflects the previous app.
 """
 
 from __future__ import annotations
@@ -18,29 +19,22 @@ MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 
 
 def reset_nova() -> None:
-    commands = [
-        ["su", "-c", f"am start -S -n {MAIN_ACTIVITY}"],
-        ["am", "start", "-S", "-n", MAIN_ACTIVITY],
-    ]
-    errors: list[str] = []
-    for command in commands:
-        try:
-            completed = subprocess.run(
-                command,
-                check=True,
-                timeout=3.0,
-                capture_output=True,
-                text=True,
-            )
-            print(
-                f"LAUNCH_COMMAND={command!r} "
-                f"stdout={completed.stdout.strip()!r} "
-                f"stderr={completed.stderr.strip()!r}"
-            )
-            return
-        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            errors.append(f"{command[0]}: {exc}")
-    raise RuntimeError("unable to launch Nova: " + "; ".join(errors))
+    command = ["am", "start", "-S", "-n", MAIN_ACTIVITY]
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            timeout=3.0,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"unable to launch Nova without root: {exc}") from exc
+    print(
+        f"LAUNCH_COMMAND={command!r} "
+        f"stdout={completed.stdout.strip()!r} "
+        f"stderr={completed.stderr.strip()!r}"
+    )
 
 
 def main() -> int:
@@ -67,6 +61,7 @@ def main() -> int:
                 "text": element.text,
                 "description": element.content_description,
                 "clickable": element.clickable,
+                "enabled": element.enabled,
             }
             for element in state.elements[:12]
         ]
