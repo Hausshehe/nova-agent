@@ -25,6 +25,14 @@ Choose one smallest safe action that advances the goal from the CURRENT state.
 After each action, reassess the new UI state instead of assuming the next step.
 Nova validates your decision before execution."""
 
+_NAVIGATION_RETRY_INSTRUCTION = """Your previous navigation response could not be validated as structured JSON.
+Return exactly one JSON object matching the required schema: action_type, target_id,
+value, reason. Do not emit markdown, prose, code fences, or extra fields.
+Use only the current observation and choose one smallest safe action that advances
+the goal from the CURRENT state. For a tap, target_id MUST exactly match one of
+the current observation.actions ids. If no target is appropriate, use an action
+with target_id null as required by the schema."""
+
 _REPAIR_INSTRUCTION = """You are Nova's isolated self-repair proposal engine.
 Return exactly one JSON object with description, patch, and paths.
 You propose code only. You have NO authority to execute commands, choose tests,
@@ -187,7 +195,12 @@ class GroqResponder:
         if not prompt.strip():
             raise ValueError(f"{self._task} prompt must not be blank")
         instruction = _REPAIR_INSTRUCTION if self._task == "repair" else _NAVIGATION_INSTRUCTION
-        result = self._request(instruction, prompt)
+        try:
+            result = self._request(instruction, prompt)
+        except RuntimeError as exc:
+            if self._task != "reasoning" or "json_validate_failed" not in str(exc):
+                raise
+            result = self._request(_NAVIGATION_RETRY_INSTRUCTION, prompt)
         if self._task == "repair" and _repair_patch_needs_retry(result):
             result = self._request(_REPAIR_DIFF_RETRY_INSTRUCTION, prompt)
         return result

@@ -67,6 +67,15 @@ class AndroidBridge:
             for item in (raw or [])
         )
 
+    @staticmethod
+    def _same_ui(before: WorldState, after: WorldState) -> bool:
+        """Compare observable UI content without depending on event sequencing."""
+        return (
+            before.package == after.package
+            and before.activity == after.activity
+            and before.elements == after.elements
+        )
+
     def observe(self) -> WorldState:
         response = self._request({"command": "observe"})
         state = response.get("state", response)
@@ -132,10 +141,19 @@ class AndroidBridge:
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
+        """Wait for either a new snapshot ID or observable UI change.
+
+        Accessibility does not guarantee that every action produces a new
+        callback before the bridge is polled. The snapshot ID is therefore
+        useful evidence, but it is not the sole definition of freshness.
+        A changed package/activity/UI tree is also a fresh observation.
+        """
         deadline = time.monotonic() + timeout
+        last_state: WorldState | None = None
         while True:
             state = self.observe()
-            if state.observation_id != previous.observation_id:
+            last_state = state
+            if state.observation_id != previous.observation_id or not self._same_ui(previous, state):
                 return state
             if time.monotonic() >= deadline:
                 raise TimeoutError(

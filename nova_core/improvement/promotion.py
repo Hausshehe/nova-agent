@@ -1,12 +1,14 @@
 """Controlled promotion gate for validated Nova self-repair candidates.
 
 Candidates are validated from an isolated git worktree before the live checkout
-is changed. Only a candidate that passes the trusted device gate is applied to
-the live checkout and committed. The repair model never controls commands.
+is changed. Only a candidate that passes every trusted validation command is
+applied to the live checkout and committed. The repair model never controls
+commands.
 """
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -28,24 +30,33 @@ class PromotionStatus(str, Enum):
 
 @dataclass(frozen=True)
 class PromotionPolicy:
-    """Fixed device-gate command and resource bounds.
+    """Fixed validation commands and resource bounds.
 
-    The command is supplied by trusted Nova configuration rather than by the
-    repair model. The repair model has no command authority.
+    Commands are supplied by trusted Nova configuration rather than by the
+    repair model. Each command runs in order inside the disposable candidate
+    worktree. A non-zero exit or timeout stops the gate immediately.
+
+    Trusted commands may use ``{worktree}`` and ``{candidate_apk}`` placeholders.
+    They are rendered by the gate from its own paths, never from model output.
+    Root should be used only for operations that actually require Android
+    privileges, such as installing a candidate APK.
     """
 
-    device_command: tuple[str, ...]
+    validation_commands: tuple[tuple[str, ...], ...]
     timeout_seconds: int = 120
     max_output_chars: int = 12_000
     commit_message: str = "promote validated self-repair"
 
     def __post_init__(self) -> None:
-        if not self.device_command or any(not part.strip() for part in self.device_command):
-            raise ValueError("device validation command must be non-empty")
+        if not self.validation_commands:
+            raise ValueError("at least one validation command is required")
+        for command in self.validation_commands:
+            if not command or any(not part.strip() for part in command):
+                raise ValueError("validation commands must be non-empty")
         if self.timeout_seconds <= 0:
-            raise ValueError("device validation timeout must be positive")
+            raise ValueError("validation timeout must be positive")
         if self.max_output_chars <= 0:
-            raise ValueError("device validation output limit must be positive")
+            raise ValueError("validation output limit must be positive")
         if not self.commit_message.strip():
             raise ValueError("promotion commit message must not be empty")
 
@@ -55,12 +66,17 @@ class PromotionResult:
     status: PromotionStatus
     baseline_revision: str
     promoted_revision: str | None = None
-    device_validation: ValidationRecord | None = None
+    validations: tuple[ValidationRecord, ...] = ()
     reason: str = ""
+
+    @property
+    def device_validation(self) -> ValidationRecord | None:
+        """Compatibility accessor for the first promotion validation."""
+        return self.validations[0] if self.validations else None
 
 
 class RepairPromotionGate:
-    """Promote an already sandbox-accepted candidate with isolated device testing."""
+    """Promote an already sandbox-accepted candidate with isolated validation."""
 
     def __init__(self, source_root: str | Path, policy: PromotionPolicy) -> None:
         self.source_root = Path(source_root).resolve()
@@ -126,6 +142,95 @@ class RepairPromotionGate:
         finally:
             patch_file.unlink(missing_ok=True)
 
+    def _render_command(self, command: tuple[str, ...], worktree: Path) -> tuple[str, ...]:
+        """Render only trusted path placeholders into a trusted command."""
+        candidate_apk = worktree / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+        replacements = {
+            "{worktree}": shlex.quote(str(worktree)),
+            "{candidate_apk}": shlex.quote(str(candidate_apk)),
+        }
+        return tuple(
+            part.replace("{worktree}", replacements["{worktree}"])
+            .replace("{candidate_apk}", replacements["{candidate_apk}"])
+            for part in command
+        )
+
+    def _run_root_command(self, rendered: tuple[str, ...], worktree: Path) -> tuple[int, str]:
+        """Enter an interactive root shell, run the trusted command, then exit.
+
+        The trusted install command is currently represented as ``su -c CMD``.
+        We deliberately turn that into an interactive ``su`` shell so Magisk
+        can present its normal authorization UI and the user can see the
+        install operation live. Only the fixed trusted CMD is sent to root,
+        followed by ``exit``. The repair model never supplies this command.
+        """
+        if len(rendered) != 3 or rendered[0] != "su" or rendered[1] != "-c":
+            raise ValueError("interactive root validation requires trusted 'su -c CMD' command")
+
+        print("PROMOTION_ROOT_ENTER=starting interactive root shell", flush=True)
+        process = subprocess.Popen(
+            ("su",),
+            cwd=worktree,
+            stdin=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert process.stdin is not None
+            process.stdin.write(rendered[2] + "\n")
+            process.stdin.write("exit\n")
+            process.stdin.flush()
+            process.stdin.close()
+            return_code = process.wait(timeout=self.policy.timeout_seconds)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            print(f"PROMOTION_ROOT_EXIT=return_code={process.returncode}", flush=True)
+
+        return return_code, "interactive root command output was attached to the terminal"
+
+    def _run_validation_commands(self, worktree: Path) -> tuple[ValidationRecord, ...]:
+        records: list[ValidationRecord] = []
+        for index, command in enumerate(self.policy.validation_commands, start=1):
+            rendered = self._render_command(command, worktree)
+            print(f"PROMOTION_STAGE_{index}_START={rendered!r}", flush=True)
+            try:
+                if rendered and rendered[0] == "su":
+                    completed_return_code, output = self._run_root_command(rendered, worktree)
+                else:
+                    completed = subprocess.run(
+                        rendered,
+                        cwd=worktree,
+                        text=True,
+                        capture_output=True,
+                        timeout=self.policy.timeout_seconds,
+                        check=False,
+                    )
+                    completed_return_code = completed.returncode
+                    output = self._output(completed.stdout, completed.stderr)
+            except subprocess.TimeoutExpired as exc:
+                output = self._output(getattr(exc, "stdout", "") or "", getattr(exc, "stderr", "") or "")
+                record = ValidationRecord(rendered, ValidationStatus.TIMED_OUT, -1, output)
+                records.append(record)
+                print(f"PROMOTION_STAGE_{index}_END=timed_out", flush=True)
+                break
+
+            record = ValidationRecord(
+                rendered,
+                ValidationStatus.PASSED if completed_return_code == 0 else ValidationStatus.FAILED,
+                completed_return_code,
+                output,
+            )
+            records.append(record)
+            print(
+                f"PROMOTION_STAGE_{index}_END={record.status.value}:return_code={record.return_code}",
+                flush=True,
+            )
+            if record.status is not ValidationStatus.PASSED:
+                break
+        return tuple(records)
+
     def promote(
         self,
         candidate: RepairCandidate,
@@ -160,51 +265,23 @@ class RepairPromotionGate:
                     reason="candidate failed promotion preflight in isolated worktree",
                 )
 
-            try:
-                device = subprocess.run(
-                    self.policy.device_command,
-                    cwd=worktree,
-                    text=True,
-                    capture_output=True,
-                    timeout=self.policy.timeout_seconds,
-                    check=False,
-                )
-            except subprocess.TimeoutExpired as exc:
-                record = ValidationRecord(
-                    self.policy.device_command,
-                    ValidationStatus.TIMED_OUT,
-                    -1,
-                    self._output(exc.stdout or "", exc.stderr or ""),
-                )
-                return PromotionResult(
-                    PromotionStatus.ROLLED_BACK,
-                    baseline,
-                    device_validation=record,
-                    reason="device validation timed out; live source was not changed",
-                )
+            validations = self._run_validation_commands(worktree)
+            if len(validations) != len(self.policy.validation_commands) or any(
+                record.status is not ValidationStatus.PASSED for record in validations
+            ):
+                status = PromotionStatus.ROLLED_BACK
+                last = validations[-1] if validations else None
+                if last and last.status is ValidationStatus.TIMED_OUT:
+                    reason = "promotion validation timed out; live source was not changed"
+                else:
+                    reason = "promotion validation failed; live source was not changed"
+                return PromotionResult(status, baseline, validations=validations, reason=reason)
 
-            record = ValidationRecord(
-                self.policy.device_command,
-                ValidationStatus.PASSED if device.returncode == 0 else ValidationStatus.FAILED,
-                device.returncode,
-                self._output(device.stdout, device.stderr),
-            )
-
-            if device.returncode != 0:
-                return PromotionResult(
-                    PromotionStatus.ROLLED_BACK,
-                    baseline,
-                    device_validation=record,
-                    reason="device validation failed; live source was not changed",
-                )
-
-            # The device gate can take time. Refuse to overwrite work committed
-            # by another process while this candidate was being validated.
             if self._revision() != baseline or not self._clean():
                 return PromotionResult(
                     PromotionStatus.REJECTED,
                     baseline,
-                    device_validation=record,
+                    validations=validations,
                     reason="live source changed during promotion validation",
                 )
 
@@ -216,8 +293,8 @@ class RepairPromotionGate:
                     return PromotionResult(
                         PromotionStatus.ROLLED_BACK,
                         baseline,
-                        device_validation=record,
-                        reason="candidate could not be applied after device validation",
+                        validations=validations,
+                        reason="candidate could not be applied after validation",
                     )
 
                 staged = self._git("add", "--", *candidate.paths)
@@ -226,7 +303,7 @@ class RepairPromotionGate:
                     return PromotionResult(
                         PromotionStatus.ROLLED_BACK,
                         baseline,
-                        device_validation=record,
+                        validations=validations,
                         reason="could not stage promoted files; baseline restored",
                     )
 
@@ -240,7 +317,7 @@ class RepairPromotionGate:
                     return PromotionResult(
                         PromotionStatus.ROLLED_BACK,
                         baseline,
-                        device_validation=record,
+                        validations=validations,
                         reason="could not commit promotion; baseline restored",
                     )
 
@@ -248,8 +325,8 @@ class RepairPromotionGate:
                     PromotionStatus.PROMOTED,
                     baseline,
                     promoted_revision=self._revision(),
-                    device_validation=record,
-                    reason="device validation passed and candidate was promoted",
+                    validations=validations,
+                    reason="all promotion validations passed and candidate was promoted",
                 )
             finally:
                 patch_file.unlink(missing_ok=True)
