@@ -95,6 +95,7 @@ object BridgeServer {
                 Log.d(TAG, "Request: ${request.optString("command")}")
                 val response = when (request.optString("command")) {
                     "observe" -> observe()
+                    "health" -> health()
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
@@ -105,6 +106,20 @@ object BridgeServer {
                 Log.e(TAG, "Bridge request failed: ${e.javaClass.simpleName}: ${e.message}", e)
                 PrintWriter(s.getOutputStream(), true).println(error(e.message ?: "bridge error").toString())
             }
+        }
+    }
+
+    private fun health(): JSONObject {
+        val service = NovaAccessibilityService.instance
+        val root = service?.rootInActiveWindow
+        val activePackage = root?.packageName?.toString()
+        root?.recycle()
+        return JSONObject().apply {
+            put("ok", true)
+            put("bridge", "running")
+            put("accessibility_connected", service != null)
+            put("active_package", activePackage ?: JSONObject.NULL)
+            put("operational", service != null && activePackage == PACKAGE)
         }
     }
 
