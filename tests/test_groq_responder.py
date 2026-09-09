@@ -30,24 +30,7 @@ def test_groq_responder_builds_bounded_structured_request():
     def opener(req, timeout):
         captured["request"] = req
         captured["timeout"] = timeout
-        return _Response(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "action_type": "tap",
-                                    "target_id": "target",
-                                    "value": None,
-                                    "reason": "select visible target",
-                                }
-                            )
-                        }
-                    }
-                ]
-            }
-        )
+        return _Response({"choices": [{"message": {"content": json.dumps({"action_type": "tap", "target_id": "target", "value": None, "reason": "select visible target"})}}]})
 
     responder = GroqResponder(api_key="test-key", model="test-model", timeout_seconds=7, opener=opener)
     result = responder('{"goal":"Tap target"}')
@@ -72,6 +55,29 @@ def test_groq_responder_builds_bounded_structured_request():
     assert "Do not create, transform, or infer an id from paths" in instruction
 
 
+def test_groq_responder_builds_mission_planning_schema():
+    captured = {}
+
+    def opener(req, timeout):
+        captured["request"] = req
+        return _Response({"choices": [{"message": {"content": json.dumps({"steps": ["start the task", "finish the task"]})}}]})
+
+    result = GroqResponder(api_key="test-key", model="test-model", opener=opener, task="planning")("{\"goal\":\"Finish\"}")
+
+    assert result["steps"] == ["start the task", "finish the task"]
+    body = json.loads(captured["request"].data.decode("utf-8"))
+    assert body["model"] == "test-model"
+    assert body["reasoning_effort"] == "low"
+    assert body["max_completion_tokens"] == 256
+    schema = body["response_format"]["json_schema"]
+    assert schema["name"] == "nova_mission_plan"
+    assert schema["strict"] is True
+    instruction = body["messages"][0]["content"]
+    assert "mission planning engine" in instruction
+    assert "NOT concrete UI actions" in instruction
+    assert "Do not invent UI element ids" in instruction
+
+
 def test_groq_responder_retries_navigation_json_validation_failure():
     calls = 0
     instructions = []
@@ -82,31 +88,8 @@ def test_groq_responder_retries_navigation_json_validation_failure():
         body = json.loads(req.data.decode("utf-8"))
         instructions.append(body["messages"][0]["content"])
         if calls == 1:
-            raise error.HTTPError(
-                req.full_url,
-                400,
-                "Bad Request",
-                {},
-                _Response({"error": {"message": "Failed to validate JSON", "code": "json_validate_failed"}}),
-            )
-        return _Response(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "action_type": "tap",
-                                    "target_id": "target",
-                                    "value": None,
-                                    "reason": "retry with strict JSON",
-                                }
-                            )
-                        }
-                    }
-                ]
-            }
-        )
+            raise error.HTTPError(req.full_url, 400, "Bad Request", {}, _Response({"error": {"message": "Failed to validate JSON", "code": "json_validate_failed"}}))
+        return _Response({"choices": [{"message": {"content": json.dumps({"action_type": "tap", "target_id": "target", "value": None, "reason": "retry with strict JSON"})}}]})
 
     responder = GroqResponder(api_key="test-key", model="test-model", opener=opener)
     result = responder('{"goal":"Tap target"}')
@@ -122,13 +105,7 @@ def test_groq_responder_does_not_retry_other_http_failure():
     def opener(req, timeout):
         nonlocal calls
         calls += 1
-        raise error.HTTPError(
-            req.full_url,
-            500,
-            "Server Error",
-            {},
-            _Response({"error": {"message": "server unavailable", "code": "internal_error"}}),
-        )
+        raise error.HTTPError(req.full_url, 500, "Server Error", {}, _Response({"error": {"message": "server unavailable", "code": "internal_error"}}))
 
     with pytest.raises(RuntimeError, match="HTTP 500"):
         GroqResponder(api_key="test-key", opener=opener)("{}")
@@ -141,23 +118,7 @@ def test_groq_responder_builds_repair_schema_without_command_authority():
 
     def opener(req, timeout):
         captured["request"] = req
-        return _Response(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "description": "Fix the broken predicate",
-                                    "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-                                    "paths": ["nova_core/value.py"],
-                                }
-                            )
-                        }
-                    }
-                ]
-            }
-        )
+        return _Response({"choices": [{"message": {"content": json.dumps({"description": "Fix the broken predicate", "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n", "paths": ["nova_core/value.py"]})}}]})
 
     responder = GroqResponder(api_key="test-key", model="test-model", opener=opener, task="repair")
     result = responder('{"failure_category":"runtime_failure"}')
@@ -181,23 +142,7 @@ def test_groq_responder_uses_stronger_default_model_for_repair():
 
     def opener(req, timeout):
         captured["request"] = req
-        return _Response(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "description": "Fix the broken predicate",
-                                    "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-                                    "paths": ["nova_core/value.py"],
-                                }
-                            )
-                        }
-                    }
-                ]
-            }
-        )
+        return _Response({"choices": [{"message": {"content": json.dumps({"description": "Fix the broken predicate", "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n", "paths": ["nova_core/value.py"]})}}]})
 
     GroqResponder(api_key="test-key", opener=opener, task="repair")("{}")
     body = json.loads(captured["request"].data.decode("utf-8"))
@@ -208,16 +153,8 @@ def test_groq_responder_uses_stronger_default_model_for_repair():
 def test_groq_responder_retries_repair_diff_missing_terminal_newline():
     calls = 0
     responses = [
-        {
-            "description": "Fix the broken predicate",
-            "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2",
-            "paths": ["nova_core/value.py"],
-        },
-        {
-            "description": "Fix the broken predicate",
-            "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n",
-            "paths": ["nova_core/value.py"],
-        },
+        {"description": "Fix the broken predicate", "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2", "paths": ["nova_core/value.py"]},
+        {"description": "Fix the broken predicate", "patch": "--- a/nova_core/value.py\n+++ b/nova_core/value.py\n@@ -1 +1 @@\n-VALUE = 1\n+VALUE = 2\n", "paths": ["nova_core/value.py"]},
     ]
 
     def opener(req, timeout):
@@ -235,7 +172,7 @@ def test_groq_responder_retries_repair_diff_missing_terminal_newline():
 
 def test_groq_responder_rejects_unknown_task():
     with pytest.raises(ValueError, match="task must be"):
-        GroqResponder(api_key="test-key", task="planning")
+        GroqResponder(api_key="test-key", task="unknown")
 
 
 def test_groq_responder_requires_api_key():
