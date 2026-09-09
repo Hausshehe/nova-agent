@@ -9,16 +9,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .repair import RepairCandidate
-from .validation import ValidationPolicy
+from .validation import ValidationPolicy, ValidationRecord, ValidationReport, ValidationStatus
 
 
 @dataclass(frozen=True)
 class SandboxResult:
-    accepted: bool
-    return_code: int
-    stdout: str
-    stderr: str
+    report: ValidationReport
     workspace: str
+
+    @property
+    def accepted(self) -> bool:
+        return self.report.accepted
 
 
 class RepairSandbox:
@@ -46,23 +47,30 @@ class RepairSandbox:
                     cwd=workspace, text=True, capture_output=True, timeout=self.policy.timeout_seconds,
                 )
                 if patch.returncode != 0:
-                    return SandboxResult(False, patch.returncode, patch.stdout, patch.stderr, str(workspace))
+                    record = ValidationRecord(("git", "apply", "--check"), ValidationStatus.FAILED, patch.returncode, self._output(patch.stdout, patch.stderr))
+                    return SandboxResult(ValidationReport((record,), False, "candidate patch failed preflight"), str(workspace))
                 applied = subprocess.run(
                     ("git", "apply", str(patch_file)),
                     cwd=workspace, text=True, capture_output=True, timeout=self.policy.timeout_seconds,
                 )
                 if applied.returncode != 0:
-                    return SandboxResult(False, applied.returncode, applied.stdout, applied.stderr, str(workspace))
-                outputs: list[str] = []
+                    record = ValidationRecord(("git", "apply"), ValidationStatus.FAILED, applied.returncode, self._output(applied.stdout, applied.stderr))
+                    return SandboxResult(ValidationReport((record,), False, "candidate patch could not be applied"), str(workspace))
+                records: list[ValidationRecord] = []
                 for command in self.policy.commands:
-                    tests = subprocess.run(
-                        command, cwd=workspace, text=True, capture_output=True,
-                        timeout=self.policy.timeout_seconds,
-                    )
-                    combined = (tests.stdout + tests.stderr)[-self.policy.max_output_chars:]
-                    outputs.append(f"$ {' '.join(command)}\n{combined}")
-                    if tests.returncode != 0:
-                        return SandboxResult(False, tests.returncode, "\n".join(outputs), "validation failed", str(workspace))
-                return SandboxResult(True, 0, "\n".join(outputs), "", str(workspace))
+                    try:
+                        result = subprocess.run(command, cwd=workspace, text=True, capture_output=True, timeout=self.policy.timeout_seconds)
+                    except subprocess.TimeoutExpired as exc:
+                        output = self._output(exc.stdout or "", exc.stderr or "")
+                        records.append(ValidationRecord(command, ValidationStatus.TIMED_OUT, -1, output))
+                        return SandboxResult(ValidationReport(tuple(records), False, "validation timed out"), str(workspace))
+                    status = ValidationStatus.PASSED if result.returncode == 0 else ValidationStatus.FAILED
+                    records.append(ValidationRecord(command, status, result.returncode, self._output(result.stdout, result.stderr)))
+                    if status is ValidationStatus.FAILED:
+                        return SandboxResult(ValidationReport(tuple(records), False, "a required validation failed"), str(workspace))
+                return SandboxResult(ValidationReport(tuple(records), True, "all required validations passed"), str(workspace))
             except subprocess.TimeoutExpired:
-                return SandboxResult(False, -1, "", "validation timed out", str(workspace))
+                return SandboxResult(ValidationReport((), False, "sandbox operation timed out"), str(workspace))
+
+    def _output(self, stdout: str, stderr: str) -> str:
+        return (stdout + stderr)[-self.policy.max_output_chars:]
