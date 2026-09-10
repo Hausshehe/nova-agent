@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from nova_core.learning_memory import LearningMemory, MissionLearningRecord
 from nova_core.learning_policy import LearningApplicationPolicy
-from nova_core.models import Goal
+from nova_core.models import Goal, Observation
 from nova_core.runtime import Runtime
 
 
@@ -48,10 +48,9 @@ def test_runtime_reasoning_context_applies_learning_policy() -> None:
         learning_memory=memory,
     )
     runtime.brain.start()
-    # Install the minimum current observation required by RuntimeBrain without
-    # exercising the Android observer or the mission lifecycle.
-    from nova_core.models import Observation
-    runtime.brain.record_observation(Observation("pkg", "activity", 1, ()))
+    observation = Observation("pkg", "activity", 1, ())
+    runtime.brain.record_observation(observation)
+    runtime.evidence.observe(observation)
 
     context = runtime._reasoning_context()
 
@@ -86,8 +85,9 @@ def test_runtime_accepts_injected_learning_policy() -> None:
         learning_policy=policy,
     )
     runtime.brain.start()
-    from nova_core.models import Observation
-    runtime.brain.record_observation(Observation("pkg", "activity", 1, ()))
+    observation = Observation("pkg", "activity", 1, ())
+    runtime.brain.record_observation(observation)
+    runtime.evidence.observe(observation)
 
     runtime._reasoning_context()
 
