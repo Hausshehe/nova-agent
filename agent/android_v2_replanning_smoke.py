@@ -25,7 +25,17 @@ class ReplanningSmokePlanner:
 
     def plan(self, context: ReasoningContext) -> Plan:
         self.plan_calls += 1
-        return Plan((PlanStep("tap Recovery Primary Action"),), revision=0)
+        # Keep the same intent twice so the first successful progress step
+        # advances to a second primary attempt. The second attempt is
+        # intentionally idempotent on the Android harness, allowing F.7 to
+        # observe accepted-but-unchanged behavior before replanning.
+        return Plan(
+            (
+                PlanStep("tap Recovery Primary Action"),
+                PlanStep("tap Recovery Primary Action"),
+            ),
+            revision=0,
+        )
 
     def replan(self, context: ReasoningContext, previous: Plan) -> Plan:
         self.replan_calls += 1
