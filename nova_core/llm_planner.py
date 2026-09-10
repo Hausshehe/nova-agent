@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, is_dataclass
 from typing import Callable, Protocol
 
@@ -11,6 +12,15 @@ from .reasoning import ReasoningContext
 
 
 _MAX_PLAN_STEPS = 8
+_FORBIDDEN_INTENT_PATTERNS = (
+    r"\bwait for\b",
+    r"\bcheck if\b",
+    r"\bcheck whether\b",
+    r"\bdecide what to do\b",
+    r"\bif no progress\b",
+    r"\bif .*\bthen\b",
+    r"\bwhen .*\bthen\b",
+)
 
 
 class PlannerTransport(Protocol):
@@ -105,8 +115,16 @@ class LLMPlanner:
         if len(steps) > self.max_steps:
             raise ValueError(f"planner returned more than {self.max_steps} steps")
         normalized: list[PlanStep] = []
+        previous_normalized: str | None = None
         for step in steps:
             if not isinstance(step, str) or not step.strip():
                 raise ValueError("planner steps must be non-empty strings")
-            normalized.append(PlanStep(step.strip()))
+            normalized_text = " ".join(step.split())
+            lowered = normalized_text.casefold()
+            if any(re.search(pattern, lowered) for pattern in _FORBIDDEN_INTENT_PATTERNS):
+                raise ValueError(f"planner returned meta/control-flow intent: {normalized_text!r}")
+            if previous_normalized == lowered:
+                raise ValueError(f"planner returned duplicate consecutive intent: {normalized_text!r}")
+            normalized.append(PlanStep(normalized_text))
+            previous_normalized = lowered
         return tuple(normalized)
