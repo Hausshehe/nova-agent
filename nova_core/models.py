@@ -72,6 +72,7 @@ class Decision:
     action: Action
     reason: str = ""
     target_label: str = ""
+    plan_stale: bool = False
 
 
 @dataclass(frozen=True)
