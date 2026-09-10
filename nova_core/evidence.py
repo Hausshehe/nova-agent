@@ -33,6 +33,8 @@ class StateEvidence:
     last_execution_changed: bool | None = None
     last_consequence: tuple[str, ...] = ()
     rejected_actions: tuple[tuple[str, str | None, str], ...] = ()
+    observation_changed: bool | None = None
+    unchanged_observation_count: int = 0
 
 
 class EvidenceTracker:
@@ -46,19 +48,30 @@ class EvidenceTracker:
         self._removed_labels = ()
         self._rejections = []
         self._max_rejections = max_rejections
+        self._previous_signature = None
+        self._current_signature = None
+        self._unchanged_observation_count = 0
 
     def observe(self, observation: Observation) -> None:
         previous = self._current
         self._previous = previous
         self._current = observation
+        previous_signature = self._current_signature
+        self._previous_signature = previous_signature
+        self._current_signature = _observation_signature(observation)
         if previous is None:
             self._added_labels = ()
             self._removed_labels = ()
+            self._unchanged_observation_count = 0
             return
         before = _labels(previous)
         after = _labels(observation)
         self._added_labels = tuple(label for label in after if label not in before)
         self._removed_labels = tuple(label for label in before if label not in after)
+        if self._current_signature == previous_signature:
+            self._unchanged_observation_count += 1
+        else:
+            self._unchanged_observation_count = 0
 
     def record_rejection(self, decision, error: str) -> None:
         if decision is None:
@@ -90,6 +103,8 @@ class EvidenceTracker:
             labels, self._added_labels, self._removed_labels, blocking, hints,
             _unsatisfied_prerequisites(self._current, blocking, hints),
             last_action, accepted, changed, consequence, tuple(self._rejections),
+            self._current_signature != self._previous_signature if self._previous_signature is not None else None,
+            self._unchanged_observation_count,
         )
 
 
@@ -103,6 +118,26 @@ def infer_unsatisfied_prerequisites(observation: Observation) -> tuple[tuple[str
 
 def _labels(observation: Observation) -> tuple[str, ...]:
     return tuple(value for element in observation.elements if element.visible for value in (element.text, element.content_description) if value)
+
+
+def _observation_signature(observation: Observation) -> tuple[object, ...]:
+    """Return a stable UI fingerprint that intentionally ignores revision numbers."""
+    return tuple(
+        (
+            element.id,
+            element.text,
+            element.content_description,
+            element.clickable,
+            element.enabled,
+            element.editable,
+            element.scrollable,
+            element.checkable,
+            element.checked,
+            element.focused,
+            element.visible,
+        )
+        for element in observation.elements
+    )
 
 
 def _normalize(label: str) -> str:
