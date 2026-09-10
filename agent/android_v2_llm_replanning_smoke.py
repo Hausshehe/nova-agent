@@ -84,9 +84,12 @@ class RecoverySmokeVerifier:
     def verify(self, goal, before, decision, result, after) -> bool:
         if not result.accepted or not result.changed:
             return False
+        # The recovery status is the authoritative completion marker for this
+        # harness. It may be outside the current viewport because the controls
+        # live inside a ScrollView, so Accessibility visibility is not a safe
+        # requirement for this smoke's terminal-state assertion.
         return any(
-            element.visible
-            and "recovery completed" in f"{element.text} {element.content_description}".casefold()
+            "recovery completed" in f"{element.text} {element.content_description}".casefold()
             and not element.clickable
             for element in after.elements
         )
