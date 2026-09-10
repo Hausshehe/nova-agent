@@ -10,6 +10,12 @@ from .mission_state import MissionState
 from .models import RunResult
 
 
+_RETRIEVAL_STOPWORDS = frozenset({
+    "a", "an", "and", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with",
+    "change", "check", "close", "complete", "finish", "get", "go", "launch", "open", "start", "use",
+})
+
+
 @dataclass(frozen=True)
 class MissionLearningRecord:
     """Factual summary of a completed mission that can be reused later."""
@@ -99,5 +105,5 @@ class LearningMemory:
         return {
             token
             for token in re.findall(r"[a-z0-9]+", text.casefold())
-            if len(token) > 1
+            if len(token) > 1 and token not in _RETRIEVAL_STOPWORDS
         }
