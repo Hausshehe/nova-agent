@@ -19,6 +19,18 @@ class FakeObserver:
         )
 
 
+class FreshFakeObserver(FakeObserver):
+    """FreshObserver implementation that must not be used for no-op actions."""
+
+    def __init__(self):
+        super().__init__()
+        self.fresh_calls = 0
+
+    def observe_fresh(self, previous):
+        self.fresh_calls += 1
+        raise AssertionError("unchanged action must not wait for a fresh UI transition")
+
+
 class FakeExecutor:
     def __init__(self, changed=True):
         self.changed = changed
@@ -78,9 +90,6 @@ def test_runtime_allows_one_unchanged_retry_before_replanning():
 
     result = runtime.run()
 
-    # Unchanged executions do not consume the successful-progress step budget.
-    # The second unchanged action triggers the bounded replan, which then
-    # exhausts the configured replan budget on the next unchanged cycle.
     assert result.error == "replan budget exhausted"
     assert planner.plan_calls == 1
     assert planner.replan_calls == 1
@@ -102,3 +111,17 @@ def test_runtime_replans_after_two_unchanged_executions():
     assert runtime.replans == 1
     assert runtime.brain.plan is not None
     assert runtime.brain.plan.revision == 1
+
+
+def test_runtime_does_not_wait_for_fresh_observation_after_accepted_unchanged_action():
+    planner = RecordingPlanner()
+    observer = FreshFakeObserver()
+    runtime = Runtime(
+        Goal("Finish the task"), observer, FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        max_steps=2, max_replans=1, planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "replan budget exhausted"
+    assert observer.fresh_calls == 0

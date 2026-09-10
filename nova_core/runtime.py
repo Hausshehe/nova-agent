@@ -129,7 +129,12 @@ class Runtime:
             execution = self.controller.last_execution
             assert before is not None and decision is not None and execution is not None
 
-            if isinstance(self.observer, FreshObserver):
+            # A successful action that reports a UI change needs a fresh
+            # post-action snapshot. Rejected and accepted-but-unchanged
+            # actions may legitimately produce no new Accessibility snapshot,
+            # so observe the current state directly instead of waiting for a
+            # change that the executor explicitly says did not happen.
+            if isinstance(self.observer, FreshObserver) and execution.accepted and execution.changed:
                 after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
@@ -152,16 +157,9 @@ class Runtime:
                     self._replan_requested = False
                     self.brain.advance_plan()
                 elif not execution.accepted:
-                    # A rejected action is direct evidence that the current
-                    # plan may no longer fit the live UI, so replan immediately.
                     self._unchanged_actions = 0
                     self._replan_requested = True
                 else:
-                    # An accepted action that changes nothing is weaker evidence.
-                    # Give the reasoner one fresh-state retry before spending an
-                    # additional planner call. This is the key F.7 containment
-                    # rule: ordinary progress cannot accidentally become a
-                    # planner/reasoner loop.
                     self._unchanged_actions += 1
                     self._replan_requested = (
                         self._unchanged_actions >= _UNCHANGED_ACTIONS_BEFORE_REPLAN
