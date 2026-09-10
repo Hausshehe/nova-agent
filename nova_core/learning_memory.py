@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -71,3 +72,32 @@ class LearningMemory:
 
     def snapshot(self) -> list[dict[str, Any]]:
         return [entry.snapshot() for entry in self.entries]
+
+    def retrieve(self, goal: str, max_results: int = 4) -> tuple[MissionLearningRecord, ...]:
+        """Return the most relevant recent records using deterministic token overlap."""
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError("goal must be a non-empty string")
+        if max_results < 1:
+            raise ValueError("max_results must be at least 1")
+
+        goal_tokens = self._tokens(goal)
+        if not goal_tokens:
+            return ()
+
+        ranked: list[tuple[int, int, MissionLearningRecord]] = []
+        for index, record in enumerate(self.entries):
+            record_tokens = self._tokens(record.goal)
+            overlap = len(goal_tokens & record_tokens)
+            if overlap:
+                ranked.append((overlap, index, record))
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return tuple(record for _, _, record in ranked[:max_results])
+
+    @staticmethod
+    def _tokens(text: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", text.casefold())
+            if len(token) > 1
+        }
