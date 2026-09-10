@@ -26,6 +26,7 @@ class AndroidBridgeAdapter:
         self.expected_package = expected_package
         self._revision = 0
         self._last_legacy_state = None
+        self.last_fresh_timed_out = False
 
     @staticmethod
     def _to_observation(state, revision: int) -> Observation:
@@ -89,15 +90,17 @@ class AndroidBridgeAdapter:
         if self._last_legacy_state is None:
             raise ValueError("cannot observe fresh state before an initial observation")
 
+        self.last_fresh_timed_out = False
         try:
             state = self.bridge.wait_for_fresh_observation(
                 self._last_legacy_state, timeout=2.0, poll_seconds=0.2
             )
         except TimeoutError:
-            # No observable UI change is not a transport failure. It is valid
-            # evidence that the action may have been ineffective. Return the
-            # latest tree so the runtime verifier can compare it with `before`
-            # and route the outcome into its bounded recovery/replanning path.
+            # No observable UI change is not a transport failure. Preserve this
+            # fact explicitly so the runtime can reconcile an optimistic bridge
+            # result without applying that Android-specific rule to every
+            # synthetic FreshObserver used by the core tests.
+            self.last_fresh_timed_out = True
             state = self.bridge.observe()
 
         candidate = self._to_observation(state, self._revision + 1)
@@ -183,6 +186,6 @@ class AndroidGoalVerifier:
     ) -> bool:
         if not result.accepted or not result.changed:
             return False
-        if before == after:
+        if before.package == after.package and before.activity == after.activity and before.elements == after.elements:
             return False
         return bool(self.goal_evaluator(goal.text, after))
