@@ -15,20 +15,7 @@ from .state_machine import RunState
 class Runtime:
     """Drive one bounded Android mission through the runtime brain."""
 
-    def __init__(
-        self,
-        goal: Goal,
-        observer: Observer,
-        reasoner: Reasoner,
-        executor: Executor,
-        verifier: Verifier,
-        *,
-        max_steps: int = 20,
-        max_invalid_decisions: int = 3,
-        max_replans: int = 2,
-        action_guard: ActionGuard | None = None,
-        planner: Planner | None = None,
-    ) -> None:
+    def __init__(self, goal: Goal, observer: Observer, reasoner: Reasoner, executor: Executor, verifier: Verifier, *, max_steps: int = 20, max_invalid_decisions: int = 3, max_replans: int = 2, action_guard: ActionGuard | None = None, planner: Planner | None = None) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
         if max_replans < 0:
@@ -49,15 +36,12 @@ class Runtime:
         self._replan_requested = False
 
     def _record_invalid_decision(self, error: str) -> None:
-        """Record one model/guard rejection without consuming action progress."""
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
 
     def _update_plan_after_observation(self) -> None:
-        """Create or replace the bounded plan only from fresh runtime evidence."""
-        context = self.brain.reasoning_context(
-            evidence=self.evidence.snapshot(self.controller.history),
-        )
+        """Create or replace the bounded plan using the newest runtime evidence."""
+        context = self.brain.reasoning_context(evidence=self.evidence.snapshot(self.controller.history))
         try:
             if self.brain.plan is None:
                 self.brain.set_plan(self.planner.plan(context))
@@ -73,11 +57,9 @@ class Runtime:
 
     def step(self) -> RunState:
         state = self.brain.state
-
         if state is RunState.CREATED:
             self.brain.start()
             return self.brain.state
-
         if state is RunState.OBSERVING:
             observation = self.observer.observe()
             self.evidence.observe(observation)
@@ -85,11 +67,8 @@ class Runtime:
             if self.brain.state is RunState.DECIDING:
                 self._update_plan_after_observation()
             return self.brain.state
-
         if state is RunState.DECIDING:
-            context = self.brain.reasoning_context(
-                evidence=self.evidence.snapshot(self.controller.history),
-            )
+            context = self.brain.reasoning_context(evidence=self.evidence.snapshot(self.controller.history))
             try:
                 decision = self.reasoner.decide(context)
             except ValueError as exc:
@@ -104,12 +83,9 @@ class Runtime:
                 return self.brain.state
             self.brain.record_decision(decision)
             return self.brain.state
-
         if state is RunState.EXECUTING:
             assert self.controller.decision is not None
-            guard = self.action_guard.check(
-                self.controller.decision, self.controller.observation  # type: ignore[arg-type]
-            )
+            guard = self.action_guard.check(self.controller.decision, self.controller.observation)  # type: ignore[arg-type]
             if not guard.allowed:
                 self._record_invalid_decision(guard.reason)
                 execution = ExecutionResult(False, False, guard.reason)
@@ -117,52 +93,41 @@ class Runtime:
                 execution = self.executor.execute(self.controller.decision.action)
             self.brain.record_execution(execution)
             return self.brain.state
-
         if state is RunState.VERIFYING:
             before = self.controller.observation
             decision = self.controller.decision
             execution = self.controller.last_execution
             assert before is not None and decision is not None and execution is not None
-
             if isinstance(self.observer, FreshObserver):
                 after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
             self.evidence.observe(after)
-
-            achieved = self.verifier.verify(
-                self.controller.goal,
-                before,
-                decision,
-                execution,
-                after,
-            )
+            achieved = self.verifier.verify(self.controller.goal, before, decision, execution, after)
             if achieved:
                 self.brain.finish_verification(after, goal_achieved=True)
             elif self.invalid_decisions > self.max_invalid_decisions:
                 self.brain.fail("invalid decision budget exhausted")
             else:
-                self._replan_requested = not (execution.accepted and execution.changed)
+                # Every fresh post-action state is new planning evidence. A
+                # meaningful transition requests bounded replanning so the
+                # next intent adapts to reality instead of a stale plan.
                 if execution.accepted and execution.changed:
                     self.brain.advance_plan()
+                self._replan_requested = self.brain.plan is not None and not self.brain.plan.complete
                 self.brain.finish_verification(after, goal_achieved=False)
                 if self.controller.steps >= self.controller.max_steps:
                     self.brain.fail("step budget exhausted")
             return self.brain.state
-
         return self.brain.state
 
     def run(self) -> RunResult:
-        # The phase budget is a final containment boundary. Per-step invalid
-        # decisions are also bounded so repeated rejected actions cannot leave
-        # a manually stepped Runtime non-terminal forever.
         phase_budget = self.controller.max_steps * 8 + self.max_invalid_decisions * 2 + self.max_replans * 2 + 1
         for _ in range(phase_budget):
             result = self.controller.result()
             if result is not None:
                 return result
             self.step()
-
         if self.controller.result() is None:
             self.brain.fail("runtime phase budget exhausted")
         result = self.controller.result()
