@@ -35,6 +35,37 @@ def test_plan_rejects_empty_or_overlarge_sequences():
         Plan(tuple(PlanStep(str(i)) for i in range(9)))
 
 
+def test_plan_progress_snapshot_explicitly_separates_completed_current_and_remaining():
+    plan = Plan(
+        (PlanStep("open settings"), PlanStep("enable Wi-Fi"), PlanStep("verify connection")),
+        cursor=1,
+    )
+
+    assert plan.progress_snapshot == {
+        "status": "in_progress",
+        "completed": ["open settings"],
+        "current": "enable Wi-Fi",
+        "remaining": ["enable Wi-Fi", "verify connection"],
+        "cursor": 1,
+        "total": 3,
+        "revision": 0,
+    }
+
+
+def test_completed_plan_progress_snapshot_has_no_current_or_remaining_intent():
+    plan = Plan((PlanStep("finish"),), cursor=1)
+
+    assert plan.progress_snapshot == {
+        "status": "complete",
+        "completed": ["finish"],
+        "current": None,
+        "remaining": [],
+        "cursor": 1,
+        "total": 1,
+        "revision": 0,
+    }
+
+
 def test_goal_planner_creates_one_intent_without_inventing_actions():
     plan = GoalPlanner().plan(_context())
 
