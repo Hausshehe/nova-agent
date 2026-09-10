@@ -66,3 +66,50 @@ def test_learning_memory_rejects_invalid_capacity_or_overflow() -> None:
         raise AssertionError("expected overflow to fail")
     except ValueError as exc:
         assert str(exc) == "entries exceed max_entries"
+
+
+def test_learning_memory_retrieves_relevant_goals_and_prefers_recent_ties() -> None:
+    records = (
+        MissionLearningRecord("Open the camera", "succeeded", 1),
+        MissionLearningRecord("Open settings", "succeeded", 1),
+        MissionLearningRecord("Change notification settings", "succeeded", 2),
+        MissionLearningRecord("Open the settings page", "failed", 3),
+    )
+    memory = LearningMemory(entries=records)
+
+    retrieved = memory.retrieve("Open settings page", max_results=3)
+
+    assert [record.goal for record in retrieved] == [
+        "Open the settings page",
+        "Open settings",
+        "Change notification settings",
+    ]
+
+
+def test_learning_memory_retrieval_excludes_unrelated_goals_and_is_bounded() -> None:
+    memory = LearningMemory(entries=(
+        MissionLearningRecord("Open camera", "succeeded", 1),
+        MissionLearningRecord("Open gallery", "succeeded", 1),
+        MissionLearningRecord("Open settings", "succeeded", 1),
+    ))
+
+    retrieved = memory.retrieve("Change Wi-Fi settings", max_results=1)
+
+    assert [record.goal for record in retrieved] == ["Open settings"]
+
+
+def test_learning_memory_retrieval_rejects_invalid_inputs() -> None:
+    memory = LearningMemory()
+
+    for goal in ("", "   ", 123):
+        try:
+            memory.retrieve(goal)  # type: ignore[arg-type]
+            raise AssertionError("expected invalid goal to fail")
+        except ValueError as exc:
+            assert str(exc) == "goal must be a non-empty string"
+
+    try:
+        memory.retrieve("open settings", max_results=0)
+        raise AssertionError("expected invalid result limit to fail")
+    except ValueError as exc:
+        assert str(exc) == "max_results must be at least 1"
