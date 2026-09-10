@@ -109,12 +109,13 @@ class Runtime:
             elif self.invalid_decisions > self.max_invalid_decisions:
                 self.brain.fail("invalid decision budget exhausted")
             else:
-                # Every fresh post-action state is new planning evidence. A
-                # meaningful transition requests bounded replanning so the
-                # next intent adapts to reality instead of a stale plan.
+                # Normal progress advances the existing mission plan. A replan
+                # is reserved for an ineffective action, where the current
+                # strategy has evidence against it. This preserves plan
+                # stability while still allowing bounded recovery.
+                self._replan_requested = not (execution.accepted and execution.changed)
                 if execution.accepted and execution.changed:
                     self.brain.advance_plan()
-                self._replan_requested = self.brain.plan is not None and not self.brain.plan.complete
                 self.brain.finish_verification(after, goal_achieved=False)
                 if self.controller.steps >= self.controller.max_steps:
                     self.brain.fail("step budget exhausted")
