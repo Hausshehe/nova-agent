@@ -62,6 +62,24 @@ class RunController:
             self.steps += 1
         self.history = self.history + (ReasoningStep(self.decision, result),)
 
+    def reconcile_execution(self, result: ExecutionResult) -> None:
+        """Correct optimistic bridge progress using the verified UI outcome."""
+        if self.state != RunState.VERIFYING:
+            raise InvalidTransition("execution can only be reconciled while verifying")
+        if not self.history:
+            raise RuntimeError("execution cannot be reconciled without execution history")
+        previous = self.history[-1].execution
+        if previous == result:
+            return
+        if previous.accepted and previous.changed and not (result.accepted and result.changed):
+            self.steps -= 1
+        elif not (previous.accepted and previous.changed) and result.accepted and result.changed:
+            self.steps += 1
+        self.last_execution = result
+        self.history = self.history[:-1] + (
+            replace(self.history[-1], execution=result),
+        )
+
     def record_post_observation(self, observation: Observation) -> None:
         """Attach the fresh result of the current action to its history entry."""
         if self.state != RunState.VERIFYING:
