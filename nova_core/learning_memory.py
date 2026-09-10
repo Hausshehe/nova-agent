@@ -90,12 +90,18 @@ class LearningMemory:
         if not goal_tokens:
             return ()
 
-        ranked: list[tuple[int, int, MissionLearningRecord]] = []
+        ranked: list[tuple[float, int, MissionLearningRecord]] = []
         for index, record in enumerate(self.entries):
             record_tokens = self._tokens(record.goal)
             overlap = len(goal_tokens & record_tokens)
-            if overlap:
-                ranked.append((overlap, index, record))
+            if not overlap:
+                continue
+            # Prefer records that explain a larger share of their own goal.
+            # This prevents a generic shared word from outranking a concise,
+            # highly specific historical mission. Recent records still break
+            # genuine score ties.
+            specificity = overlap / len(record_tokens)
+            ranked.append((specificity, index, record))
 
         ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return tuple(record for _, _, record in ranked[:max_results])
