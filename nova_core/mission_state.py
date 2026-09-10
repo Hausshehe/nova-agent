@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .models import Decision, ExecutionResult, Goal, Observation
+from .outcome_memory import ActionOutcome, OutcomeMemory
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class MissionState:
     changed_actions: int = 0
     failed_actions: int = 0
     goal_verified: bool = False
+    outcome_memory: OutcomeMemory = OutcomeMemory()
 
     @property
     def progress_evidence(self) -> tuple[str, ...]:
@@ -47,18 +49,14 @@ class MissionState:
         return tuple(evidence)
 
     def reasoning_snapshot(self) -> dict[str, Any]:
-        """Return bounded state facts for model reasoning and planning.
-
-        This is deliberately descriptive rather than predictive. The model can
-        see what has happened and what the runtime can prove, but it is not
-        handed a fabricated claim about what should happen next.
-        """
+        """Return bounded state facts for model reasoning and planning."""
         snapshot: dict[str, Any] = {
             "goal_verified": self.goal_verified,
             "successful_actions": self.successful_actions,
             "changed_actions": self.changed_actions,
             "failed_actions": self.failed_actions,
             "progress_evidence": list(self.progress_evidence),
+            "recent_action_outcomes": self.outcome_memory.snapshot(),
         }
         if self.observation is not None:
             snapshot["current_observation_revision"] = self.observation.revision
@@ -80,28 +78,35 @@ class MissionState:
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.goal_verified,
+            self.goal_verified, self.outcome_memory,
         )
 
     def decided(self, decision: Decision) -> "MissionState":
         return MissionState(
             self.goal, self.observation, decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            False,
+            False, self.outcome_memory,
         )
 
     def executed(self, result: ExecutionResult) -> "MissionState":
+        outcome = ActionOutcome.from_execution(
+            self.last_decision.action.type if self.last_decision else __import__("nova_core.models", fromlist=["ActionType"]).ActionType.WAIT,
+            self.last_decision.action.target_id if self.last_decision else None,
+            self.last_decision.target_label if self.last_decision else "",
+            result,
+        )
         return MissionState(
             self.goal, self.observation, self.last_decision, result,
             self.successful_actions + int(result.accepted),
             self.changed_actions + int(result.accepted and result.changed),
             self.failed_actions + int(not result.accepted),
             False,
+            self.outcome_memory.remember(outcome),
         )
 
     def verified(self, observation: Observation, goal_achieved: bool) -> "MissionState":
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            goal_achieved,
+            goal_achieved, self.outcome_memory,
         )
