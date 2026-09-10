@@ -60,6 +60,49 @@ def test_reasoning_snapshot_exposes_what_happened_without_predicting_next_action
     assert "next_action" not in snapshot
 
 
+def test_mission_assessment_distinguishes_progress_from_stall() -> None:
+    state = MissionState(Goal("Finish the task")).observed(observation()).decided(decision())
+
+    progressing = state.executed(ExecutionResult(accepted=True, changed=True))
+    stalled = state.executed(ExecutionResult(accepted=True, changed=False))
+
+    assert progressing.assessment == {
+        "status": "progressing",
+        "confidence": "medium",
+        "basis": "accepted action produced observable change",
+    }
+    assert stalled.assessment == {
+        "status": "stalled",
+        "confidence": "medium",
+        "basis": "accepted action produced no observable change",
+    }
+
+
+def test_mission_assessment_marks_rejection_as_blocked_and_verification_as_high_confidence() -> None:
+    state = MissionState(Goal("Finish the task")).observed(observation()).decided(decision())
+    blocked = state.executed(ExecutionResult(accepted=False, changed=False, error="blocked"))
+    verified = blocked.verified(observation(2), goal_achieved=True)
+
+    assert blocked.assessment["status"] == "blocked"
+    assert blocked.assessment["confidence"] == "high"
+    assert verified.assessment == {
+        "status": "verified",
+        "confidence": "high",
+        "basis": "goal verifier",
+    }
+
+
+def test_reasoning_snapshot_exposes_evidence_backed_assessment() -> None:
+    state = MissionState(Goal("Finish the task")).observed(observation()).decided(decision())
+    state = state.executed(ExecutionResult(accepted=True, changed=False))
+
+    assert state.reasoning_snapshot()["assessment"] == {
+        "status": "stalled",
+        "confidence": "medium",
+        "basis": "accepted action produced no observable change",
+    }
+
+
 def test_runtime_brain_exposes_current_mission_state_to_reasoning() -> None:
     brain = RuntimeBrain.create(Goal("Finish the task"), max_steps=3)
     brain.start()
