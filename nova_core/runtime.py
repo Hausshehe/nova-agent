@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
+from .learning_memory import LearningMemory, MissionLearningRecord
 from .models import ExecutionResult, Goal, RunResult
 from .planning import GoalPlanner, Planner, Plan
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
@@ -31,6 +32,7 @@ class Runtime:
         max_replans: int = 2,
         action_guard: ActionGuard | None = None,
         planner: Planner | None = None,
+        learning_memory: LearningMemory | None = None,
     ) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
@@ -49,6 +51,8 @@ class Runtime:
         self.planner = planner or GoalPlanner()
         self.max_replans = max_replans
         self.replans = 0
+        self.learning_memory = learning_memory or LearningMemory()
+        self._learning_recorded = False
         self._replan_requested = False
         self._unchanged_actions = 0
 
@@ -56,6 +60,19 @@ class Runtime:
         """Record one model/guard rejection without consuming action progress."""
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
+
+    def _reasoning_context(self):
+        return self.brain.reasoning_context(
+            evidence=self.evidence.snapshot(self.controller.history),
+            relevant_learning=self.learning_memory.retrieve(self.brain.goal.text),
+        )
+
+    def _record_learning(self, result: RunResult) -> RunResult:
+        if not self._learning_recorded:
+            record = MissionLearningRecord.from_mission(self.brain.mission, result)
+            self.learning_memory = self.learning_memory.remember(record)
+            self._learning_recorded = True
+        return result
 
     @staticmethod
     def _skip_replayed_replan_intents(previous: Plan, replacement: Plan, evidence: object) -> Plan:
@@ -82,9 +99,7 @@ class Runtime:
 
     def _update_plan_after_observation(self) -> None:
         """Create or replace the bounded plan only from fresh runtime evidence."""
-        context = self.brain.reasoning_context(
-            evidence=self.evidence.snapshot(self.controller.history),
-        )
+        context = self._reasoning_context()
         try:
             if self.brain.plan is None:
                 self.brain.set_plan(self.planner.plan(context))
@@ -125,9 +140,7 @@ class Runtime:
             return self.brain.state
 
         if state is RunState.DECIDING:
-            context = self.brain.reasoning_context(
-                evidence=self.evidence.snapshot(self.controller.history),
-            )
+            context = self._reasoning_context()
             try:
                 decision = self.reasoner.decide(context)
             except ValueError as exc:
@@ -212,11 +225,11 @@ class Runtime:
         for _ in range(phase_budget):
             result = self.controller.result()
             if result is not None:
-                return result
+                return self._record_learning(result)
             self.step()
 
         if self.controller.result() is None:
             self.brain.fail("runtime phase budget exhausted")
         result = self.controller.result()
         assert result is not None
-        return result
+        return self._record_learning(result)
