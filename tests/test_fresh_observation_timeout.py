@@ -1,13 +1,10 @@
 from dataclasses import dataclass
 
-import pytest
-
-from agent.android_bridge import AndroidBridge
 from agent.core import UIElement, WorldState
 from nova_core.adapters.android import AndroidBridgeAdapter
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal
-from nova_core.reasoning import ReasoningStep
+from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
 from nova_core.run_controller import RunController
+from nova_core.semantic_verifier import SemanticGoalVerifier
 from nova_core.state_machine import RunState
 
 
@@ -52,9 +49,9 @@ def test_fresh_observation_timeout_returns_latest_ui(monkeypatch):
 
     bridge = TimeoutBridge(_state())
     adapter = AndroidBridgeAdapter(bridge=bridge, expected_package="com.hausshehe.nova")
-    adapter.observe()
+    initial = adapter.observe()
 
-    fresh = adapter.observe_fresh(adapter.observe())
+    fresh = adapter.observe_fresh(initial)
 
     assert fresh.package == "com.hausshehe.nova"
     assert fresh.elements[0].text == "Continue"
@@ -76,3 +73,18 @@ def test_controller_reconciliation_removes_optimistic_step_progress():
     assert controller.steps == 0
     assert controller.last_execution == ExecutionResult(accepted=True, changed=False)
     assert controller.history[-1].execution.changed is False
+
+
+def test_semantic_verifier_ignores_revision_when_ui_is_unchanged():
+    element = UiElement(id="status", text="Continue", clickable=False)
+    before = Observation("com.hausshehe.nova", ".MainActivity", (element,), revision=1)
+    after = Observation("com.hausshehe.nova", ".MainActivity", (element,), revision=2)
+    decision = Decision(Action(ActionType.TAP, target_id="button"))
+
+    assert SemanticGoalVerifier().verify(
+        Goal("Finish"),
+        before,
+        decision,
+        ExecutionResult(accepted=True, changed=True),
+        after,
+    ) is False
