@@ -40,12 +40,30 @@ class Plan:
         return self.steps[self.cursor] if self.cursor < len(self.steps) else None
 
     @property
+    def completed(self) -> tuple[PlanStep, ...]:
+        """Intents before the cursor that the runtime has treated as completed."""
+        return self.steps[: self.cursor]
+
+    @property
     def remaining(self) -> tuple[PlanStep, ...]:
         return self.steps[self.cursor :]
 
     @property
     def complete(self) -> bool:
         return self.cursor >= len(self.steps)
+
+    @property
+    def progress_snapshot(self) -> dict[str, object]:
+        """Expose explicit achieved/current/remaining intent state without guessing."""
+        return {
+            "status": "complete" if self.complete else "in_progress",
+            "completed": [step.description for step in self.completed],
+            "current": self.current.description if self.current else None,
+            "remaining": [step.description for step in self.remaining],
+            "cursor": self.cursor,
+            "total": len(self.steps),
+            "revision": self.revision,
+        }
 
     def advance(self) -> "Plan":
         if self.complete:
