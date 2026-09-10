@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .learning_memory import MissionLearningRecord
+from .learning_policy import LearningAssessment
 from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
 from .planning import Plan
@@ -64,6 +65,7 @@ class RuntimeBrain:
         *,
         evidence: object | None = None,
         relevant_learning: tuple[MissionLearningRecord, ...] = (),
+        learning_assessment: LearningAssessment | None = None,
     ) -> ReasoningContext:
         observation = self.memory.observation
         if self.state != RunState.DECIDING or observation is None:
@@ -76,6 +78,7 @@ class RuntimeBrain:
             mission_state=self.mission,
             plan=self.plan,
             relevant_learning=relevant_learning,
+            learning_assessment=learning_assessment,
         )
 
     def record_decision(self, decision: Decision) -> None:
