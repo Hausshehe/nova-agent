@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .learning_memory import MissionLearningRecord
 from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation
 from .planning import Plan
@@ -22,3 +23,4 @@ class ReasoningContext:
     evidence: object | None = None
     mission_state: MissionState | None = None
     plan: Plan | None = None
+    relevant_learning: tuple[MissionLearningRecord, ...] = ()
