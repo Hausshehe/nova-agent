@@ -20,11 +20,12 @@ class FakeObserver:
 
 
 class FakeExecutor:
-    def __init__(self, changed=True):
+    def __init__(self, changed=True, accepted=True):
         self.changed = changed
+        self.accepted = accepted
 
     def execute(self, action):
-        return ExecutionResult(accepted=True, changed=self.changed)
+        return ExecutionResult(accepted=self.accepted, changed=self.changed)
 
 
 class FakeVerifier:
@@ -69,10 +70,41 @@ def test_runtime_creates_plan_and_advances_after_verified_progress():
     assert runtime.brain.state is RunState.FAILED
 
 
-def test_runtime_requests_replan_after_unchanged_execution():
+def test_runtime_allows_one_unchanged_retry_before_replanning():
     planner = RecordingPlanner()
     runtime = Runtime(
         Goal("Finish the task"), FakeObserver(), FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        max_steps=2, max_invalid_decisions=3, max_replans=1, planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "step budget exhausted"
+    assert planner.plan_calls == 1
+    assert planner.replan_calls == 0
+    assert runtime.replans == 0
+
+
+def test_runtime_replans_after_two_unchanged_executions():
+    planner = RecordingPlanner()
+    runtime = Runtime(
+        Goal("Finish the task"), FakeObserver(), FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        max_steps=3, max_invalid_decisions=3, max_replans=1, planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "replan budget exhausted"
+    assert planner.plan_calls == 1
+    assert planner.replan_calls == 1
+    assert runtime.brain.plan is not None
+    assert runtime.brain.plan.revision == 1
+
+
+def test_runtime_replans_immediately_after_rejected_execution():
+    planner = RecordingPlanner()
+    runtime = Runtime(
+        Goal("Finish the task"), FakeObserver(), FakeReasoner(), FakeExecutor(accepted=False), FakeVerifier(),
         max_steps=2, max_invalid_decisions=3, max_replans=1, planner=planner,
     )
 
