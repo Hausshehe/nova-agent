@@ -76,8 +76,13 @@ class LLMPlanner:
             else []
         )
         prompt = (
-            "You are Nova's mission planner. Produce a short plan of mission intents, "
-            "not UI actions. The action reasoner will choose concrete actions later.\n"
+            "You are Nova's mission planner. Produce a short sequence of executable mission intents, "
+            "not UI actions and not internal control-flow commentary. The action reasoner will choose "
+            "concrete UI actions later. Every intent must describe a concrete goal-directed piece of work "
+            "that the reasoner can execute from the current observation. Do not output meta-steps such as "
+            "'wait for observable change', 'check if progress made', 'decide what to do', or conditional "
+            "instructions such as 'if no progress, ...'. Encode the intended recovery action itself as a "
+            "step.\n"
             "Return ONLY valid JSON in this exact shape: {\"steps\":[\"intent\", ...]}.\n"
             f"Use at most {self.max_steps} steps. Each intent must be a non-empty string.\n"
             f"GOAL: {context.goal.text}\n"
