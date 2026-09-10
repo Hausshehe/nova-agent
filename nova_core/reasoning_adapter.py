@@ -148,10 +148,18 @@ def _learning_payload(context: ReasoningContext) -> dict[str, Any]:
         for (action, target), count in counts.items()
         if count > 1
     ]
+    assessment = context.learning_assessment
+    assessment_payload = None
+    if assessment is not None:
+        assessment_payload = {
+            "warnings": list(assessment.warnings[:_MAX_LEARNING_ITEMS]),
+            "guidance": list(assessment.guidance[:_MAX_LEARNING_ITEMS]),
+        }
     return {
         "accepted_but_no_progress": attempts[-_MAX_LEARNING_ITEMS:],
         "repeated_ineffective_actions": repeated[-_MAX_LEARNING_ITEMS:],
         "cross_mission": [record.snapshot() for record in context.relevant_learning[:_MAX_LEARNING_ITEMS]],
+        "assessment": assessment_payload,
         "guidance": "Treat ineffective outcomes and relevant past missions as evidence. Do not repeat an accepted action with no progress unless the current observation provides a concrete reason it may now work. Past missions are historical context, not proof that the same action is valid now.",
     }
 
