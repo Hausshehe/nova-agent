@@ -172,38 +172,22 @@ def _recovery_payload(context: ReasoningContext) -> dict[str, Any]:
         if step.execution.accepted and not step.execution.changed:
             target = step.decision.action.target_id
             key = (step.decision.action.type.value, target)
-            ineffective.append({
-                "action": key[0],
-                "target": target,
-                "label": step.decision.target_label or None,
-                "error": (step.execution.error or "")[:_MAX_REASON_LENGTH],
-            })
+            ineffective.append({"action": key[0], "target": target, "label": step.decision.target_label or None, "error": (step.execution.error or "")[:_MAX_REASON_LENGTH]})
             ineffective_targets.add(key)
-
     alternatives = []
     for element in context.observation.elements:
-        if not element.visible or not element.enabled:
-            continue
+        if not element.visible or not element.enabled: continue
         label = _label(element)
-        if not label:
-            continue
+        if not label: continue
         if element.clickable and (ActionType.TAP.value, element.id) not in ineffective_targets:
             alternatives.append({"action": ActionType.TAP.value, "target": element.id, "label": label})
         if element.editable and (ActionType.TYPE.value, element.id) not in ineffective_targets:
             alternatives.append({"action": ActionType.TYPE.value, "target": element.id, "label": label})
         if element.scrollable and (ActionType.SCROLL.value, element.id) not in ineffective_targets:
             alternatives.append({"action": ActionType.SCROLL.value, "target": element.id, "label": label})
-        if len(alternatives) >= _MAX_LEARNING_ITEMS:
-            break
-
-    if not ineffective:
-        return {"active": False}
-    return {
-        "active": True,
-        "ineffective_recent_actions": ineffective[-_MAX_LEARNING_ITEMS:],
-        "available_alternatives": alternatives[:_MAX_LEARNING_ITEMS],
-        "guidance": "Change strategy after ineffective progress. Select an alternative only when it is supported by the current observation and advances the goal. Do not retry the failed target without new evidence.",
-    }
+        if len(alternatives) >= _MAX_LEARNING_ITEMS: break
+    if not ineffective: return {"active": False}
+    return {"active": True, "ineffective_recent_actions": ineffective[-_MAX_LEARNING_ITEMS:], "available_alternatives": alternatives[:_MAX_LEARNING_ITEMS], "guidance": "Change strategy after ineffective progress. Select an alternative only when it is supported by the current observation and advances the goal. Do not retry the failed target without new evidence."}
 
 
 def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
@@ -224,7 +208,7 @@ def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
     plan = context.plan
     if plan is None: return None
     return {"revision": plan.revision, "cursor": plan.cursor, "current": plan.current.description if plan.current else None,
-            "remaining": [step.description for step in plan.remaining]}
+            "remaining": [step.description for step in plan.remaining], "progress": plan.progress_snapshot}
 
 
 def _mission_payload(context: ReasoningContext) -> dict[str, Any] | None:
