@@ -5,7 +5,7 @@ from __future__ import annotations
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
 from .models import ExecutionResult, Goal, RunResult
-from .planning import GoalPlanner, Planner
+from .planning import GoalPlanner, Planner, Plan
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
 from .runtime_brain import RuntimeBrain
@@ -57,6 +57,29 @@ class Runtime:
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
 
+    @staticmethod
+    def _skip_replayed_replan_intents(previous: Plan, replacement: Plan, evidence: object) -> Plan:
+        """Do not immediately replay an intent that just produced no progress.
+
+        A planner may legally return a multi-step replacement plan, but the
+        first steps must not blindly replay the exact intent that the runtime
+        has just observed to be ineffective. Exact-prefix skipping is a small
+        deterministic safety boundary; semantic intent interpretation remains
+        the planner/reasoner's job.
+        """
+        if (
+            getattr(evidence, "last_execution_accepted", None) is not True
+            or getattr(evidence, "last_execution_changed", None) is not False
+            or previous.current is None
+        ):
+            return replacement
+
+        failed_intent = previous.current.description.strip().casefold()
+        adjusted = replacement
+        while adjusted.current is not None and adjusted.current.description.strip().casefold() == failed_intent:
+            adjusted = adjusted.advance()
+        return adjusted
+
     def _update_plan_after_observation(self) -> None:
         """Create or replace the bounded plan only from fresh runtime evidence."""
         context = self.brain.reasoning_context(
@@ -69,7 +92,17 @@ class Runtime:
                 if self.replans >= self.max_replans:
                     self.brain.fail("replan budget exhausted")
                     return
-                self.brain.set_plan(self.planner.replan(context, self.brain.plan))
+                previous = self.brain.plan
+                replacement = self.planner.replan(context, previous)
+                replacement = self._skip_replayed_replan_intents(
+                    previous,
+                    replacement,
+                    context.evidence,
+                )
+                if replacement.complete:
+                    self.brain.fail("replan produced no new executable intent")
+                    return
+                self.brain.set_plan(replacement)
                 self.replans += 1
                 self._replan_requested = False
                 self._unchanged_actions = 0
