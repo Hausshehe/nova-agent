@@ -48,7 +48,7 @@ def test_runtime_reasoning_context_applies_learning_policy() -> None:
         learning_memory=memory,
     )
     runtime.brain.start()
-    observation = Observation("pkg", "activity", 1, ())
+    observation = Observation("pkg", "activity", (), 1)
     runtime.brain.record_observation(observation)
     runtime.evidence.observe(observation)
 
@@ -85,7 +85,7 @@ def test_runtime_accepts_injected_learning_policy() -> None:
         learning_policy=policy,
     )
     runtime.brain.start()
-    observation = Observation("pkg", "activity", 1, ())
+    observation = Observation("pkg", "activity", (), 1)
     runtime.brain.record_observation(observation)
     runtime.evidence.observe(observation)
 
