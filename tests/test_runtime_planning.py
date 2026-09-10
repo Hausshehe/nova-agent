@@ -1,3 +1,4 @@
+from nova_core.llm_planner import LLMPlanner
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
 from nova_core.planning import Plan, PlanStep
 from nova_core.reasoning import ReasoningContext
@@ -125,3 +126,43 @@ def test_runtime_does_not_wait_for_fresh_observation_after_accepted_unchanged_ac
 
     assert result.error == "replan budget exhausted"
     assert observer.fresh_calls == 0
+
+
+def test_runtime_uses_llm_planner_for_initial_plan_and_f7_replan():
+    prompts = []
+    responses = iter(
+        (
+            '{"steps":["first intent","second intent"]}',
+            '{"steps":["recovered intent"]}',
+        )
+    )
+
+    def complete(prompt: str) -> str:
+        prompts.append(prompt)
+        return next(responses)
+
+    planner = LLMPlanner(complete)
+    runtime = Runtime(
+        Goal("Finish the task"),
+        FakeObserver(),
+        FakeReasoner(),
+        FakeExecutor(changed=False),
+        FakeVerifier(),
+        max_steps=3,
+        max_replans=1,
+        planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "replan budget exhausted"
+    assert len(prompts) == 2
+    assert runtime.replans == 1
+    assert runtime.brain.plan is not None
+    assert runtime.brain.plan.revision == 1
+    assert runtime.brain.plan.current is not None
+    assert runtime.brain.plan.current.description == "recovered intent"
+    assert '"first intent"' in prompts[1]
+    assert '"second intent"' in prompts[1]
+    assert "accepted_but_no_progress" in prompts[1]
+    assert "repeated_ineffective_actions" in prompts[1]
