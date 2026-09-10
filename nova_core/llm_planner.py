@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict, is_dataclass
 from typing import Callable, Protocol
 
 from .planning import Plan, PlanStep
@@ -61,7 +62,12 @@ class LLMPlanner:
                 for element in context.observation.elements
             ],
         }
-        evidence = repr(context.evidence) if context.evidence is not None else "none"
+        if context.evidence is None:
+            evidence = None
+        elif is_dataclass(context.evidence):
+            evidence = asdict(context.evidence)
+        else:
+            evidence = repr(context.evidence)
         previous_text = (
             [step.description for step in previous.remaining]
             if previous is not None
@@ -76,7 +82,7 @@ class LLMPlanner:
             f"Use at most {self.max_steps} steps. Each intent must be a non-empty string.\n"
             f"GOAL: {context.goal.text}\n"
             f"OBSERVATION: {json.dumps(observation, ensure_ascii=False, separators=(',', ':'))}\n"
-            f"EVIDENCE: {evidence}\n"
+            f"EVIDENCE: {json.dumps(evidence, ensure_ascii=False, separators=(',', ':'))}\n"
             f"PREVIOUS_PLAN_REMAINING: {json.dumps(previous_text, ensure_ascii=False)}\n"
         )
         return self._complete(prompt)
