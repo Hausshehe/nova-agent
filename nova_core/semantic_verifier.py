@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from .action_verifier import ActionExecutionVerifier
-from .models import Decision, ExecutionResult, Goal, Observation, UiElement
+from .models import Decision, ExecutionResult, Goal, Observation, UiElement, same_ui
 
 
 _STATE_VERBS = {"open", "show", "display", "navigate", "go", "select", "choose"}
@@ -38,7 +38,7 @@ class SemanticGoalVerifier:
         result: ExecutionResult,
         after: Observation,
     ) -> bool:
-        if not result.accepted or not result.changed or before == after:
+        if not result.accepted or not result.changed or same_ui(before, after):
             return False
 
         words = _tokens(goal.text)
