@@ -82,6 +82,13 @@ class RuntimeBrain:
         self.mission = self.mission.executed(result)
         self.controller.move(RunState.VERIFYING)
 
+    def reconcile_execution(self, result: ExecutionResult) -> None:
+        """Reconcile optimistic execution with authoritative post-action evidence."""
+        self.controller.reconcile_execution(result)
+        if self.memory.history:
+            self.memory.remember_step(self.controller.history[-1])
+        self.mission = self.mission.executed(result)
+
     def finish_verification(self, observation: Observation, *, goal_achieved: bool) -> RunResult | None:
         self.controller.record_post_observation(observation)
         self.memory.remember_post_observation(observation)
