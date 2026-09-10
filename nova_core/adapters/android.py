@@ -89,9 +89,17 @@ class AndroidBridgeAdapter:
         if self._last_legacy_state is None:
             raise ValueError("cannot observe fresh state before an initial observation")
 
-        state = self.bridge.wait_for_fresh_observation(
-            self._last_legacy_state, timeout=2.0, poll_seconds=0.2
-        )
+        try:
+            state = self.bridge.wait_for_fresh_observation(
+                self._last_legacy_state, timeout=2.0, poll_seconds=0.2
+            )
+        except TimeoutError:
+            # No observable UI change is not a transport failure. It is valid
+            # evidence that the action may have been ineffective. Return the
+            # latest tree so the runtime verifier can compare it with `before`
+            # and route the outcome into its bounded recovery/replanning path.
+            state = self.bridge.observe()
+
         candidate = self._to_observation(state, self._revision + 1)
 
         # A changed observation ID only proves that Accessibility emitted a
