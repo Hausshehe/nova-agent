@@ -12,6 +12,9 @@ from .runtime_brain import RuntimeBrain
 from .state_machine import RunState
 
 
+_UNCHANGED_ACTIONS_BEFORE_REPLAN = 2
+
+
 class Runtime:
     """Drive one bounded Android mission through the runtime brain."""
 
@@ -47,6 +50,7 @@ class Runtime:
         self.max_replans = max_replans
         self.replans = 0
         self._replan_requested = False
+        self._unchanged_actions = 0
 
     def _record_invalid_decision(self, error: str) -> None:
         """Record one model/guard rejection without consuming action progress."""
@@ -68,6 +72,7 @@ class Runtime:
                 self.brain.set_plan(self.planner.replan(context, self.brain.plan))
                 self.replans += 1
                 self._replan_requested = False
+                self._unchanged_actions = 0
         except (ValueError, RuntimeError) as exc:
             self.brain.fail(f"planning failed: {exc}")
 
@@ -142,9 +147,25 @@ class Runtime:
             elif self.invalid_decisions > self.max_invalid_decisions:
                 self.brain.fail("invalid decision budget exhausted")
             else:
-                self._replan_requested = not (execution.accepted and execution.changed)
                 if execution.accepted and execution.changed:
+                    self._unchanged_actions = 0
+                    self._replan_requested = False
                     self.brain.advance_plan()
+                elif not execution.accepted:
+                    # A rejected action is direct evidence that the current
+                    # plan may no longer fit the live UI, so replan immediately.
+                    self._unchanged_actions = 0
+                    self._replan_requested = True
+                else:
+                    # An accepted action that changes nothing is weaker evidence.
+                    # Give the reasoner one fresh-state retry before spending an
+                    # additional planner call. This is the key F.7 containment
+                    # rule: ordinary progress cannot accidentally become a
+                    # planner/reasoner loop.
+                    self._unchanged_actions += 1
+                    self._replan_requested = (
+                        self._unchanged_actions >= _UNCHANGED_ACTIONS_BEFORE_REPLAN
+                    )
                 self.brain.finish_verification(after, goal_achieved=False)
                 if self.controller.steps >= self.controller.max_steps:
                     self.brain.fail("step budget exhausted")
