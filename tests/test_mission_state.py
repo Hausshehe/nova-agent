@@ -46,6 +46,20 @@ def test_failed_execution_is_counted_as_failure_evidence() -> None:
     assert "last_execution_error=blocked" in state.progress_evidence
 
 
+def test_reasoning_snapshot_exposes_what_happened_without_predicting_next_action() -> None:
+    state = MissionState(Goal("Finish the task")).observed(observation()).decided(decision())
+    state = state.executed(ExecutionResult(accepted=True, changed=True))
+
+    snapshot = state.reasoning_snapshot()
+
+    assert snapshot["current_observation_revision"] == 1
+    assert snapshot["last_action"] == "tap"
+    assert snapshot["last_target_id"] == "next"
+    assert snapshot["last_execution"] == {"accepted": True, "changed": True, "error": None}
+    assert snapshot["changed_actions"] == 1
+    assert "next_action" not in snapshot
+
+
 def test_runtime_brain_exposes_current_mission_state_to_reasoning() -> None:
     brain = RuntimeBrain.create(Goal("Finish the task"), max_steps=3)
     brain.start()
