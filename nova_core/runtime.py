@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
 from .models import ExecutionResult, Goal, RunResult
@@ -110,6 +112,16 @@ class Runtime:
                 after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
+
+            # The Android bridge can optimistically report `changed=True`, but
+            # the authoritative mission evidence is the fresh UI observation.
+            # If the UI is unchanged, downgrade that optimistic result before
+            # verification so the step budget, history, evidence, and replanner
+            # all agree that the action made no observable progress.
+            if before == after and execution.accepted and execution.changed:
+                execution = replace(execution, changed=False)
+                self.brain.reconcile_execution(execution)
+
             self.evidence.observe(after)
             achieved = self.verifier.verify(self.controller.goal, before, decision, execution, after)
             if achieved:
