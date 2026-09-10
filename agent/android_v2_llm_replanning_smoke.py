@@ -16,7 +16,6 @@ from nova_core.llm_planner import LLMPlanner
 from nova_core.models import Action, ActionType, Decision, Goal, RunStatus
 from nova_core.reasoning import ReasoningContext
 from nova_core.runtime import Runtime
-from nova_core.semantic_verifier import SemanticGoalVerifier
 
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
@@ -79,6 +78,20 @@ class LLMReplanningReasoner:
         return Decision(Action(ActionType.TAP, target_id=target_id), reason=context.plan.current.description)
 
 
+class RecoverySmokeVerifier:
+    """Verify the concrete recovery result without testing the general verifier."""
+
+    def verify(self, goal, before, decision, result, after) -> bool:
+        if not result.accepted or not result.changed:
+            return False
+        return any(
+            element.visible
+            and "recovery completed" in f"{element.text} {element.content_description}".casefold()
+            and not element.clickable
+            for element in after.elements
+        )
+
+
 def _groq_planner(model: str | None) -> tuple[LLMPlanner, GroqResponder]:
     if not os.environ.get("GROQ_API_KEY"):
         raise RuntimeError("GROQ_API_KEY is not configured")
@@ -117,7 +130,7 @@ def main() -> int:
         adapter,
         reasoner,
         adapter,
-        SemanticGoalVerifier(),
+        RecoverySmokeVerifier(),
         max_steps=2,
         max_replans=1,
         planner=planner,
