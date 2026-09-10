@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .models import Decision, ExecutionResult, Goal, Observation
+from .models import ActionType, Decision, ExecutionResult, Goal, Observation
 from .outcome_memory import ActionOutcome, OutcomeMemory
 
 
@@ -89,10 +89,11 @@ class MissionState:
         )
 
     def executed(self, result: ExecutionResult) -> "MissionState":
+        decision = self.last_decision
         outcome = ActionOutcome.from_execution(
-            self.last_decision.action.type if self.last_decision else __import__("nova_core.models", fromlist=["ActionType"]).ActionType.WAIT,
-            self.last_decision.action.target_id if self.last_decision else None,
-            self.last_decision.target_label if self.last_decision else "",
+            decision.action.type if decision else ActionType.WAIT,
+            decision.action.target_id if decision else None,
+            decision.target_label if decision else "",
             result,
         )
         return MissionState(
