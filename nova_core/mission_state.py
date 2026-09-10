@@ -48,10 +48,26 @@ class MissionState:
         ))
         return tuple(evidence)
 
+    @property
+    def assessment(self) -> dict[str, str]:
+        """Classify the mission only from evidence, never from LLM belief."""
+        if self.goal_verified:
+            return {"status": "verified", "confidence": "high", "basis": "goal verifier"}
+        if self.last_execution is not None:
+            if not self.last_execution.accepted:
+                return {"status": "blocked", "confidence": "high", "basis": "execution rejected"}
+            if not self.last_execution.changed:
+                return {"status": "stalled", "confidence": "medium", "basis": "accepted action produced no observable change"}
+            return {"status": "progressing", "confidence": "medium", "basis": "accepted action produced observable change"}
+        if self.observation is not None:
+            return {"status": "observed", "confidence": "low", "basis": "current UI observed but no action outcome yet"}
+        return {"status": "unknown", "confidence": "none", "basis": "no mission evidence yet"}
+
     def reasoning_snapshot(self) -> dict[str, Any]:
         """Return bounded state facts for model reasoning and planning."""
         snapshot: dict[str, Any] = {
             "goal_verified": self.goal_verified,
+            "assessment": self.assessment,
             "successful_actions": self.successful_actions,
             "changed_actions": self.changed_actions,
             "failed_actions": self.failed_actions,
