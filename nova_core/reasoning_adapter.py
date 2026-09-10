@@ -23,7 +23,7 @@ class LegacyReasoner(Protocol):
 
 
 class LegacyReasoningAdapter:
-    def __init__(self, provider: LegacyReasoner) -> None: self._provider = provider
+    def __init__(self, provider: LegacyReasoner): self._provider = provider
     def decide(self, context: ReasoningContext) -> Decision: return self._translate(self._provider.decide(context.goal.text, context.observation, context.history))
     @staticmethod
     def _translate(raw: object) -> Decision:
@@ -40,7 +40,7 @@ class LegacyReasoningAdapter:
 
 
 class LLMReasoner:
-    def __init__(self, responder: Callable[[str], Mapping[str, Any]]) -> None: self._responder = responder
+    def __init__(self, responder: Callable[[str], Mapping[str, Any]]): self._responder = responder
     def decide(self, context: ReasoningContext) -> Decision:
         prompt = json.dumps(_reasoning_payload(context), ensure_ascii=False, separators=(",", ":"))
         try: response = self._responder(prompt)
@@ -151,7 +151,8 @@ def _learning_payload(context: ReasoningContext) -> dict[str, Any]:
     return {
         "accepted_but_no_progress": attempts[-_MAX_LEARNING_ITEMS:],
         "repeated_ineffective_actions": repeated[-_MAX_LEARNING_ITEMS:],
-        "guidance": "Treat ineffective outcomes as evidence. Do not repeat an accepted action with no progress unless the current observation provides a concrete reason it may now work.",
+        "cross_mission": [record.snapshot() for record in context.relevant_learning[:_MAX_LEARNING_ITEMS]],
+        "guidance": "Treat ineffective outcomes and relevant past missions as evidence. Do not repeat an accepted action with no progress unless the current observation provides a concrete reason it may now work. Past missions are historical context, not proof that the same action is valid now.",
     }
 
 
@@ -213,19 +214,13 @@ def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
 
 def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
     plan = context.plan
-    if plan is None:
-        return None
-    return {
-        "revision": plan.revision,
-        "cursor": plan.cursor,
-        "current": plan.current.description if plan.current else None,
-        "remaining": [step.description for step in plan.remaining],
-    }
+    if plan is None: return None
+    return {"revision": plan.revision, "cursor": plan.cursor, "current": plan.current.description if plan.current else None,
+            "remaining": [step.description for step in plan.remaining]}
 
 
 def _mission_payload(context: ReasoningContext) -> dict[str, Any] | None:
-    if context.mission_state is None:
-        return None
+    if context.mission_state is None: return None
     return context.mission_state.reasoning_snapshot()
 
 
