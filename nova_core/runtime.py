@@ -81,6 +81,14 @@ class Runtime:
             except RuntimeError as exc:
                 self.brain.fail(str(exc))
                 return self.brain.state
+            if decision.plan_stale and self.brain.plan is not None and not self.brain.plan.complete:
+                # The reasoner has fresh UI evidence that the remaining mission
+                # plan no longer fits reality. Discard this decision rather than
+                # executing an action chosen under the stale strategy, then take
+                # one fresh observation before bounded replanning.
+                self._replan_requested = True
+                self.controller.move(RunState.OBSERVING)
+                return self.brain.state
             self.brain.record_decision(decision)
             return self.brain.state
         if state is RunState.EXECUTING:
@@ -110,9 +118,9 @@ class Runtime:
                 self.brain.fail("invalid decision budget exhausted")
             else:
                 # Normal progress advances the existing mission plan. A replan
-                # is reserved for an ineffective action, where the current
-                # strategy has evidence against it. This preserves plan
-                # stability while still allowing bounded recovery.
+                # is reserved for an ineffective action or an explicit stale-plan
+                # signal from the reasoner. This preserves plan stability while
+                # still allowing bounded recovery when reality invalidates the plan.
                 self._replan_requested = not (execution.accepted and execution.changed)
                 if execution.accepted and execution.changed:
                     self.brain.advance_plan()
