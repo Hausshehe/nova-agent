@@ -156,14 +156,22 @@ def _plan_payload(context: ReasoningContext) -> dict[str, Any] | None:
     }
 
 
+def _mission_payload(context: ReasoningContext) -> dict[str, Any] | None:
+    if context.mission_state is None:
+        return None
+    return context.mission_state.reasoning_snapshot()
+
+
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Build a compact, bounded prompt so every reasoning call stays cheap."""
     plan = _plan_payload(context)
+    mission = _mission_payload(context)
     rules = [
         "Choose one action supported by the current UI.",
         "Prefer the smallest safe action that advances the goal.",
         "Treat the plan as guidance, not proof of success.",
         "Never invent an element id; reassess after UI changes.",
+        "Use mission state only as evidence of what has happened; the current observation is authoritative for what is available now.",
     ]
     if plan is not None and plan["current"] is not None:
         rules.extend([
@@ -175,6 +183,7 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     return {
         "goal": context.goal.text,
         "rules": rules,
+        "mission": mission,
         "plan": plan,
         "observation": _observation_payload(context.observation),
         "evidence": _evidence_payload(context.evidence),
