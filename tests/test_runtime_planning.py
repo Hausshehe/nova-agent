@@ -66,6 +66,18 @@ class RecordingPlanner:
         return Plan((PlanStep("recovered intent"),), revision=previous.revision + 1)
 
 
+class ReplayThenFallbackPlanner(RecordingPlanner):
+    def replan(self, context, previous):
+        self.replan_calls += 1
+        return Plan(
+            (
+                PlanStep(previous.current.description),
+                PlanStep("fallback intent"),
+            ),
+            revision=previous.revision + 1,
+        )
+
+
 def test_runtime_creates_plan_and_advances_after_verified_progress():
     planner = RecordingPlanner()
     runtime = Runtime(
@@ -112,6 +124,22 @@ def test_runtime_replans_after_two_unchanged_executions():
     assert runtime.replans == 1
     assert runtime.brain.plan is not None
     assert runtime.brain.plan.revision == 1
+
+
+def test_runtime_skips_exact_replay_at_start_of_replanned_plan():
+    planner = ReplayThenFallbackPlanner()
+    runtime = Runtime(
+        Goal("Finish the task"), FakeObserver(), FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        max_steps=3, max_invalid_decisions=3, max_replans=1, planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "replan budget exhausted"
+    assert runtime.brain.plan is not None
+    assert runtime.brain.plan.revision == 1
+    assert runtime.brain.plan.current is not None
+    assert runtime.brain.plan.current.description == "fallback intent"
 
 
 def test_runtime_does_not_wait_for_fresh_observation_after_accepted_unchanged_action():
