@@ -164,5 +164,5 @@ def test_runtime_uses_llm_planner_for_initial_plan_and_f7_replan():
     assert runtime.brain.plan.current.description == "recovered intent"
     assert '"first intent"' in prompts[1]
     assert '"second intent"' in prompts[1]
-    assert "accepted_but_no_progress" in prompts[1]
-    assert "repeated_ineffective_actions" in prompts[1]
+    assert '"last_execution_changed":false' in prompts[1]
+    assert '"unchanged_observation_count"' in prompts[1]
