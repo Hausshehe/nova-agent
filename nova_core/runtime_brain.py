@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .learning_memory import MissionLearningRecord
 from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation, RunResult, RunStatus
 from .planning import Plan
@@ -58,7 +59,12 @@ class RuntimeBrain:
         if self.plan is not None:
             self.plan = self.plan.advance()
 
-    def reasoning_context(self, *, evidence: object | None = None) -> ReasoningContext:
+    def reasoning_context(
+        self,
+        *,
+        evidence: object | None = None,
+        relevant_learning: tuple[MissionLearningRecord, ...] = (),
+    ) -> ReasoningContext:
         observation = self.memory.observation
         if self.state != RunState.DECIDING or observation is None:
             raise RuntimeError("reasoning context requires a current observation")
@@ -69,6 +75,7 @@ class RuntimeBrain:
             evidence=evidence,
             mission_state=self.mission,
             plan=self.plan,
+            relevant_learning=relevant_learning,
         )
 
     def record_decision(self, decision: Decision) -> None:
