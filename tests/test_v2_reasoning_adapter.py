@@ -3,6 +3,7 @@ import json
 import pytest
 
 from nova_core.models import ActionType, Goal, Observation, UiElement
+from nova_core.planning import Plan, PlanStep
 from nova_core.reasoning import ReasoningContext
 from nova_core.reasoning_adapter import LLMReasoner, LegacyReasoningAdapter
 
@@ -81,6 +82,29 @@ def test_llm_reasoner_does_not_repeat_completed_goal_stage_candidate():
     def responder(prompt): received.append(json.loads(prompt)); return {"action_type": "tap", "target_id": "finish"}
     LLMReasoner(responder).decide(context_value)
     assert received[0]["goal_stage_candidates"] == []
+
+
+def test_llm_reasoner_exposes_plan_progress_snapshot():
+    observation = Observation("pkg", "MainActivity", (UiElement(id="current", text="Continue", clickable=True),))
+    plan = Plan((PlanStep("Start the task"), PlanStep("Continue the task"), PlanStep("Finish the task")), revision=2, cursor=1)
+    context_value = ReasoningContext(goal=Goal("Finish the task"), observation=observation, plan=plan)
+    received = []
+
+    def responder(prompt):
+        received.append(json.loads(prompt))
+        return {"action_type": "tap", "target_id": "current"}
+
+    LLMReasoner(responder).decide(context_value)
+
+    assert received[0]["plan"]["progress"] == {
+        "status": "in_progress",
+        "completed": ["Start the task"],
+        "current": "Continue the task",
+        "remaining": ["Continue the task", "Finish the task"],
+        "cursor": 1,
+        "total": 3,
+        "revision": 2,
+    }
 
 
 def test_llm_reasoner_rejects_stale_or_non_clickable_target():
