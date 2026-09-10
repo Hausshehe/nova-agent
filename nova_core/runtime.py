@@ -84,10 +84,6 @@ class Runtime:
                 self.brain.fail(str(exc))
                 return self.brain.state
             if decision.plan_stale and self.brain.plan is not None and not self.brain.plan.complete:
-                # The reasoner has fresh UI evidence that the remaining mission
-                # plan no longer fits reality. Discard this decision rather than
-                # executing an action chosen under the stale strategy, then take
-                # one fresh observation before bounded replanning.
                 self._replan_requested = True
                 self.controller.move(RunState.OBSERVING)
                 return self.brain.state
@@ -113,12 +109,16 @@ class Runtime:
             else:
                 after = self.observer.observe()
 
-            # The Android bridge can optimistically report `changed=True`, but
-            # the authoritative mission evidence is the fresh UI observation.
-            # If the UI is unchanged, downgrade that optimistic result before
-            # verification so the step budget, history, evidence, and replanner
-            # all agree that the action made no observable progress.
-            if same_ui(before, after) and execution.accepted and execution.changed:
+            # Only the Android bridge adapter exposes a timeout marker. Generic
+            # FreshObserver implementations are allowed to report progress via
+            # ExecutionResult even when their synthetic UI tree is unchanged.
+            # Reconcile only when the Android freshness wait actually timed out.
+            if (
+                getattr(self.observer, "last_fresh_timed_out", False)
+                and same_ui(before, after)
+                and execution.accepted
+                and execution.changed
+            ):
                 execution = replace(execution, changed=False)
                 self.brain.reconcile_execution(execution)
 
@@ -129,10 +129,6 @@ class Runtime:
             elif self.invalid_decisions > self.max_invalid_decisions:
                 self.brain.fail("invalid decision budget exhausted")
             else:
-                # Normal progress advances the existing mission plan. A replan
-                # is reserved for an ineffective action or an explicit stale-plan
-                # signal from the reasoner. This preserves plan stability while
-                # still allowing bounded recovery when reality invalidates the plan.
                 self._replan_requested = not (execution.accepted and execution.changed)
                 if execution.accepted and execution.changed:
                     self.brain.advance_plan()
