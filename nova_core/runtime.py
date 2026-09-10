@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
-from .models import ExecutionResult, Goal, RunResult
+from .models import ExecutionResult, Goal, RunResult, same_ui
 from .planning import GoalPlanner, Planner
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
@@ -118,7 +118,7 @@ class Runtime:
             # If the UI is unchanged, downgrade that optimistic result before
             # verification so the step budget, history, evidence, and replanner
             # all agree that the action made no observable progress.
-            if before == after and execution.accepted and execution.changed:
+            if same_ui(before, after) and execution.accepted and execution.changed:
                 execution = replace(execution, changed=False)
                 self.brain.reconcile_execution(execution)
 
