@@ -78,6 +78,18 @@ def test_completion_goal_matches_target_without_repeating_completion_verb():
     )
 
 
+def test_completion_goal_accepts_target_and_marker_split_across_accessibility_nodes():
+    verifier = SemanticGoalVerifier()
+    before = _observation(UiElement(id="status", text="Step 2 started"))
+    after = _observation(
+        UiElement(id="target", text="Multi-Step Test"),
+        UiElement(id="status", text="completed"),
+    )
+    assert verifier.verify(
+        Goal("Finish Multi-Step Test"), before, _decision(), _tap_result(), after
+    )
+
+
 def test_completion_goal_does_not_accept_still_visible_finish_button():
     verifier = SemanticGoalVerifier()
     before = _observation(UiElement(id="finish", text="Finish Multi-Step", clickable=True))
