@@ -60,6 +60,15 @@ class Observation:
     revision: int = 0
 
 
+def same_ui(before: Observation, after: Observation) -> bool:
+    """Compare observable Android UI while ignoring observation revisions."""
+    return (
+        before.package == after.package
+        and before.activity == after.activity
+        and before.elements == after.elements
+    )
+
+
 @dataclass(frozen=True)
 class Action:
     type: ActionType
