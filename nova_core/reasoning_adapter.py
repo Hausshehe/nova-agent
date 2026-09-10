@@ -171,7 +171,8 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         "Prefer the smallest safe action that advances the goal.",
         "Treat the plan as guidance, not proof of success.",
         "Never invent an element id; reassess after UI changes.",
-        "Use mission state only as evidence of what has happened; the current observation is authoritative for what is available now.",
+        "Use mission state only as evidence of what has happened.",
+        "The current observation is authoritative for what is available now.",
     ]
     if plan is not None and plan["current"] is not None:
         rules.extend([
