@@ -206,6 +206,7 @@ def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
                                 "changed": step.execution.changed}
         if step.execution.error: item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
         if step.decision.target_label: item["label"] = step.decision.target_label
+        if step.decision.plan_stale: item["plan_stale"] = True
         if step.post_observation is not None: item["after"] = _observation_history_summary(step.post_observation)
         result.append(item)
     return result
@@ -240,6 +241,8 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         "Never invent an element id; reassess after UI changes.",
         "Use mission state only as evidence of what has happened.",
         "The current observation is authoritative for what is available now.",
+        "If the remaining plan no longer fits the current observation or mission state, set plan_status to stale instead of forcing an action to satisfy the old plan.",
+        "Use plan_status valid when the remaining plan still makes sense from the current state.",
     ]
     if plan is not None and plan["current"] is not None:
         rules.extend([
@@ -267,29 +270,33 @@ def _decision_from_response(response: Mapping[str, Any], context: ReasoningConte
     try: action = ActionType(action_type)
     except (TypeError, ValueError) as exc: raise ValueError("invalid action_type") from exc
     target_id, value, reason = response.get("target_id"), response.get("value"), str(response.get("reason", "model decision"))
+    plan_status = response.get("plan_status", "valid")
+    if plan_status not in ("valid", "stale"):
+        raise ValueError("plan_status must be 'valid' or 'stale'")
+    plan_stale = plan_status == "stale"
     if target_id is not None and (not isinstance(target_id, str) or not target_id): raise ValueError("target_id must be a non-empty string or null")
     if value is not None and not isinstance(value, str): raise ValueError("value must be a string or null")
     if action in (ActionType.BACK, ActionType.WAIT):
         if target_id is not None or value is not None: raise ValueError("target_id and value are not allowed for this action")
-        return Decision(Action(action), reason)
+        return Decision(Action(action), reason, plan_stale=plan_stale)
     if action is ActionType.TAP:
         if target_id is None or value is not None: raise ValueError("tap requires target_id and no value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled or not element.clickable: raise ValueError("tap target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id), reason, target_label=_label(element))
+        return Decision(Action(action, target_id=target_id), reason, target_label=_label(element), plan_stale=plan_stale)
     if action is ActionType.SCROLL:
         if target_id is not None:
             element = next((item for item in context.observation.elements if item.id == target_id), None)
             if element is None or not element.visible or not element.enabled or not element.scrollable: raise ValueError("scroll target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id), reason)
+        return Decision(Action(action, target_id=target_id), reason, plan_stale=plan_stale)
     if action is ActionType.TYPE:
         if target_id is None or value is None: raise ValueError("type requires target_id and value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled or not element.editable: raise ValueError("type target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
+        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element), plan_stale=plan_stale)
     if action is ActionType.SWIPE:
         if target_id is None or value is None: raise ValueError("swipe requires target_id and value")
         element = next((item for item in context.observation.elements if item.id == target_id), None)
         if element is None or not element.visible or not element.enabled: raise ValueError("swipe target is not available in the current observation")
-        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element))
+        return Decision(Action(action, target_id=target_id, value=value), reason, target_label=_label(element), plan_stale=plan_stale)
     raise ValueError("unsupported action type")
