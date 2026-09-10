@@ -22,6 +22,7 @@ object BridgeServer {
     private const val RETRY_DELAY_MS = 250L
     private const val LAUNCH_WAIT_MS = 3000L
     private const val OBSERVATION_POLL_MS = 100L
+    private const val ACTION_CHANGE_TIMEOUT_MS = 2000L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
@@ -134,15 +135,42 @@ object BridgeServer {
     private fun click(elementId: String): JSONObject {
         val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
         val root = service.rootInActiveWindow ?: return error("No active accessibility window")
-        val node = findNode(root, elementId) ?: return error("element not found: $elementId")
+        ObservationStore.update(root)
+        val before = ObservationStore.current()
+        val node = findNode(root, elementId) ?: run {
+            root.recycle()
+            return error("element not found: $elementId")
+        }
         val accepted = node.isEnabled && node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         node.recycle()
+        root.recycle()
+        val changed = accepted && waitForObservableChange(service, before)
         return JSONObject().apply {
             put("ok", true)
             put("accepted", accepted)
-            put("changed", accepted)
+            put("changed", changed)
         }
     }
+
+    private fun waitForObservableChange(service: NovaAccessibilityService, before: UiSnapshot): Boolean {
+        val deadline = System.currentTimeMillis() + ACTION_CHANGE_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val root = service.rootInActiveWindow
+            if (root != null) {
+                ObservationStore.update(root)
+                root.recycle()
+                val current = ObservationStore.current()
+                if (!sameUi(before, current)) return true
+            }
+            Thread.sleep(OBSERVATION_POLL_MS)
+        }
+        return false
+    }
+
+    private fun sameUi(before: UiSnapshot, after: UiSnapshot): Boolean =
+        before.packageName == after.packageName &&
+            before.activity == after.activity &&
+            before.elements == after.elements
 
     private fun findNode(root: AccessibilityNodeInfo, id: String): AccessibilityNodeInfo? = findNode(root, id, "0")
 
