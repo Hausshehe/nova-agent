@@ -112,7 +112,7 @@ def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
 def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     if evidence is None: return None
     payload: dict[str, Any] = {}
-    for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
+    for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed", "observation_changed", "unchanged_observation_count"):
         value = getattr(evidence, name, None)
         if value is not None: payload[name] = value
     for name, limit in (("visible_labels", _MAX_VISIBLE_LABELS), ("added_labels", 12), ("removed_labels", 12),
