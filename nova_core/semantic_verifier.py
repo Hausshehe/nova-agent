@@ -128,23 +128,27 @@ def _completion_state_visible(
     observation: Observation,
     target_words: set[str],
 ) -> bool:
-    """Require explicit completion evidence in the current observation.
+    """Require explicit non-actionable completion evidence in the observation.
 
     Accessibility trees do not always preserve a human-visible sentence in one
     node. A status can expose ``Multi-Step Test`` and ``completed`` as separate
     nodes, for example. We therefore accept completion only when the current
     observation collectively exposes every requested target token and an
-    explicit completion marker. This remains evidence-based and does not infer
-    completion from a successful button click alone.
+    explicit completion marker from a non-actionable element. A clickable
+    ``FINISH ...`` control is an instruction for reaching completion, not proof
+    that completion has already occurred.
     """
     visible_elements = [element for element in observation.elements if element.visible]
     if not visible_elements:
         return False
 
-    visible_tokens = set().union(*(_element_tokens(element) for element in visible_elements))
+    visible_tokens = set().union(
+        *(_element_tokens(element) for element in visible_elements)
+    )
     has_target = target_words.issubset(visible_tokens)
     has_completion_marker = any(
-        bool(_element_tokens(element) & _COMPLETION_MARKERS)
+        not element.clickable
+        and bool(_element_tokens(element) & _COMPLETION_MARKERS)
         for element in visible_elements
     )
     return has_target and has_completion_marker
