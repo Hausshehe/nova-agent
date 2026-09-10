@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from .models import Decision, ExecutionResult, Goal, Observation
 
@@ -30,6 +31,8 @@ class MissionState:
             evidence.append(f"last_action_type={self.last_decision.action.type.value}")
             if self.last_decision.action.target_id:
                 evidence.append(f"last_target_id={self.last_decision.action.target_id}")
+            if self.last_decision.target_label:
+                evidence.append(f"last_target_label={self.last_decision.target_label}")
         if self.last_execution is not None:
             evidence.append(f"last_execution_accepted={self.last_execution.accepted}")
             evidence.append(f"last_execution_changed={self.last_execution.changed}")
@@ -42,6 +45,36 @@ class MissionState:
             f"goal_verified={self.goal_verified}",
         ))
         return tuple(evidence)
+
+    def reasoning_snapshot(self) -> dict[str, Any]:
+        """Return bounded state facts for model reasoning and planning.
+
+        This is deliberately descriptive rather than predictive. The model can
+        see what has happened and what the runtime can prove, but it is not
+        handed a fabricated claim about what should happen next.
+        """
+        snapshot: dict[str, Any] = {
+            "goal_verified": self.goal_verified,
+            "successful_actions": self.successful_actions,
+            "changed_actions": self.changed_actions,
+            "failed_actions": self.failed_actions,
+            "progress_evidence": list(self.progress_evidence),
+        }
+        if self.observation is not None:
+            snapshot["current_observation_revision"] = self.observation.revision
+        if self.last_decision is not None:
+            snapshot["last_action"] = self.last_decision.action.type.value
+            if self.last_decision.action.target_id:
+                snapshot["last_target_id"] = self.last_decision.action.target_id
+            if self.last_decision.target_label:
+                snapshot["last_target_label"] = self.last_decision.target_label
+        if self.last_execution is not None:
+            snapshot["last_execution"] = {
+                "accepted": self.last_execution.accepted,
+                "changed": self.last_execution.changed,
+                "error": self.last_execution.error,
+            }
+        return snapshot
 
     def observed(self, observation: Observation) -> "MissionState":
         return MissionState(
