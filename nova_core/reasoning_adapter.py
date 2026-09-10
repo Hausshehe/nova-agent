@@ -15,6 +15,7 @@ _STAGE_WORDS = {"start": 10, "begin": 10, "launch": 10, "continue": 20, "next": 
 _MAX_HISTORY_ITEMS = 3
 _MAX_VISIBLE_LABELS = 24
 _MAX_REASON_LENGTH = 160
+_MAX_LEARNING_ITEMS = 4
 
 
 class LegacyReasoner(Protocol):
@@ -130,6 +131,72 @@ def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     return payload
 
 
+def _learning_payload(context: ReasoningContext) -> dict[str, Any]:
+    """Summarize recent outcomes so reasoning can adapt instead of blindly repeating."""
+    attempts = []
+    counts: dict[tuple[str, str | None], int] = {}
+    for step in context.history[-_MAX_HISTORY_ITEMS:]:
+        if step.execution.accepted and not step.execution.changed:
+            key = (step.decision.action.type.value, step.decision.action.target_id)
+            counts[key] = counts.get(key, 0) + 1
+            item: dict[str, Any] = {"action": key[0], "target": key[1], "label": step.decision.target_label or None}
+            if step.execution.error:
+                item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
+            attempts.append(item)
+    repeated = [
+        {"action": action, "target": target, "attempts": count}
+        for (action, target), count in counts.items()
+        if count > 1
+    ]
+    return {
+        "accepted_but_no_progress": attempts[-_MAX_LEARNING_ITEMS:],
+        "repeated_ineffective_actions": repeated[-_MAX_LEARNING_ITEMS:],
+        "guidance": "Treat ineffective outcomes as evidence. Do not repeat an accepted action with no progress unless the current observation provides a concrete reason it may now work.",
+    }
+
+
+def _recovery_payload(context: ReasoningContext) -> dict[str, Any]:
+    """Expose bounded alternatives when recent evidence says the current strategy failed."""
+    ineffective = []
+    ineffective_targets = set()
+    for step in context.history[-_MAX_HISTORY_ITEMS:]:
+        if step.execution.accepted and not step.execution.changed:
+            target = step.decision.action.target_id
+            key = (step.decision.action.type.value, target)
+            ineffective.append({
+                "action": key[0],
+                "target": target,
+                "label": step.decision.target_label or None,
+                "error": (step.execution.error or "")[:_MAX_REASON_LENGTH],
+            })
+            ineffective_targets.add(key)
+
+    alternatives = []
+    for element in context.observation.elements:
+        if not element.visible or not element.enabled:
+            continue
+        label = _label(element)
+        if not label:
+            continue
+        if element.clickable and (ActionType.TAP.value, element.id) not in ineffective_targets:
+            alternatives.append({"action": ActionType.TAP.value, "target": element.id, "label": label})
+        if element.editable and (ActionType.TYPE.value, element.id) not in ineffective_targets:
+            alternatives.append({"action": ActionType.TYPE.value, "target": element.id, "label": label})
+        if element.scrollable and (ActionType.SCROLL.value, element.id) not in ineffective_targets:
+            alternatives.append({"action": ActionType.SCROLL.value, "target": element.id, "label": label})
+        if len(alternatives) >= _MAX_LEARNING_ITEMS:
+            break
+
+    if not ineffective:
+        return {"active": False}
+    return {
+        "active": True,
+        "ineffective_recent_actions": ineffective[-_MAX_LEARNING_ITEMS:],
+        "available_alternatives": alternatives[:_MAX_LEARNING_ITEMS],
+        "guidance": "Change strategy after ineffective progress. Select an alternative only when it is supported by the current observation and advances the goal. Do not retry the failed target without new evidence.",
+    }
+
+
 def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
     """Keep only recent, decision-relevant history to prevent prompt growth."""
     result = []
@@ -188,6 +255,8 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         "plan": plan,
         "observation": _observation_payload(context.observation),
         "evidence": _evidence_payload(context.evidence),
+        "learning": _learning_payload(context),
+        "recovery": _recovery_payload(context),
         "goal_stage_candidates": _goal_stage_guidance(context),
         "history": _history_payload(context),
     }
