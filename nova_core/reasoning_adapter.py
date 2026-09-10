@@ -15,6 +15,7 @@ _STAGE_WORDS = {"start": 10, "begin": 10, "launch": 10, "continue": 20, "next": 
 _MAX_HISTORY_ITEMS = 3
 _MAX_VISIBLE_LABELS = 24
 _MAX_REASON_LENGTH = 160
+_MAX_LEARNING_ITEMS = 4
 
 
 class LegacyReasoner(Protocol):
@@ -111,8 +112,6 @@ def _goal_stage_guidance(context: ReasoningContext) -> list[dict[str, Any]]:
 
 def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     if evidence is None: return None
-    # StateEvidence is intentionally read by attributes so the adapter remains
-    # independent of the evidence module's concrete type.
     payload: dict[str, Any] = {}
     for name in ("current_revision", "previous_revision", "last_action", "last_execution_accepted", "last_execution_changed"):
         value = getattr(evidence, name, None)
@@ -130,6 +129,30 @@ def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     if rejected:
         payload["rejected_actions"] = [{"action": t, "target": target, "error": error[:_MAX_REASON_LENGTH]} for t, target, error in rejected[-4:]]
     return payload
+
+
+def _learning_payload(context: ReasoningContext) -> dict[str, Any]:
+    """Summarize recent outcomes so reasoning can adapt instead of blindly repeating."""
+    attempts = []
+    counts: dict[tuple[str, str | None], int] = {}
+    for step in context.history[-_MAX_HISTORY_ITEMS:]:
+        if step.execution.accepted and not step.execution.changed:
+            key = (step.decision.action.type.value, step.decision.action.target_id)
+            counts[key] = counts.get(key, 0) + 1
+            item: dict[str, Any] = {"action": key[0], "target": key[1], "label": step.decision.target_label or None}
+            if step.execution.error:
+                item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
+            attempts.append(item)
+    repeated = [
+        {"action": action, "target": target, "attempts": count}
+        for (action, target), count in counts.items()
+        if count > 1
+    ]
+    return {
+        "accepted_but_no_progress": attempts[-_MAX_LEARNING_ITEMS:],
+        "repeated_ineffective_actions": repeated[-_MAX_LEARNING_ITEMS:],
+        "guidance": "Treat ineffective outcomes as evidence. Do not repeat an accepted action with no progress unless the current observation provides a concrete reason it may now work.",
+    }
 
 
 def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
@@ -157,6 +180,7 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
         ],
         "observation": _observation_payload(context.observation),
         "evidence": _evidence_payload(context.evidence),
+        "learning": _learning_payload(context),
         "goal_stage_candidates": _goal_stage_guidance(context),
         "history": _history_payload(context),
     }
