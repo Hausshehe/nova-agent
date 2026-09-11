@@ -199,7 +199,11 @@ class Runtime:
             decision = self.controller.decision
             execution = self.controller.last_execution
             assert before is not None and decision is not None and execution is not None
-            if isinstance(self.observer, FreshObserver) and execution.accepted and execution.changed:
+            if isinstance(self.observer, FreshObserver) and execution.accepted:
+                # A fresh observation is evidence even when Android reports no
+                # visible change. The absence of change is itself information
+                # that can resolve the action-effect uncertainty and prevent a
+                # blind replay.
                 after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
