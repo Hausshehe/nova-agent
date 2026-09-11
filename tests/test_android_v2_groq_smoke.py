@@ -59,7 +59,7 @@ def test_failure_injecting_executor_reports_one_controlled_failure_after_real_ex
 
     adapter = FakeAdapter()
     execute, injected = android_v2_groq_smoke._failure_injecting_executor(adapter)
-    action = Action(ActionType.CLICK, target_id="recovery_test")
+    action = Action(ActionType.TAP, target_id="recovery_test")
 
     first = execute(action)
     second = execute(action)
