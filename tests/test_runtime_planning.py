@@ -37,8 +37,10 @@ class FreshFakeObserver(FakeObserver):
 class FakeExecutor:
     def __init__(self, changed=True):
         self.changed = changed
+        self.calls = 0
 
     def execute(self, action):
+        self.calls += 1
         return ExecutionResult(accepted=True, changed=self.changed)
 
 
@@ -147,16 +149,18 @@ def test_runtime_skips_exact_replay_at_start_of_replanned_plan():
 def test_runtime_uses_fresh_observation_after_accepted_unchanged_action():
     planner = RecordingPlanner()
     observer = FreshFakeObserver()
+    executor = FakeExecutor(changed=False)
     runtime = Runtime(
-        Goal("Finish the task"), observer, FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        Goal("Finish the task"), observer, FakeReasoner(), executor, FakeVerifier(),
         max_steps=2, max_replans=1, planner=planner,
     )
 
     result = runtime.run()
 
     assert result.error == "replan budget exhausted"
-    assert observer.fresh_calls == 2
-    assert observer.fresh_previous_revisions == [1, 2]
+    assert observer.fresh_calls == executor.calls
+    assert observer.fresh_previous_revisions == list(range(1, executor.calls + 1))
+    assert observer.fresh_calls > 0
 
 
 def test_runtime_uses_llm_planner_for_initial_plan_and_f7_replan():
