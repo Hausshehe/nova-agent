@@ -14,6 +14,7 @@ from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
 from .runtime_brain import RuntimeBrain
 from .state_machine import RunState
+from .uncertainty import UncertaintyResolutionPolicy
 
 
 _UNCHANGED_ACTIONS_BEFORE_REPLAN = 2
@@ -61,6 +62,7 @@ class Runtime:
         self.replans = 0
         self.learning_memory = learning_memory or LearningMemory()
         self.learning_policy = learning_policy or LearningApplicationPolicy()
+        self.uncertainty_policy = UncertaintyResolutionPolicy()
         self._learning_recorded = False
         self._replan_requested = False
         self._unchanged_actions = 0
@@ -69,6 +71,23 @@ class Runtime:
         """Record one model/guard rejection without consuming action progress."""
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
+
+    def _uncertainty_resolution(self):
+        observation = self.brain.memory.observation
+        if observation is None:
+            return None
+        excluded: tuple[str, ...] = ()
+        last_execution = self.brain.mission.last_execution
+        last_decision = self.brain.mission.last_decision
+        if last_execution is not None and last_execution.accepted and not last_execution.changed and last_decision is not None:
+            if last_decision.action.target_id:
+                excluded = (last_decision.action.target_id,)
+        return self.uncertainty_policy.resolve(
+            self.brain.mission.uncertainty,
+            observation,
+            self.brain.goal,
+            excluded_target_ids=excluded,
+        )
 
     def _reasoning_context(self):
         relevant_learning = self.learning_memory.retrieve(self.brain.goal.text)
@@ -84,6 +103,7 @@ class Runtime:
             evidence=self.evidence.snapshot(self.controller.history),
             relevant_learning=relevant_learning,
             learning_assessment=learning_assessment,
+            uncertainty_resolution=self._uncertainty_resolution(),
         )
 
     def _record_learning(self, result: RunResult) -> RunResult:
