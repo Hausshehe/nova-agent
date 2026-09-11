@@ -18,7 +18,7 @@ from agent.openrouter_responder import OpenRouterResponder
 from agent.provider_pool import ReasoningProviderPool
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.llm_planner import LLMPlanner
-from nova_core.models import Goal, RunStatus
+from nova_core.models import ExecutionResult, Goal, RunStatus
 from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
@@ -114,6 +114,21 @@ def _planner(responders: list[tuple[str, object]], *, gemini_timeout_seconds: fl
     return LLMPlanner(complete), pool
 
 
+def _failure_injecting_executor(adapter: AndroidBridgeAdapter) -> tuple[Callable[[Any], ExecutionResult], Callable[[], bool]]:
+    injected = False
+
+    def execute(action: Any) -> ExecutionResult:
+        nonlocal injected
+        result = adapter.execute(action)
+        if not injected and result.accepted:
+            injected = True
+            print("V2_INJECTED_RECOVERABLE_FAILURE=after_android_execution", flush=True)
+            return ExecutionResult(False, False, "controlled smoke failure after Android execution")
+        return result
+
+    return execute, lambda: injected
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one bounded real-provider v2 Android navigation test")
     parser.add_argument("--launch-nova", action="store_true")
@@ -122,6 +137,8 @@ def main() -> int:
     parser.add_argument("--max-steps", type=int, default=1)
     parser.add_argument("--gemini-timeout", type=float, default=None,
                         help="Override Gemini request timeout for bounded latency diagnostics")
+    parser.add_argument("--inject-recoverable-failure", action="store_true",
+                        help="Execute the first accepted Android action, then report a controlled failure to exercise fresh-observation replanning")
     args = parser.parse_args()
     if args.max_steps < 1:
         parser.error("--max-steps must be at least 1")
@@ -148,8 +165,11 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
+    executor: Any = adapter
+    if args.inject_recoverable_failure:
+        executor, _ = _failure_injecting_executor(adapter)
     runtime = Runtime(
-        Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
+        Goal(args.goal), adapter, LLMReasoner(provider_pool), executor, SemanticGoalVerifier(),
         max_steps=args.max_steps, planner=planner, replan_after_progress=False,
         max_replans=max(2, args.max_steps),
     )
