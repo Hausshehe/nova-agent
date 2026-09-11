@@ -102,14 +102,18 @@ class Runtime:
 
     def _update_plan_after_observation(self) -> None:
         """Create or replace the bounded plan only from fresh runtime evidence."""
+        # Never spend a planning/replanning cycle after the action budget is
+        # exhausted. The step budget is the outer safety boundary and must
+        # take precedence over all lower-level planning budgets.
+        if self.controller.steps >= self.controller.max_steps:
+            self.brain.fail("step budget exhausted")
+            return
+
         context = self._reasoning_context()
         try:
             if self.brain.plan is None:
                 self.brain.set_plan(self.planner.plan(context))
             elif self._replan_requested:
-                if self.controller.steps >= self.controller.max_steps:
-                    self.brain.fail("step budget exhausted")
-                    return
                 if self.replans >= self.max_replans:
                     self.brain.fail("replan budget exhausted")
                     return
