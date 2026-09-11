@@ -7,7 +7,7 @@ from typing import Any
 
 from .models import ActionType, Decision, ExecutionResult, Goal, Observation, RunResult
 from .outcome_memory import ActionOutcome, OutcomeMemory
-from .uncertainty import UncertaintyAssessment
+from .uncertainty import UncertaintyAssessment, UncertaintyResolutionPolicy
 
 
 @dataclass(frozen=True)
@@ -68,38 +68,45 @@ class MissionState:
     def uncertainty(self) -> UncertaintyAssessment:
         """State explicitly what remains unknown after the latest evidence."""
         if self.goal_verified:
-            return UncertaintyAssessment(
-                level="low",
-                basis="goal completion was verified",
-            )
+            return UncertaintyAssessment(level="low", basis="goal completion was verified")
         if self.last_execution is not None:
             if not self.last_execution.accepted:
                 return UncertaintyAssessment(
-                    level="high",
-                    basis="execution was rejected",
+                    level="high", basis="execution was rejected",
                     unknowns=("whether another viable action exists", "goal completion"),
                 )
             if not self.last_execution.changed:
                 return UncertaintyAssessment(
-                    level="high",
-                    basis="accepted action produced no observable change",
+                    level="high", basis="accepted action produced no observable change",
                     unknowns=("whether the action had the intended effect", "whether another action is required", "goal completion"),
                 )
             return UncertaintyAssessment(
-                level="medium",
-                basis="action changed the UI but goal completion is not verified",
+                level="medium", basis="action changed the UI but goal completion is not verified",
                 unknowns=("whether the observed change advances the goal", "goal completion"),
             )
         if self.observation is not None:
             return UncertaintyAssessment(
-                level="high",
-                basis="current UI is known but no action outcome exists yet",
+                level="high", basis="current UI is known but no action outcome exists yet",
                 unknowns=("which action best advances the goal", "goal completion"),
             )
         return UncertaintyAssessment(
-            level="high",
-            basis="no mission evidence exists",
+            level="high", basis="no mission evidence exists",
             unknowns=("current UI state", "best next action", "goal completion"),
+        )
+
+    def uncertainty_resolution(self):
+        """Return current-UI actions that could reduce explicit uncertainty."""
+        if self.observation is None:
+            return None
+        excluded: tuple[str, ...] = ()
+        if self.last_execution is not None and self.last_execution.accepted and not self.last_execution.changed:
+            if self.last_decision is not None and self.last_decision.action.target_id:
+                excluded = (self.last_decision.action.target_id,)
+        return UncertaintyResolutionPolicy().resolve(
+            self.uncertainty,
+            self.observation,
+            self.goal,
+            excluded_target_ids=excluded,
         )
 
     def reasoning_snapshot(self) -> dict[str, Any]:
@@ -114,6 +121,9 @@ class MissionState:
             "progress_evidence": list(self.progress_evidence),
             "recent_action_outcomes": self.outcome_memory.snapshot(),
         }
+        resolution = self.uncertainty_resolution()
+        if resolution is not None:
+            snapshot["uncertainty_resolution"] = resolution.snapshot()
         if self.observation is not None:
             snapshot["current_observation_revision"] = self.observation.revision
         if self.last_decision is not None:
