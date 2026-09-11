@@ -21,15 +21,17 @@ class FakeObserver:
 
 
 class FreshFakeObserver(FakeObserver):
-    """FreshObserver implementation that must not be used for no-op actions."""
+    """FreshObserver implementation that records post-action observations."""
 
     def __init__(self):
         super().__init__()
         self.fresh_calls = 0
+        self.fresh_previous_revisions = []
 
     def observe_fresh(self, previous):
         self.fresh_calls += 1
-        raise AssertionError("unchanged action must not wait for a fresh UI transition")
+        self.fresh_previous_revisions.append(previous.revision)
+        return self.observe()
 
 
 class FakeExecutor:
@@ -142,7 +144,7 @@ def test_runtime_skips_exact_replay_at_start_of_replanned_plan():
     assert runtime.brain.plan.current.description == "fallback intent"
 
 
-def test_runtime_does_not_wait_for_fresh_observation_after_accepted_unchanged_action():
+def test_runtime_uses_fresh_observation_after_accepted_unchanged_action():
     planner = RecordingPlanner()
     observer = FreshFakeObserver()
     runtime = Runtime(
@@ -153,7 +155,8 @@ def test_runtime_does_not_wait_for_fresh_observation_after_accepted_unchanged_ac
     result = runtime.run()
 
     assert result.error == "replan budget exhausted"
-    assert observer.fresh_calls == 0
+    assert observer.fresh_calls == 2
+    assert observer.fresh_previous_revisions == [1, 2]
 
 
 def test_runtime_uses_llm_planner_for_initial_plan_and_f7_replan():
