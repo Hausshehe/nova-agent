@@ -83,4 +83,4 @@ def test_llm_reasoner_prompt_contains_bounded_mission_state():
     assert payload["mission"]["last_target_label"] == "FINISH"
     assert payload["mission"]["last_execution"] == {"accepted": True, "changed": True, "error": None}
     assert payload["mission"]["changed_actions"] == 1
-    assert "The current observation is authoritative for what is available now." in " ".join(payload["rules"])
+    assert "The current observation is authoritative for what is available now" in " ".join(payload["rules"])
