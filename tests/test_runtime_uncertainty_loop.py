@@ -109,7 +109,7 @@ def test_runtime_uses_fresh_observation_to_change_next_decision() -> None:
     assert first_context.mission_state is not None
     assert "whether the action had the intended effect" not in first_context.uncertainty.unknowns
 
-    assert second_context.observation.revision == 2
+    assert second_context.observation.revision == 3
     assert second_context.mission_state is not None
     assert "whether the action had the intended effect" not in second_context.uncertainty.unknowns
     assert "whether another action is required" in second_context.uncertainty.unknowns
