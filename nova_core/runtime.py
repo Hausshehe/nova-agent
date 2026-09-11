@@ -33,6 +33,7 @@ class Runtime:
         max_replans: int = 2,
         action_guard: ActionGuard | None = None,
         planner: Planner | None = None,
+        replan_after_progress: bool = False,
         learning_memory: LearningMemory | None = None,
         learning_policy: LearningApplicationPolicy | None = None,
         intent_verifier: Verifier | None = None,
@@ -53,6 +54,7 @@ class Runtime:
         self.invalid_decisions = 0
         self.max_invalid_decisions = max_invalid_decisions
         self.planner = planner or GoalPlanner()
+        self.replan_after_progress = replan_after_progress
         self.max_replans = max_replans
         self.replans = 0
         self.learning_memory = learning_memory or LearningMemory()
@@ -191,9 +193,12 @@ class Runtime:
             else:
                 if execution.accepted and execution.changed:
                     self._unchanged_actions = 0
-                    self._replan_requested = False
-                    if intent_achieved:
-                        self.brain.advance_plan()
+                    if self.replan_after_progress:
+                        self._replan_requested = True
+                    else:
+                        self._replan_requested = False
+                        if intent_achieved:
+                            self.brain.advance_plan()
                 elif not execution.accepted:
                     self._unchanged_actions = 0
                     self._replan_requested = True
