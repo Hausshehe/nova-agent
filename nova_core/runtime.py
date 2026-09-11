@@ -35,6 +35,7 @@ class Runtime:
         planner: Planner | None = None,
         learning_memory: LearningMemory | None = None,
         learning_policy: LearningApplicationPolicy | None = None,
+        intent_verifier: Verifier | None = None,
     ) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
@@ -46,6 +47,7 @@ class Runtime:
         self.reasoner = reasoner
         self.executor = executor
         self.verifier = verifier
+        self.intent_verifier = intent_verifier
         self.action_guard = action_guard or ActionGuard()
         self.evidence = EvidenceTracker(max_rejections=max(1, max_invalid_decisions + 2))
         self.invalid_decisions = 0
@@ -169,6 +171,21 @@ class Runtime:
                 after = self.observer.observe()
             self.evidence.observe(after)
             achieved = self.verifier.verify(self.controller.goal, before, decision, execution, after)
+            intent_achieved = False
+            current_intent = self.brain.plan.current if self.brain.plan is not None else None
+            if (
+                self.intent_verifier is not None
+                and current_intent is not None
+                and execution.accepted
+                and execution.changed
+            ):
+                intent_achieved = self.intent_verifier.verify(
+                    Goal(current_intent.description),
+                    before,
+                    decision,
+                    execution,
+                    after,
+                )
             if achieved:
                 self.brain.finish_verification(after, goal_achieved=True)
             elif self.invalid_decisions > self.max_invalid_decisions:
@@ -177,7 +194,8 @@ class Runtime:
                 if execution.accepted and execution.changed:
                     self._unchanged_actions = 0
                     self._replan_requested = False
-                    self.brain.advance_plan()
+                    if intent_achieved:
+                        self.brain.advance_plan()
                 elif not execution.accepted:
                     self._unchanged_actions = 0
                     self._replan_requested = True
