@@ -11,11 +11,11 @@ from typing import Any, Callable, Mapping
 
 from agent.android_bridge import AndroidBridge
 from agent.cerebras_responder import CerebrasResponder
-from agent.fallback_responder import FallbackResponder
 from agent.gemini_responder import GeminiResponder
 from agent.groq_responder import GroqResponder
 from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
+from agent.provider_pool import ReasoningProviderPool
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.llm_planner import LLMPlanner
 from nova_core.models import Goal, RunStatus
@@ -121,15 +121,16 @@ def main() -> int:
     else: bridge.launch(root=False)
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
-    responder = FallbackResponder(responders)
+    provider_pool = ReasoningProviderPool(responders)
     runtime = Runtime(
-        Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(),
+        Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
         max_steps=args.max_steps,
         planner=planner,
         replan_after_progress=planner is not None,
         max_replans=max(2, args.max_steps),
     )
     result = runtime.run()
+    print("V2_PROVIDER_HEALTH=" + json.dumps(provider_pool.health(), sort_keys=True))
     if runtime.brain.plan is not None:
         plan = runtime.brain.plan
         print(f"V2_MISSION_PLAN revision={plan.revision} cursor={plan.cursor} complete={plan.complete}")
