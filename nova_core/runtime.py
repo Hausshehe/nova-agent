@@ -107,6 +107,9 @@ class Runtime:
             if self.brain.plan is None:
                 self.brain.set_plan(self.planner.plan(context))
             elif self._replan_requested:
+                if self.controller.steps >= self.controller.max_steps:
+                    self.brain.fail("step budget exhausted")
+                    return
                 if self.replans >= self.max_replans:
                     self.brain.fail("replan budget exhausted")
                     return
