@@ -47,30 +47,11 @@ class MainActivity : Activity() {
             setPadding(0, 8, 0, 24)
         })
 
-        content.addView(section("Accessibility"))
-        accessibilityStatus = status(accessibilityStatusText())
-        content.addView(accessibilityStatus)
-        content.addView(Button(this).apply {
-            text = "Open Accessibility Settings"
-            contentDescription = "Open Accessibility Settings"
-            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-        }, buttonParams())
-
-        content.addView(section("Navigation"))
-        val navigationButton = Button(this).apply {
-            id = R.id.test_navigation_action
-            text = "Test Navigation Action"
-            contentDescription = "Test Navigation Action"
-            setOnClickListener {
-                navigationClicks++
-                text = "Navigation Action Completed"
-                navigationStatus.text = "Clicked $navigationClicks time${if (navigationClicks == 1) "" else "s"}"
-            }
-        }
-        content.addView(navigationButton, buttonParams())
-        navigationStatus = status("Clicked 0 times")
-        content.addView(navigationStatus)
-
+        // Keep the recovery controls near the top of the harness. Accessibility
+        // services on some Android builds can omit off-screen ScrollView
+        // descendants after a focused click. The replanning smoke needs both
+        // the failed primary and fallback targets to remain observable while
+        // testing accepted-but-unchanged actions.
         content.addView(section("Recovery"))
         val recoveryButton = Button(this).apply {
             id = R.id.recovery_test
@@ -98,6 +79,30 @@ class MainActivity : Activity() {
         content.addView(recoveryFallback, buttonParams())
         recoveryStatus = status("Recovery ready")
         content.addView(recoveryStatus)
+
+        content.addView(section("Accessibility"))
+        accessibilityStatus = status(accessibilityStatusText())
+        content.addView(accessibilityStatus)
+        content.addView(Button(this).apply {
+            text = "Open Accessibility Settings"
+            contentDescription = "Open Accessibility Settings"
+            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }, buttonParams())
+
+        content.addView(section("Navigation"))
+        val navigationButton = Button(this).apply {
+            id = R.id.test_navigation_action
+            text = "Test Navigation Action"
+            contentDescription = "Test Navigation Action"
+            setOnClickListener {
+                navigationClicks++
+                text = "Navigation Action Completed"
+                navigationStatus.text = "Clicked $navigationClicks time${if (navigationClicks == 1) "" else "s"}"
+            }
+        }
+        content.addView(navigationButton, buttonParams())
+        navigationStatus = status("Clicked 0 times")
+        content.addView(navigationStatus)
 
         content.addView(section("Multi-Step"))
         val multiStepButton = Button(this).apply {
