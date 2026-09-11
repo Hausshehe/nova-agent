@@ -79,6 +79,7 @@ class RuntimeBrain:
             plan=self.plan,
             relevant_learning=relevant_learning,
             learning_assessment=learning_assessment,
+            uncertainty=self.mission.uncertainty,
         )
 
     def record_decision(self, decision: Decision) -> None:
