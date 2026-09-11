@@ -9,17 +9,20 @@ class SequenceObserver:
 
     def observe(self):
         self.revision += 1
-        target_id = {
-            1: "stale-future-intent",
-            2: "freshly-observed-intent",
-        }.get(self.revision, "freshly-observed-intent")
+        if self.revision == 1:
+            elements = (
+                UiElement(id="stale-future-intent", text="State 1", clickable=True),
+            )
+        else:
+            elements = (
+                UiElement(id="freshly-observed-intent", text=f"State {self.revision} fresh", clickable=True),
+                UiElement(id="another-stale-intent", text=f"State {self.revision} legacy", clickable=True),
+            )
         return Observation(
             package="com.example.app",
             activity="MainActivity",
             revision=self.revision,
-            elements=(
-                UiElement(id=target_id, text=f"State {self.revision}", clickable=True),
-            ),
+            elements=elements,
         )
 
 
