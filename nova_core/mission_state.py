@@ -23,6 +23,7 @@ class MissionState:
     failed_actions: int = 0
     goal_verified: bool = False
     outcome_memory: OutcomeMemory = OutcomeMemory()
+    resolved_unknowns: tuple[str, ...] = ()
 
     @property
     def progress_evidence(self) -> tuple[str, ...]:
@@ -71,18 +72,22 @@ class MissionState:
             return UncertaintyAssessment(level="low", basis="goal completion was verified")
         if self.last_execution is not None:
             if not self.last_execution.accepted:
-                return UncertaintyAssessment(
-                    level="high", basis="execution was rejected",
-                    unknowns=("whether another viable action exists", "goal completion"),
+                return self._with_resolved_unknowns(
+                    "high", "execution was rejected",
+                    ("whether another viable action exists", "goal completion"),
                 )
             if not self.last_execution.changed:
-                return UncertaintyAssessment(
-                    level="high", basis="accepted action produced no observable change",
-                    unknowns=("whether the action had the intended effect", "whether another action is required", "goal completion"),
+                return self._with_resolved_unknowns(
+                    "high", "accepted action produced no observable change",
+                    (
+                        "whether the action had the intended effect",
+                        "whether another action is required",
+                        "goal completion",
+                    ),
                 )
-            return UncertaintyAssessment(
-                level="medium", basis="action changed the UI but goal completion is not verified",
-                unknowns=("whether the observed change advances the goal", "goal completion"),
+            return self._with_resolved_unknowns(
+                "medium", "action changed the UI but goal completion is not verified",
+                ("whether the observed change advances the goal", "goal completion"),
             )
         if self.observation is not None:
             return UncertaintyAssessment(
@@ -93,6 +98,15 @@ class MissionState:
             level="high", basis="no mission evidence exists",
             unknowns=("current UI state", "best next action", "goal completion"),
         )
+
+    def _with_resolved_unknowns(
+        self,
+        level: str,
+        basis: str,
+        unknowns: tuple[str, ...],
+    ) -> UncertaintyAssessment:
+        remaining = tuple(unknown for unknown in unknowns if unknown not in self.resolved_unknowns)
+        return UncertaintyAssessment(level=level, basis=basis, unknowns=remaining)
 
     def uncertainty_resolution(self):
         """Return current-UI actions that could reduce explicit uncertainty."""
@@ -120,6 +134,7 @@ class MissionState:
             "failed_actions": self.failed_actions,
             "progress_evidence": list(self.progress_evidence),
             "recent_action_outcomes": self.outcome_memory.snapshot(),
+            "resolved_unknowns": list(self.resolved_unknowns),
         }
         resolution = self.uncertainty_resolution()
         if resolution is not None:
@@ -144,14 +159,14 @@ class MissionState:
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.goal_verified, self.outcome_memory,
+            self.goal_verified, self.outcome_memory, self.resolved_unknowns,
         )
 
     def decided(self, decision: Decision) -> "MissionState":
         return MissionState(
             self.goal, self.observation, decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            False, self.outcome_memory,
+            False, self.outcome_memory, (),
         )
 
     def executed(self, result: ExecutionResult) -> "MissionState":
@@ -169,11 +184,23 @@ class MissionState:
             self.failed_actions + int(not result.accepted),
             False,
             self.outcome_memory.remember(outcome),
+            (),
         )
 
     def verified(self, observation: Observation, goal_achieved: bool) -> "MissionState":
+        resolved = self.resolved_unknowns
+        before = self.observation
+        execution = self.last_execution
+        if (
+            before is not None
+            and execution is not None
+            and observation.revision != before.revision
+            and execution.accepted
+            and not execution.changed
+        ):
+            resolved = tuple(dict.fromkeys((*resolved, "whether the action had the intended effect")))
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            goal_achieved, self.outcome_memory,
+            goal_achieved, self.outcome_memory, resolved,
         )
