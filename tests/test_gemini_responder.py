@@ -81,3 +81,11 @@ def test_gemini_responder_does_not_retry_timeout():
         GeminiResponder(api_key="test-key", opener=opener)("{}")
 
     assert calls == 1
+
+
+def test_gemini_responder_normalizes_connection_aborted_for_provider_pool():
+    def opener(req, timeout):
+        raise ConnectionAbortedError(103, "Software caused connection abort")
+
+    with pytest.raises(RuntimeError, match="Gemini request connection failed: \[Errno 103\] Software caused connection abort"):
+        GeminiResponder(api_key="test-key", opener=opener)("{}")
