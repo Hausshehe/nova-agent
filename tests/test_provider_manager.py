@@ -5,15 +5,13 @@ import pytest
 from agent.fallback_responder import FallbackResponder
 
 
-def test_fallback_retries_transient_provider_once_and_uses_first_success() -> None:
+def test_fallback_moves_to_next_provider_on_rate_limit() -> None:
     calls: list[str] = []
     sleeps: list[float] = []
 
     def groq(prompt: str):
         calls.append("groq")
-        if calls.count("groq") == 1:
-            raise RuntimeError("HTTP 429")
-        return {"action_type": "wait", "target_id": None, "value": None, "reason": "ok"}
+        raise RuntimeError("HTTP 429")
 
     def openrouter(prompt: str):
         calls.append("openrouter")
@@ -25,8 +23,8 @@ def test_fallback_retries_transient_provider_once_and_uses_first_success() -> No
     )
 
     assert responder("context")["action_type"] == "wait"
-    assert calls == ["groq", "groq"]
-    assert sleeps == [1.25]
+    assert calls == ["groq", "openrouter"]
+    assert sleeps == []
 
 
 def test_fallback_does_not_retry_permanent_failed_provider() -> None:
