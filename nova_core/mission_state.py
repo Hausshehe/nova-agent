@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .models import ActionType, Decision, ExecutionResult, Goal, Observation
+from .models import ActionType, Decision, ExecutionResult, Goal, Observation, RunResult
 from .outcome_memory import ActionOutcome, OutcomeMemory
+from .uncertainty import UncertaintyAssessment
 
 
 @dataclass(frozen=True)
@@ -63,11 +64,50 @@ class MissionState:
             return {"status": "observed", "confidence": "low", "basis": "current UI observed but no action outcome yet"}
         return {"status": "unknown", "confidence": "none", "basis": "no mission evidence yet"}
 
+    @property
+    def uncertainty(self) -> UncertaintyAssessment:
+        """State explicitly what remains unknown after the latest evidence."""
+        if self.goal_verified:
+            return UncertaintyAssessment(
+                level="low",
+                basis="goal completion was verified",
+            )
+        if self.last_execution is not None:
+            if not self.last_execution.accepted:
+                return UncertaintyAssessment(
+                    level="high",
+                    basis="execution was rejected",
+                    unknowns=("whether another viable action exists", "goal completion"),
+                )
+            if not self.last_execution.changed:
+                return UncertaintyAssessment(
+                    level="high",
+                    basis="accepted action produced no observable change",
+                    unknowns=("whether the action had the intended effect", "whether another action is required", "goal completion"),
+                )
+            return UncertaintyAssessment(
+                level="medium",
+                basis="action changed the UI but goal completion is not verified",
+                unknowns=("whether the observed change advances the goal", "goal completion"),
+            )
+        if self.observation is not None:
+            return UncertaintyAssessment(
+                level="high",
+                basis="current UI is known but no action outcome exists yet",
+                unknowns=("which action best advances the goal", "goal completion"),
+            )
+        return UncertaintyAssessment(
+            level="high",
+            basis="no mission evidence exists",
+            unknowns=("current UI state", "best next action", "goal completion"),
+        )
+
     def reasoning_snapshot(self) -> dict[str, Any]:
         """Return bounded state facts for model reasoning and planning."""
         snapshot: dict[str, Any] = {
             "goal_verified": self.goal_verified,
             "assessment": self.assessment,
+            "uncertainty": self.uncertainty.snapshot(),
             "successful_actions": self.successful_actions,
             "changed_actions": self.changed_actions,
             "failed_actions": self.failed_actions,
