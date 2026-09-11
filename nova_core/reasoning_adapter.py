@@ -216,17 +216,39 @@ def _mission_payload(context: ReasoningContext) -> dict[str, Any] | None:
     return context.mission_state.reasoning_snapshot()
 
 
+def _uncertainty_payload(context: ReasoningContext) -> dict[str, Any]:
+    """Translate uncertainty into bounded, concrete action-selection guidance."""
+    assessment = context.uncertainty
+    if assessment is None:
+        return {"level": "unknown", "mode": "reassess", "unknowns": [], "conflicts": [],
+                "guidance": "Uncertainty is not supplied. Do not infer success from the plan or history; use the current observation and fresh evidence."}
+    level = assessment.level if assessment.level in {"low", "medium", "high"} else "high"
+    mode = {"low": "execute", "medium": "progress_check", "high": "reassess"}[level]
+    guidance = {
+        "low": "Normal execution is appropriate because goal completion is already evidenced. Still validate the selected target against the current observation.",
+        "medium": "Select a concrete goal-advancing action whose effect can be verified from a fresh observation. Do not treat a UI change alone as proof of goal progress.",
+        "high": "Do not assume the previous action worked or that the goal is closer. Prefer an action that resolves an unknown or produces fresh observable evidence. Do not repeat an ineffective action without new evidence.",
+    }[level]
+    return {"level": level, "mode": mode, "basis": assessment.basis, "unknowns": list(assessment.unknowns),
+            "conflicts": list(assessment.conflicts), "guidance": guidance}
+
+
 def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Build a compact, bounded prompt so every reasoning call stays cheap."""
     plan = _plan_payload(context)
     mission = _mission_payload(context)
+    uncertainty = _uncertainty_payload(context)
     rules = [
         "Choose one action supported by the current UI.",
         "Prefer the smallest safe action that advances the goal.",
         "Treat the plan as guidance, not proof of success.",
         "Never invent an element id; reassess after UI changes.",
         "Use mission state only as evidence of what has happened.",
-        "The current observation is authoritative for what is available now.",
+        "The current observation is authoritative for what is available now and outranks historical assumptions.",
+        "When uncertainty is high, favor fresh evidence or an action that resolves an explicit unknown instead of blindly repeating the previous action.",
+        "When uncertainty is medium, prefer an action whose effect can be checked from the next observation.",
+        "When uncertainty is low, do not add unnecessary recovery or exploration; execute the evidence-backed next action normally.",
+        "If evidence conflicts, do not silently choose the historical interpretation; prefer fresh current evidence.",
     ]
     if plan is not None and plan["current"] is not None:
         rules.extend([
@@ -238,6 +260,7 @@ def _reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     return {
         "goal": context.goal.text,
         "rules": rules,
+        "uncertainty": uncertainty,
         "mission": mission,
         "plan": plan,
         "observation": _observation_payload(context.observation),
