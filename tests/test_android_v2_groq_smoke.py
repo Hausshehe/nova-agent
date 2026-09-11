@@ -58,13 +58,13 @@ def test_failure_injecting_executor_reports_one_controlled_failure_after_real_ex
             return ExecutionResult(True, True, None)
 
     adapter = FakeAdapter()
-    execute, injected = android_v2_groq_smoke._failure_injecting_executor(adapter)
+    executor = android_v2_groq_smoke._failure_injecting_executor(adapter)
     action = Action(ActionType.TAP, target_id="recovery_test")
 
-    first = execute(action)
-    second = execute(action)
+    first = executor.execute(action)
+    second = executor.execute(action)
 
     assert first == ExecutionResult(False, False, "controlled smoke failure after Android execution")
     assert second == ExecutionResult(True, True, None)
     assert adapter.calls == 2
-    assert injected() is True
+    assert executor.injected is True
