@@ -61,11 +61,16 @@ def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READ
     raise RuntimeError(f"Nova Android bridge did not become ready within {timeout_seconds}s: {last_error}")
 
 
-def _configured_responders(model: str | None, *, task: str = "reasoning") -> list[tuple[str, object]]:
+def _configured_responders(model: str | None, *, task: str = "reasoning",
+                           gemini_timeout_seconds: float | None = None) -> list[tuple[str, object]]:
     available: dict[str, object] = {}
     if os.environ.get("GROQ_API_KEY"): available["groq"] = GroqResponder(model=model, task=task)
     if os.environ.get("OPENROUTER_API_KEY"): available["openrouter"] = OpenRouterResponder(task=task)
-    if os.environ.get("GEMINI_API_KEY"): available["gemini"] = GeminiResponder(task=task)
+    if os.environ.get("GEMINI_API_KEY"):
+        if gemini_timeout_seconds is None:
+            available["gemini"] = GeminiResponder(task=task)
+        else:
+            available["gemini"] = GeminiResponder(task=task, timeout_seconds=gemini_timeout_seconds)
     if os.environ.get("MISTRAL_API_KEY"): available["mistral"] = MistralResponder(task=task)
     if os.environ.get("CEREBRAS_API_KEY"): available["cerebras"] = CerebrasResponder(task=task)
     requested = [name.strip().lower() for name in os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini,mistral,cerebras").split(",") if name.strip()]
@@ -79,15 +84,28 @@ def _instrument_responders(responders: list[tuple[str, object]], *, label: str) 
     instrumented = []
     for name, responder in responders:
         def measured(prompt: str, *, _name=name, _responder=responder) -> Mapping[str, Any]:
-            print(f"V2_{label}_PROMPT_CHARS provider={_name} chars={len(prompt)}")
-            return _responder(prompt)  # type: ignore[operator]
+            print(f"V2_{label}_PROMPT_CHARS provider={_name} chars={len(prompt)}", flush=True)
+            started = time.monotonic()
+            try:
+                result = _responder(prompt)  # type: ignore[operator]
+            except Exception as exc:
+                elapsed = time.monotonic() - started
+                print(f"V2_{label}_LATENCY provider={_name} seconds={elapsed:.2f} outcome=error error={exc!r}", flush=True)
+                raise
+            elapsed = time.monotonic() - started
+            print(f"V2_{label}_LATENCY provider={_name} seconds={elapsed:.2f} outcome=success", flush=True)
+            return result
         instrumented.append((name, measured))
     return instrumented
 
 
-def _planner(responders: list[tuple[str, object]]) -> tuple[LLMPlanner | None, ReasoningProviderPool | None]:
+def _planner(responders: list[tuple[str, object]], *, gemini_timeout_seconds: float | None = None) -> tuple[LLMPlanner | None, ReasoningProviderPool | None]:
     if not responders:
         return None, None
+    if gemini_timeout_seconds is not None:
+        names = {name for name, _ in responders}
+        configured = _configured_responders(None, task="planning", gemini_timeout_seconds=gemini_timeout_seconds)
+        responders = [(name, responder) for name, responder in configured if name in names]
     pool = ReasoningProviderPool(_instrument_responders(responders, label="PLANNING"))
 
     def complete(prompt: str) -> str:
@@ -102,12 +120,16 @@ def main() -> int:
     parser.add_argument("--goal", default="Tap Test Navigation Action")
     parser.add_argument("--model", default=None)
     parser.add_argument("--max-steps", type=int, default=1)
+    parser.add_argument("--gemini-timeout", type=float, default=None,
+                        help="Override Gemini request timeout for bounded latency diagnostics")
     args = parser.parse_args()
     if args.max_steps < 1:
         parser.error("--max-steps must be at least 1")
+    if args.gemini_timeout is not None and args.gemini_timeout <= 0:
+        parser.error("--gemini-timeout must be positive")
     try:
-        responders = _configured_responders(args.model, task="reasoning")
-        planning_responders = _configured_responders(args.model, task="planning")
+        responders = _configured_responders(args.model, task="reasoning", gemini_timeout_seconds=args.gemini_timeout)
+        planning_responders = _configured_responders(args.model, task="planning", gemini_timeout_seconds=args.gemini_timeout)
     except ValueError as exc:
         parser.error(str(exc))
     if not responders:
@@ -115,7 +137,7 @@ def main() -> int:
     responders = _instrument_responders(responders, label="REASONING")
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
-    planner, planner_pool = _planner(planning_responders)
+    planner, planner_pool = _planner(planning_responders, gemini_timeout_seconds=args.gemini_timeout)
     print("V2_MISSION_PLANNER=" + ("provider-pool" if planner is not None else "goal-default"))
     print("V2_PLANNING_PROVIDER_ORDER=" + (",".join(name for name, _ in planning_responders) or "NONE"))
     bridge = AndroidBridge()
