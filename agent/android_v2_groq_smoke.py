@@ -64,7 +64,7 @@ def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READ
 def _configured_responders(model: str | None, *, task: str = "reasoning") -> list[tuple[str, object]]:
     available: dict[str, object] = {}
     if os.environ.get("GROQ_API_KEY"): available["groq"] = GroqResponder(model=model, task=task)
-    if os.environ.get("OPENROUTER_API_KEY"): available["openrouter"] = OpenRouterResponder()
+    if os.environ.get("OPENROUTER_API_KEY"): available["openrouter"] = OpenRouterResponder(task=task)
     if os.environ.get("GEMINI_API_KEY"): available["gemini"] = GeminiResponder(task=task)
     if os.environ.get("MISTRAL_API_KEY"): available["mistral"] = MistralResponder(task=task)
     if os.environ.get("CEREBRAS_API_KEY"): available["cerebras"] = CerebrasResponder(task=task)
@@ -112,7 +112,6 @@ def main() -> int:
         parser.error(str(exc))
     if not responders:
         parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
-    provider_names = [name for name, _ in responders]
     responders = _instrument_responders(responders, label="REASONING")
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
@@ -127,11 +126,9 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
-    runtime = Runtime(
-        Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
-        max_steps=args.max_steps, planner=planner, replan_after_progress=planner is not None,
-        max_replans=max(2, args.max_steps),
-    )
+    runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
+                      max_steps=args.max_steps, planner=planner, replan_after_progress=planner is not None,
+                      max_replans=max(2, args.max_steps))
     result = runtime.run()
     print("V2_PROVIDER_HEALTH=" + json.dumps(provider_pool.health(), sort_keys=True))
     if planner_pool is not None:
