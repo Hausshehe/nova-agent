@@ -90,6 +90,18 @@ class LLMPlanner:
             if context.learning_assessment is not None
             else [],
         }
+        uncertainty = context.uncertainty
+        uncertainty_payload = uncertainty.snapshot() if uncertainty is not None else {
+            "level": "unknown",
+            "basis": "uncertainty was not supplied",
+            "unknowns": [],
+            "conflicts": [],
+        }
+        uncertainty_mode = {
+            "high": "reassess",
+            "medium": "progress_check",
+            "low": "execute",
+        }.get(uncertainty_payload["level"], "reassess")
         previous_text = (
             [step.description for step in previous.remaining]
             if previous is not None
@@ -106,11 +118,19 @@ class LLMPlanner:
             "instructions such as 'if no progress, ...'. Encode the intended recovery action itself as a "
             "step. Historical lessons are warnings only: current observation and evidence take priority, "
             "and a lesson must never be treated as proof that an action is valid now.\n"
+            "Uncertainty is behavioral guidance, not decoration. If uncertainty is high, do not assume the "
+            "previous action worked or that the goal is closer to completion; prefer a concrete intent that "
+            "resolves an unknown or produces fresh observable evidence, and do not repeat an ineffective "
+            "action without new evidence. If uncertainty is medium, prefer a concrete goal-advancing intent "
+            "whose effect can be verified from a fresh observation. If uncertainty is low, proceed normally "
+            "while still requiring evidence-backed completion. Conflicting evidence must remain unresolved "
+            "rather than being silently ignored.\n"
             "Return ONLY valid JSON in this exact shape: {\"steps\":[\"intent\", ...]}.\n"
             f"Use at most {self.max_steps} steps. Each intent must be a non-empty string.\n"
             f"GOAL: {context.goal.text}\n"
             f"OBSERVATION: {json.dumps(observation, ensure_ascii=False, separators=(',', ':'))}\n"
             f"EVIDENCE: {json.dumps(evidence, ensure_ascii=False, separators=(',', ':'))}\n"
+            f"UNCERTAINTY: {json.dumps({**uncertainty_payload, 'mode': uncertainty_mode}, ensure_ascii=False, separators=(',', ':'))}\n"
             f"LEARNING: {json.dumps(learning, ensure_ascii=False, separators=(',', ':'))}\n"
             f"PREVIOUS_PLAN_REMAINING: {json.dumps(previous_text, ensure_ascii=False)}\n"
         )
