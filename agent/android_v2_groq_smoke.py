@@ -148,9 +148,11 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
-    runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
-                      max_steps=args.max_steps, planner=planner, replan_after_progress=planner is not None,
-                      max_replans=max(2, args.max_steps))
+    runtime = Runtime(
+        Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
+        max_steps=args.max_steps, planner=planner, replan_after_progress=False,
+        max_replans=max(2, args.max_steps),
+    )
     result = runtime.run()
     print("V2_PROVIDER_HEALTH=" + json.dumps(provider_pool.health(), sort_keys=True))
     if planner_pool is not None:
