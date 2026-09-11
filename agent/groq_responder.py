@@ -196,7 +196,9 @@ class GroqResponder:
                 raw = response.read()
         except error.HTTPError as exc:
             detail = _http_error_detail(exc)
-            suffix = f": {detail}" if detail else ""
+            retry_after = exc.headers.get("retry-after") if exc.headers else None
+            suffix_parts = [part for part in (detail, f"retry-after: {retry_after}" if retry_after else None) if part]
+            suffix = f": {'; '.join(suffix_parts)}" if suffix_parts else ""
             raise RuntimeError(f"Groq request failed with HTTP {exc.code}{suffix}") from exc
         except error.URLError as exc:
             raise RuntimeError("Groq request failed") from exc
