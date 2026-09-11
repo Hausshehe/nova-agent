@@ -39,9 +39,7 @@ def _reset_nova_process(timeout_seconds: float) -> None:
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"unable to reset and launch Nova without root: reset timed out after {timeout_seconds}s") from exc
     except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        stdout = (exc.stdout or "").strip()
-        details = stderr or stdout or f"exit={exc.returncode}"
+        details = (exc.stderr or exc.stdout or f"exit={exc.returncode}").strip()
         raise RuntimeError(f"unable to reset and launch Nova without root: exit={exc.returncode}; {details}") from exc
     if completed.stdout.strip() or completed.stderr.strip():
         print(f"RESET_COMMAND_OUTPUT={command!r} stdout={completed.stdout.strip()!r} stderr={completed.stderr.strip()!r}")
@@ -63,40 +61,39 @@ def _wait_for_bridge(bridge: AndroidBridge, timeout_seconds: float = BRIDGE_READ
     raise RuntimeError(f"Nova Android bridge did not become ready within {timeout_seconds}s: {last_error}")
 
 
-def _configured_responders(model: str | None) -> list[tuple[str, object]]:
+def _configured_responders(model: str | None, *, task: str = "reasoning") -> list[tuple[str, object]]:
     available: dict[str, object] = {}
-    if os.environ.get("GROQ_API_KEY"): available["groq"] = GroqResponder(model=model)
+    if os.environ.get("GROQ_API_KEY"): available["groq"] = GroqResponder(model=model, task=task)
     if os.environ.get("OPENROUTER_API_KEY"): available["openrouter"] = OpenRouterResponder()
-    if os.environ.get("GEMINI_API_KEY"): available["gemini"] = GeminiResponder()
-    if os.environ.get("MISTRAL_API_KEY"): available["mistral"] = MistralResponder()
-    if os.environ.get("CEREBRAS_API_KEY"): available["cerebras"] = CerebrasResponder()
+    if os.environ.get("GEMINI_API_KEY"): available["gemini"] = GeminiResponder(task=task)
+    if os.environ.get("MISTRAL_API_KEY"): available["mistral"] = MistralResponder(task=task)
+    if os.environ.get("CEREBRAS_API_KEY"): available["cerebras"] = CerebrasResponder(task=task)
     requested = [name.strip().lower() for name in os.environ.get("V2_REASONING_PROVIDER_ORDER", "groq,openrouter,gemini,mistral,cerebras").split(",") if name.strip()]
     unknown = [name for name in requested if name not in SUPPORTED_PROVIDERS]
-    if unknown: raise ValueError("unknown reasoning providers: " + ", ".join(unknown))
+    if unknown:
+        raise ValueError("unknown reasoning providers: " + ", ".join(unknown))
     return [(name, available[name]) for name in requested if name in available]
 
 
-def _instrument_responders(responders: list[tuple[str, object]]) -> list[tuple[str, Callable[[str], Mapping[str, Any]]]]:
+def _instrument_responders(responders: list[tuple[str, object]], *, label: str) -> list[tuple[str, Callable[[str], Mapping[str, Any]]]]:
     instrumented = []
     for name, responder in responders:
         def measured(prompt: str, *, _name=name, _responder=responder) -> Mapping[str, Any]:
-            print(f"V2_REASONING_PROMPT_CHARS provider={_name} chars={len(prompt)}")
+            print(f"V2_{label}_PROMPT_CHARS provider={_name} chars={len(prompt)}")
             return _responder(prompt)  # type: ignore[operator]
         instrumented.append((name, measured))
     return instrumented
 
 
-def _groq_planner(model: str | None, provider_names: list[str]) -> LLMPlanner | None:
-    """Use Groq for mission planning when Groq is actually in the active provider set."""
-    if "groq" not in provider_names:
-        return None
-    responder = GroqResponder(model=model, task="planning")
+def _planner(responders: list[tuple[str, object]]) -> tuple[LLMPlanner | None, ReasoningProviderPool | None]:
+    if not responders:
+        return None, None
+    pool = ReasoningProviderPool(_instrument_responders(responders, label="PLANNING"))
 
     def complete(prompt: str) -> str:
-        print(f"V2_PLANNING_PROMPT_CHARS provider=groq chars={len(prompt)}")
-        return json.dumps(responder(prompt), ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(pool(prompt), ensure_ascii=False, separators=(",", ":"))
 
-    return LLMPlanner(complete)
+    return LLMPlanner(complete), pool
 
 
 def main() -> int:
@@ -106,31 +103,39 @@ def main() -> int:
     parser.add_argument("--model", default=None)
     parser.add_argument("--max-steps", type=int, default=1)
     args = parser.parse_args()
-    if args.max_steps < 1: parser.error("--max-steps must be at least 1")
-    try: responders = _configured_responders(args.model)
-    except ValueError as exc: parser.error(str(exc))
-    if not responders: parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
+    if args.max_steps < 1:
+        parser.error("--max-steps must be at least 1")
+    try:
+        responders = _configured_responders(args.model, task="reasoning")
+        planning_responders = _configured_responders(args.model, task="planning")
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not responders:
+        parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
     provider_names = [name for name, _ in responders]
-    responders = _instrument_responders(responders)
+    responders = _instrument_responders(responders, label="REASONING")
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
-    planner = _groq_planner(args.model, provider_names)
-    print("V2_MISSION_PLANNER=" + ("groq" if planner is not None else "goal-default"))
+    planner, planner_pool = _planner(planning_responders)
+    print("V2_MISSION_PLANNER=" + ("provider-pool" if planner is not None else "goal-default"))
+    print("V2_PLANNING_PROVIDER_ORDER=" + (",".join(name for name, _ in planning_responders) or "NONE"))
     bridge = AndroidBridge()
-    if args.launch_nova: _reset_nova_process(bridge.timeout)
-    else: bridge.launch(root=False)
+    if args.launch_nova:
+        _reset_nova_process(bridge.timeout)
+    else:
+        bridge.launch(root=False)
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
     runtime = Runtime(
         Goal(args.goal), adapter, LLMReasoner(provider_pool), adapter, SemanticGoalVerifier(),
-        max_steps=args.max_steps,
-        planner=planner,
-        replan_after_progress=planner is not None,
+        max_steps=args.max_steps, planner=planner, replan_after_progress=planner is not None,
         max_replans=max(2, args.max_steps),
     )
     result = runtime.run()
     print("V2_PROVIDER_HEALTH=" + json.dumps(provider_pool.health(), sort_keys=True))
+    if planner_pool is not None:
+        print("V2_PLANNER_PROVIDER_HEALTH=" + json.dumps(planner_pool.health(), sort_keys=True))
     if runtime.brain.plan is not None:
         plan = runtime.brain.plan
         print(f"V2_MISSION_PLAN revision={plan.revision} cursor={plan.cursor} complete={plan.complete}")
