@@ -7,8 +7,8 @@ import os
 from typing import Any, Mapping
 from urllib import error, request
 
-DEFAULT_MODEL = "gemini-2.5-flash-lite"
-DEFAULT_TIMEOUT_SECONDS = 20.0
+DEFAULT_MODEL = "gemini-3.6-flash"
+DEFAULT_TIMEOUT_SECONDS = 60.0
 GEMINI_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 _NAVIGATION_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
@@ -80,6 +80,8 @@ class GeminiResponder:
             raise RuntimeError("Gemini request failed") from exc
         except TimeoutError as exc:
             raise RuntimeError("Gemini request timed out") from exc
+        except (ConnectionError, OSError) as exc:
+            raise RuntimeError(f"Gemini request connection failed: {exc}") from exc
         try:
             envelope = json.loads(raw.decode("utf-8"))
             content = envelope["candidates"][0]["content"]["parts"][0]["text"]
