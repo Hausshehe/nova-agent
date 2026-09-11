@@ -12,7 +12,7 @@ from .planning import Plan
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
-from .uncertainty import UncertaintyResolution
+from .uncertainty import UncertaintyResolution, UncertaintyResolutionPolicy
 from .working_memory import WorkingMemory
 
 
@@ -61,6 +61,23 @@ class RuntimeBrain:
         if self.plan is not None:
             self.plan = self.plan.advance()
 
+    def _uncertainty_resolution(self) -> UncertaintyResolution | None:
+        observation = self.memory.observation
+        if observation is None:
+            return None
+        excluded: tuple[str, ...] = ()
+        last_execution = self.mission.last_execution
+        last_decision = self.mission.last_decision
+        if last_execution is not None and last_execution.accepted and not last_execution.changed and last_decision is not None:
+            if last_decision.action.target_id:
+                excluded = (last_decision.action.target_id,)
+        return UncertaintyResolutionPolicy().resolve(
+            self.mission.uncertainty,
+            observation,
+            self.goal,
+            excluded_target_ids=excluded,
+        )
+
     def reasoning_context(
         self,
         *,
@@ -82,7 +99,7 @@ class RuntimeBrain:
             relevant_learning=relevant_learning,
             learning_assessment=learning_assessment,
             uncertainty=self.mission.uncertainty,
-            uncertainty_resolution=uncertainty_resolution,
+            uncertainty_resolution=uncertainty_resolution or self._uncertainty_resolution(),
         )
 
     def record_decision(self, decision: Decision) -> None:
