@@ -114,19 +114,28 @@ def _planner(responders: list[tuple[str, object]], *, gemini_timeout_seconds: fl
     return LLMPlanner(complete), pool
 
 
-def _failure_injecting_executor(adapter: AndroidBridgeAdapter) -> tuple[Callable[[Any], ExecutionResult], Callable[[], bool]]:
-    injected = False
+class _FailureInjectingExecutor:
+    """Execute one real Android action, then inject one bounded failure report."""
 
-    def execute(action: Any) -> ExecutionResult:
-        nonlocal injected
-        result = adapter.execute(action)
-        if not injected and result.accepted:
-            injected = True
+    def __init__(self, adapter: AndroidBridgeAdapter) -> None:
+        self._adapter = adapter
+        self._injected = False
+
+    def execute(self, action: Any) -> ExecutionResult:
+        result = self._adapter.execute(action)
+        if not self._injected and result.accepted:
+            self._injected = True
             print("V2_INJECTED_RECOVERABLE_FAILURE=after_android_execution", flush=True)
             return ExecutionResult(False, False, "controlled smoke failure after Android execution")
         return result
 
-    return execute, lambda: injected
+    @property
+    def injected(self) -> bool:
+        return self._injected
+
+
+def _failure_injecting_executor(adapter: AndroidBridgeAdapter) -> _FailureInjectingExecutor:
+    return _FailureInjectingExecutor(adapter)
 
 
 def main() -> int:
@@ -165,9 +174,7 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
-    executor: Any = adapter
-    if args.inject_recoverable_failure:
-        executor, _ = _failure_injecting_executor(adapter)
+    executor: Any = _failure_injecting_executor(adapter) if args.inject_recoverable_failure else adapter
     runtime = Runtime(
         Goal(args.goal), adapter, LLMReasoner(provider_pool), executor, SemanticGoalVerifier(),
         max_steps=args.max_steps, planner=planner, replan_after_progress=False,
