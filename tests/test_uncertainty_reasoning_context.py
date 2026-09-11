@@ -35,6 +35,5 @@ def test_runtime_brain_reasoning_context_carries_uncertainty_resolution() -> Non
 
     context = brain.reasoning_context()
 
-    assert context.uncertainty_resolution is None
-    assert context.mission_state is brain.mission
-    assert context.mission_state.reasoning_snapshot()["uncertainty_resolution"]["candidates"]
+    assert context.uncertainty_resolution is not None
+    assert context.uncertainty_resolution.candidates[0].action.target_id == "finish"
