@@ -7,86 +7,52 @@ import os
 from typing import Any, Mapping
 from urllib import error, request
 
-
 MISTRAL_CHAT_COMPLETIONS_URL = "https://api.mistral.ai/v1/chat/completions"
 DEFAULT_MODEL = "mistral-small-latest"
 DEFAULT_TIMEOUT_SECONDS = 20.0
 DEFAULT_MAX_TOKENS = 256
 USER_AGENT = "Nova-Agent/1.0"
 
-_SYSTEM_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
-Return exactly one JSON object with these fields:
-- action_type: one of tap, back, scroll, type, swipe, wait
-- target_id: a live element id from the supplied observation, or null
-- value: a string when required by the action, otherwise null
-- reason: a short explanation
-Never invent an element id. Use only the supplied observation. Choose the
-smallest safe action that advances the user's goal. Nova will independently
-validate your response before execution."""
+_NAVIGATION_INSTRUCTION = """You are Nova's Android navigation reasoning engine.
+Return exactly one JSON object with action_type, target_id, value, reason.
+action_type must be tap, back, scroll, type, swipe, or wait. Use only live ids
+from the observation. Never invent an id. Choose the smallest safe action."""
+_PLANNING_INSTRUCTION = """You are Nova's mission planning engine.
+Return exactly one JSON object with a steps array of short, non-empty mission
+intent strings. Produce intents, not concrete UI actions or element ids. Keep the
+plan focused on the goal and current evidence."""
 
-_RESPONSE_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "nova_navigation_decision",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "action_type": {"type": "string", "enum": ["tap", "back", "scroll", "type", "swipe", "wait"]},
-                "target_id": {"type": ["string", "null"]},
-                "value": {"type": ["string", "null"]},
-                "reason": {"type": "string"},
-            },
-            "required": ["action_type", "target_id", "value", "reason"],
-            "additionalProperties": False,
-        },
-    },
+_RESPONSE_SCHEMAS = {
+    "reasoning": {"type": "json_schema", "json_schema": {"name": "nova_navigation_decision", "strict": True, "schema": {"type": "object", "properties": {"action_type": {"type": "string", "enum": ["tap", "back", "scroll", "type", "swipe", "wait"]}, "target_id": {"type": ["string", "null"]}, "value": {"type": ["string", "null"]}, "reason": {"type": "string"}}, "required": ["action_type", "target_id", "value", "reason"], "additionalProperties": False}}},
+    "planning": {"type": "json_schema", "json_schema": {"name": "nova_mission_plan", "strict": True, "schema": {"type": "object", "properties": {"steps": {"type": "array", "items": {"type": "string", "minLength": 1}}}, "required": ["steps"], "additionalProperties": False}}},
 }
 
 
 class MistralResponder:
-    """Callable adapter from Nova's prompt string to a structured mapping."""
+    """Callable adapter for Nova reasoning and mission-planning responses."""
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        model: str | None = None,
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-        opener=request.urlopen,
-    ) -> None:
+    def __init__(self, api_key: str | None = None, model: str | None = None,
+                 timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS, opener=request.urlopen,
+                 task: str = "reasoning") -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if task not in _RESPONSE_SCHEMAS:
+            raise ValueError("task must be 'reasoning' or 'planning'")
         self._api_key = api_key if api_key is not None else os.environ.get("MISTRAL_API_KEY")
         self._model = model or os.environ.get("NOVA_MISTRAL_MODEL", DEFAULT_MODEL)
         self._timeout_seconds = timeout_seconds
         self._opener = opener
+        self._task = task
 
     def __call__(self, prompt: str) -> Mapping[str, Any]:
         if not self._api_key:
             raise RuntimeError("MISTRAL_API_KEY is not set")
         if not prompt.strip():
-            raise ValueError("reasoning prompt must not be blank")
-
-        payload = {
-            "model": self._model,
-            "messages": [{"role": "user", "content": f"{_SYSTEM_INSTRUCTION}\n\nLive Nova reasoning context:\n{prompt}"}],
-            "temperature": 0,
-            "max_tokens": DEFAULT_MAX_TOKENS,
-            "response_format": _RESPONSE_SCHEMA,
-            "stream": False,
-        }
+            raise ValueError(f"{self._task} prompt must not be blank")
+        instruction = _PLANNING_INSTRUCTION if self._task == "planning" else _NAVIGATION_INSTRUCTION
+        payload = {"model": self._model, "messages": [{"role": "user", "content": f"{instruction}\n\nLive Nova context:\n{prompt}"}], "temperature": 0, "max_tokens": DEFAULT_MAX_TOKENS, "response_format": _RESPONSE_SCHEMAS[self._task], "stream": False}
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req = request.Request(
-            MISTRAL_CHAT_COMPLETIONS_URL,
-            data=body,
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-                "User-Agent": USER_AGENT,
-                "Accept": "application/json",
-            },
-            method="POST",
-        )
+        req = request.Request(MISTRAL_CHAT_COMPLETIONS_URL, data=body, headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json", "User-Agent": USER_AGENT, "Accept": "application/json"}, method="POST")
         try:
             with self._opener(req, timeout=self._timeout_seconds) as response:
                 raw = response.read()
@@ -96,13 +62,12 @@ class MistralResponder:
             raise RuntimeError("Mistral request failed") from exc
         except TimeoutError as exc:
             raise RuntimeError("Mistral request timed out") from exc
-
         try:
             envelope = json.loads(raw.decode("utf-8"))
             content = envelope["choices"][0]["message"]["content"]
             result = json.loads(content)
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("Mistral returned an invalid reasoning response") from exc
+            raise RuntimeError(f"Mistral returned an invalid {self._task} response") from exc
         if not isinstance(result, Mapping):
-            raise RuntimeError("Mistral reasoning response must be an object")
+            raise RuntimeError(f"Mistral {self._task} response must be an object")
         return result
