@@ -3,7 +3,7 @@ import pytest
 from agent.fallback_responder import FallbackResponder
 
 
-def test_fallback_retries_transient_failure_before_using_next_provider():
+def test_fallback_moves_to_next_provider_on_rate_limit():
     calls = []
     sleeps = []
 
@@ -21,8 +21,8 @@ def test_fallback_retries_transient_failure_before_using_next_provider():
     )("context")
 
     assert result["target_id"] == "target"
-    assert calls == ["groq", "groq", "backup"]
-    assert sleeps == [1.25]
+    assert calls == ["groq", "backup"]
+    assert sleeps == []
 
 
 def test_fallback_is_bounded_and_reports_all_failures():
