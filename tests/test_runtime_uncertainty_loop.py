@@ -2,16 +2,16 @@ from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal
 from nova_core.planning import Plan, PlanStep
 from nova_core.reasoning import ReasoningContext
 from nova_core.runtime import Runtime
-from nova_core.state_machine import RunState
 
 
 class EvidenceObserver:
-    """Returns a new observation revision after every runtime observation."""
+    """Returns a new observation revision and exposes explicit fresh reads."""
 
     def __init__(self):
         self.revision = 0
+        self.fresh_reads = []
 
-    def observe(self):
+    def _observation(self):
         self.revision += 1
         return Observation(
             package="com.example.app",
@@ -22,6 +22,13 @@ class EvidenceObserver:
                 UiElement(id="alternative", text="Open details", clickable=True),
             ),
         )
+
+    def observe(self):
+        return self._observation()
+
+    def observe_fresh(self, previous):
+        self.fresh_reads.append(previous.revision)
+        return self._observation()
 
 
 class EvidencePlanner:
@@ -79,9 +86,10 @@ class EvidenceVerifier:
 def test_runtime_uses_fresh_observation_to_change_next_decision() -> None:
     reasoner = EvidenceReasoner()
     executor = EvidenceExecutor()
+    observer = EvidenceObserver()
     runtime = Runtime(
         Goal("Finish setup"),
-        EvidenceObserver(),
+        observer,
         reasoner,
         executor,
         EvidenceVerifier(),
@@ -94,11 +102,12 @@ def test_runtime_uses_fresh_observation_to_change_next_decision() -> None:
     assert result.status.value == "succeeded"
     assert [action.target_id for action in executor.actions] == ["probe", "alternative"]
     assert len(reasoner.contexts) == 2
+    assert observer.fresh_reads == [1]
 
     first_context, second_context = reasoner.contexts
     assert first_context.observation.revision == 1
     assert first_context.mission_state is not None
-    assert "whether the action had the intended effect" in first_context.uncertainty.unknowns
+    assert "whether the action had the intended effect" not in first_context.uncertainty.unknowns
 
     assert second_context.observation.revision == 2
     assert second_context.mission_state is not None
@@ -110,9 +119,10 @@ def test_runtime_uses_fresh_observation_to_change_next_decision() -> None:
 def test_runtime_does_not_repeat_evidence_action_after_fresh_unchanged_observation() -> None:
     reasoner = EvidenceReasoner()
     executor = EvidenceExecutor()
+    observer = EvidenceObserver()
     runtime = Runtime(
         Goal("Finish setup"),
-        EvidenceObserver(),
+        observer,
         reasoner,
         executor,
         EvidenceVerifier(),
@@ -122,6 +132,7 @@ def test_runtime_does_not_repeat_evidence_action_after_fresh_unchanged_observati
 
     runtime.run()
 
+    assert observer.fresh_reads == [1]
     assert reasoner.decisions[0].action.target_id == "probe"
     assert reasoner.decisions[1].action.target_id == "alternative"
     assert reasoner.contexts[1].uncertainty_resolution is not None
