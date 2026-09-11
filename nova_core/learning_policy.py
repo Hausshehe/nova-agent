@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .learning_memory import MissionLearningRecord, MissionLesson
+from .learning_memory import LearningMemory, MissionLearningRecord, MissionLesson
 
 
 @dataclass(frozen=True)
@@ -38,9 +38,7 @@ class LearningApplicationPolicy:
             raise ValueError("goal must be a non-empty string when provided")
 
         relevant = records[: self._MAX_RECORDS]
-        lessons = ()
-        if goal is not None:
-            lessons = LearningMemoryView(relevant).extract_lessons(goal, self._MAX_LESSONS)
+        lessons = LearningMemory(entries=relevant).extract_lessons(goal, self._MAX_LESSONS) if goal else ()
 
         warnings: list[str] = []
         for record in relevant:
@@ -75,15 +73,3 @@ class LearningApplicationPolicy:
             warnings=tuple(warnings[: self._MAX_WARNINGS]),
             guidance=guidance,
         )
-
-
-class LearningMemoryView:
-    """Small adapter used when policy already has only the relevant records."""
-
-    def __init__(self, records: tuple[MissionLearningRecord, ...]) -> None:
-        self._records = records
-
-    def extract_lessons(self, goal: str, max_results: int) -> tuple[MissionLesson, ...]:
-        from .learning_memory import LearningMemory
-
-        return LearningMemory(entries=self._records).extract_lessons(goal, max_results)
