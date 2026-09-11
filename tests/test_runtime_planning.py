@@ -159,7 +159,7 @@ def test_runtime_uses_fresh_observation_after_accepted_unchanged_action():
 
     assert result.error == "replan budget exhausted"
     assert observer.fresh_calls == executor.calls
-    assert observer.fresh_previous_revisions == list(range(1, executor.calls + 1))
+    assert observer.fresh_previous_revisions == list(range(1, 2 * executor.calls, 2))
     assert observer.fresh_calls > 0
 
 
