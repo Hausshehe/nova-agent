@@ -126,8 +126,7 @@ def _evidence_payload(evidence: object | None) -> dict[str, Any] | None:
     if prerequisites:
         payload["unsatisfied_prerequisites"] = [{"id": i, "label": l, "required": r, "stage": s} for i, l, r, s in prerequisites[:8]]
     rejected = getattr(evidence, "rejected_actions", ())
-    if rejected:
-        payload["rejected_actions"] = [{"action": t, "target": target, "error": error[:_MAX_REASON_LENGTH]} for t, target, error in rejected[-4:]]
+    if rejected: payload["rejected_actions"] = [{"action": t, "target": target, "error": error[:_MAX_REASON_LENGTH]} for t, target, error in rejected[-4:]]
     return payload
 
 
@@ -140,8 +139,7 @@ def _learning_payload(context: ReasoningContext) -> dict[str, Any]:
             key = (step.decision.action.type.value, step.decision.action.target_id)
             counts[key] = counts.get(key, 0) + 1
             item: dict[str, Any] = {"action": key[0], "target": key[1], "label": step.decision.target_label or None}
-            if step.execution.error:
-                item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
+            if step.execution.error: item["error"] = step.execution.error[:_MAX_REASON_LENGTH]
             attempts.append(item)
     repeated = [
         {"action": action, "target": target, "attempts": count}
@@ -191,9 +189,11 @@ def _recovery_payload(context: ReasoningContext) -> dict[str, Any]:
 
 
 def _history_payload(context: ReasoningContext) -> list[dict[str, Any]]:
-    """Keep only recent, decision-relevant history to prevent prompt growth."""
+    """Keep only failure/stall history; successful progress is already represented by mission state."""
     result = []
     for step in context.history[-_MAX_HISTORY_ITEMS:]:
+        if step.execution.accepted and step.execution.changed:
+            continue
         item: dict[str, Any] = {"action": step.decision.action.type.value, "target": step.decision.action.target_id,
                                 "value": step.decision.action.value, "accepted": step.execution.accepted,
                                 "changed": step.execution.changed}
