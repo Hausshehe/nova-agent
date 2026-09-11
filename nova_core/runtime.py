@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 from .action_guard import ActionGuard
 from .evidence import EvidenceTracker
 from .learning_memory import LearningMemory, MissionLearningRecord
@@ -70,10 +72,14 @@ class Runtime:
 
     def _reasoning_context(self):
         relevant_learning = self.learning_memory.retrieve(self.brain.goal.text)
-        learning_assessment = self.learning_policy.assess(
-            relevant_learning,
-            goal=self.brain.goal.text,
-        )
+        assess = self.learning_policy.assess
+        if "goal" in inspect.signature(assess).parameters:
+            learning_assessment = assess(relevant_learning, goal=self.brain.goal.text)
+        else:
+            # Preserve compatibility with injected policies using the original
+            # assess(records) contract. Historical learning still reaches the
+            # reasoner; only goal-aware lesson extraction is unavailable.
+            learning_assessment = assess(relevant_learning)
         return self.brain.reasoning_context(
             evidence=self.evidence.snapshot(self.controller.history),
             relevant_learning=relevant_learning,
