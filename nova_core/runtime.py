@@ -70,7 +70,10 @@ class Runtime:
 
     def _reasoning_context(self):
         relevant_learning = self.learning_memory.retrieve(self.brain.goal.text)
-        learning_assessment = self.learning_policy.assess(relevant_learning)
+        learning_assessment = self.learning_policy.assess(
+            relevant_learning,
+            goal=self.brain.goal.text,
+        )
         return self.brain.reasoning_context(
             evidence=self.evidence.snapshot(self.controller.history),
             relevant_learning=relevant_learning,
@@ -102,9 +105,6 @@ class Runtime:
 
     def _update_plan_after_observation(self) -> None:
         """Create or replace the bounded plan only from fresh runtime evidence."""
-        # Never spend a planning/replanning cycle after the action budget is
-        # exhausted. The step budget is the outer safety boundary and must
-        # take precedence over all lower-level planning budgets.
         if self.controller.steps >= self.controller.max_steps:
             self.brain.fail("step budget exhausted")
             return
@@ -132,7 +132,6 @@ class Runtime:
 
     def step(self) -> RunState:
         state = self.brain.state
-
         if state is RunState.CREATED:
             self.brain.start()
             return self.brain.state
