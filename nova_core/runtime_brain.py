@@ -12,6 +12,7 @@ from .planning import Plan
 from .reasoning import ReasoningContext
 from .run_controller import RunController
 from .state_machine import RunState
+from .uncertainty import UncertaintyResolution
 from .working_memory import WorkingMemory
 
 
@@ -66,6 +67,7 @@ class RuntimeBrain:
         evidence: object | None = None,
         relevant_learning: tuple[MissionLearningRecord, ...] = (),
         learning_assessment: LearningAssessment | None = None,
+        uncertainty_resolution: UncertaintyResolution | None = None,
     ) -> ReasoningContext:
         observation = self.memory.observation
         if self.state != RunState.DECIDING or observation is None:
@@ -80,6 +82,7 @@ class RuntimeBrain:
             relevant_learning=relevant_learning,
             learning_assessment=learning_assessment,
             uncertainty=self.mission.uncertainty,
+            uncertainty_resolution=uncertainty_resolution,
         )
 
     def record_decision(self, decision: Decision) -> None:
