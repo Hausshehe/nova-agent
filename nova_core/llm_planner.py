@@ -78,6 +78,18 @@ class LLMPlanner:
             evidence = asdict(context.evidence)
         else:
             evidence = repr(context.evidence)
+        learning = {
+            "relevant_records": [record.snapshot() for record in context.relevant_learning],
+            "lessons": [lesson.snapshot() for lesson in context.learning_assessment.lessons]
+            if context.learning_assessment is not None
+            else [],
+            "warnings": list(context.learning_assessment.warnings)
+            if context.learning_assessment is not None
+            else [],
+            "guidance": list(context.learning_assessment.guidance)
+            if context.learning_assessment is not None
+            else [],
+        }
         previous_text = (
             [step.description for step in previous.remaining]
             if previous is not None
@@ -92,12 +104,14 @@ class LLMPlanner:
             "that the reasoner can execute from the current observation. Do not output meta-steps such as "
             "'wait for observable change', 'check if progress made', 'decide what to do', or conditional "
             "instructions such as 'if no progress, ...'. Encode the intended recovery action itself as a "
-            "step.\n"
+            "step. Historical lessons are warnings only: current observation and evidence take priority, "
+            "and a lesson must never be treated as proof that an action is valid now.\n"
             "Return ONLY valid JSON in this exact shape: {\"steps\":[\"intent\", ...]}.\n"
             f"Use at most {self.max_steps} steps. Each intent must be a non-empty string.\n"
             f"GOAL: {context.goal.text}\n"
             f"OBSERVATION: {json.dumps(observation, ensure_ascii=False, separators=(',', ':'))}\n"
             f"EVIDENCE: {json.dumps(evidence, ensure_ascii=False, separators=(',', ':'))}\n"
+            f"LEARNING: {json.dumps(learning, ensure_ascii=False, separators=(',', ':'))}\n"
             f"PREVIOUS_PLAN_REMAINING: {json.dumps(previous_text, ensure_ascii=False)}\n"
         )
         return self._complete(prompt)
