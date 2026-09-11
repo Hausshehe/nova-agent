@@ -7,6 +7,7 @@ from .learning_policy import LearningAssessment
 from .mission_state import MissionState
 from .models import Decision, ExecutionResult, Goal, Observation
 from .planning import Plan
+from .uncertainty import UncertaintyAssessment
 
 
 @dataclass(frozen=True)
@@ -26,3 +27,4 @@ class ReasoningContext:
     plan: Plan | None = None
     relevant_learning: tuple[MissionLearningRecord, ...] = ()
     learning_assessment: LearningAssessment | None = None
+    uncertainty: UncertaintyAssessment | None = None
