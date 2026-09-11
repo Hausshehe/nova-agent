@@ -31,13 +31,6 @@ class PlannerTransport(Protocol):
         ...
 
 
-@dataclass(frozen=True)
-class PlanStep:
-    """One bounded intent in a mission plan, not a concrete UI action."""
-
-    description: str
-
-
 class LLMPlanner:
     """Turn runtime evidence into a bounded sequence of mission intents.
 
@@ -100,12 +93,10 @@ class LLMPlanner:
         candidates = self._goal_stage_candidates(context)
         if not candidates or not steps:
             return steps
-        first = steps[0].description
-        first_norm = " ".join(re.findall(r"[a-z0-9]+", first.lower()))
+        first_norm = " ".join(re.findall(r"[a-z0-9]+", steps[0].description.lower()))
         if any(" ".join(re.findall(r"[a-z0-9]+", candidate.lower())) in first_norm for candidate in candidates):
             return steps
-        grounded = (PlanStep(candidates[0]),) + steps[1:]
-        return grounded
+        return (PlanStep(candidates[0]),) + steps[1:]
 
     def _request(self, context: ReasoningContext, previous: Plan | None) -> str:
         observation = {
@@ -151,11 +142,7 @@ class LLMPlanner:
             "unknowns": [],
             "conflicts": [],
         }
-        uncertainty_mode = {
-            "high": "reassess",
-            "medium": "progress_check",
-            "low": "execute",
-        }.get(uncertainty_payload["level"], "reassess")
+        uncertainty_mode = {"high": "reassess", "medium": "progress_check", "low": "execute"}.get(uncertainty_payload["level"], "reassess")
         previous_text = (
             [step.description for step in previous.remaining]
             if previous is not None
