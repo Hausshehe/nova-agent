@@ -102,7 +102,7 @@ def test_runtime_uses_fresh_observation_to_change_next_decision() -> None:
     assert result.status.value == "succeeded"
     assert [action.target_id for action in executor.actions] == ["probe", "alternative"]
     assert len(reasoner.contexts) == 2
-    assert observer.fresh_reads == [1]
+    assert observer.fresh_reads == [1, 3]
 
     first_context, second_context = reasoner.contexts
     assert first_context.observation.revision == 1
@@ -132,7 +132,7 @@ def test_runtime_does_not_repeat_evidence_action_after_fresh_unchanged_observati
 
     runtime.run()
 
-    assert observer.fresh_reads == [1]
+    assert observer.fresh_reads == [1, 3]
     assert reasoner.decisions[0].action.target_id == "probe"
     assert reasoner.decisions[1].action.target_id == "alternative"
     assert reasoner.contexts[1].uncertainty_resolution is not None
