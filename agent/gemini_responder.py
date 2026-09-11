@@ -80,6 +80,8 @@ class GeminiResponder:
             raise RuntimeError("Gemini request failed") from exc
         except TimeoutError as exc:
             raise RuntimeError("Gemini request timed out") from exc
+        except (ConnectionError, OSError) as exc:
+            raise RuntimeError(f"Gemini request connection failed: {exc}") from exc
         try:
             envelope = json.loads(raw.decode("utf-8"))
             content = envelope["candidates"][0]["content"]["parts"][0]["text"]
