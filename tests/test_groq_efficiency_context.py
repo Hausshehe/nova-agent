@@ -35,8 +35,7 @@ def test_successful_history_is_not_repeated_in_reasoning_prompt():
     payload = _reasoning_payload(_context((_step(changed=True),)))
 
     assert payload["history"] == []
-    assert payload["mission"]["last_action"] == "tap"
-    assert payload["mission"]["last_execution"] == {"accepted": True, "changed": True, "error": None}
+    assert payload["mission"] is None
 
 
 def test_failed_or_stalled_history_remains_available_for_recovery():
