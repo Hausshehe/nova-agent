@@ -171,14 +171,10 @@ class Runtime:
                 after = self.observer.observe()
             self.evidence.observe(after)
             achieved = self.verifier.verify(self.controller.goal, before, decision, execution, after)
-            intent_achieved = False
             current_intent = self.brain.plan.current if self.brain.plan is not None else None
-            if (
-                self.intent_verifier is not None
-                and current_intent is not None
-                and execution.accepted
-                and execution.changed
-            ):
+            if self.intent_verifier is None:
+                intent_achieved = execution.accepted and execution.changed
+            elif current_intent is not None and execution.accepted and execution.changed:
                 intent_achieved = self.intent_verifier.verify(
                     Goal(current_intent.description),
                     before,
@@ -186,6 +182,8 @@ class Runtime:
                     execution,
                     after,
                 )
+            else:
+                intent_achieved = False
             if achieved:
                 self.brain.finish_verification(after, goal_achieved=True)
             elif self.invalid_decisions > self.max_invalid_decisions:
