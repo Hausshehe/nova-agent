@@ -122,7 +122,13 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     responder = FallbackResponder(responders)
-    runtime = Runtime(Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(), max_steps=args.max_steps, planner=planner)
+    runtime = Runtime(
+        Goal(args.goal), adapter, LLMReasoner(responder), adapter, SemanticGoalVerifier(),
+        max_steps=args.max_steps,
+        planner=planner,
+        replan_after_progress=planner is not None,
+        max_replans=max(2, args.max_steps),
+    )
     result = runtime.run()
     if runtime.brain.plan is not None:
         plan = runtime.brain.plan
