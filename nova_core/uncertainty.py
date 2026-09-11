@@ -72,8 +72,8 @@ class UncertaintyResolutionPolicy:
     _MAX_CANDIDATES = 4
     _STOPWORDS = {
         "the", "a", "an", "whether", "what", "which", "is", "are", "to",
-        "the", "goal", "completion", "action", "another", "required", "current",
-        "ui", "state", "best", "next", "effect", "intended", "may", "now",
+        "goal", "completion", "action", "another", "required", "current", "ui",
+        "state", "best", "next", "effect", "intended", "may", "now",
     }
 
     def resolve(
@@ -145,8 +145,6 @@ class UncertaintyResolutionPolicy:
     def _action_for(element: object) -> Action | None:
         if getattr(element, "clickable", False):
             return Action(ActionType.TAP, target_id=element.id)
-        if getattr(element, "editable", False):
-            return Action(ActionType.TYPE, target_id=element.id)
         if getattr(element, "scrollable", False):
             return Action(ActionType.SCROLL, target_id=element.id)
         return None
