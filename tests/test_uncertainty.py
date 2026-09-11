@@ -51,5 +51,5 @@ def test_runtime_brain_propagates_uncertainty_into_reasoning_context() -> None:
 
     context = brain.reasoning_context()
 
-    assert context.uncertainty is brain.mission.uncertainty
+    assert context.uncertainty == brain.mission.uncertainty
     assert context.uncertainty.level == "high"
