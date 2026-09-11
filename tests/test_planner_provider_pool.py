@@ -1,7 +1,4 @@
-import json
-
 from agent.provider_pool import ReasoningProviderPool
-from nova_core.llm_planner import LLMPlanner
 
 
 def test_planner_pool_fails_over_between_independent_providers():
@@ -13,29 +10,51 @@ def test_planner_pool_fails_over_between_independent_providers():
 
     def openrouter(prompt):
         calls.append("openrouter")
-        return {"steps": ["Click MULTI-STEP TEST", "Click CONTINUE MULTI-STEP"]}
+        return {"steps": ["Click MULTI-STEP TEST"]}
 
     pool = ReasoningProviderPool([("groq", groq), ("openrouter", openrouter)])
-    planner = LLMPlanner(lambda prompt: json.dumps(pool(prompt)), max_steps=3)
 
-    assert planner.plan.__name__ == "plan"
-    assert calls == []
+    assert pool("planning prompt") == {"steps": ["Click MULTI-STEP TEST"]}
+    assert calls == ["groq", "openrouter"]
+    assert pool.health()["groq"]["cooldown_seconds"] > 0
 
 
-def test_planner_transport_uses_next_provider_after_rate_limit():
+def test_planner_pool_uses_third_provider_after_two_rate_limits():
     calls = []
 
     def first(prompt):
         calls.append("first")
-        raise RuntimeError("HTTP 429 retry-after: 5")
+        raise RuntimeError("HTTP 429")
 
     def second(prompt):
         calls.append("second")
-        return {"steps": ["Advance the current goal"]}
+        raise RuntimeError("HTTP 429")
 
-    pool = ReasoningProviderPool([("first", first), ("second", second)])
-    response = pool("planning prompt")
+    def third(prompt):
+        calls.append("third")
+        return {"steps": ["Finish the current goal"]}
 
-    assert response == {"steps": ["Advance the current goal"]}
-    assert calls == ["first", "second"]
-    assert pool.health()["first"]["cooldown_seconds"] >= 5
+    pool = ReasoningProviderPool([("first", first), ("second", second), ("third", third)])
+
+    assert pool("planning prompt") == {"steps": ["Finish the current goal"]}
+    assert calls == ["first", "second", "third"]
+
+
+def test_planner_pool_reports_bounded_failure_when_every_provider_fails():
+    calls = []
+
+    def fail(name):
+        def responder(prompt):
+            calls.append(name)
+            raise RuntimeError(f"{name} HTTP 429")
+        return responder
+
+    pool = ReasoningProviderPool([("groq", fail("groq")), ("gemini", fail("gemini")), ("cerebras", fail("cerebras"))])
+
+    try:
+        pool("planning prompt")
+    except RuntimeError as exc:
+        assert str(exc).startswith("all reasoning providers failed:")
+    else:
+        raise AssertionError("expected bounded provider-pool failure")
+    assert calls == ["groq", "gemini", "cerebras"]
