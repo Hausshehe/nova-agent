@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+
 from nova_core.learning_memory import LearningMemory, MissionLearningRecord
 from nova_core.learning_policy import LearningApplicationPolicy
-from nova_core.models import Goal, Observation
+from nova_core.models import Action, ActionType, Decision, Goal, Observation, UiElement
+from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 
 
@@ -157,3 +160,102 @@ def test_runtime_learning_does_not_create_lesson_from_single_failure() -> None:
 
     assert context.learning_assessment is not None
     assert context.learning_assessment.lessons == ()
+
+
+def test_experience_can_change_llm_decision_toward_current_alternative() -> None:
+    record = MissionLearningRecord(
+        "Open settings quickly",
+        "failed",
+        2,
+        ineffective_actions=(
+            {"action": "tap", "target": "settings_button"},
+        ),
+    )
+    memory = LearningMemory(entries=(record, record))
+    runtime = Runtime(
+        Goal("Open settings quickly"),
+        _Observer(),
+        _Reasoner(),
+        _Executor(),
+        _Verifier(),
+        learning_memory=memory,
+    )
+    runtime.brain.start()
+    observation = Observation(
+        "pkg",
+        "activity",
+        (
+            UiElement("settings_button", text="Settings", clickable=True),
+            UiElement("preferences_button", text="Preferences", clickable=True),
+        ),
+        2,
+    )
+    runtime.brain.record_observation(observation)
+    runtime.evidence.observe(observation)
+    context = runtime._reasoning_context()
+
+    seen = {}
+
+    def responder(prompt: str):
+        payload = json.loads(prompt)
+        seen["learning"] = payload["learning"]
+        seen["observation"] = payload["observation"]
+        return {
+            "action_type": "tap",
+            "target_id": "preferences_button",
+            "reason": "The historical settings target was ineffective; the current alternative is available.",
+        }
+
+    decision = LLMReasoner(responder).decide(context)
+
+    assert seen["learning"]["assessment"]["guidance"]
+    assert any("historically ineffective" in item for item in seen["learning"]["assessment"]["guidance"])
+    assert {item["id"] for item in seen["observation"]["actions"]} == {
+        "settings_button",
+        "preferences_button",
+    }
+    assert decision.action == Action(ActionType.TAP, target_id="preferences_button")
+
+
+def test_experience_warning_does_not_override_current_evidence() -> None:
+    record = MissionLearningRecord(
+        "Open settings",
+        "failed",
+        2,
+        ineffective_actions=(
+            {"action": "tap", "target": "settings_button"},
+        ),
+    )
+    memory = LearningMemory(entries=(record, record))
+    runtime = Runtime(
+        Goal("Open settings"),
+        _Observer(),
+        _Reasoner(),
+        _Executor(),
+        _Verifier(),
+        learning_memory=memory,
+    )
+    runtime.brain.start()
+    observation = Observation(
+        "pkg",
+        "activity",
+        (UiElement("settings_button", text="Settings", clickable=True),),
+        3,
+    )
+    runtime.brain.record_observation(observation)
+    runtime.evidence.observe(observation)
+    context = runtime._reasoning_context()
+
+    def responder(prompt: str):
+        payload = json.loads(prompt)
+        assert any("historically ineffective" in item for item in payload["learning"]["assessment"]["guidance"])
+        assert payload["observation"]["actions"][0]["id"] == "settings_button"
+        return {
+            "action_type": "tap",
+            "target_id": "settings_button",
+            "reason": "Current UI evidence makes the target available now.",
+        }
+
+    decision = LLMReasoner(responder).decide(context)
+
+    assert decision.action == Action(ActionType.TAP, target_id="settings_button")
