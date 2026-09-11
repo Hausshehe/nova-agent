@@ -40,8 +40,10 @@ class ReasoningProviderPool:
     """Route requests across providers with bounded retries and cooldowns.
 
     Providers are independent capacity pools. A rate-limited provider is not
-    retried immediately; it is cooled down while the next available provider
-    gets the request. Other transient failures receive one bounded retry.
+    retried immediately when another provider is available. Other transient
+    failures receive one bounded retry. With only one provider configured, the
+    legacy bounded retry remains available so a temporary 429 does not make a
+    single-provider setup fail immediately.
     """
 
     def __init__(
@@ -125,6 +127,10 @@ class ReasoningProviderPool:
                     failures.append(f"{name}: {exc}")
                     state.failures += 1
                     if self._is_rate_limited(exc):
+                        if len(self._responders) == 1 and attempts < self._transient_retries:
+                            attempts += 1
+                            self._sleeper(self._retry_delay_seconds)
+                            continue
                         retry_after = self._retry_after(exc)
                         cooldown = retry_after if retry_after is not None else self._rate_limit_cooldown_seconds
                         state.cooldown_until = self._clock() + cooldown
