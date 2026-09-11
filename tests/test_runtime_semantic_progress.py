@@ -1,12 +1,16 @@
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation
+from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
 from nova_core.planning import Plan, PlanStep
 from nova_core.runtime import Runtime
-from nova_core.run_controller import RunController
 
 
 class StaticObserver:
     def __init__(self):
-        self.observation = Observation("pkg", "MainActivity", revision=1)
+        self.observation = Observation(
+            "pkg",
+            "MainActivity",
+            revision=1,
+            elements=(UiElement(id="button", text="Continue", clickable=True),),
+        )
 
     def observe(self):
         return self.observation
