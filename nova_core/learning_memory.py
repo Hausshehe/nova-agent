@@ -58,6 +58,37 @@ class MissionLearningRecord:
 
 
 @dataclass(frozen=True)
+class MissionLesson:
+    """A reusable lesson distilled only from repeated factual mission outcomes."""
+
+    trigger_tokens: tuple[str, ...]
+    action: str
+    target: str | None
+    outcome: str
+    occurrences: int
+    confidence: str
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "trigger_tokens": list(self.trigger_tokens),
+            "action": self.action,
+            "target": self.target,
+            "outcome": self.outcome,
+            "occurrences": self.occurrences,
+            "confidence": self.confidence,
+        }
+
+    @property
+    def guidance(self) -> str:
+        target = f" '{self.target}'" if self.target else ""
+        return (
+            f"For goals sharing {', '.join(self.trigger_tokens)}, action {self.action}{target} "
+            f"was historically ineffective ({self.occurrences} occurrence(s)). "
+            "Treat this as a warning, not a prohibition."
+        )
+
+
+@dataclass(frozen=True)
 class LearningMemory:
     """Keep only a small, factual window of completed mission outcomes."""
 
@@ -96,15 +127,60 @@ class LearningMemory:
             overlap = len(goal_tokens & record_tokens)
             if not overlap:
                 continue
-            # Prefer records that explain a larger share of their own goal.
-            # This prevents a generic shared word from outranking a concise,
-            # highly specific historical mission. Recent records still break
-            # genuine score ties.
             specificity = overlap / len(record_tokens)
             ranked.append((specificity, index, record))
 
         ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return tuple(record for _, _, record in ranked[:max_results])
+
+    def extract_lessons(self, goal: str, max_results: int = 4) -> tuple[MissionLesson, ...]:
+        """Distill repeated ineffective actions into bounded, reusable warnings.
+
+        A lesson is emitted only when the same action/target pattern appears in
+        relevant historical missions. A single failure remains a raw record,
+        preventing Nova from turning one bad experience into a permanent rule.
+        """
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError("goal must be a non-empty string")
+        if max_results < 1:
+            raise ValueError("max_results must be at least 1")
+
+        goal_tokens = self._tokens(goal)
+        if not goal_tokens:
+            return ()
+
+        patterns: dict[tuple[tuple[str, ...], str, str | None], int] = {}
+        for record in self.entries:
+            record_tokens = self._tokens(record.goal)
+            overlap = goal_tokens & record_tokens
+            if not overlap:
+                continue
+            trigger = tuple(sorted(overlap))
+            for ineffective in record.ineffective_actions:
+                action = str(ineffective.get("action", "unknown"))
+                target_value = ineffective.get("target")
+                target = str(target_value) if target_value else None
+                key = (trigger, action, target)
+                patterns[key] = patterns.get(key, 0) + 1
+
+        lessons: list[MissionLesson] = []
+        for (trigger, action, target), occurrences in patterns.items():
+            if occurrences < 2:
+                continue
+            confidence = "high" if occurrences >= 3 else "medium"
+            lessons.append(
+                MissionLesson(
+                    trigger_tokens=trigger,
+                    action=action,
+                    target=target,
+                    outcome="ineffective",
+                    occurrences=occurrences,
+                    confidence=confidence,
+                )
+            )
+
+        lessons.sort(key=lambda lesson: (lesson.occurrences, len(lesson.trigger_tokens)), reverse=True)
+        return tuple(lessons[:max_results])
 
     @staticmethod
     def _tokens(text: str) -> set[str]:
