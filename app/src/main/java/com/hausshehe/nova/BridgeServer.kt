@@ -22,6 +22,7 @@ object BridgeServer {
     private const val RETRY_DELAY_MS = 250L
     private const val LAUNCH_WAIT_MS = 3000L
     private const val OBSERVATION_POLL_MS = 100L
+    private const val ACTION_TARGET_WAIT_MS = 1000L
     private const val ACTION_CHANGE_TIMEOUT_MS = 2000L
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
@@ -134,13 +135,29 @@ object BridgeServer {
 
     private fun click(elementId: String): JSONObject {
         val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
-        val root = service.rootInActiveWindow ?: return error("No active accessibility window")
-        ObservationStore.update(root)
-        val before = ObservationStore.current()
-        val node = findNode(root, elementId) ?: run {
-            root.recycle()
+        val deadline = System.currentTimeMillis() + ACTION_TARGET_WAIT_MS
+        var root: AccessibilityNodeInfo? = null
+        var node: AccessibilityNodeInfo? = null
+        var before: UiSnapshot? = null
+
+        while (System.currentTimeMillis() < deadline) {
+            root?.recycle()
+            root = service.rootInActiveWindow
+            if (root != null) {
+                ObservationStore.update(root)
+                before = ObservationStore.current()
+                node = findNode(root, elementId)
+                if (node != null) break
+            }
+            Thread.sleep(OBSERVATION_POLL_MS)
+        }
+
+        if (root == null || node == null || before == null) {
+            root?.recycle()
+            node?.recycle()
             return error("element not found: $elementId")
         }
+
         val accepted = node.isEnabled && node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         node.recycle()
         root.recycle()
