@@ -34,6 +34,21 @@ class FreshFakeObserver(FakeObserver):
         return self.observe()
 
 
+class DisappearingTargetObserver(FreshFakeObserver):
+    """Fresh evidence removes the accepted-but-unchanged action target."""
+
+    def observe_fresh(self, previous):
+        self.fresh_calls += 1
+        self.fresh_previous_revisions.append(previous.revision)
+        self.revision += 1
+        return Observation(
+            package="com.example.app",
+            activity="MainActivity",
+            revision=self.revision,
+            elements=(),
+        )
+
+
 class FakeExecutor:
     def __init__(self, changed=True):
         self.changed = changed
@@ -128,6 +143,29 @@ def test_runtime_replans_after_two_unchanged_executions():
     assert runtime.replans == 1
     assert runtime.brain.plan is not None
     assert runtime.brain.plan.revision == 1
+
+
+def test_runtime_replans_immediately_when_fresh_evidence_removes_unchanged_target():
+    planner = RecordingPlanner()
+    observer = DisappearingTargetObserver()
+    runtime = Runtime(
+        Goal("Finish the task"), observer, FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
+        max_steps=1, max_replans=1, planner=planner,
+    )
+
+    result = runtime.run()
+
+    assert result.error == "step budget exhausted"
+    assert planner.plan_calls == 1
+    assert planner.replan_calls == 0
+    assert runtime.replans == 0
+    assert runtime._replan_requested is True
+
+    runtime.controller.max_steps = 2
+    runtime.run()
+
+    assert planner.replan_calls == 1
+    assert runtime.replans == 1
 
 
 def test_runtime_skips_exact_replay_at_start_of_replanned_plan():
