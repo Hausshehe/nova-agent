@@ -160,6 +160,44 @@ class Runtime:
             return True
         return any(element.id == target_id for element in observation.elements)
 
+    def _refresh_missing_target(self, guard):
+        """Refresh live UI evidence once when a selected target is missing.
+
+        Planning and action selection operate on a sampled observation. Android
+        accessibility trees can transiently lag that sample, so a missing
+        target at the execution boundary gets one fresh observation before the
+        action is rejected. This keeps the guard authoritative without turning
+        every action into a second observation.
+        """
+        if guard.allowed or not isinstance(self.observer, FreshObserver):
+            return guard
+        if guard.reason not in {
+            "tap target is not present",
+            "type target is not present",
+            "scroll target is not scrollable and available",
+            "swipe target is not available",
+        }:
+            return guard
+
+        previous = self.controller.observation
+        if previous is None:
+            return guard
+
+        try:
+            refreshed = self.observer.observe_fresh(previous)
+        except (TimeoutError, RuntimeError, ValueError):
+            return guard
+
+        self.controller.observation = refreshed
+        self.brain.memory.observe(refreshed)
+        self.brain.mission = self.brain.mission.observed(refreshed)
+        self.evidence.observe(refreshed)
+        return self.action_guard.check(
+            self.controller.decision,  # type: ignore[arg-type]
+            refreshed,
+            self.evidence.snapshot(self.controller.history),
+        )
+
     def step(self) -> RunState:
         state = self.brain.state
         if state is RunState.CREATED:
@@ -191,6 +229,7 @@ class Runtime:
         if state is RunState.EXECUTING:
             assert self.controller.decision is not None
             guard = self.action_guard.check(self.controller.decision, self.controller.observation)  # type: ignore[arg-type]
+            guard = self._refresh_missing_target(guard)
             if not guard.allowed:
                 self._record_invalid_decision(guard.reason)
                 execution = ExecutionResult(False, False, guard.reason)
@@ -241,11 +280,6 @@ class Runtime:
                 else:
                     target_id = decision.action.target_id
                     if not self._target_is_present(after, target_id):
-                        # An accepted-but-unchanged action whose exact target
-                        # disappears from the fresh UI is stronger evidence
-                        # than the generic unchanged-action retry threshold.
-                        # Replan now instead of issuing a stale action against
-                        # a target the device no longer exposes.
                         self._unchanged_actions = 0
                         self._replan_requested = True
                     else:
