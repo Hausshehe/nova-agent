@@ -1,4 +1,4 @@
-from nova_core.models import WorldState, UIElement
+from agent.core import WorldState, UIElement
 from agent.android_bridge import AndroidBridge
 
 
