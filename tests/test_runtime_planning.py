@@ -155,7 +155,7 @@ def test_runtime_replans_immediately_when_fresh_evidence_removes_unchanged_targe
 
     result = runtime.run()
 
-    assert result.error == "step budget exhausted"
+    assert result.error == "replan budget exhausted"
     assert planner.plan_calls == 1
     assert planner.replan_calls == 1
     assert runtime.replans == 1
