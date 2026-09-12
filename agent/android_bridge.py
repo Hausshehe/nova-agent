@@ -136,13 +136,21 @@ class AndroidBridge:
 
     def wait_for_fresh_observation(self, previous: WorldState, timeout: float = 2.0,
                                    poll_seconds: float = 0.2) -> WorldState:
+        """Return a newly queried Android snapshot, even when the UI is unchanged.
+
+        ``observe`` asks the Android bridge for the current accessibility tree and
+        the bridge assigns a new observation ID when it successfully samples an
+        active window. A fresh observation therefore does not require the UI
+        content itself to change. UI settling is handled by the Android adapter
+        after this method returns.
+        """
         deadline = time.monotonic() + timeout
         while True:
             state = self.observe()
-            if not self._same_ui(previous, state):
+            if state.observation_id != previous.observation_id:
                 return state
             if time.monotonic() >= deadline:
                 raise TimeoutError(
-                    f"timed out waiting for observable Android UI change after {previous.observation_id}"
+                    f"timed out waiting for fresh Android observation after {previous.observation_id}"
                 )
             time.sleep(poll_seconds)
