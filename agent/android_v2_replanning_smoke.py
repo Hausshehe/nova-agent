@@ -17,7 +17,7 @@ PACKAGE_NAME = "com.hausshehe.nova"
 
 
 class ReplanningSmokePlanner:
-    """Force an unchanged primary action, then replace it with fallback."""
+    """Force unchanged primary actions, then replace them with fallback."""
 
     def __init__(self) -> None:
         self.plan_calls = 0
@@ -105,14 +105,16 @@ def main() -> int:
         and planner.plan_calls == 1
         and planner.replan_calls == 1
         and runtime.replans == 1
-        and len(history) == 3
+        and len(history) == 4
         and history[0].execution.accepted
         and history[0].execution.changed
         and history[1].execution.accepted
         and not history[1].execution.changed
         and history[2].execution.accepted
-        and history[2].execution.changed
-        and history[2].decision.action.target_id == "com.hausshehe.nova:id/recovery_fallback"
+        and not history[2].execution.changed
+        and history[3].execution.accepted
+        and history[3].execution.changed
+        and history[3].decision.action.target_id == "com.hausshehe.nova:id/recovery_fallback"
     )
     if expected:
         print("F7_ANDROID_REPLAN_SMOKE=PASS")
