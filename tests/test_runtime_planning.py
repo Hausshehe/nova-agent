@@ -150,22 +150,16 @@ def test_runtime_replans_immediately_when_fresh_evidence_removes_unchanged_targe
     observer = DisappearingTargetObserver()
     runtime = Runtime(
         Goal("Finish the task"), observer, FakeReasoner(), FakeExecutor(changed=False), FakeVerifier(),
-        max_steps=1, max_replans=1, planner=planner,
+        max_steps=2, max_replans=1, planner=planner,
     )
 
     result = runtime.run()
 
     assert result.error == "step budget exhausted"
     assert planner.plan_calls == 1
-    assert planner.replan_calls == 0
-    assert runtime.replans == 0
-    assert runtime._replan_requested is True
-
-    runtime.controller.max_steps = 2
-    runtime.run()
-
     assert planner.replan_calls == 1
     assert runtime.replans == 1
+    assert observer.fresh_calls == 2
 
 
 def test_runtime_skips_exact_replay_at_start_of_replanned_plan():
