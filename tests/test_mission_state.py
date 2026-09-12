@@ -1,6 +1,7 @@
 from nova_core.mission_state import MissionState
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
 from nova_core.runtime_brain import RuntimeBrain
+from nova_core.semantic_progress import GoalRequirement, ProgressStatus, SemanticProgress
 from nova_core.state_machine import RunState
 
 
@@ -144,3 +145,59 @@ def test_goal_verification_marks_mission_complete() -> None:
     assert brain.goal_verified is True
     assert brain.mission.goal_verified is True
     assert brain.mission.observation.revision == 2
+
+
+def test_semantic_progress_tracks_distinct_requirement_statuses_and_evidence() -> None:
+    progress = SemanticProgress.from_requirements((
+        GoalRequirement("r1", "Open the app"),
+        GoalRequirement("r2", "Complete the form"),
+        GoalRequirement("r3", "Submit the form"),
+    ))
+    progress = progress.update("r1", ProgressStatus.ACHIEVED, ("app observed",))
+    progress = progress.update("r2", ProgressStatus.CURRENT, ("form visible",))
+    progress = progress.update("r3", ProgressStatus.UNCERTAIN, ("submission state not observable",))
+
+    snapshot = progress.snapshot()
+
+    assert snapshot["achieved"] == ["r1"]
+    assert snapshot["current"] == ["r2"]
+    assert snapshot["remaining"] == []
+    assert snapshot["uncertain"] == ["r3"]
+    assert snapshot["blocked"] == []
+    assert snapshot["requirements"][0] == {
+        "id": "r1",
+        "description": "Open the app",
+        "status": "achieved",
+        "evidence": ["app observed"],
+    }
+
+
+def test_semantic_progress_rejects_duplicate_or_unknown_requirements() -> None:
+    first = GoalRequirement("r1", "Open")
+    duplicate = GoalRequirement("r1", "Open again")
+
+    try:
+        SemanticProgress.from_requirements((first, duplicate))
+    except ValueError as exc:
+        assert "unique" in str(exc)
+    else:
+        raise AssertionError("duplicate requirement id should fail")
+
+    try:
+        SemanticProgress().update("missing", ProgressStatus.CURRENT)
+    except KeyError as exc:
+        assert "missing" in str(exc)
+    else:
+        raise AssertionError("unknown requirement should fail")
+
+
+def test_mission_state_preserves_semantic_progress_and_exposes_it_to_reasoning() -> None:
+    progress = SemanticProgress.from_requirements((GoalRequirement("r1", "Open the app"),))
+    progress = progress.update("r1", ProgressStatus.ACHIEVED, ("verified by app state",))
+    state = MissionState(Goal("Open the app")).with_semantic_progress(progress)
+
+    snapshot = state.reasoning_snapshot()
+
+    assert state.semantic_progress is progress
+    assert snapshot["semantic_progress"]["achieved"] == ["r1"]
+    assert snapshot["semantic_progress"]["requirements"][0]["status"] == "achieved"

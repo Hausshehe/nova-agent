@@ -7,6 +7,7 @@ from typing import Any
 
 from .models import ActionType, Decision, ExecutionResult, Goal, Observation
 from .outcome_memory import ActionOutcome, OutcomeMemory
+from .semantic_progress import SemanticProgress
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class MissionState:
     failed_actions: int = 0
     goal_verified: bool = False
     outcome_memory: OutcomeMemory = OutcomeMemory()
+    semantic_progress: SemanticProgress = SemanticProgress()
 
     @property
     def progress_evidence(self) -> tuple[str, ...]:
@@ -73,6 +75,7 @@ class MissionState:
             "failed_actions": self.failed_actions,
             "progress_evidence": list(self.progress_evidence),
             "recent_action_outcomes": self.outcome_memory.snapshot(),
+            "semantic_progress": self.semantic_progress.snapshot(),
         }
         if self.observation is not None:
             snapshot["current_observation_revision"] = self.observation.revision
@@ -90,18 +93,26 @@ class MissionState:
             }
         return snapshot
 
+    def with_semantic_progress(self, semantic_progress: SemanticProgress) -> "MissionState":
+        """Replace semantic progress without changing runtime evidence."""
+        return MissionState(
+            self.goal, self.observation, self.last_decision, self.last_execution,
+            self.successful_actions, self.changed_actions, self.failed_actions,
+            self.goal_verified, self.outcome_memory, semantic_progress,
+        )
+
     def observed(self, observation: Observation) -> "MissionState":
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            self.goal_verified, self.outcome_memory,
+            self.goal_verified, self.outcome_memory, self.semantic_progress,
         )
 
     def decided(self, decision: Decision) -> "MissionState":
         return MissionState(
             self.goal, self.observation, decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            False, self.outcome_memory,
+            False, self.outcome_memory, self.semantic_progress,
         )
 
     def executed(self, result: ExecutionResult) -> "MissionState":
@@ -119,11 +130,12 @@ class MissionState:
             self.failed_actions + int(not result.accepted),
             False,
             self.outcome_memory.remember(outcome),
+            self.semantic_progress,
         )
 
     def verified(self, observation: Observation, goal_achieved: bool) -> "MissionState":
         return MissionState(
             self.goal, observation, self.last_decision, self.last_execution,
             self.successful_actions, self.changed_actions, self.failed_actions,
-            goal_achieved, self.outcome_memory,
+            goal_achieved, self.outcome_memory, self.semantic_progress,
         )
