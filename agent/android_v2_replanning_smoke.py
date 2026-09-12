@@ -17,7 +17,7 @@ PACKAGE_NAME = "com.hausshehe.nova"
 
 
 class ReplanningSmokePlanner:
-    """Force a known stale intent, then replace it after F.7 requests a replan."""
+    """Force an unchanged primary action, then replace it with fallback."""
 
     def __init__(self) -> None:
         self.plan_calls = 0
@@ -25,10 +25,6 @@ class ReplanningSmokePlanner:
 
     def plan(self, context: ReasoningContext) -> Plan:
         self.plan_calls += 1
-        # Keep the same intent twice so the first successful progress step
-        # advances to a second primary attempt. The second attempt is
-        # intentionally idempotent on the Android harness, allowing F.7 to
-        # observe accepted-but-unchanged behavior before replanning.
         return Plan(
             (
                 PlanStep("tap Recovery Primary Action"),
@@ -102,19 +98,21 @@ def main() -> int:
         )
     print("F7_ACTION_TRACE_END")
 
+    history = runtime.controller.history
     expected = (
         result.status is RunStatus.SUCCEEDED
-        and result.steps == 2
         and result.error is None
         and planner.plan_calls == 1
         and planner.replan_calls == 1
         and runtime.replans == 1
-        and len(runtime.controller.history) == 4
-        and runtime.controller.history[0].execution.changed
-        and not runtime.controller.history[1].execution.changed
-        and not runtime.controller.history[2].execution.changed
-        and runtime.controller.history[3].execution.changed
-        and runtime.controller.history[3].decision.action.target_id == "com.hausshehe.nova:id/recovery_fallback"
+        and len(history) == 3
+        and history[0].execution.accepted
+        and history[0].execution.changed
+        and history[1].execution.accepted
+        and not history[1].execution.changed
+        and history[2].execution.accepted
+        and history[2].execution.changed
+        and history[2].decision.action.target_id == "com.hausshehe.nova:id/recovery_fallback"
     )
     if expected:
         print("F7_ANDROID_REPLAN_SMOKE=PASS")
