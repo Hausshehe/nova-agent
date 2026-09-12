@@ -95,9 +95,6 @@ class Runtime:
         if "goal" in inspect.signature(assess).parameters:
             learning_assessment = assess(relevant_learning, goal=self.brain.goal.text)
         else:
-            # Preserve compatibility with injected policies using the original
-            # assess(records) contract. Historical learning still reaches the
-            # reasoner; only goal-aware lesson extraction is unavailable.
             learning_assessment = assess(relevant_learning)
         return self.brain.reasoning_context(
             evidence=self.evidence.snapshot(self.controller.history),
@@ -156,6 +153,13 @@ class Runtime:
         except (ValueError, RuntimeError) as exc:
             self.brain.fail(f"planning failed: {exc}")
 
+    @staticmethod
+    def _target_is_present(observation, target_id: str | None) -> bool:
+        """Return whether the exact action target remains in fresh UI evidence."""
+        if not target_id:
+            return True
+        return any(element.id == target_id for element in observation.elements)
+
     def step(self) -> RunState:
         state = self.brain.state
         if state is RunState.CREATED:
@@ -200,10 +204,6 @@ class Runtime:
             execution = self.controller.last_execution
             assert before is not None and decision is not None and execution is not None
             if isinstance(self.observer, FreshObserver) and execution.accepted:
-                # A fresh observation is evidence even when Android reports no
-                # visible change. The absence of change is itself information
-                # that can resolve the action-effect uncertainty and prevent a
-                # blind replay.
                 after = self.observer.observe_fresh(before)
             else:
                 after = self.observer.observe()
@@ -239,8 +239,18 @@ class Runtime:
                     self._unchanged_actions = 0
                     self._replan_requested = True
                 else:
-                    self._unchanged_actions += 1
-                    self._replan_requested = self._unchanged_actions >= _UNCHANGED_ACTIONS_BEFORE_REPLAN
+                    target_id = decision.action.target_id
+                    if not self._target_is_present(after, target_id):
+                        # An accepted-but-unchanged action whose exact target
+                        # disappears from the fresh UI is stronger evidence
+                        # than the generic unchanged-action retry threshold.
+                        # Replan now instead of issuing a stale action against
+                        # a target the device no longer exposes.
+                        self._unchanged_actions = 0
+                        self._replan_requested = True
+                    else:
+                        self._unchanged_actions += 1
+                        self._replan_requested = self._unchanged_actions >= _UNCHANGED_ACTIONS_BEFORE_REPLAN
                 self.brain.finish_verification(after, goal_achieved=False)
                 if self.controller.steps >= self.controller.max_steps:
                     self.brain.fail("step budget exhausted")
