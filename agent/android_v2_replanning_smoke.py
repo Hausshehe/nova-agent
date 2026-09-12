@@ -55,6 +55,44 @@ class ReplanningSmokeReasoner:
         )
 
 
+def _print_live_target_diagnostic(bridge: AndroidBridge, target_id: str) -> None:
+    """Print the live accessibility tree after an Android target-missing failure."""
+    print("F7_TARGET_DIAGNOSTIC_START")
+    try:
+        state = bridge.observe()
+    except Exception as exc:
+        print(f"F7_TARGET_DIAGNOSTIC_ERROR={exc!r}")
+        print("F7_TARGET_DIAGNOSTIC_END")
+        return
+
+    print(f"F7_DIAGNOSTIC_OBSERVATION_ID={state.observation_id!r}")
+    print(f"F7_DIAGNOSTIC_PACKAGE={state.package!r}")
+    print(f"F7_DIAGNOSTIC_ACTIVITY={state.activity!r}")
+    print(f"F7_DIAGNOSTIC_ELEMENT_COUNT={len(state.elements)}")
+
+    target = next((element for element in state.elements if element.id == target_id), None)
+    if target is None:
+        print(f"F7_DIAGNOSTIC_TARGET_PRESENT=False target_id={target_id!r}")
+    else:
+        print(
+            f"F7_DIAGNOSTIC_TARGET_PRESENT=True target_id={target.id!r} "
+            f"text={target.text!r} content={target.content_description!r} "
+            f"clickable={target.clickable} enabled={target.enabled} visible={target.visible} "
+            f"bounds={target.bounds!r}"
+        )
+
+    for element in state.elements:
+        haystack = f"{element.id} {element.text} {element.content_description}".lower()
+        if "recovery" in haystack:
+            print(
+                f"F7_DIAGNOSTIC_RECOVERY_ELEMENT="
+                f"id={element.id!r} text={element.text!r} content={element.content_description!r} "
+                f"clickable={element.clickable} enabled={element.enabled} visible={element.visible} "
+                f"bounds={element.bounds!r}"
+            )
+    print("F7_TARGET_DIAGNOSTIC_END")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the F.7 real-device accepted-unchanged replanning smoke test")
     parser.add_argument("--launch-nova", action="store_true")
@@ -96,6 +134,8 @@ def main() -> int:
             f"accepted:{step.execution.accepted} changed:{step.execution.changed} "
             f"error:{step.execution.error!r} reason:{step.decision.reason!r}"
         )
+        if not step.execution.accepted and action.target_id:
+            _print_live_target_diagnostic(bridge, action.target_id)
     print("F7_ACTION_TRACE_END")
 
     history = runtime.controller.history
