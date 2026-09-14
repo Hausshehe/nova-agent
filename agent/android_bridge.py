@@ -95,6 +95,20 @@ class AndroidBridge:
     def click(self, element_id: str) -> dict[str, Any]:
         return self._request({"command": "click", "elementId": element_id})
 
+    def open_uri(self, uri: str, package: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"command": "open_uri", "uri": uri}
+        if package:
+            payload["package"] = package
+        return self._request(payload)
+
+    def share_text(self, text: str, package: str, component: str) -> dict[str, Any]:
+        return self._request({
+            "command": "share_text",
+            "text": text,
+            "package": package,
+            "component": component,
+        })
+
     def execute(self, action: Action) -> ExecutionResult:
         if action.type == ActionType.CLICK:
             if action.target is None:
