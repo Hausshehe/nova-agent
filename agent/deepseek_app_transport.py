@@ -18,10 +18,10 @@ class DeepSeekTransportError(RuntimeError):
 
 
 class DeepSeekBridge(Protocol):
-    def open_uri(uri: str, package: str | None = None) -> dict[str, Any]: ...
-    def share_text(text: str, package: str, component: str) -> dict[str, Any]: ...
-    def observe() -> WorldState: ...
-    def click(element_id: str) -> dict[str, Any]: ...
+    def open_uri(self, uri: str, package: str | None = None) -> dict[str, Any]: ...
+    def share_text(self, text: str, package: str, component: str) -> dict[str, Any]: ...
+    def observe(self) -> WorldState: ...
+    def click(self, element_id: str) -> dict[str, Any]: ...
 
 
 class DeepSeekAppTransport:
@@ -91,19 +91,6 @@ class DeepSeekAppTransport:
         active = last_state.package if last_state else ""
         raise DeepSeekTransportError(
             f"timed out waiting for DeepSeek app; active package={active!r}"
-        )
-
-    def _wait_for_prompt(self, prompt: str) -> WorldState:
-        deadline = self._clock() + self.timeout
-        while self._clock() < deadline:
-            state = self.bridge.observe()
-            if state.package == DEEPSEEK_PACKAGE and any(
-                prompt == element.text for element in state.elements if element.visible
-            ):
-                return state
-            self._sleep(self.poll_seconds)
-        raise DeepSeekTransportError(
-            "timed out waiting for DeepSeek composer to contain the submitted prompt"
         )
 
     def _wait_for_send_control(self, prompt: str) -> str:
