@@ -82,11 +82,13 @@ def test_start_new_chat_opens_exposed_deepseek_uri() -> None:
     assert bridge.opened == [("dpsk://chat/new", DEEPSEEK_PACKAGE)]
 
 
-def test_send_prompt_uses_share_intent_then_clicks_send_and_reads_new_response() -> None:
+def test_send_prompt_waits_for_send_readiness_then_reads_new_response() -> None:
     prompt = "Return exactly one JSON object."
     send = element(id="send-wrapper", content_description="Send", clickable=True, bounds="[1,2][3,4]")
     response = element(id="answer", text='{"status":"continue","action":{"type":"none"}}')
     bridge = FakeBridge([
+        state(),
+        state(),
         state(element(id="composer", text=prompt)),
         state(element(id="composer", text=prompt), send),
         state(element(id="composer", text=prompt), send, response),
