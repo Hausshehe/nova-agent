@@ -106,16 +106,17 @@ def test_send_prompt_waits_for_send_readiness_then_reads_new_response() -> None:
     assert result["session_id"] == session
 
 
-def test_send_prompt_prefers_clickable_wrapper_when_send_node_is_not_clickable() -> None:
+def test_send_prompt_clicks_smallest_clickable_container_of_send_icon() -> None:
     prompt = "hello"
-    send_semantic = element(id="send-semantic", content_description="Send", bounds="[580,890][697,1003]")
+    send_semantic = element(id="send-semantic", content_description="Send", bounds="[625,935][655,965]")
     send_wrapper = element(id="send-wrapper", clickable=True, bounds="[580,890][697,1003]")
+    larger_container = element(id="composer-container", clickable=True, bounds="[500,800][750,1100]")
     response = element(id="answer", text="response")
     bridge = FakeBridge([
         state(element(id="composer", text=prompt)),
-        state(element(id="composer", text=prompt), send_semantic, send_wrapper),
-        state(element(id="composer", text=prompt), send_semantic, send_wrapper, response),
-        state(element(id="composer", text=prompt), send_semantic, send_wrapper, response),
+        state(element(id="composer", text=prompt), send_semantic, send_wrapper, larger_container),
+        state(element(id="composer", text=prompt), send_semantic, send_wrapper, larger_container, response),
+        state(element(id="composer", text=prompt), send_semantic, send_wrapper, larger_container, response),
     ])
     transport = DeepSeekAppTransport(bridge=bridge, poll_seconds=0.0, stable_polls=2, sleeper=lambda _: None)
     session = transport.start_new_chat()
