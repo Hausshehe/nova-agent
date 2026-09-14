@@ -2,6 +2,7 @@ package com.hausshehe.nova
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
@@ -72,6 +73,13 @@ object BridgeServer {
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
+                    "open_uri" -> openUri(context, request.optString("uri"), request.optString("package").takeIf { it.isNotBlank() })
+                    "share_text" -> shareText(
+                        context,
+                        request.optString("text"),
+                        request.optString("package"),
+                        request.optString("component"),
+                    )
                     else -> error("unknown command: ${request.optString("command")}")
                 }
                 writer.println(response.toString())
@@ -219,6 +227,44 @@ object BridgeServer {
         }
         val activePackage = service.rootInActiveWindow?.packageName?.toString()
         return error("launch timed out waiting for accessibility window: expected=$packageName active=$activePackage")
+    }
+
+    private fun openUri(context: Context, uriValue: String, packageName: String?): JSONObject {
+        if (uriValue.isBlank()) return error("uri is required")
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriValue)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!packageName.isNullOrBlank()) setPackage(packageName)
+        }
+        return try {
+            context.startActivity(intent)
+            JSONObject().apply {
+                put("ok", true)
+                put("accepted", true)
+            }
+        } catch (e: Exception) {
+            error("unable to open URI: ${e.message ?: "unknown error"}")
+        }
+    }
+
+    private fun shareText(context: Context, text: String, packageName: String, component: String): JSONObject {
+        if (text.isBlank()) return error("text is required")
+        if (packageName.isBlank()) return error("package is required")
+        if (component.isBlank()) return error("component is required")
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            setClassName(packageName, component)
+        }
+        return try {
+            context.startActivity(intent)
+            JSONObject().apply {
+                put("ok", true)
+                put("accepted", true)
+            }
+        } catch (e: Exception) {
+            error("unable to share text: ${e.message ?: "unknown error"}")
+        }
     }
 
     private fun error(message: String): JSONObject = JSONObject().apply {
