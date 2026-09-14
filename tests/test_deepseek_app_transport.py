@@ -106,6 +106,26 @@ def test_send_prompt_waits_for_send_readiness_then_reads_new_response() -> None:
     assert result["session_id"] == session
 
 
+def test_send_prompt_normalizes_prompt_whitespace_for_send_readiness() -> None:
+    prompt = "LIVE TEST PROMPT:\nInspect the current Android state."
+    normalized_prompt = "LIVE TEST PROMPT: Inspect the current Android state."
+    send = element(id="send-wrapper", content_description="Send", clickable=True, bounds="[1,2][3,4]")
+    response = element(id="answer", text="response")
+    bridge = FakeBridge([
+        state(element(id="composer", text=normalized_prompt)),
+        state(element(id="composer", text=normalized_prompt), send),
+        state(element(id="composer", text=normalized_prompt), send, response),
+        state(element(id="composer", text=normalized_prompt), send, response),
+    ])
+    transport = DeepSeekAppTransport(bridge=bridge, poll_seconds=0.0, stable_polls=2, sleeper=lambda _: None)
+    session = transport.start_new_chat()
+
+    result = transport.send_prompt(session, prompt)
+
+    assert bridge.clicked == ["send-wrapper"]
+    assert result["text"] == "response"
+
+
 def test_send_prompt_clicks_smallest_clickable_container_of_send_icon() -> None:
     prompt = "hello"
     send_semantic = element(id="send-semantic", content_description="Send", bounds="[625,935][655,965]")
