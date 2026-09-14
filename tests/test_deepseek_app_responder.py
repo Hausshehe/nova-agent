@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.deepseek_app_responder import DeepSeekAppResponder
+from agent.deepseek_app_responder import DEEPSEEK_MISSION_PROMPT, DeepSeekAppResponder
 
 
 class FakeDeepSeekTransport:
@@ -31,9 +31,18 @@ def test_reuses_one_deepseek_chat_for_multiple_reasoning_turns() -> None:
     assert second["status"] == "continue"
     assert transport.started == 1
     assert transport.sent == [
+        ("session-1", DEEPSEEK_MISSION_PROMPT),
         ("session-1", "turn one"),
         ("session-1", "turn two"),
     ]
+
+
+def test_mission_prompt_defines_role_and_completion_boundary() -> None:
+    assert "Nova's Android reasoning engine" in DEEPSEEK_MISSION_PROMPT
+    assert "exactly ONE next action" in DEEPSEEK_MISSION_PROMPT
+    assert "Never invent UI elements" in DEEPSEEK_MISSION_PROMPT
+    assert '"completed" only when the supplied state proves' in DEEPSEEK_MISSION_PROMPT
+    assert "Completion requires evidence" in DEEPSEEK_MISSION_PROMPT
 
 
 def test_new_mission_replaces_the_previous_session() -> None:
@@ -47,7 +56,9 @@ def test_new_mission_replaces_the_previous_session() -> None:
 
     assert transport.started == 2
     assert transport.sent == [
+        ("session-1", DEEPSEEK_MISSION_PROMPT),
         ("session-1", "old mission turn"),
+        ("session-2", DEEPSEEK_MISSION_PROMPT),
         ("session-2", "new mission turn"),
     ]
 
