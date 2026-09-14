@@ -18,10 +18,10 @@ class DeepSeekTransportError(RuntimeError):
 
 
 class DeepSeekBridge(Protocol):
-    def open_uri(self, uri: str, package: str | None = None) -> dict[str, Any]: ...
-    def share_text(self, text: str, package: str, component: str) -> dict[str, Any]: ...
-    def observe(self) -> WorldState: ...
-    def click(self, element_id: str) -> dict[str, Any]: ...
+    def open_uri(uri: str, package: str | None = None) -> dict[str, Any]: ...
+    def share_text(text: str, package: str, component: str) -> dict[str, Any]: ...
+    def observe() -> WorldState: ...
+    def click(element_id: str) -> dict[str, Any]: ...
 
 
 class DeepSeekAppTransport:
@@ -65,11 +65,7 @@ class DeepSeekAppTransport:
         before = self.bridge.observe()
         baseline_texts = self._text_values(before)
         self.bridge.share_text(prompt, DEEPSEEK_PACKAGE, DEEPSEEK_SHARE_COMPONENT)
-        composer_state = self._wait_for_prompt(prompt)
-        send_id = self._find_send_id(composer_state)
-        if send_id is None:
-            raise DeepSeekTransportError("DeepSeek Send control was not found")
-
+        send_id = self._wait_for_send_control(prompt)
         click_result = self.bridge.click(send_id)
         if not bool(click_result.get("accepted", click_result.get("ok", False))):
             raise DeepSeekTransportError(
@@ -108,6 +104,27 @@ class DeepSeekAppTransport:
             self._sleep(self.poll_seconds)
         raise DeepSeekTransportError(
             "timed out waiting for DeepSeek composer to contain the submitted prompt"
+        )
+
+    def _wait_for_send_control(self, prompt: str) -> str:
+        """Wait until the submitted prompt and an actionable Send control coexist.
+
+        DeepSeek can expose the composer text before its Send button/wrapper has
+        settled into the accessibility hierarchy. Do not treat prompt visibility
+        alone as readiness to click.
+        """
+        deadline = self._clock() + self.timeout
+        while self._clock() < deadline:
+            state = self.bridge.observe()
+            if state.package == DEEPSEEK_PACKAGE and any(
+                prompt == element.text for element in state.elements if element.visible
+            ):
+                send_id = self._find_send_id(state)
+                if send_id is not None:
+                    return send_id
+            self._sleep(self.poll_seconds)
+        raise DeepSeekTransportError(
+            "timed out waiting for DeepSeek Send control after prompt became visible"
         )
 
     def _wait_for_response(self, prompt: str, baseline_texts: set[str]) -> str:
