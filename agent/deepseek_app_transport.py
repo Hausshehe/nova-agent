@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from typing import Any, Protocol
@@ -18,10 +19,10 @@ class DeepSeekTransportError(RuntimeError):
 
 
 class DeepSeekBridge(Protocol):
-    def open_uri(self, uri: str, package: str | None = None) -> dict[str, Any]: ...
-    def share_text(self, text: str, package: str, component: str) -> dict[str, Any]: ...
-    def observe(self) -> WorldState: ...
-    def click(self, element_id: str) -> dict[str, Any]: ...
+    def open_uri(uri: str, package: str | None = None) -> dict[str, Any]: ...
+    def share_text(text: str, package: str, component: str) -> dict[str, Any]: ...
+    def observe() -> WorldState: ...
+    def click(element_id: str) -> dict[str, Any]: ...
 
 
 class DeepSeekAppTransport:
@@ -97,8 +98,9 @@ class DeepSeekAppTransport:
         """Wait until the submitted prompt and an actionable Send control coexist.
 
         DeepSeek can expose the composer text before its Send button/wrapper has
-        settled into the accessibility hierarchy. Do not treat prompt visibility
-        alone as readiness to click.
+        settled into the accessibility hierarchy. The semantic Send node can
+        also be a non-clickable icon inside a larger clickable wrapper, so the
+        wrapper is selected by containment rather than requiring identical bounds.
         """
         deadline = self._clock() + self.timeout
         while self._clock() < deadline:
@@ -149,7 +151,17 @@ class DeepSeekAppTransport:
         }
 
     @staticmethod
-    def _find_send_id(state: WorldState) -> str | None:
+    def _parse_bounds(bounds: str) -> tuple[int, int, int, int] | None:
+        match = re.fullmatch(r"\[\s*(-?\d+)\s*,\s*(-?\d+)\]\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]", bounds.strip())
+        if not match:
+            return None
+        left, top, right, bottom = (int(value) for value in match.groups())
+        if right < left or bottom < top:
+            return None
+        return left, top, right, bottom
+
+    @classmethod
+    def _find_send_id(cls, state: WorldState) -> str | None:
         candidates = [
             element
             for element in state.elements
@@ -163,12 +175,32 @@ class DeepSeekAppTransport:
             if element.clickable:
                 return element.id
 
-        # DeepSeek can expose a non-clickable semantic Send node inside a
-        # clickable wrapper. Prefer a clickable element with the same bounds.
-        bounds = {element.bounds for element in candidates if element.bounds}
-        for element in state.elements:
-            if element.visible and element.enabled and element.clickable and element.bounds in bounds:
-                return element.id
+        # DeepSeek can expose the white Send arrow as a non-clickable semantic
+        # node inside a larger clickable blue button. Select the smallest
+        # enabled clickable element whose bounds contain that semantic node.
+        for semantic in candidates:
+            semantic_bounds = cls._parse_bounds(semantic.bounds)
+            if semantic_bounds is None:
+                continue
+            s_left, s_top, s_right, s_bottom = semantic_bounds
+            containing: list[tuple[int, str]] = []
+            for element in state.elements:
+                if not element.visible or not element.enabled or not element.clickable:
+                    continue
+                wrapper_bounds = cls._parse_bounds(element.bounds)
+                if wrapper_bounds is None:
+                    continue
+                w_left, w_top, w_right, w_bottom = wrapper_bounds
+                if (
+                    w_left <= s_left
+                    and w_top <= s_top
+                    and w_right >= s_right
+                    and w_bottom >= s_bottom
+                ):
+                    area = (w_right - w_left) * (w_bottom - w_top)
+                    containing.append((area, element.id))
+            if containing:
+                return min(containing, key=lambda item: item[0])[1]
         return None
 
     @classmethod
