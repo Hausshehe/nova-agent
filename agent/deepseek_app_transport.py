@@ -94,6 +94,10 @@ class DeepSeekAppTransport:
             f"timed out waiting for DeepSeek app; active package={active!r}"
         )
 
+    @staticmethod
+    def _normalize_prompt_text(text: str) -> str:
+        return " ".join(text.split())
+
     def _wait_for_send_control(self, prompt: str) -> str:
         """Wait until the submitted prompt and an actionable Send control coexist.
 
@@ -103,10 +107,13 @@ class DeepSeekAppTransport:
         wrapper is selected by containment rather than requiring identical bounds.
         """
         deadline = self._clock() + self.timeout
+        normalized_prompt = self._normalize_prompt_text(prompt)
         while self._clock() < deadline:
             state = self.bridge.observe()
             if state.package == DEEPSEEK_PACKAGE and any(
-                prompt == element.text for element in state.elements if element.visible
+                self._normalize_prompt_text(element.text) == normalized_prompt
+                for element in state.elements
+                if element.visible
             ):
                 send_id = self._find_send_id(state)
                 if send_id is not None:
@@ -152,7 +159,10 @@ class DeepSeekAppTransport:
 
     @staticmethod
     def _parse_bounds(bounds: str) -> tuple[int, int, int, int] | None:
-        match = re.fullmatch(r"\[\s*(-?\d+)\s*,\s*(-?\d+)\]\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]", bounds.strip())
+        match = re.fullmatch(
+            r"\[\s*(-?\d+)\s*,\s*(-?\d+)\]\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]",
+            bounds.strip(),
+        )
         if not match:
             return None
         left, top, right, bottom = (int(value) for value in match.groups())
