@@ -5,8 +5,7 @@ import uuid
 from typing import Any, Protocol
 
 from .android_bridge import AndroidBridge
-from .deepseek_app_responder import DEEPSEEK_MISSION_PROMPT
-from .core import UIElement, WorldState
+from .core import WorldState
 
 
 DEEPSEEK_PACKAGE = "com.deepseek.chat"
@@ -100,10 +99,8 @@ class DeepSeekAppTransport:
 
     def _wait_for_prompt(self, prompt: str) -> WorldState:
         deadline = self._clock() + self.timeout
-        last_state: WorldState | None = None
         while self._clock() < deadline:
             state = self.bridge.observe()
-            last_state = state
             if state.package == DEEPSEEK_PACKAGE and any(
                 prompt == element.text for element in state.elements if element.visible
             ):
@@ -206,5 +203,4 @@ class DeepSeekAppTransport:
 
 
 def build_deepseek_mission_transport(bridge: DeepSeekBridge | None = None) -> DeepSeekAppTransport:
-    """Construct the app transport and keep the mission bootstrap in one place."""
     return DeepSeekAppTransport(bridge=bridge)
