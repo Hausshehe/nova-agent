@@ -8,6 +8,19 @@
         android:label="Nova Agent"
         android:allowBackup="false"
         android:supportsRtl="true">
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Nova DeepSeek hook probe" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.deepseek.chat" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
