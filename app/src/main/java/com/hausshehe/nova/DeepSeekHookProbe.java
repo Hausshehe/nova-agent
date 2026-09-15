@@ -3,7 +3,7 @@ package com.hausshehe.nova;
 import android.util.Log;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_LoadPackage;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
  * Minimal LSPosed proof-of-injection probe.
