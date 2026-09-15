@@ -15,11 +15,16 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * mutation points discovered in DeepSeek 2.5.1:
  * n63.b(String, nx4, n62) for APPEND and
  * n63.j(String, nx4, r21, n62) for SET.
+ *
+ * It also observes x21.a(x21, k09, zg2), the native SSE event dispatcher,
+ * so the real completion event can be mapped to collector.finish().
  */
 public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
     private static final String TARGET_PACKAGE = "com.deepseek.chat";
     private static final String RESPONSE_FRAGMENT = "n63";
+    private static final String STREAM_DISPATCHER = "x21";
+    private static final String STREAM_EVENT = "k09";
     private static final int PREVIEW_LIMIT = 96;
     private static final DeepSeekResponseCollector RESPONSE_COLLECTOR =
             new DeepSeekResponseCollector();
@@ -65,7 +70,9 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
         try {
             hookAppend(lpparam.classLoader);
             hookSet(lpparam.classLoader);
+            hookStreamEvents(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_RESPONSE_HOOKS_INSTALLED class=" + RESPONSE_FRAGMENT);
+            Log.i(TAG, "DEEPSEEK_STREAM_EVENT_HOOK_INSTALLED class=" + STREAM_DISPATCHER);
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_RESPONSE_HOOKS_FAILED", t);
         }
@@ -99,6 +106,20 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 r21,
                 n62,
                 new ResponseHook("SET"));
+    }
+
+    private static void hookStreamEvents(ClassLoader classLoader) throws ClassNotFoundException {
+        Class<?> x21 = XposedHelpers.findClass(STREAM_DISPATCHER, classLoader);
+        Class<?> k09 = XposedHelpers.findClass(STREAM_EVENT, classLoader);
+        Class<?> zg2 = XposedHelpers.findClass("zg2", classLoader);
+
+        XposedHelpers.findAndHookMethod(
+                x21,
+                "a",
+                x21,
+                k09,
+                zg2,
+                new StreamEventHook());
     }
 
     private static String preview(String text) {
@@ -137,6 +158,21 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                         + " preview=" + preview(text));
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_RESPONSE_FRAGMENT_LOG_FAILED", t);
+            }
+        }
+    }
+
+    private static final class StreamEventHook extends XC_MethodHook {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                Object event = param.args[1];
+                String first = String.valueOf(XposedHelpers.getObjectField(event, "a"));
+                String second = String.valueOf(XposedHelpers.getObjectField(event, "b"));
+                Log.i(TAG, "DEEPSEEK_STREAM_EVENT first=" + preview(first)
+                        + " second=" + preview(second));
+            } catch (Throwable t) {
+                Log.e(TAG, "DEEPSEEK_STREAM_EVENT_LOG_FAILED", t);
             }
         }
     }
