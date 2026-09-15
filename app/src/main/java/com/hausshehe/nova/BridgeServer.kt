@@ -70,6 +70,7 @@ object BridgeServer {
                 val response = when (request.optString("command")) {
                     "observe" -> observe()
                     "health" -> health()
+                    "deepseek_event" -> deepSeekEvent(request)
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
@@ -87,6 +88,19 @@ object BridgeServer {
                 Log.e(TAG, "Bridge request failed: ${e.message}", e)
                 PrintWriter(s.getOutputStream(), true).println(error(e.message ?: "bridge error").toString())
             }
+        }
+    }
+
+    private fun deepSeekEvent(request: JSONObject): JSONObject {
+        val event = request.optString("event")
+        val type = request.optString("type")
+        val id = request.optInt("id", -1)
+        val delta = request.optString("delta", "")
+        val text = request.optString("text", "")
+        Log.i(TAG, "DEEPSEEK_BRIDGE_EVENT event=$event type=$type id=$id delta=$delta length=${text.length}")
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", true)
         }
     }
 
@@ -237,10 +251,7 @@ object BridgeServer {
         }
         return try {
             context.startActivity(intent)
-            JSONObject().apply {
-                put("ok", true)
-                put("accepted", true)
-            }
+            JSONObject().apply { put("ok", true); put("accepted", true) }
         } catch (e: Exception) {
             error("unable to open URI: ${e.message ?: "unknown error"}")
         }
@@ -258,10 +269,7 @@ object BridgeServer {
         }
         return try {
             context.startActivity(intent)
-            JSONObject().apply {
-                put("ok", true)
-                put("accepted", true)
-            }
+            JSONObject().apply { put("ok", true); put("accepted", true) }
         } catch (e: Exception) {
             error("unable to share text: ${e.message ?: "unknown error"}")
         }
