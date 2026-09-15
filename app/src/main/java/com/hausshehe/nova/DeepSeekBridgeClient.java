@@ -2,6 +2,7 @@ package com.hausshehe.nova;
 
 import android.util.Log;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -37,23 +38,40 @@ public final class DeepSeekBridgeClient {
     }
 
     public static void sendDelta(String type, int id, String delta) {
-        send(event("delta", type, id).put("delta", safe(delta)));
+        try {
+            send(event("delta", type, id).put("delta", safe(delta)));
+        } catch (JSONException e) {
+            Log.w(TAG, "Unable to encode delta event", e);
+        }
     }
 
     public static void sendReplaced(String type, int id, String text) {
-        send(event("replaced", type, id).put("text", safe(text)));
+        try {
+            send(event("replaced", type, id).put("text", safe(text)));
+        } catch (JSONException e) {
+            Log.w(TAG, "Unable to encode replaced event", e);
+        }
     }
 
     public static void sendFinished(String type, int id, String text) {
-        send(event("finished", type, id).put("text", safe(text)));
+        try {
+            send(event("finished", type, id).put("text", safe(text)));
+        } catch (JSONException e) {
+            Log.w(TAG, "Unable to encode finished event", e);
+        }
     }
 
     private static JSONObject event(String event, String type, int id) {
-        return new JSONObject()
-                .put("command", "deepseek_event")
-                .put("event", event)
-                .put("type", safe(type))
-                .put("id", id);
+        JSONObject request = new JSONObject();
+        try {
+            request.put("command", "deepseek_event");
+            request.put("event", event);
+            request.put("type", safe(type));
+            request.put("id", id);
+        } catch (JSONException e) {
+            throw new IllegalStateException("Unable to encode DeepSeek event", e);
+        }
+        return request;
     }
 
     private static void send(final JSONObject request) {
