@@ -19,9 +19,15 @@ public final class DeepSeekResponseCollector {
     }
 
     private static final class State {
+        final int id;
         String type;
         String text = "";
         boolean started;
+
+        State(int id, String type) {
+            this.id = id;
+            this.type = type;
+        }
     }
 
     private final Map<Integer, State> states = new HashMap<>();
@@ -82,8 +88,7 @@ public final class DeepSeekResponseCollector {
     private State state(String type, int id) {
         State state = states.get(id);
         if (state == null) {
-            state = new State();
-            state.type = safe(type);
+            state = new State(id, safe(type));
             states.put(id, state);
         } else if (type != null) {
             state.type = type;
@@ -94,29 +99,23 @@ public final class DeepSeekResponseCollector {
     private void notifyStarted(State state) {
         Listener current = listener;
         if (current != null) {
-            current.onResponseStarted(state.type, idFor(state), null);
+            current.onResponseStarted(state.type, state.id);
         }
     }
 
     private void notifyDelta(State state, String delta) {
         Listener current = listener;
         if (current != null) {
-            current.onResponseDelta(state.type, idFor(state), delta);
+            current.onResponseDelta(state.type, state.id, delta);
         }
     }
 
     private void notifyReplace(State state) {
         Listener current = listener;
         if (current != null) {
-            current.onResponseReplaced(state.type, idFor(state), state.text);
+            current.onResponseReplaced(state.type, state.id, state.text);
         }
     }
-
-    private static int idFor(State state) {
-        return stateIdHolder.get();
-    }
-
-    private static final ThreadLocal<Integer> stateIdHolder = new ThreadLocal<>();
 
     private static String safe(String value) {
         return value == null ? "" : value;
