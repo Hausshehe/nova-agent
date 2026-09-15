@@ -21,6 +21,8 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String TARGET_PACKAGE = "com.deepseek.chat";
     private static final String RESPONSE_FRAGMENT = "n63";
     private static final int PREVIEW_LIMIT = 96;
+    private static final DeepSeekResponseCollector RESPONSE_COLLECTOR =
+            new DeepSeekResponseCollector();
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -30,6 +32,31 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
 
         Log.i(TAG, "DEEPSEEK_HOOK_LOADED package=" + lpparam.packageName
                 + " process=" + lpparam.processName);
+
+        RESPONSE_COLLECTOR.setListener(new DeepSeekResponseCollector.Listener() {
+            @Override
+            public void onResponseStarted(String type, int id) {
+                Log.i(TAG, "DEEPSEEK_RESPONSE_STARTED type=" + type + " id=" + id);
+            }
+
+            @Override
+            public void onResponseDelta(String type, int id, String delta) {
+                Log.i(TAG, "DEEPSEEK_RESPONSE_DELTA type=" + type
+                        + " id=" + id + " delta=" + preview(delta));
+            }
+
+            @Override
+            public void onResponseReplaced(String type, int id, String text) {
+                Log.i(TAG, "DEEPSEEK_RESPONSE_REPLACED type=" + type
+                        + " id=" + id + " length=" + text.length());
+            }
+
+            @Override
+            public void onResponseFinished(String type, int id, String text) {
+                Log.i(TAG, "DEEPSEEK_RESPONSE_FINISHED type=" + type
+                        + " id=" + id + " length=" + text.length());
+            }
+        });
 
         try {
             hookAppend(lpparam.classLoader);
@@ -70,6 +97,14 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 new ResponseHook("SET"));
     }
 
+    private static String preview(String text) {
+        String value = text == null ? "" : text.replace('\n', ' ').replace('\r', ' ');
+        if (value.length() > PREVIEW_LIMIT) {
+            return value.substring(0, PREVIEW_LIMIT) + "...";
+        }
+        return value;
+    }
+
     private static final class ResponseHook extends XC_MethodHook {
         private final String operation;
 
@@ -84,16 +119,18 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 String type = String.valueOf(XposedHelpers.getObjectField(fragment, "a"));
                 int id = XposedHelpers.getIntField(fragment, "b");
                 String text = String.valueOf(XposedHelpers.callMethod(fragment, "g"));
-                String preview = text.replace('\n', ' ').replace('\r', ' ');
-                if (preview.length() > PREVIEW_LIMIT) {
-                    preview = preview.substring(0, PREVIEW_LIMIT) + "...";
+
+                if ("APPEND".equals(operation)) {
+                    RESPONSE_COLLECTOR.append(type, id, text);
+                } else {
+                    RESPONSE_COLLECTOR.replace(type, id, text);
                 }
 
                 Log.i(TAG, "DEEPSEEK_RESPONSE_FRAGMENT operation=" + operation
                         + " type=" + type
                         + " id=" + id
                         + " length=" + text.length()
-                        + " preview=" + preview);
+                        + " preview=" + preview(text));
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_RESPONSE_FRAGMENT_LOG_FAILED", t);
             }
