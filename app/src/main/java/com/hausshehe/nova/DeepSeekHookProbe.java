@@ -2,6 +2,8 @@ package com.hausshehe.nova;
 
 import android.util.Log;
 
+import org.json.JSONObject;
+
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -17,7 +19,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * n63.j(String, nx4, r21, n62) for SET.
  *
  * It also observes x21.a(x21, k09, zg2), the native SSE event dispatcher,
- * so the real completion event can be mapped to collector.finish().
+ * and maps response/status=FINISHED to collector.finish().
  */
 public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
@@ -28,6 +30,7 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final int PREVIEW_LIMIT = 96;
     private static final DeepSeekResponseCollector RESPONSE_COLLECTOR =
             new DeepSeekResponseCollector();
+    private static volatile int activeResponseId = -1;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -166,13 +169,62 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
             try {
-                Object event = param.args[1];
-                String first = String.valueOf(XposedHelpers.getObjectField(event, "a"));
-                String second = String.valueOf(XposedHelpers.getObjectField(event, "b"));
+                Object event = param.args.length > 1 ? param.args[1] : null;
+                if (event == null) {
+                    Log.i(TAG, "DEEPSEEK_STREAM_EVENT event=null");
+                    return;
+                }
+
+                Object firstValue = null;
+                Object secondValue = null;
+                try {
+                    firstValue = XposedHelpers.getObjectField(event, "a");
+                } catch (Throwable ignored) {
+                    // Some event variants do not expose the optional event name.
+                }
+                try {
+                    secondValue = XposedHelpers.getObjectField(event, "b");
+                } catch (Throwable ignored) {
+                    // Some event variants do not expose the optional payload.
+                }
+
+                String first = firstValue == null ? null : String.valueOf(firstValue);
+                String second = secondValue == null ? null : String.valueOf(secondValue);
                 Log.i(TAG, "DEEPSEEK_STREAM_EVENT first=" + preview(first)
                         + " second=" + preview(second));
+
+                handleCompletionSignal(first, second);
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_STREAM_EVENT_LOG_FAILED", t);
+            }
+        }
+
+        private static void handleCompletionSignal(String first, String second) {
+            if (second == null || second.isEmpty()) {
+                return;
+            }
+
+            try {
+                JSONObject payload = new JSONObject(second);
+                if (!"response/status".equals(payload.optString("p"))
+                        || !"SET".equals(payload.optString("o"))
+                        || !"FINISHED".equals(payload.optString("v"))) {
+                    if ("ready".equals(first)) {
+                        activeResponseId = new JSONObject(second).optInt("response_message_id", -1);
+                    }
+                    return;
+                }
+
+                int responseId = activeResponseId;
+                if (responseId >= 0) {
+                    Log.i(TAG, "DEEPSEEK_RESPONSE_FINISH_SIGNAL id=" + responseId);
+                    RESPONSE_COLLECTOR.finish("RESPONSE", responseId);
+                    activeResponseId = -1;
+                } else {
+                    Log.w(TAG, "DEEPSEEK_RESPONSE_FINISH_SIGNAL_WITHOUT_ID");
+                }
+            } catch (Throwable ignored) {
+                // Non-JSON SSE payloads are expected and are not completion signals.
             }
         }
     }
