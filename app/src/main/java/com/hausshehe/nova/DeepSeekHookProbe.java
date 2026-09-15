@@ -37,24 +37,28 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
             @Override
             public void onResponseStarted(String type, int id) {
                 Log.i(TAG, "DEEPSEEK_RESPONSE_STARTED type=" + type + " id=" + id);
+                DeepSeekBridgeClient.sendStarted(type, id);
             }
 
             @Override
             public void onResponseDelta(String type, int id, String delta) {
                 Log.i(TAG, "DEEPSEEK_RESPONSE_DELTA type=" + type
                         + " id=" + id + " delta=" + preview(delta));
+                DeepSeekBridgeClient.sendDelta(type, id, delta);
             }
 
             @Override
             public void onResponseReplaced(String type, int id, String text) {
                 Log.i(TAG, "DEEPSEEK_RESPONSE_REPLACED type=" + type
                         + " id=" + id + " length=" + text.length());
+                DeepSeekBridgeClient.sendReplaced(type, id, text);
             }
 
             @Override
             public void onResponseFinished(String type, int id, String text) {
                 Log.i(TAG, "DEEPSEEK_RESPONSE_FINISHED type=" + type
                         + " id=" + id + " length=" + text.length());
+                DeepSeekBridgeClient.sendFinished(type, id, text);
             }
         });
 
