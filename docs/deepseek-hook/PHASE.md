@@ -1,0 +1,1 @@
+Phase G5 status: minimal legacy Xposed/LSPosed probe added. Target package is `com.deepseek.chat`. The probe logs only package/process identity when loaded. No authentication or network material is accessed.
