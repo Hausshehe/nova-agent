@@ -31,8 +31,6 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static volatile Object lastParentId;
     private static volatile Object lastRefs;
 
-    private DeepSeekNativeInvokeProbe() {}
-
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
