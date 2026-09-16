@@ -2,10 +2,9 @@ package com.hausshehe.nova;
 
 import android.util.Log;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
+import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -18,7 +17,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * experiment can test a controlled native invocation without rebuilding the
  * entire request path.
  */
-public final class DeepSeekNativeInvokeProbe {
+public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
     private static final String TARGET_PACKAGE = "com.deepseek.chat";
 
@@ -34,7 +33,8 @@ public final class DeepSeekNativeInvokeProbe {
 
     private DeepSeekNativeInvokeProbe() {}
 
-    public static void init(XC_LoadPackage.LoadPackageParam lpparam) {
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         try {
             hookKk1Resolution(lpparam.classLoader);
@@ -112,7 +112,7 @@ public final class DeepSeekNativeInvokeProbe {
                         lastEw1 = param.args[8];
                         lastYg2 = param.args[9];
 
-                        Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED xr=" + identity(lastXr())
+                        Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED xr=" + identity(liveXr)
                                 + " sv8=" + identity(lastSv8)
                                 + " ew1=" + identity(lastEw1)
                                 + " yg2Class=" + className(lastYg2)
@@ -120,10 +120,6 @@ public final class DeepSeekNativeInvokeProbe {
                                 + " refsClass=" + className(lastRefs));
                     }
                 });
-    }
-
-    private static Object lastXr() {
-        return liveXr;
     }
 
     private static String identity(Object value) {
