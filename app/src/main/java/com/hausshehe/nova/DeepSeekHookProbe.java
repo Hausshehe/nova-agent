@@ -15,7 +15,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *
  * Vector has already proven that Nova can execute inside DeepSeek. This probe
  * observes semantic response fragments, native SSE completion, the internal
- * request entry point, and the construction of the concrete r51 request.
+ * request entry point, the construction of the concrete r51 request, and
+ * resolution of DeepSeek's live kk1 ViewModel.
  * It does not modify or invoke DeepSeek requests.
  */
 public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
@@ -28,8 +29,7 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String REQUEST_INTERFACE = "h21";
     private static final String REQUEST_MODEL = "r51";
     private static final int PREVIEW_LIMIT = 96;
-    private static final DeepSeekResponseCollector RESPONSE_COLLECTOR =
-            new DeepSeekResponseCollector();
+    private static final DeepSeekResponseCollector RESPONSE_COLLECTOR = new DeepSeekResponseCollector();
     private static volatile int activeResponseId = -1;
 
     @Override
@@ -76,13 +76,35 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
             hookStreamEvents(lpparam.classLoader);
             hookRequestEntryPoint(lpparam.classLoader);
             hookRequestConstruction(lpparam.classLoader);
+            hookViewModelResolution(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_RESPONSE_HOOKS_INSTALLED class=" + RESPONSE_FRAGMENT);
             Log.i(TAG, "DEEPSEEK_STREAM_EVENT_HOOK_INSTALLED class=" + STREAM_DISPATCHER);
             Log.i(TAG, "DEEPSEEK_REQUEST_HOOK_INSTALLED class=" + REQUEST_DISPATCHER);
             Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_HOOK_INSTALLED class=" + REQUEST_MODEL);
+            Log.i(TAG, "DEEPSEEK_KK1_VM_HOOK_INSTALLED class=x05 method=K0");
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_RESPONSE_HOOKS_FAILED", t);
         }
+    }
+
+    private static void hookViewModelResolution(ClassLoader classLoader) throws ClassNotFoundException {
+        Class<?> x05 = XposedHelpers.findClass("x05", classLoader);
+        Class<?> p35 = XposedHelpers.findClass("p35", classLoader);
+        Class<?> f5a = XposedHelpers.findClass("f5a", classLoader);
+        Class<?> pj2 = XposedHelpers.findClass("pj2", classLoader);
+        Class<?> g48 = XposedHelpers.findClass("g48", classLoader);
+        Class<?> kx3 = XposedHelpers.findClass("kx3", classLoader);
+
+        XposedHelpers.findAndHookMethod(
+                x05,
+                "K0",
+                p35,
+                f5a,
+                String.class,
+                pj2,
+                g48,
+                kx3,
+                new ViewModelResolutionHook());
     }
 
     private static void hookAppend(ClassLoader classLoader) throws ClassNotFoundException {
@@ -182,6 +204,32 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                     + " j=" + j;
         } catch (Throwable t) {
             return "fieldSummaryError=" + t.getClass().getSimpleName();
+        }
+    }
+
+    private static final class ViewModelResolutionHook extends XC_MethodHook {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                Object key = param.args.length > 0 ? param.args[0] : null;
+                if (key == null) {
+                    return;
+                }
+
+                String keyName = String.valueOf(XposedHelpers.callMethod(key, "b"));
+                if (!keyName.contains("kk1")) {
+                    return;
+                }
+
+                Object result = param.getResult();
+                Log.i(TAG, "DEEPSEEK_KK1_VM_RESOLVED key=" + keyName
+                        + " resultClass="
+                        + (result == null ? "null" : result.getClass().getName())
+                        + " identity="
+                        + (result == null ? -1 : System.identityHashCode(result)));
+            } catch (Throwable t) {
+                Log.e(TAG, "DEEPSEEK_KK1_VM_RESOLUTION_FAILED", t);
+            }
         }
     }
 
