@@ -6,21 +6,17 @@ import org.json.JSONObject;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * DeepSeek in-process response-stream probe.
+ * DeepSeek in-process response/request probe.
  *
  * Vector has already proven that Nova can execute inside DeepSeek. This probe
- * stays above the network layer and observes the semantic response fragment
- * mutation points discovered in DeepSeek 2.5.1:
- * n63.b(String, nx4, n62) for APPEND and
- * n63.j(String, nx4, r21, n62) for SET.
- *
- * It also observes x21.a(x21, k09, zg2), the native SSE event dispatcher,
- * maps response/status=FINISHED to collector.finish(), and probes the
- * request-side ir2.b(h21, Long) entry point without changing its behavior.
+ * observes semantic response fragments, native SSE completion, the internal
+ * request entry point, and the construction of the concrete r51 request.
+ * It does not modify or invoke DeepSeek requests.
  */
 public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
@@ -30,6 +26,7 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final String STREAM_EVENT = "k09";
     private static final String REQUEST_DISPATCHER = "ir2";
     private static final String REQUEST_INTERFACE = "h21";
+    private static final String REQUEST_MODEL = "r51";
     private static final int PREVIEW_LIMIT = 96;
     private static final DeepSeekResponseCollector RESPONSE_COLLECTOR =
             new DeepSeekResponseCollector();
@@ -78,9 +75,11 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
             hookSet(lpparam.classLoader);
             hookStreamEvents(lpparam.classLoader);
             hookRequestEntryPoint(lpparam.classLoader);
+            hookRequestConstruction(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_RESPONSE_HOOKS_INSTALLED class=" + RESPONSE_FRAGMENT);
             Log.i(TAG, "DEEPSEEK_STREAM_EVENT_HOOK_INSTALLED class=" + STREAM_DISPATCHER);
             Log.i(TAG, "DEEPSEEK_REQUEST_HOOK_INSTALLED class=" + REQUEST_DISPATCHER);
+            Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_HOOK_INSTALLED class=" + REQUEST_MODEL);
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_RESPONSE_HOOKS_FAILED", t);
         }
@@ -142,12 +141,48 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 new RequestHook());
     }
 
+    private static void hookRequestConstruction(ClassLoader classLoader) throws ClassNotFoundException {
+        Class<?> r51 = XposedHelpers.findClass(REQUEST_MODEL, classLoader);
+        XposedBridge.hookAllConstructors(r51, new RequestConstructionHook());
+    }
+
     private static String preview(String text) {
         String value = text == null ? "" : text.replace('\n', ' ').replace('\r', ' ');
         if (value.length() > PREVIEW_LIMIT) {
             return value.substring(0, PREVIEW_LIMIT) + "...";
         }
         return value;
+    }
+
+    private static int stringLength(Object value) {
+        return value == null ? -1 : String.valueOf(value).length();
+    }
+
+    private static String fieldSummary(Object request) {
+        try {
+            Object a = XposedHelpers.getObjectField(request, "a");
+            Object b = XposedHelpers.getObjectField(request, "b");
+            Object c = XposedHelpers.getObjectField(request, "c");
+            Object d = XposedHelpers.getObjectField(request, "d");
+            Object e = XposedHelpers.getObjectField(request, "e");
+            Object f = XposedHelpers.getObjectField(request, "f");
+            Object g = XposedHelpers.getObjectField(request, "g");
+            Object h = XposedHelpers.getObjectField(request, "h");
+            Object i = XposedHelpers.getObjectField(request, "i");
+            Object j = XposedHelpers.getObjectField(request, "j");
+            return "aLen=" + stringLength(a)
+                    + " b=" + b
+                    + " cLen=" + stringLength(c)
+                    + " dClass=" + (d == null ? "null" : d.getClass().getName())
+                    + " e=" + e
+                    + " f=" + f
+                    + " gLen=" + stringLength(g)
+                    + " h=" + h
+                    + " i=" + i
+                    + " j=" + j;
+        } catch (Throwable t) {
+            return "fieldSummaryError=" + t.getClass().getSimpleName();
+        }
     }
 
     private static final class ResponseHook extends XC_MethodHook {
@@ -197,12 +232,10 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 try {
                     firstValue = XposedHelpers.getObjectField(event, "a");
                 } catch (Throwable ignored) {
-                    // Some event variants do not expose the optional event name.
                 }
                 try {
                     secondValue = XposedHelpers.getObjectField(event, "b");
                 } catch (Throwable ignored) {
-                    // Some event variants do not expose the optional payload.
                 }
 
                 String first = firstValue == null ? null : String.valueOf(firstValue);
@@ -227,7 +260,7 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                         || !"SET".equals(payload.optString("o"))
                         || !"FINISHED".equals(payload.optString("v"))) {
                     if ("ready".equals(first)) {
-                        activeResponseId = new JSONObject(second).optInt("response_message_id", -1);
+                        activeResponseId = payload.optInt("response_message_id", -1);
                     }
                     return;
                 }
@@ -241,7 +274,6 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                     Log.w(TAG, "DEEPSEEK_RESPONSE_FINISH_SIGNAL_WITHOUT_ID");
                 }
             } catch (Throwable ignored) {
-                // Non-JSON SSE payloads are expected and are not completion signals.
             }
         }
     }
@@ -259,9 +291,36 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
 
                 Log.i(TAG, "DEEPSEEK_REQUEST_ENTRY requestClass="
                         + request.getClass().getName()
-                        + " timeout=" + timeout);
+                        + " receiverClass="
+                        + (param.thisObject == null ? "null" : param.thisObject.getClass().getName())
+                        + " timeout=" + timeout
+                        + " " + fieldSummary(request));
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_REQUEST_ENTRY_LOG_FAILED", t);
+            }
+        }
+    }
+
+    private static final class RequestConstructionHook extends XC_MethodHook {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                Object request = param.thisObject;
+                StringBuilder args = new StringBuilder();
+                for (int index = 0; index < param.args.length; index++) {
+                    if (index > 0) {
+                        args.append(',');
+                    }
+                    Object value = param.args[index];
+                    args.append(index).append('=')
+                            .append(value == null ? "null" : value.getClass().getName());
+                }
+                Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTED class="
+                        + request.getClass().getName()
+                        + " argTypes=[" + args + "] "
+                        + fieldSummary(request));
+            } catch (Throwable t) {
+                Log.e(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_LOG_FAILED", t);
             }
         }
     }
