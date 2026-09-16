@@ -8,7 +8,7 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Metadata-only probe for DeepSeek's live kk1 -> p41 -> b18 session chain.
+ * Metadata-only probe for DeepSeek's live kk1 -> np1 -> p41 -> b18 session chain.
  * It does not invoke or modify DeepSeek requests.
  */
 public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
@@ -47,6 +47,13 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                                     return;
                                 }
 
+                                Object d = XposedHelpers.getObjectField(kk1, "d");
+                                Object zj1 = d == null ? null : XposedHelpers.callMethod(d, "getValue");
+                                Object liveState = zj1 == null ? null : XposedHelpers.getObjectField(zj1, "c");
+                                Object np1 = liveState != null && "np1".equals(liveState.getClass().getName())
+                                        ? liveState
+                                        : null;
+
                                 Object p41 = XposedHelpers.getObjectField(kk1, "h");
                                 Object b18 = p41 == null
                                         ? null
@@ -55,6 +62,7 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                                 Log.i(TAG,
                                         "DEEPSEEK_KK1_SESSION_CHAIN"
                                                 + " kk1Identity=" + System.identityHashCode(kk1)
+                                                + " np1Identity=" + (np1 == null ? -1 : System.identityHashCode(np1))
                                                 + " p41Class=" + (p41 == null ? "null" : p41.getClass().getName())
                                                 + " p41Identity=" + (p41 == null ? -1 : System.identityHashCode(p41))
                                                 + " b18Class=" + (b18 == null ? "null" : b18.getClass().getName())
