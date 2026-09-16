@@ -31,6 +31,7 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
     private static final int PREVIEW_LIMIT = 96;
     private static final DeepSeekResponseCollector RESPONSE_COLLECTOR = new DeepSeekResponseCollector();
     private static volatile int activeResponseId = -1;
+    private static volatile Object liveKk1ViewModel;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -222,11 +223,21 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 }
 
                 Object result = param.getResult();
+                if (result == null) {
+                    Log.i(TAG, "DEEPSEEK_KK1_VM_RESOLVED key=" + keyName
+                            + " resultClass=null identity=-1");
+                    return;
+                }
+
+                liveKk1ViewModel = result;
+                Object currentXr = XposedHelpers.callMethod(result, "m");
                 Log.i(TAG, "DEEPSEEK_KK1_VM_RESOLVED key=" + keyName
-                        + " resultClass="
-                        + (result == null ? "null" : result.getClass().getName())
-                        + " identity="
-                        + (result == null ? -1 : System.identityHashCode(result)));
+                        + " resultClass=" + result.getClass().getName()
+                        + " identity=" + System.identityHashCode(result)
+                        + " currentXrClass="
+                        + (currentXr == null ? "null" : currentXr.getClass().getName())
+                        + " currentXrIdentity="
+                        + (currentXr == null ? -1 : System.identityHashCode(currentXr)));
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_KK1_VM_RESOLUTION_FAILED", t);
             }
