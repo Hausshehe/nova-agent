@@ -1,5 +1,6 @@
 import json
 
+from agent.agent_state import AgentState
 from agent.core import ActionType, UIElement, WorldState
 from agent.reasoning_context import build_reasoning_context
 from agent.reasoning_payload import reasoning_payload
@@ -51,3 +52,32 @@ def test_reasoning_payload_is_json_serializable():
     encoded = json.dumps(reasoning_payload(context))
 
     assert '"goal": "Tap Finish"' in encoded
+
+
+def test_reasoning_payload_includes_compact_runtime_state():
+    world = WorldState(package="nova", observation_id="7")
+    runtime = AgentState(
+        goal="Finish task",
+        world=world,
+        step=4,
+        status="running",
+        failure_count=1,
+        last_error="rejected",
+        plan=("finish", "verify"),
+    )
+    context = build_reasoning_context(
+        runtime.goal,
+        runtime.world,
+        runtime.history,
+        agent_state=runtime,
+    )
+
+    payload = reasoning_payload(context)
+
+    assert payload["runtime"] == {
+        "step": 4,
+        "status": "running",
+        "failure_count": 1,
+        "last_error": "rejected",
+        "plan": ["finish", "verify"],
+    }
