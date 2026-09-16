@@ -319,6 +319,28 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                         + request.getClass().getName()
                         + " argTypes=[" + args + "] "
                         + fieldSummary(request));
+
+                StackTraceElement[] stack = new Throwable().getStackTrace();
+                StringBuilder callerTrace = new StringBuilder();
+                int emitted = 0;
+                for (StackTraceElement frame : stack) {
+                    String className = frame.getClassName();
+                    if (className.equals(DeepSeekHookProbe.class.getName())
+                            || className.startsWith("de.robv.android.xposed.")) {
+                        continue;
+                    }
+                    if (emitted > 0) {
+                        callerTrace.append(" <- ");
+                    }
+                    callerTrace.append(className)
+                            .append('#').append(frame.getMethodName())
+                            .append(':').append(frame.getLineNumber());
+                    emitted++;
+                    if (emitted >= 8) {
+                        break;
+                    }
+                }
+                Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_CALLERS " + callerTrace);
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_LOG_FAILED", t);
             }
