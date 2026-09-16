@@ -24,6 +24,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static volatile Object liveKk1;
     private static volatile Object liveXr;
     private static volatile Object liveB18;
+    private static volatile Object liveNp1;
 
     private static volatile Object lastSv8;
     private static volatile Object lastEw1;
@@ -110,7 +111,15 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                         lastEw1 = param.args[8];
                         lastYg2 = param.args[9];
 
+                        try {
+                            liveNp1 = XposedHelpers.getObjectField(context, "i");
+                        } catch (Throwable t) {
+                            liveNp1 = null;
+                            Log.e(TAG, "DEEPSEEK_NATIVE_NP1_CAPTURE_FAILED", t);
+                        }
+
                         Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED xr=" + identity(liveXr)
+                                + " np1=" + identity(liveNp1)
                                 + " sv8=" + identity(lastSv8)
                                 + " ew1=" + identity(lastEw1)
                                 + " yg2Class=" + className(lastYg2)
