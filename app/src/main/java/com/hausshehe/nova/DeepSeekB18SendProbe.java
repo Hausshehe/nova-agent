@@ -68,26 +68,53 @@ public final class DeepSeekB18SendProbe implements IXposedHookLoadPackage {
 
                 int refsSize = refs instanceof java.util.Collection
                         ? ((java.util.Collection<?>) refs).size() : -1;
+                boolean realSend = stringLength(prompt) > 0
+                        && "ap1".equals(className(yg2));
 
-                Log.i(TAG,
-                        "DEEPSEEK_B18_SEND_ENTRY"
-                                + " b18Identity=" + System.identityHashCode(b18)
-                                + " xrClass=" + className(xr)
-                                + " xrIdentity=" + identity(xr)
-                                + " promptLength=" + stringLength(prompt)
-                                + " parentIdClass=" + className(parentId)
-                                + " parentIdPresent=" + (parentId != null)
-                                + " refsClass=" + className(refs)
-                                + " refsSize=" + refsSize
-                                + " thinking=" + thinking
-                                + " search=" + search
-                                + " audioIdPresent=" + (audioId != null)
-                                + " sv8Class=" + className(sv8)
-                                + " sv8Identity=" + identity(sv8)
-                                + " ew1Class=" + className(ew1)
-                                + " ew1Identity=" + identity(ew1)
-                                + " yg2Class=" + className(yg2)
-                                + " yg2Identity=" + identity(yg2));
+                StringBuilder line = new StringBuilder()
+                        .append("DEEPSEEK_B18_SEND_ENTRY")
+                        .append(" b18Identity=").append(System.identityHashCode(b18))
+                        .append(" xrClass=").append(className(xr))
+                        .append(" xrIdentity=").append(identity(xr))
+                        .append(" promptLength=").append(stringLength(prompt))
+                        .append(" parentIdClass=").append(className(parentId))
+                        .append(" parentIdPresent=").append(parentId != null)
+                        .append(" refsClass=").append(className(refs))
+                        .append(" refsSize=").append(refsSize)
+                        .append(" thinking=").append(thinking)
+                        .append(" search=").append(search)
+                        .append(" audioIdPresent=").append(audioId != null)
+                        .append(" sv8Class=").append(className(sv8))
+                        .append(" sv8Identity=").append(identity(sv8))
+                        .append(" ew1Class=").append(className(ew1))
+                        .append(" ew1Identity=").append(identity(ew1))
+                        .append(" yg2Class=").append(className(yg2))
+                        .append(" yg2Identity=").append(identity(yg2));
+                Log.i(TAG, line.toString());
+
+                if (realSend) {
+                    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+                    StringBuilder callers = new StringBuilder("DEEPSEEK_B18_SEND_CALLERS");
+                    int emitted = 0;
+                    for (StackTraceElement frame : stack) {
+                        String className = frame.getClassName();
+                        if (className.equals(Thread.class.getName())
+                                || className.startsWith("de.robv.android.xposed.")) {
+                            continue;
+                        }
+                        callers.append(' ')
+                                .append(className)
+                                .append('#')
+                                .append(frame.getMethodName())
+                                .append(':')
+                                .append(frame.getLineNumber());
+                        emitted++;
+                        if (emitted >= 12) {
+                            break;
+                        }
+                    }
+                    Log.i(TAG, callers.toString());
+                }
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_B18_SEND_PROBE_FAILED", t);
             }
