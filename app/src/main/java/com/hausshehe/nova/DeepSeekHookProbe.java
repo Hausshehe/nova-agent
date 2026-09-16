@@ -78,11 +78,13 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
             hookRequestEntryPoint(lpparam.classLoader);
             hookRequestConstruction(lpparam.classLoader);
             hookViewModelResolution(lpparam.classLoader);
+            hookB18RequestBoundary(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_RESPONSE_HOOKS_INSTALLED class=" + RESPONSE_FRAGMENT);
             Log.i(TAG, "DEEPSEEK_STREAM_EVENT_HOOK_INSTALLED class=" + STREAM_DISPATCHER);
             Log.i(TAG, "DEEPSEEK_REQUEST_HOOK_INSTALLED class=" + REQUEST_DISPATCHER);
             Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_HOOK_INSTALLED class=" + REQUEST_MODEL);
             Log.i(TAG, "DEEPSEEK_KK1_VM_HOOK_INSTALLED class=x05 method=K0");
+            Log.i(TAG, "DEEPSEEK_B18_REQUEST_HOOK_INSTALLED class=b18 method=c");
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_RESPONSE_HOOKS_FAILED", t);
         }
@@ -106,6 +108,26 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 g48,
                 kx3,
                 new ViewModelResolutionHook());
+    }
+
+    private static void hookB18RequestBoundary(ClassLoader classLoader)
+            throws ClassNotFoundException {
+        Class<?> b18 = XposedHelpers.findClass("b18", classLoader);
+        Class<?> xr = XposedHelpers.findClass("xr", classLoader);
+        Class<?> wq = XposedHelpers.findClass("wq", classLoader);
+        Class<?> sv8 = XposedHelpers.findClass("sv8", classLoader);
+        Class<?> ew1 = XposedHelpers.findClass("ew1", classLoader);
+        Class<?> yg2 = XposedHelpers.findClass("yg2", classLoader);
+
+        XposedHelpers.findAndHookMethod(
+                b18,
+                "c",
+                xr,
+                wq,
+                sv8,
+                ew1,
+                yg2,
+                new B18RequestHook());
     }
 
     private static void hookAppend(ClassLoader classLoader) throws ClassNotFoundException {
@@ -240,6 +262,34 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                         + (currentXr == null ? -1 : System.identityHashCode(currentXr)));
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_KK1_VM_RESOLUTION_FAILED", t);
+            }
+        }
+    }
+
+    private static final class B18RequestHook extends XC_MethodHook {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                Object b18 = param.thisObject;
+                Object xr = param.args[0];
+                Object wq = param.args[1];
+                Object sv8 = param.args[2];
+                Object ew1 = param.args[3];
+
+                Log.i(TAG,
+                        "DEEPSEEK_B18_REQUEST_ENTRY"
+                                + " b18Class=" + b18.getClass().getName()
+                                + " b18Identity=" + System.identityHashCode(b18)
+                                + " xrClass=" + (xr == null ? "null" : xr.getClass().getName())
+                                + " xrIdentity=" + (xr == null ? -1 : System.identityHashCode(xr))
+                                + " wqClass=" + (wq == null ? "null" : wq.getClass().getName())
+                                + " wqIdentity=" + (wq == null ? -1 : System.identityHashCode(wq))
+                                + " sv8Class=" + (sv8 == null ? "null" : sv8.getClass().getName())
+                                + " sv8Identity=" + (sv8 == null ? -1 : System.identityHashCode(sv8))
+                                + " ew1Class=" + (ew1 == null ? "null" : ew1.getClass().getName())
+                                + " ew1Identity=" + (ew1 == null ? -1 : System.identityHashCode(ew1)));
+            } catch (Throwable t) {
+                Log.e(TAG, "DEEPSEEK_B18_REQUEST_PROBE_FAILED", t);
             }
         }
     }
