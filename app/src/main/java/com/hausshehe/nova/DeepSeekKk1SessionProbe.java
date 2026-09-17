@@ -4,12 +4,17 @@ import android.util.Log;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
  * Metadata-only probe for DeepSeek's live kk1 -> np1 -> p41 -> b18 session chain.
  * It does not invoke or modify DeepSeek requests.
+ *
+ * G11 additionally traces construction of the native request-context helper
+ * objects (sv8/ew1/yg2/ap1). Only class names, identities and call sites are
+ * logged, never object contents.
  */
 public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
@@ -73,9 +78,56 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                         }
                     });
 
+            hookConstructors(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_KK1_SESSION_HOOK_INSTALLED class=x05 method=K0");
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_KK1_SESSION_HOOK_INSTALL_FAILED", t);
         }
+    }
+
+    private static void hookConstructors(ClassLoader classLoader) throws ClassNotFoundException {
+        hookConstructorsFor("sv8", classLoader);
+        hookConstructorsFor("ew1", classLoader);
+        hookConstructorsFor("yg2", classLoader);
+        hookConstructorsFor("ap1", classLoader);
+    }
+
+    private static void hookConstructorsFor(String className, ClassLoader classLoader)
+            throws ClassNotFoundException {
+        Class<?> type = XposedHelpers.findClass(className, classLoader);
+        XposedBridge.hookAllConstructors(type, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    Object instance = param.thisObject;
+                    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+                    StringBuilder callers = new StringBuilder("DEEPSEEK_CONTEXT_CONSTRUCTED")
+                            .append(" class=").append(className)
+                            .append(" identity=").append(System.identityHashCode(instance));
+                    int emitted = 0;
+                    for (StackTraceElement frame : stack) {
+                        String owner = frame.getClassName();
+                        if (owner.equals(Thread.class.getName())
+                                || owner.startsWith("de.robv.android.xposed.")) {
+                            continue;
+                        }
+                        callers.append(' ')
+                                .append(owner)
+                                .append('#')
+                                .append(frame.getMethodName())
+                                .append(':')
+                                .append(frame.getLineNumber());
+                        emitted++;
+                        if (emitted >= 8) {
+                            break;
+                        }
+                    }
+                    Log.i(TAG, callers.toString());
+                } catch (Throwable t) {
+                    Log.e(TAG, "DEEPSEEK_CONTEXT_CONSTRUCTOR_TRACE_FAILED class=" + className, t);
+                }
+            }
+        });
+        Log.i(TAG, "DEEPSEEK_CONTEXT_CONSTRUCTOR_HOOK_INSTALLED class=" + className);
     }
 }
