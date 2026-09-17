@@ -2,6 +2,8 @@ package com.hausshehe.nova;
 
 import android.util.Log;
 
+import java.lang.reflect.Field;
+
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
@@ -13,8 +15,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * It does not invoke or modify DeepSeek requests.
  *
  * G11 additionally traces construction of the native request-context helper
- * objects (sv8/ew1/yg2/ap1). Only class names, identities and call sites are
- * logged, never object contents.
+ * objects (sv8/ew1/yg2/ap1), and now records the fresh xr field state when the
+ * live kk1 is resolved. Only metadata, sizes, identities and primitive values
+ * are logged, never string contents.
  */
 public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
@@ -72,6 +75,11 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                                                 + " p41Identity=" + (p41 == null ? -1 : System.identityHashCode(p41))
                                                 + " b18Class=" + (b18 == null ? "null" : b18.getClass().getName())
                                                 + " b18Identity=" + (b18 == null ? -1 : System.identityHashCode(b18)));
+
+                                if (np1 != null) {
+                                    Object xr = XposedHelpers.callMethod(np1, "M");
+                                    logXrFields(xr, "DEEPSEEK_FRESH_XR_FIELDS");
+                                }
                             } catch (Throwable t) {
                                 Log.e(TAG, "DEEPSEEK_KK1_SESSION_CHAIN_FAILED", t);
                             }
@@ -83,6 +91,54 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_KK1_SESSION_HOOK_INSTALL_FAILED", t);
         }
+    }
+
+    private static void logXrFields(Object xr, String prefix) {
+        if (xr == null) {
+            Log.i(TAG, prefix + " null");
+            return;
+        }
+        try {
+            Field[] fields = xr.getClass().getDeclaredFields();
+            StringBuilder line = new StringBuilder(prefix)
+                    .append(" xrIdentity=").append(System.identityHashCode(xr));
+            for (Field field : fields) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(xr);
+                    line.append(' ')
+                            .append(field.getName()).append('=')
+                            .append(describeFieldValue(value));
+                } catch (Throwable t) {
+                    line.append(' ').append(field.getName()).append("=<unreadable:")
+                            .append(t.getClass().getSimpleName()).append('>');
+                }
+            }
+            Log.i(TAG, line.toString());
+        } catch (Throwable t) {
+            Log.e(TAG, prefix + "_FAILED", t);
+        }
+    }
+
+    private static String describeFieldValue(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        if (value instanceof String) {
+            return "String(length=" + ((String) value).length() + ")";
+        }
+        if (value instanceof Number || value instanceof Boolean || value instanceof Character) {
+            return value.getClass().getSimpleName() + "(" + value + ")";
+        }
+        if (value instanceof java.util.Map) {
+            return value.getClass().getName() + "(size=" + ((java.util.Map<?, ?>) value).size()
+                    + ",identity=" + System.identityHashCode(value) + ")";
+        }
+        if (value instanceof java.util.Collection) {
+            return value.getClass().getName() + "(size=" + ((java.util.Collection<?>) value).size()
+                    + ",identity=" + System.identityHashCode(value) + ")";
+        }
+        return value.getClass().getName() + "(identity=" + System.identityHashCode(value) + ")";
     }
 
     private static void hookConstructors(ClassLoader classLoader) throws ClassNotFoundException {
