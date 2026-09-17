@@ -150,6 +150,10 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
             }
 
             try {
+                long startedAt = System.nanoTime();
+                Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_CALLING np1=" + identity(np1)
+                        + " promptLength=" + prompt.length());
+
                 XposedHelpers.callStaticMethod(
                         np1.getClass(),
                         "V",
@@ -163,6 +167,9 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                         liveSearch,
                         false);
 
+                long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L;
+                Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_RETURNED np1=" + identity(np1)
+                        + " elapsedMs=" + elapsedMs);
                 Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_STARTED np1=" + identity(np1)
                         + " promptLength=" + prompt.length());
                 writer.println(ok().toString());
