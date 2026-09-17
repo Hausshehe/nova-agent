@@ -11,6 +11,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -18,12 +19,15 @@ import java.util.concurrent.Executors
 object BridgeServer {
     private const val TAG = "NovaBridgeServer"
     private const val PORT = 18765
+    private const val DEEPSEEK_NATIVE_PORT = 18766
     private const val PACKAGE = "com.hausshehe.nova"
     private const val START_RETRIES = 20
     private const val RETRY_DELAY_MS = 250L
     private const val LAUNCH_WAIT_MS = 3000L
     private const val OBSERVATION_POLL_MS = 100L
     private const val ACTION_CHANGE_TIMEOUT_MS = 2000L
+    private const val DEEPSEEK_CONNECT_TIMEOUT_MS = 1000
+    private const val DEEPSEEK_READ_TIMEOUT_MS = 3000
     private val executor = Executors.newCachedThreadPool()
     @Volatile private var started = false
 
@@ -71,6 +75,7 @@ object BridgeServer {
                     "observe" -> observe()
                     "health" -> health()
                     "deepseek_event" -> deepSeekEvent(request)
+                    "deepseek_native_prompt" -> deepSeekNativePrompt(request)
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
@@ -101,6 +106,29 @@ object BridgeServer {
         return JSONObject().apply {
             put("ok", true)
             put("accepted", true)
+        }
+    }
+
+    private fun deepSeekNativePrompt(request: JSONObject): JSONObject {
+        val prompt = request.optString("prompt", "")
+        if (prompt.isBlank()) return error("prompt is required")
+        if (prompt.length > 12000) return error("prompt too long")
+
+        return try {
+            Socket().use { socket ->
+                socket.connect(
+                    InetSocketAddress("127.0.0.1", DEEPSEEK_NATIVE_PORT),
+                    DEEPSEEK_CONNECT_TIMEOUT_MS,
+                )
+                socket.soTimeout = DEEPSEEK_READ_TIMEOUT_MS
+                val writer = PrintWriter(socket.getOutputStream(), true)
+                writer.println(request.toString())
+                val responseLine = BufferedReader(InputStreamReader(socket.getInputStream())).readLine()
+                    ?: return error("DeepSeek native bridge returned no response")
+                JSONObject(responseLine)
+            }
+        } catch (e: Exception) {
+            error("DeepSeek native bridge unavailable: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
