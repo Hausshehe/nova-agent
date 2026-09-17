@@ -309,6 +309,8 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 int id = XposedHelpers.getIntField(fragment, "b");
                 String text = String.valueOf(XposedHelpers.callMethod(fragment, "g"));
 
+                activeResponseId = id;
+
                 if ("APPEND".equals(operation)) {
                     RESPONSE_COLLECTOR.append(type, id, text);
                 } else {
@@ -368,9 +370,6 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 if (!"response/status".equals(payload.optString("p"))
                         || !"SET".equals(payload.optString("o"))
                         || !"FINISHED".equals(payload.optString("v"))) {
-                    if ("ready".equals(first)) {
-                        activeResponseId = payload.optInt("response_message_id", -1);
-                    }
                     return;
                 }
 
@@ -394,18 +393,15 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
                 Object request = param.args.length > 0 ? param.args[0] : null;
                 Object timeout = param.args.length > 1 ? param.args[1] : null;
                 if (request == null) {
-                    Log.i(TAG, "DEEPSEEK_REQUEST_ENTRY request=null timeout=" + timeout);
                     return;
                 }
 
                 Log.i(TAG, "DEEPSEEK_REQUEST_ENTRY requestClass="
                         + request.getClass().getName()
-                        + " receiverClass="
-                        + (param.thisObject == null ? "null" : param.thisObject.getClass().getName())
                         + " timeout=" + timeout
-                        + " " + fieldSummary(request));
+                        + " fields=" + fieldSummary(request));
             } catch (Throwable t) {
-                Log.e(TAG, "DEEPSEEK_REQUEST_ENTRY_LOG_FAILED", t);
+                Log.e(TAG, "DEEPSEEK_REQUEST_HOOK_FAILED", t);
             }
         }
     }
@@ -415,43 +411,11 @@ public final class DeepSeekHookProbe implements IXposedHookLoadPackage {
         protected void afterHookedMethod(MethodHookParam param) {
             try {
                 Object request = param.thisObject;
-                StringBuilder args = new StringBuilder();
-                for (int index = 0; index < param.args.length; index++) {
-                    if (index > 0) {
-                        args.append(',');
-                    }
-                    Object value = param.args[index];
-                    args.append(index).append('=')
-                            .append(value == null ? "null" : value.getClass().getName());
-                }
                 Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTED class="
                         + request.getClass().getName()
-                        + " argTypes=[" + args + "] "
-                        + fieldSummary(request));
-
-                StackTraceElement[] stack = new Throwable().getStackTrace();
-                StringBuilder callerTrace = new StringBuilder();
-                int emitted = 0;
-                for (StackTraceElement frame : stack) {
-                    String className = frame.getClassName();
-                    if (className.equals(DeepSeekHookProbe.class.getName())
-                            || className.startsWith("de.robv.android.xposed.")) {
-                        continue;
-                    }
-                    if (emitted > 0) {
-                        callerTrace.append(" <- ");
-                    }
-                    callerTrace.append(className)
-                            .append('#').append(frame.getMethodName())
-                            .append(':').append(frame.getLineNumber());
-                    emitted++;
-                    if (emitted >= 8) {
-                        break;
-                    }
-                }
-                Log.i(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_CALLERS " + callerTrace);
+                        + " fields=" + fieldSummary(request));
             } catch (Throwable t) {
-                Log.e(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_LOG_FAILED", t);
+                Log.e(TAG, "DEEPSEEK_REQUEST_CONSTRUCTION_HOOK_FAILED", t);
             }
         }
     }
