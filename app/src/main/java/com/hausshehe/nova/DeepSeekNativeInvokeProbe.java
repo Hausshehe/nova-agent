@@ -116,12 +116,15 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
             BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream()));
             PrintWriter writer = new PrintWriter(s.getOutputStream(), true);
             String line = reader.readLine();
+            Log.i(TAG, "DEEPSEEK_NATIVE_CONTROL_REQUEST_RECEIVED hasLine=" + (line != null));
             if (line == null || line.length() == 0) {
                 writer.println(error("empty request").toString());
                 return;
             }
 
             JSONObject request = new JSONObject(line);
+            Log.i(TAG, "DEEPSEEK_NATIVE_CONTROL_COMMAND_PARSED command="
+                    + request.optString("command"));
             if (!"deepseek_native_prompt".equals(request.optString("command"))) {
                 writer.println(error("unknown command").toString());
                 return;
