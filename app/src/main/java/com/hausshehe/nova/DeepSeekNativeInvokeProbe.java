@@ -94,7 +94,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                     CONTROL_PORT, 16, InetAddress.getByName("127.0.0.1"))) {
                 while (true) {
                     final Socket socket = server.accept();
-                    Thread client = new Thread(() -> handleControl(socket, cl), "NovaDeepSeekNativeClient");
+                    Thread client = new Thread(() -> handleControl(socket), "NovaDeepSeekNativeClient");
                     client.setDaemon(true);
                     client.start();
                 }
@@ -106,7 +106,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         serverThread.start();
     }
 
-    private static void handleControl(Socket socket, ClassLoader cl) {
+    private static void handleControl(Socket socket) {
         try (Socket s = socket) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream()));
             PrintWriter writer = new PrintWriter(s.getOutputStream(), true);
@@ -156,7 +156,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
 
                 Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_STARTED np1=" + identity(np1)
                         + " promptLength=" + prompt.length());
-                writer.println(new JSONObject().put("ok", true).put("accepted", true).toString());
+                writer.println(ok().toString());
             } catch (Throwable t) {
                 Log.e(TAG, "DEEPSEEK_NATIVE_INVOKE_FAILED", t);
                 writer.println(error("native invocation failed: " + t.getClass().getSimpleName()).toString());
@@ -166,8 +166,24 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         }
     }
 
+    private static JSONObject ok() {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("ok", true);
+            result.put("accepted", true);
+        } catch (Throwable ignored) {
+        }
+        return result;
+    }
+
     private static JSONObject error(String message) {
-        return new JSONObject().put("ok", false).put("error", message);
+        JSONObject result = new JSONObject();
+        try {
+            result.put("ok", false);
+            result.put("error", message);
+        } catch (Throwable ignored) {
+        }
+        return result;
     }
 
     private static String identity(Object value) {
