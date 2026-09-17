@@ -42,12 +42,30 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 + " process=" + lpparam.processName);
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         try {
+            hookAppLifecycle(lpparam.classLoader);
             hookSessionResolution(lpparam.classLoader);
             startControlServer(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_BRIDGE_INSTALLED port=" + CONTROL_PORT);
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_NATIVE_INVOKE_BRIDGE_FAILED", t);
         }
+    }
+
+    private static void hookAppLifecycle(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> app = XposedHelpers.findClass("com.deepseek.chat.App", cl);
+        XposedHelpers.findAndHookMethod(app, "onCreate", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                Log.i(TAG, "DEEPSEEK_APP_ONCREATE_ENTER process="
+                        + android.app.Application.getProcessName());
+            }
+
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                Log.i(TAG, "DEEPSEEK_APP_ONCREATE_EXIT");
+            }
+        });
+        Log.i(TAG, "DEEPSEEK_APP_LIFECYCLE_HOOK_INSTALLED class=com.deepseek.chat.App method=onCreate");
     }
 
     private static void hookSessionResolution(ClassLoader cl) throws ClassNotFoundException {
