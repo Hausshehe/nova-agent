@@ -10,8 +10,6 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -21,24 +19,22 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 /**
  * Controlled native completion bridge for DeepSeek.
  *
- * A real DeepSeek send is used only to capture the live session context. The
- * actual native completion is invoked only after Nova sends a command over the
- * loopback control socket. No prompt content is logged.
+ * Nova enters DeepSeek's own higher-level session/send path instead of calling
+ * the lower-level V() method with a previously warmed xr. DeepSeek therefore
+ * retains ownership of session-state checks, bootstrap/recovery decisions, and
+ * the native completion machinery.
  */
 public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
     private static final String TARGET_PACKAGE = "com.deepseek.chat";
     private static final int CONTROL_PORT = 18766;
     private static final int MAX_PROMPT_LENGTH = 12000;
+    private static final int U_DEFAULT_MASK = 0x4c;
 
     public DeepSeekNativeInvokeProbe() {
     }
 
     private static volatile Object liveNp1;
-    private static volatile Object liveXr;
-    private static volatile Object liveSv8;
-    private static volatile boolean liveThinking;
-    private static volatile boolean liveSearch;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -62,7 +58,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         Class<?> yg2 = XposedHelpers.findClass("yg2", cl);
 
         XposedHelpers.findAndHookMethod(
-                b18, "v", xr, String.class, Integer.class, List.class,
+                b18, "v", xr, String.class, Integer.class, java.util.List.class,
                 boolean.class, boolean.class, String.class, sv8, ew1, yg2,
                 new XC_MethodHook() {
                     @Override
@@ -75,18 +71,11 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                         }
 
                         try {
-                            Object np1 = XposedHelpers.getObjectField(context, "i");
-                            liveNp1 = np1;
-                            liveXr = param.args[0];
-                            liveSv8 = param.args[7];
-                            liveThinking = ((Boolean) param.args[4]).booleanValue();
-                            liveSearch = ((Boolean) param.args[5]).booleanValue();
-                            Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED np1=" + identity(np1)
-                                    + " thinking=" + liveThinking + " search=" + liveSearch);
+                            liveNp1 = XposedHelpers.getObjectField(context, "i");
+                            Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED np1=" + identity(liveNp1)
+                                    + " thinking=" + param.args[4] + " search=" + param.args[5]);
                         } catch (Throwable t) {
                             liveNp1 = null;
-                            liveXr = null;
-                            liveSv8 = null;
                             Log.e(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURE_FAILED", t);
                         }
                     }
@@ -142,40 +131,40 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
             }
 
             Object np1 = liveNp1;
-            Object xr = liveXr;
-            Object sv8 = liveSv8;
-            if (np1 == null || xr == null) {
-                writer.println(error("DeepSeek native session context is not ready; send one normal DeepSeek message first").toString());
+            if (np1 == null) {
+                writer.println(error("DeepSeek native session object is not ready").toString());
                 return;
             }
 
             try {
+                Object refs = XposedHelpers.callMethod(
+                        XposedHelpers.callMethod(
+                                XposedHelpers.callMethod(np1, "Q"), "l"), "a");
+                Object nativeN1 = XposedHelpers.callMethod(refs, "k");
+
                 long startedAt = System.nanoTime();
-                Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_CALLING np1=" + identity(np1)
-                        + " promptLength=" + prompt.length());
+                Log.i(TAG, "DEEPSEEK_NATIVE_U_CALLING np1=" + identity(np1)
+                        + " n1=" + identity(nativeN1)
+                        + " promptLength=" + prompt.length()
+                        + " mask=" + U_DEFAULT_MASK);
 
                 XposedHelpers.callStaticMethod(
                         np1.getClass(),
-                        "V",
+                        "U",
                         np1,
                         prompt,
-                        new ArrayList<>(),
+                        nativeN1,
                         null,
-                        sv8,
-                        xr,
-                        liveThinking,
-                        liveSearch,
-                        false);
+                        false,
+                        U_DEFAULT_MASK);
 
                 long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L;
-                Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_RETURNED np1=" + identity(np1)
+                Log.i(TAG, "DEEPSEEK_NATIVE_U_RETURNED np1=" + identity(np1)
                         + " elapsedMs=" + elapsedMs);
-                Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_STARTED np1=" + identity(np1)
-                        + " promptLength=" + prompt.length());
                 writer.println(ok().toString());
             } catch (Throwable t) {
-                Log.e(TAG, "DEEPSEEK_NATIVE_INVOKE_FAILED", t);
-                writer.println(error("native invocation failed: " + t.getClass().getSimpleName()).toString());
+                Log.e(TAG, "DEEPSEEK_NATIVE_U_FAILED", t);
+                writer.println(error("native U invocation failed: " + t.getClass().getSimpleName()).toString());
             }
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_NATIVE_CONTROL_REQUEST_FAILED", t);
