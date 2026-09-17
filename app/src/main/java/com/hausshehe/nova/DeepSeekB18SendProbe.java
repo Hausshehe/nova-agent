@@ -2,6 +2,8 @@ package com.hausshehe.nova;
 
 import android.util.Log;
 
+import java.lang.reflect.Field;
+
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -93,6 +95,7 @@ public final class DeepSeekB18SendProbe implements IXposedHookLoadPackage {
                 Log.i(TAG, line.toString());
 
                 if (realSend) {
+                    logXrFields(xr);
                     StackTraceElement[] stack = Thread.currentThread().getStackTrace();
                     StringBuilder callers = new StringBuilder("DEEPSEEK_B18_SEND_CALLERS");
                     int emitted = 0;
@@ -119,6 +122,54 @@ public final class DeepSeekB18SendProbe implements IXposedHookLoadPackage {
                 Log.e(TAG, "DEEPSEEK_B18_SEND_PROBE_FAILED", t);
             }
         }
+    }
+
+    private static void logXrFields(Object xr) {
+        if (xr == null) {
+            Log.i(TAG, "DEEPSEEK_XR_FIELDS null");
+            return;
+        }
+        try {
+            Field[] fields = xr.getClass().getDeclaredFields();
+            StringBuilder line = new StringBuilder("DEEPSEEK_XR_FIELDS")
+                    .append(" xrIdentity=").append(identity(xr));
+            for (Field field : fields) {
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(xr);
+                    line.append(' ')
+                            .append(field.getName()).append('=')
+                            .append(describeFieldValue(value));
+                } catch (Throwable t) {
+                    line.append(' ').append(field.getName()).append("=<unreadable:")
+                            .append(t.getClass().getSimpleName()).append('>');
+                }
+            }
+            Log.i(TAG, line.toString());
+        } catch (Throwable t) {
+            Log.e(TAG, "DEEPSEEK_XR_FIELDS_FAILED", t);
+        }
+    }
+
+    private static String describeFieldValue(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        if (value instanceof String) {
+            return "String(length=" + ((String) value).length() + ")";
+        }
+        if (value instanceof Number || value instanceof Boolean || value instanceof Character) {
+            return value.getClass().getSimpleName() + "(" + value + ")";
+        }
+        if (value instanceof java.util.Map) {
+            return className(value) + "(size=" + ((java.util.Map<?, ?>) value).size()
+                    + ",identity=" + identity(value) + ")";
+        }
+        if (value instanceof java.util.Collection) {
+            return className(value) + "(size=" + ((java.util.Collection<?>) value).size()
+                    + ",identity=" + identity(value) + ")";
+        }
+        return className(value) + "(identity=" + identity(value) + ")";
     }
 
     private static String className(Object value) {
