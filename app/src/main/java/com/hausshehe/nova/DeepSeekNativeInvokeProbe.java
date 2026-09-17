@@ -112,6 +112,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     }
 
     private static void handleControl(Socket socket) {
+        Log.i(TAG, "DEEPSEEK_NATIVE_CONTROL_HANDLER_ENTERED");
         try (Socket s = socket) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream()));
             PrintWriter writer = new PrintWriter(s.getOutputStream(), true);
