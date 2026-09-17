@@ -15,7 +15,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * It does not invoke or modify DeepSeek requests.
  *
  * G11 additionally traces construction of the native request-context helper
- * objects (sv8/ew1/yg2/ap1), and now records the fresh xr field state when the
+ * objects (sv8/ew1/yg2/ap1), and records the fresh xr field state when the
  * live kk1 is resolved. Only metadata, sizes, identities and primitive values
  * are logged, never string contents.
  */
@@ -49,8 +49,9 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
+                            Object kk1 = null;
                             try {
-                                Object kk1 = param.getResult();
+                                kk1 = param.getResult();
                                 if (kk1 == null || !"kk1".equals(kk1.getClass().getName())) {
                                     return;
                                 }
@@ -77,11 +78,32 @@ public final class DeepSeekKk1SessionProbe implements IXposedHookLoadPackage {
                                                 + " b18Identity=" + (b18 == null ? -1 : System.identityHashCode(b18)));
 
                                 if (np1 != null) {
-                                    Object xr = XposedHelpers.callMethod(np1, "M");
-                                    logXrFields(xr, "DEEPSEEK_FRESH_XR_FIELDS");
+                                    try {
+                                        Log.i(TAG, "DEEPSEEK_KK1_XR_RESOLVE_BEGIN"
+                                                + " np1Identity=" + System.identityHashCode(np1));
+                                        Object xr = XposedHelpers.callMethod(np1, "M");
+                                        Log.i(TAG, "DEEPSEEK_KK1_XR_RESOLVE_RESULT"
+                                                + " np1Identity=" + System.identityHashCode(np1)
+                                                + " xrClass=" + (xr == null ? "null" : xr.getClass().getName())
+                                                + " xrIdentity=" + (xr == null ? -1 : System.identityHashCode(xr)));
+                                        try {
+                                            logXrFields(xr, "DEEPSEEK_FRESH_XR_FIELDS");
+                                            Log.i(TAG, "DEEPSEEK_KK1_XR_FIELD_DUMP_DONE"
+                                                    + " xrIdentity=" + (xr == null ? -1 : System.identityHashCode(xr)));
+                                        } catch (Throwable dumpError) {
+                                            Log.e(TAG, "DEEPSEEK_KK1_XR_FIELD_DUMP_FAILED"
+                                                    + " xrIdentity=" + (xr == null ? -1 : System.identityHashCode(xr)), dumpError);
+                                        }
+                                    } catch (Throwable resolveError) {
+                                        Log.e(TAG, "DEEPSEEK_KK1_XR_RESOLVE_FAILED"
+                                                + " np1Identity=" + System.identityHashCode(np1), resolveError);
+                                    }
+                                } else {
+                                    Log.i(TAG, "DEEPSEEK_KK1_XR_RESOLVE_SKIPPED reason=np1_null");
                                 }
                             } catch (Throwable t) {
-                                Log.e(TAG, "DEEPSEEK_KK1_SESSION_CHAIN_FAILED", t);
+                                Log.e(TAG, "DEEPSEEK_KK1_SESSION_CHAIN_FAILED"
+                                        + " kk1Identity=" + (kk1 == null ? -1 : System.identityHashCode(kk1)), t);
                             }
                         }
                     });
