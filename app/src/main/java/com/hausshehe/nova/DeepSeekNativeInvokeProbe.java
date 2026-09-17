@@ -42,7 +42,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 + " process=" + lpparam.processName);
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         try {
-            hookRealB18Send(lpparam.classLoader);
+            hookSessionResolution(lpparam.classLoader);
             startControlServer(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_BRIDGE_INSTALLED port=" + CONTROL_PORT);
         } catch (Throwable t) {
@@ -50,36 +50,37 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         }
     }
 
-    private static void hookRealB18Send(ClassLoader cl) {
-        Class<?> b18 = XposedHelpers.findClass("b18", cl);
-        Class<?> xr = XposedHelpers.findClass("xr", cl);
-        Class<?> sv8 = XposedHelpers.findClass("sv8", cl);
-        Class<?> ew1 = XposedHelpers.findClass("ew1", cl);
-        Class<?> yg2 = XposedHelpers.findClass("yg2", cl);
+    private static void hookSessionResolution(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> x05 = XposedHelpers.findClass("x05", cl);
+        Class<?> p35 = XposedHelpers.findClass("p35", cl);
+        Class<?> f5a = XposedHelpers.findClass("f5a", cl);
+        Class<?> pj2 = XposedHelpers.findClass("pj2", cl);
+        Class<?> g48 = XposedHelpers.findClass("g48", cl);
+        Class<?> kx3 = XposedHelpers.findClass("kx3", cl);
 
         XposedHelpers.findAndHookMethod(
-                b18, "v", xr, String.class, Integer.class, java.util.List.class,
-                boolean.class, boolean.class, String.class, sv8, ew1, yg2,
+                x05, "K0", p35, f5a, String.class, pj2, g48, kx3,
                 new XC_MethodHook() {
                     @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        Object prompt = param.args[1];
-                        Object context = param.args[9];
-                        if (!(prompt instanceof String) || ((String) prompt).length() == 0
-                                || context == null || !"ap1".equals(context.getClass().getSimpleName())) {
-                            return;
-                        }
-
+                    protected void afterHookedMethod(MethodHookParam param) {
                         try {
-                            liveNp1 = XposedHelpers.getObjectField(context, "i");
-                            Log.i(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURED np1=" + identity(liveNp1)
-                                    + " thinking=" + param.args[4] + " search=" + param.args[5]);
+                            Object kk1 = param.getResult();
+                            if (kk1 == null || !"kk1".equals(kk1.getClass().getName())) return;
+
+                            Object d = XposedHelpers.getObjectField(kk1, "d");
+                            Object zj1 = d == null ? null : XposedHelpers.callMethod(d, "getValue");
+                            Object np1 = zj1 == null ? null : XposedHelpers.getObjectField(zj1, "c");
+                            if (np1 != null && "np1".equals(np1.getClass().getName())) {
+                                liveNp1 = np1;
+                                Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_RESOLVED np1=" + identity(np1)
+                                        + " kk1=" + identity(kk1));
+                            }
                         } catch (Throwable t) {
-                            liveNp1 = null;
-                            Log.e(TAG, "DEEPSEEK_NATIVE_CONTEXT_CAPTURE_FAILED", t);
+                            Log.e(TAG, "DEEPSEEK_NATIVE_SESSION_RESOLVE_FAILED", t);
                         }
                     }
                 });
+        Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_HOOK_INSTALLED class=x05 method=K0");
     }
 
     private static void startControlServer(final ClassLoader cl) {
@@ -137,10 +138,10 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
             }
 
             try {
-                Object refs = XposedHelpers.callMethod(
-                        XposedHelpers.callMethod(
-                                XposedHelpers.callMethod(np1, "Q"), "l"), "a");
-                Object nativeN1 = XposedHelpers.callMethod(refs, "k");
+                Object be1 = XposedHelpers.callMethod(np1, "Q");
+                Object lr1 = XposedHelpers.callMethod(be1, "l");
+                Object it8 = XposedHelpers.getObjectField(lr1, "a");
+                Object nativeN1 = XposedHelpers.callMethod(it8, "k");
 
                 long startedAt = System.nanoTime();
                 Log.i(TAG, "DEEPSEEK_NATIVE_U_CALLING np1=" + identity(np1)
