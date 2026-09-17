@@ -42,6 +42,8 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        Log.i(TAG, "DEEPSEEK_NATIVE_LPPARAM_RECEIVED package=" + lpparam.packageName
+                + " process=" + lpparam.processName);
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         try {
             hookRealB18Send(lpparam.classLoader);
