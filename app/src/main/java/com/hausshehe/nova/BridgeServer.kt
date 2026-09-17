@@ -28,7 +28,13 @@ object BridgeServer {
     private const val ACTION_CHANGE_TIMEOUT_MS = 2000L
     private const val DEEPSEEK_CONNECT_TIMEOUT_MS = 1000
     private const val DEEPSEEK_READ_TIMEOUT_MS = 3000
+    private const val DEEPSEEK_RESPONSE_TIMEOUT_MS = 30000L
     private val executor = Executors.newCachedThreadPool()
+    private val deepSeekResponseLock = Object()
+    private var deepSeekResponseActive = false
+    private var deepSeekResponseFinished = false
+    private var deepSeekResponseText = ""
+    private var deepSeekResponseError: String? = null
     @Volatile private var started = false
 
     @Synchronized
@@ -102,7 +108,29 @@ object BridgeServer {
         val id = request.optInt("id", -1)
         val delta = request.optString("delta", "")
         val text = request.optString("text", "")
-        Log.i(TAG, "DEEPSEEK_BRIDGE_EVENT event=$event type=$type id=$id delta=$delta length=${text.length}")
+        synchronized(deepSeekResponseLock) {
+            if (deepSeekResponseActive) {
+                when (event) {
+                    "started" -> {
+                        deepSeekResponseText = ""
+                        deepSeekResponseFinished = false
+                        deepSeekResponseError = null
+                    }
+                    "delta" -> deepSeekResponseText += delta
+                    "replaced" -> deepSeekResponseText = text
+                    "finished" -> {
+                        if (text.isNotEmpty()) deepSeekResponseText = text
+                        deepSeekResponseFinished = true
+                        deepSeekResponseLock.notifyAll()
+                    }
+                }
+            }
+        }
+        Log.i(
+            TAG,
+            "DEEPSEEK_BRIDGE_EVENT event=$event type=$type id=$id " +
+                "deltaLength=${delta.length} textLength=${text.length}"
+        )
         return JSONObject().apply {
             put("ok", true)
             put("accepted", true)
@@ -114,7 +142,15 @@ object BridgeServer {
         if (prompt.isBlank()) return error("prompt is required")
         if (prompt.length > 12000) return error("prompt too long")
 
-        return try {
+        synchronized(deepSeekResponseLock) {
+            if (deepSeekResponseActive) return error("DeepSeek native response already in progress")
+            deepSeekResponseActive = true
+            deepSeekResponseFinished = false
+            deepSeekResponseText = ""
+            deepSeekResponseError = null
+        }
+
+        val accepted = try {
             Socket().use { socket ->
                 socket.connect(
                     InetSocketAddress("127.0.0.1", DEEPSEEK_NATIVE_PORT),
@@ -124,11 +160,49 @@ object BridgeServer {
                 val writer = PrintWriter(socket.getOutputStream(), true)
                 writer.println(request.toString())
                 val responseLine = BufferedReader(InputStreamReader(socket.getInputStream())).readLine()
-                    ?: return error("DeepSeek native bridge returned no response")
-                JSONObject(responseLine)
+                    ?: return error("DeepSeek native bridge returned no response").also { clearDeepSeekResponseState() }
+                val nativeResponse = JSONObject(responseLine)
+                if (!nativeResponse.optBoolean("accepted", false)) {
+                    clearDeepSeekResponseState()
+                }
+                nativeResponse
             }
         } catch (e: Exception) {
-            error("DeepSeek native bridge unavailable: ${e.message ?: e.javaClass.simpleName}")
+            clearDeepSeekResponseState()
+            return error("DeepSeek native bridge unavailable: ${e.message ?: e.javaClass.simpleName}")
+        }
+
+        if (!accepted.optBoolean("accepted", false)) return accepted
+
+        val completed = synchronized(deepSeekResponseLock) {
+            val deadline = System.currentTimeMillis() + DEEPSEEK_RESPONSE_TIMEOUT_MS
+            while (!deepSeekResponseFinished && deepSeekResponseError == null) {
+                val remaining = deadline - System.currentTimeMillis()
+                if (remaining <= 0L) break
+                deepSeekResponseLock.wait(remaining)
+            }
+            if (deepSeekResponseFinished) {
+                JSONObject().apply {
+                    put("ok", true)
+                    put("accepted", true)
+                    put("completed", true)
+                    put("text", deepSeekResponseText)
+                }
+            } else {
+                error(deepSeekResponseError ?: "DeepSeek native response timed out")
+            }
+        }
+        clearDeepSeekResponseState()
+        return completed
+    }
+
+    private fun clearDeepSeekResponseState() {
+        synchronized(deepSeekResponseLock) {
+            deepSeekResponseActive = false
+            deepSeekResponseFinished = false
+            deepSeekResponseText = ""
+            deepSeekResponseError = null
+            deepSeekResponseLock.notifyAll()
         }
     }
 
