@@ -31,6 +31,9 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final int CONTROL_PORT = 18766;
     private static final int MAX_PROMPT_LENGTH = 12000;
 
+    public DeepSeekNativeInvokeProbe() {
+    }
+
     private static volatile Object liveNp1;
     private static volatile Object liveXr;
     private static volatile Object liveSv8;
