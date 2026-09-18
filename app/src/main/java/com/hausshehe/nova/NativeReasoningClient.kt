@@ -17,7 +17,7 @@ class NativeReasoningClient(
     private val host: String = "127.0.0.1",
     private val port: Int = 18765,
     private val timeoutMs: Int = 40000,
-) {
+) : ReasoningProvider {
     fun complete(prompt: String): String {
         require(prompt.isNotBlank()) { "reasoning prompt must not be blank" }
 
