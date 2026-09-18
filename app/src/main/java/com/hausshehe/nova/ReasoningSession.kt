@@ -98,6 +98,27 @@ class ReasoningSession(
                 If the goal is not yet satisfied, choose the single next action.
                 If the goal appears satisfied, still do not claim completion here;
                 Nova will run a separate verification turn.
+
+                Follow explicit procedural constraints in the goal literally, not
+                just the final desired label. If the goal says "scroll", "scroll
+                down until", "navigate to", or similar, that required transition
+                must actually be performed before treating a visible target as
+                the requested result. Do not skip an explicitly required
+                intermediate step merely because a similarly named control is
+                already visible.
+
+                Distinguish content/feed sections from persistent navigation
+                controls. When a goal says to find a section by scrolling, a
+                persistent bottom navigation tab with the same label is not the
+                section found by scrolling. Do not substitute a navigation tab
+                for a content section unless the goal explicitly asks for the
+                tab or navigation destination.
+
+                For goals with ordered steps, preserve their order. Do not
+                perform a later step before the required earlier transition has
+                actually happened. Use recent outcomes together with the current
+                observation to determine which required steps have already been
+                executed, and replan from the fresh observation after each action.
                 """.trimIndent()
             }
 
