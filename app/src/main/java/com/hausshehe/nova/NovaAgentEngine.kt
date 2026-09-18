@@ -38,6 +38,12 @@ private data class AgentExecution(
     val error: String? = null,
 )
 
+private data class GoalVerification(
+    val complete: Boolean,
+    val evidenceIds: List<String>,
+    val reason: String,
+)
+
 class NovaAgentEngine(
     private val context: Context,
     private val maxSteps: Int = 24,
@@ -166,7 +172,10 @@ class NovaAgentEngine(
                 }
             }
 
-            if (isGoalComplete(goal, after, state)) {
+            val verified = isGoalComplete(goal, after, state) ||
+                verifyGoalWithDeepSeek(goal, after)
+
+            if (verified) {
                 onProgress(
                     NovaAgentProgress(
                         steps = attempts,
@@ -232,6 +241,87 @@ class NovaAgentEngine(
         """.trimIndent() + "\n" + root.toString()
     }
 
+    private fun verifyGoalWithDeepSeek(
+        goal: String,
+        state: UiSnapshot,
+    ): Boolean {
+        return try {
+            val verification = parseVerification(
+                client.complete(buildVerificationPrompt(goal, state)),
+                state,
+            )
+            verification.complete
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun buildVerificationPrompt(
+        goal: String,
+        state: UiSnapshot,
+    ): String {
+        return """
+            You are Nova's goal-verification engine.
+
+            Decide whether the user goal is ALREADY satisfied by the CURRENT
+            Android observation. Do not suggest another action. Do not rely on
+            memory of previous screens except for the task goal itself.
+
+            Return complete=true only when the visible current state provides
+            concrete evidence that the requested goal is satisfied. If there
+            is meaningful uncertainty, return complete=false.
+
+            Evidence must reference only element ids present in the current
+            observation. Never invent ids. A completion decision with no valid
+            visible evidence ids is invalid.
+
+            Return JSON only:
+            {
+              "complete": true | false,
+              "evidence_ids": ["current element id", "..."],
+              "reason": "brief explanation"
+            }
+
+            GOAL:
+        """.trimIndent() + "
+" + goal + "
+
+CURRENT_STATE:
+" + statePayload(state).toString()
+    }
+
+    private fun parseVerification(
+        raw: String,
+        state: UiSnapshot,
+    ): GoalVerification {
+        val json = extractObject(raw)
+        val complete = json.optBoolean("complete", false)
+        val evidence = json.optJSONArray("evidence_ids")
+        val ids = mutableListOf<String>()
+
+        if (evidence != null) {
+            for (index in 0 until evidence.length()) {
+                val id = evidence.optString(index, "").trim()
+                if (id.isNotBlank() && state.elements.any { it.id == id && it.visible }) {
+                    ids.add(id)
+                }
+            }
+        }
+
+        if (complete && ids.isEmpty()) {
+            return GoalVerification(
+                false,
+                emptyList(),
+                "completion claim lacked valid visible evidence",
+            )
+        }
+
+        return GoalVerification(
+            complete = complete,
+            evidenceIds = ids,
+            reason = json.optString("reason", "").take(240),
+        )
+    }
     private fun statePayload(state: UiSnapshot): JSONObject {
         val root = JSONObject().apply {
             put("package", state.packageName)
