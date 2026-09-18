@@ -52,12 +52,11 @@ class NovaAgentEngine(
 ) {
     private val invalidDecisionBudget = 3
     private val recentOutcomes = ArrayDeque<String>()
-    private val reasoningSession: ReasoningSession by lazy {
+    private var reasoningSession: ReasoningSession =
         ReasoningSessionRegistry.session(
             sessionId ?: "engine-" + System.identityHashCode(this),
             client,
         )
-    }
 
     fun run(
         goal: String,
@@ -134,7 +133,7 @@ class NovaAgentEngine(
 
             state = ObservationStore.current()
             val raw = try {
-                reasoningSession.complete(buildReasoningPrompt(goal, state))
+                completeReasoning(buildReasoningPrompt(goal, state), goal, state, "action")
             } catch (t: Throwable) {
                 return NovaAgentRunResult(
                     false,
@@ -245,6 +244,47 @@ class NovaAgentEngine(
             CURRENT_CONTEXT:
         """.trimIndent() + "\n" + root.toString()
     }
+
+    private fun completeReasoning(prompt: String, goal: String, state: UiSnapshot, mode: String): String {
+        return try {
+            reasoningSession.complete(prompt)
+        } catch (t: ReasoningSession.RateLimitExhaustedException) {
+            val id = sessionId ?: "engine-" + System.identityHashCode(this)
+            reasoningSession = ReasoningSessionRegistry.replace(id, client)
+            reasoningSession.complete(
+                buildRateLimitHandoffPrompt(goal, state, mode, prompt)
+            )
+        }
+    }
+
+    private fun buildRateLimitHandoffPrompt(
+        goal: String,
+        state: UiSnapshot,
+        mode: String,
+        originalPrompt: String,
+    ): String =
+        """
+        NEW REASONING SESSION HANDOFF
+
+        The previous Nova reasoning session was temporarily rate limited.
+        Continue the same task from the current Android state below.
+
+        GOAL:
+        $goal
+
+        CURRENT MODE:
+        $mode
+
+        IMPORTANT:
+        - Treat the current Android observation as authoritative.
+        - Do not assume any action succeeded unless the current observation supports it.
+        - Preserve the goal's explicit procedural and ordered steps.
+        - Continue from the current state; do not restart completed work without evidence.
+        - Return exactly the output required by the task below.
+
+        ORIGINAL REQUEST:
+        $originalPrompt
+        """.trimIndent()
 
     private fun verifyGoalWithDeepSeek(
         goal: String,
