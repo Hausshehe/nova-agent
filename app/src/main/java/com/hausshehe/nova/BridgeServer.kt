@@ -300,11 +300,12 @@ object BridgeServer {
         }
     }
 
-    private fun agentStatus(context: Context): JSONObject = JSONObject().apply {
-        put("ok", true)
-        put("task", TaskStore.snapshotJson(context).opt("task").let { value ->
-            if (value == null || value == JSONObject.NULL) JSONObject.NULL else TaskStore.snapshotJson(context)
-        })
+    private fun agentStatus(context: Context): JSONObject {
+        val task = TaskStore.get(context)
+        return JSONObject().apply {
+            put("ok", true)
+            put("task", if (task == null) JSONObject.NULL else TaskStore.snapshotJson(context))
+        }
     }
 
     private fun agentCancel(context: Context): JSONObject {
