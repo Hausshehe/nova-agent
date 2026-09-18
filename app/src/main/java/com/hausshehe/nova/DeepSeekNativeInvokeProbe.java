@@ -1,5 +1,6 @@
 package com.hausshehe.nova;
 
+import android.app.Activity;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -31,10 +32,11 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final int MAX_PROMPT_LENGTH = 12000;
     private static final int U_DEFAULT_MASK = 0x4c;
 
+    private static volatile Object liveNp1;
+    private static volatile Activity bootstrapActivity;
+
     public DeepSeekNativeInvokeProbe() {
     }
-
-    private static volatile Object liveNp1;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -43,6 +45,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         if (!TARGET_PACKAGE.equals(lpparam.packageName)) return;
         try {
             hookAppLifecycle(lpparam.classLoader);
+            hookMainActivity(lpparam.classLoader);
             hookSessionResolution(lpparam.classLoader);
             startControlServer(lpparam.classLoader);
             Log.i(TAG, "DEEPSEEK_NATIVE_INVOKE_BRIDGE_INSTALLED port=" + CONTROL_PORT);
@@ -66,6 +69,21 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
             }
         });
         Log.i(TAG, "DEEPSEEK_APP_LIFECYCLE_HOOK_INSTALLED class=com.deepseek.chat.App method=onCreate");
+    }
+
+    private static void hookMainActivity(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> mainActivity = XposedHelpers.findClass("com.deepseek.chat.MainActivity", cl);
+        XposedHelpers.findAndHookMethod(mainActivity, "onCreate", android.os.Bundle.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.thisObject instanceof Activity) {
+                            bootstrapActivity = (Activity) param.thisObject;
+                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_CAPTURED");
+                        }
+                    }
+                });
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_HOOK_INSTALLED class=com.deepseek.chat.MainActivity method=onCreate");
     }
 
     private static void hookSessionResolution(ClassLoader cl) throws ClassNotFoundException {
@@ -92,6 +110,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                                 liveNp1 = np1;
                                 Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_RESOLVED np1=" + identity(np1)
                                         + " kk1=" + identity(kk1));
+                                hideBootstrapActivity();
                             }
                         } catch (Throwable t) {
                             Log.e(TAG, "DEEPSEEK_NATIVE_SESSION_RESOLVE_FAILED", t);
@@ -99,6 +118,22 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                     }
                 });
         Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_HOOK_INSTALLED class=x05 method=K0");
+    }
+
+    private static void hideBootstrapActivity() {
+        final Activity activity = bootstrapActivity;
+        if (activity == null) {
+            Log.w(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_NOT_CAPTURED");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                boolean moved = activity.moveTaskToBack(true);
+                Log.i(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_HIDDEN movedToBack=" + moved);
+            } catch (Throwable t) {
+                Log.e(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_HIDE_FAILED", t);
+            }
+        });
     }
 
     private static void startControlServer(final ClassLoader cl) {
