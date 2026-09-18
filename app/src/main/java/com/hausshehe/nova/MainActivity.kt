@@ -218,7 +218,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun runAgentGoal() {
+    private fun runAgentGoal(sourcePackage: String? = null) {
         val goal = agentGoalInput.text?.toString()?.trim().orEmpty()
         if (goal.isBlank()) {
             agentStatus.text = "Enter a goal first"
@@ -227,7 +227,7 @@ class MainActivity : Activity() {
 
         val deadlineMs = parseDeadline(goal)
         try {
-            val taskIntent = NovaTaskService.intent(this, goal, deadlineMs)
+            val taskIntent = NovaTaskService.intent(this, goal, deadlineMs, sourcePackage)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(taskIntent)
             } else {
