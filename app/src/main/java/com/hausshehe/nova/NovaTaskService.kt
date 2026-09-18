@@ -109,7 +109,10 @@ class NovaTaskService : Service() {
 
             updateNotification("Working: " + task.goal.take(60))
 
-            val result = NovaAgentEngine(applicationContext).run(
+            val result = NovaAgentEngine(
+                applicationContext,
+                sessionId = task.id,
+            ).run(
                 goal = task.goal,
                 deadlineMs = task.deadlineMs,
                 shouldStop = {
@@ -138,6 +141,7 @@ class NovaTaskService : Service() {
                 if (completed != null) {
                     updateNotification("Completed: " + completed.goal.take(60))
                 }
+                ReasoningSessionRegistry.remove(task.id)
                 stopSelf()
                 return
             }
@@ -149,6 +153,7 @@ class NovaTaskService : Service() {
 
             if (result.error == "task cancelled" || latest.status == "cancelled") {
                 updateNotification("Task cancelled")
+                ReasoningSessionRegistry.remove(task.id)
                 stopSelf()
                 return
             }
