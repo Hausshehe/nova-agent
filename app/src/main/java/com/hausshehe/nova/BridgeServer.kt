@@ -286,7 +286,8 @@ object BridgeServer {
         if (goal.isBlank()) return error("goal is required")
         val deadlineMs = request.optLong("deadlineMs", 0L)
         if (deadlineMs < 0L) return error("deadlineMs must not be negative")
-        val intent = NovaTaskService.intent(context, goal, deadlineMs)
+        val task = TaskStore.startNew(context, goal, deadlineMs)
+        val intent = NovaTaskService.intent(context, goal, deadlineMs, taskId = task.id)
         return try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -294,17 +295,14 @@ object BridgeServer {
                 context.startService(intent)
             }
             val waitForResult = request.optBoolean("wait", false)
-            val taskId = waitForTaskStart(context, goal)
             if (waitForResult) {
-                if (taskId == null) {
-                    return error("Nova task did not become visible in TaskStore after start")
-                }
-                waitForTerminalTask(context, taskId, request.optLong("waitTimeoutMs", 300000L))
+                waitForTerminalTask(context, task.id, request.optLong("waitTimeoutMs", 300000L))
             } else {
                 JSONObject().apply {
                     put("ok", true)
                     put("accepted", true)
                     put("status", "running")
+                    put("taskId", task.id)
                 }
             }
         } catch (e: Throwable) {
@@ -320,16 +318,6 @@ object BridgeServer {
             return error("no active or completed task is available")
         }
         return waitForTerminalTask(context, taskId, request.optLong("waitTimeoutMs", 300000L))
-    }
-
-    private fun waitForTaskStart(context: Context, goal: String): String? {
-        val deadline = System.currentTimeMillis() + 3000L
-        while (System.currentTimeMillis() < deadline) {
-            val task = TaskStore.get(context)
-            if (task != null && task.goal == goal) return task.id
-            Thread.sleep(50L)
-        }
-        return null
     }
 
     private fun waitForTerminalTask(
