@@ -416,7 +416,16 @@ class NovaAgentEngine(
                 require(target.visible && target.enabled && target.clickable) {
                     "tap target is not visible, enabled, and clickable"
                 }
-                require(value == null) { "tap cannot carry value" }
+                // Some model/tool-call serializers attach the visible label as
+                // optional tap metadata. The observation ID remains authoritative,
+                // so accept it when it matches the selected node rather than
+                // rejecting an otherwise valid action.
+                if (value != null) {
+                    val label = (target.text + " " + target.contentDescription).trim()
+                    require(value == label || value in listOf(target.text, target.contentDescription).filter { it.isNotBlank() }) {
+                        "tap value does not match target label"
+                    }
+                }
             }
 
             "type", "input_text" -> {
@@ -437,7 +446,11 @@ class NovaAgentEngine(
                         "scroll target is not visible, enabled, and scrollable"
                     }
                 }
-                require(value == null) { "scroll cannot carry value" }
+                if (value != null) {
+                    require(value.lowercase() in setOf("up", "down", "forward", "backward")) {
+                        "scroll value must be up, down, forward, or backward"
+                    }
+                }
             }
 
             "back" -> require(targetId == null && value == null) {
@@ -509,7 +522,7 @@ class NovaAgentEngine(
             when (decision.type) {
                 "tap", "click" -> executeTap(service, decision.targetId!!)
                 "type", "input_text" -> executeType(service, decision.targetId!!, decision.value!!)
-                "scroll" -> executeScroll(service, decision.targetId)
+                "scroll" -> executeScroll(service, decision.targetId, decision.value)
                 "back" -> AgentExecution(
                     accepted = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK),
                     changed = true,
@@ -663,6 +676,7 @@ class NovaAgentEngine(
     private fun executeScroll(
         service: NovaAccessibilityService,
         targetId: String?,
+        direction: String?,
     ): AgentExecution {
         val root = service.rootInActiveWindow
             ?: return AgentExecution(false, false, "no active accessibility window")
@@ -678,8 +692,12 @@ class NovaAgentEngine(
                 } else if (targetId != null && !node.isScrollable) {
                     AgentExecution(false, false, "scroll target is no longer scrollable")
                 } else {
+                    val action = when (direction?.lowercase()) {
+                        "up", "backward" -> AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                        else -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                    }
                     AgentExecution(
-                        accepted = node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD),
+                        accepted = node.performAction(action),
                         changed = false,
                     )
                 }
