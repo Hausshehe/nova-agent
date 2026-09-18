@@ -47,6 +47,29 @@ object TaskStore {
     }
 
     @Synchronized
+    fun startNew(
+        context: Context,
+        goal: String,
+        deadlineMs: Long,
+        taskId: String = UUID.randomUUID().toString(),
+    ): NovaTaskSnapshot {
+        val now = System.currentTimeMillis()
+        return NovaTaskSnapshot(
+            id = taskId,
+            goal = goal,
+            deadlineMs = deadlineMs,
+            status = "running",
+            steps = 0,
+            observationId = 0L,
+            lastAction = "",
+            lastOutcome = "task started",
+            error = null,
+            startedAtMs = now,
+            updatedAtMs = now,
+        ).also { save(context, it) }
+    }
+
+    @Synchronized
     fun get(context: Context): NovaTaskSnapshot? {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_TASK, null) ?: return null
