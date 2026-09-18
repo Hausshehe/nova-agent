@@ -1,15 +1,21 @@
 package com.hausshehe.nova
 
 import android.app.Activity
+import android.app.role.RoleManager
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.Calendar
 
 class MainActivity : Activity() {
     private var navigationClicks = 0
@@ -23,6 +29,16 @@ class MainActivity : Activity() {
     private lateinit var accessibilityStatus: TextView
     private lateinit var continueButton: Button
     private lateinit var finishButton: Button
+    private lateinit var agentGoalInput: EditText
+    private lateinit var agentStatus: TextView
+
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusPoller = object : Runnable {
+        override fun run() {
+            updateAgentStatus()
+            statusHandler.postDelayed(this, 700L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +62,31 @@ class MainActivity : Activity() {
             setTextColor(Color.GRAY)
             setPadding(0, 8, 0, 24)
         })
+
+        content.addView(section("Nova Agent"))
+        agentGoalInput = EditText(this).apply {
+            hint = "Tell Nova what to do"
+            minLines = 2
+            maxLines = 5
+            setPadding(16, 16, 16, 16)
+        }
+        content.addView(agentGoalInput, buttonParams())
+
+        content.addView(Button(this).apply {
+            text = "Run with DeepSeek"
+            contentDescription = "Run with DeepSeek"
+            setOnClickListener { runAgentGoal() }
+        }, buttonParams())
+
+        content.addView(Button(this).apply {
+            text = "Make Nova Assistant"
+            contentDescription = "Make Nova Assistant"
+            setOnClickListener { requestAssistantRole() }
+        }, buttonParams())
+
+        agentStatus = status("Agent idle")
+        content.addView(agentStatus)
+
 
         content.addView(section("Accessibility"))
         accessibilityStatus = status(accessibilityStatusText())
@@ -149,6 +190,124 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::accessibilityStatus.isInitialized) accessibilityStatus.text = accessibilityStatusText()
+        statusHandler.post(statusPoller)
+    }
+
+    override fun onPause() {
+        statusHandler.removeCallbacks(statusPoller)
+        super.onPause()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent?.action == Intent.ACTION_ASSIST) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+            if (text.isNotBlank() && ::agentGoalInput.isInitialized) {
+                agentGoalInput.setText(text)
+                agentGoalInput.setSelection(agentGoalInput.text.length)
+                runAgentGoal()
+            }
+        }
+    }
+
+    private fun runAgentGoal() {
+        val goal = agentGoalInput.text?.toString()?.trim().orEmpty()
+        if (goal.isBlank()) {
+            agentStatus.text = "Enter a goal first"
+            return
+        }
+
+        val deadlineMs = parseDeadline(goal)
+        try {
+            val taskIntent = NovaTaskService.intent(this, goal, deadlineMs)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(taskIntent)
+            } else {
+                startService(taskIntent)
+            }
+            agentStatus.text = if (deadlineMs > 0L) {
+                "Started. Deadline: " + deadlineSummary(deadlineMs)
+            } else {
+                "Started. DeepSeek is reasoning from the live UI."
+            }
+        } catch (t: Throwable) {
+            agentStatus.text = "Could not start task: " + (t.message ?: t.javaClass.simpleName)
+        }
+    }
+
+    private fun updateAgentStatus() {
+        if (!::agentStatus.isInitialized) return
+        val task = TaskStore.get(this)
+        agentStatus.text = if (task == null) {
+            "Agent idle"
+        } else {
+            "Task " + task.status +
+                " | steps=" + task.steps +
+                if (task.lastOutcome.isNotBlank()) " | " + task.lastOutcome else ""
+        }
+    }
+
+    private fun requestAssistantRole() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            agentStatus.text = "Assistant role requires Android 10 or newer"
+            return
+        }
+        val roleManager = getSystemService(RoleManager::class.java)
+        if (!roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) {
+            agentStatus.text = "This Android build does not expose the assistant role"
+            return
+        }
+        try {
+            startActivityForResult(
+                roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT),
+                18765,
+            )
+        } catch (t: Throwable) {
+            agentStatus.text = "Unable to request assistant role: " + (t.message ?: t.javaClass.simpleName)
+        }
+    }
+
+    private fun parseDeadline(goal: String): Long {
+        val match = Regex("""(?i)\\bby\\s+(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?\\b""").find(goal)
+            ?: return 0L
+
+        val rawHour = match.groupValues[1].toIntOrNull() ?: return 0L
+        val minute = match.groupValues[2].toIntOrNull() ?: 0
+        val marker = match.groupValues[3].lowercase()
+        if (minute !in 0..59) return 0L
+
+        val hour = if (marker.isBlank()) {
+            if (rawHour !in 0..23) return 0L
+            rawHour
+        } else {
+            if (rawHour !in 1..12) return 0L
+            when {
+                marker == "am" && rawHour == 12 -> 0
+                marker == "pm" && rawHour != 12 -> rawHour + 12
+                else -> rawHour
+            }
+        }
+
+        val target = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (target.timeInMillis <= System.currentTimeMillis()) {
+            target.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return target.timeInMillis
+    }
+
+    private fun deadlineSummary(deadlineMs: Long): String {
+        val time = Calendar.getInstance().apply { timeInMillis = deadlineMs }
+        val hour = time.get(Calendar.HOUR)
+        val displayHour = if (hour == 0) 12 else hour
+        val minute = time.get(Calendar.MINUTE)
+        val marker = if (time.get(Calendar.AM_PM) == Calendar.AM) "AM" else "PM"
+        return displayHour.toString() + ":" + minute.toString().padStart(2, '0') + " " + marker
     }
 
     private fun accessibilityStatusText(): String =
