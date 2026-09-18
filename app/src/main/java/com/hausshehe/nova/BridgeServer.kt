@@ -94,6 +94,7 @@ object BridgeServer {
                     "deepseek_native_prompt" -> deepSeekNativePrompt(context, request)
                     "agent_goal" -> agentGoal(context, request)
                     "agent_status" -> agentStatus(context)
+                    "agent_trace" -> agentTrace(context, request)
                     "agent_result" -> agentResult(context, request)
                     "agent_cancel" -> agentCancel(context)
                     "click" -> click(request.optString("elementId"))
@@ -315,6 +316,18 @@ object BridgeServer {
             }
         } catch (e: Throwable) {
             error("unable to start Nova task service: " + (e.message ?: e.javaClass.simpleName))
+        }
+    }
+
+    private fun agentTrace(context: Context, request: JSONObject): JSONObject {
+        val requestedTaskId = request.optString("taskId", "").trim().ifBlank { null }
+        val taskId = requestedTaskId ?: TaskStore.get(context)?.id
+        if (taskId == null) return error("no task id is available for trace")
+        val trace = NovaTrace.snapshot(taskId)
+        return JSONObject().apply {
+            put("ok", true)
+            put("taskId", taskId)
+            put("events", trace)
         }
     }
 
