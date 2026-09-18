@@ -52,37 +52,97 @@ class NovaTaskService : Service() {
     }
 
     private fun runActiveTask() {
-        val task = TaskStore.get(this) ?: return
-        if (task.status !in setOf("running", "pending")) return
+        var cycles = 0
+        val maxCycles = 12
 
-        updateNotification("Working: " + task.goal.take(60))
+        while (cycles < maxCycles) {
+            val task = TaskStore.get(this) ?: return
+            if (task.status !in setOf("running", "pending")) return
 
-        val result = NovaAgentEngine(applicationContext).run(
-            goal = task.goal,
-            deadlineMs = task.deadlineMs,
-        ) { progress ->
-            TaskStore.update(applicationContext, progress)
-            updateNotification(
-                when (progress.status) {
-                    "verified_complete" -> "Goal verified"
-                    "invalid_decision" -> "Reassessing current UI"
-                    "rejected" -> "Action rejected, reassessing"
-                    else -> "Step " + progress.steps + ": " + progress.lastAction.take(48)
+            if (task.deadlineMs > 0L && System.currentTimeMillis() >= task.deadlineMs) {
+                val expired = TaskStore.finish(
+                    applicationContext,
+                    NovaAgentRunResult(false, task.steps, "task deadline reached before verified completion"),
+                )
+                if (expired != null) {
+                    updateNotification("Stopped: deadline reached")
                 }
-            )
+                stopSelf()
+                return
+            }
+
+            cycles++
+            updateNotification("Working: " + task.goal.take(60))
+
+            val result = NovaAgentEngine(applicationContext).run(
+                goal = task.goal,
+                deadlineMs = task.deadlineMs,
+                shouldStop = {
+                    TaskStore.get(applicationContext)?.status == "cancelled"
+                },
+            ) { progress ->
+                TaskStore.update(applicationContext, progress)
+                updateNotification(
+                    when (progress.status) {
+                        "verified_complete" -> "Goal verified"
+                        "invalid_decision" -> "Reassessing current UI"
+                        "rejected" -> "Action rejected, reassessing"
+                        else -> "Step " + progress.steps + ": " + progress.lastAction.take(48)
+                    }
+                )
+            }
+
+            if (result.success) {
+                val completed = TaskStore.finish(applicationContext, result)
+                if (completed != null) {
+                    updateNotification("Completed: " + completed.goal.take(60))
+                }
+                stopSelf()
+                return
+            }
+
+            if (result.error == "task cancelled") {
+                updateNotification("Task cancelled")
+                stopSelf()
+                return
+            }
+
+            val latest = TaskStore.get(this)
+            if (latest == null) return
+            if (latest.deadlineMs > 0L && System.currentTimeMillis() >= latest.deadlineMs) {
+                TaskStore.finish(applicationContext, result)
+                updateNotification("Stopped: deadline reached")
+                stopSelf()
+                return
+            }
+
+            if (result.error?.startsWith("step budget exhausted") == true ||
+                result.error?.startsWith("DeepSeek reasoning failed") == true
+            ) {
+                TaskStore.keepRunning(
+                    applicationContext,
+                    "bounded cycle ended; re-observing current Android state",
+                )
+                Thread.sleep(500L)
+                continue
+            }
+
+            val stopped = TaskStore.finish(applicationContext, result)
+            if (stopped != null) {
+                updateNotification("Stopped: " + (stopped.error ?: "task failed").take(60))
+            }
+            stopSelf()
+            return
         }
 
-        val completed = TaskStore.finish(applicationContext, result)
-        if (completed != null) {
-            updateNotification(
-                if (result.success) {
-                    "Completed: " + completed.goal.take(60)
-                } else {
-                    "Stopped: " + (completed.error ?: "task failed").take(60)
-                }
+        val latest = TaskStore.get(this)
+        if (latest != null && latest.status in setOf("running", "pending")) {
+            TaskStore.finish(
+                applicationContext,
+                NovaAgentRunResult(false, latest.steps, "bounded recovery cycles exhausted"),
             )
+            updateNotification("Stopped: recovery cycle limit reached")
         }
-
         stopSelf()
     }
 
