@@ -49,6 +49,7 @@ class NovaAgentEngine(
     fun run(
         goal: String,
         deadlineMs: Long = 0L,
+        waitForPackage: String? = null,
         shouldStop: () -> Boolean = { false },
         onProgress: (NovaAgentProgress) -> Unit = {},
     ): NovaAgentRunResult {
@@ -56,6 +57,17 @@ class NovaAgentEngine(
 
         val service = NovaAccessibilityService.instance
             ?: return NovaAgentRunResult(false, 0, "Nova accessibility service is not connected")
+
+        if (!waitForPackage.isNullOrBlank()) {
+            val waitDeadline = System.currentTimeMillis() + 2500L
+            while (System.currentTimeMillis() < waitDeadline && !shouldStop()) {
+                val root = service.rootInActiveWindow
+                val activePackage = root?.packageName?.toString()
+                root?.recycle()
+                if (activePackage == waitForPackage) break
+                Thread.sleep(100L)
+            }
+        }
 
         observeNow(service)
         var state = ObservationStore.current()
