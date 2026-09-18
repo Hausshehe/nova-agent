@@ -48,6 +48,7 @@ class NovaAgentEngine(
     private val context: Context,
     private val maxSteps: Int = 24,
     private val client: ReasoningProvider = NativeReasoningClient(),
+    private val sessionId: String? = null,
 ) {
     private val invalidDecisionBudget = 3
     private val recentOutcomes = ArrayDeque<String>()
@@ -73,6 +74,20 @@ class NovaAgentEngine(
                 if (activePackage == waitForPackage) break
                 Thread.sleep(100L)
             }
+        }
+
+        val reasoningSession = ReasoningSessionRegistry.session(
+            sessionId ?: "engine-" + System.identityHashCode(this),
+            client,
+        )
+        try {
+            reasoningSession.start()
+        } catch (t: Throwable) {
+            return NovaAgentRunResult(
+                false,
+                0,
+                "DeepSeek reasoning bootstrap failed: " + (t.message ?: t.javaClass.simpleName),
+            )
         }
 
         observeNow(service)
@@ -116,7 +131,7 @@ class NovaAgentEngine(
 
             state = ObservationStore.current()
             val raw = try {
-                client.complete(buildReasoningPrompt(goal, state))
+                reasoningSession.complete(buildReasoningPrompt(goal, state))
             } catch (t: Throwable) {
                 return NovaAgentRunResult(
                     false,
@@ -215,47 +230,6 @@ class NovaAgentEngine(
         }
 
         return """
-            You are Nova's Android decision engine.
-
-            Nova owns the Android device. You do NOT execute actions.
-            You receive one fresh observation and must choose exactly ONE next action.
-            After Nova executes it, Nova will provide a new observation.
-            Never output an action sequence.
-
-            The current observation is authoritative. Ignore assumptions from
-            older turns when they conflict with this observation.
-
-            Rules:
-            - Do not invent UI element ids, labels, packages, coordinates, or outcomes.
-            - Select targets only from the current observation.
-            - Prefer semantic UI targets exposed by the accessibility tree.
-            - A successful action is NOT proof that the goal is complete.
-            - Nova verifies the result from fresh Android state.
-            - After an accepted action produces no observable change, change strategy
-              unless new evidence gives a concrete reason to retry.
-            - If the UI is loading or temporarily unavailable, use wait with a bounded delay.
-            - Use open_uri only for an explicit http:// or https:// URI.
-            - Use open_system for Android system destinations such as Settings when
-              accessibility navigation cannot reach the destination safely. Its value
-              must be the exact Android settings action, such as android.settings.SETTINGS.
-            - Use open_app when the goal requires launching an installed app and the
-              current accessibility observation does not expose a suitable target.
-              Give the app's human-readable name in value, not a package name.
-              Nova resolves that name against installed applications at runtime.
-            - Never type shell commands, adb commands, or Android Activity Manager
-              commands into terminal or command-line applications. Nova provides
-              system-level actions directly.
-            - Never use coordinates or screen positions.
-            - Return JSON only.
-
-            Required JSON:
-            {
-              "action_type": "tap | type | scroll | back | wait | open_uri | open_system | open_app",
-              "target_id": "current UI element id or null",
-              "value": "text to type, wait milliseconds, URI, or Android system action, otherwise null",
-              "reason": "brief reason for this one action"
-            }
-
             CURRENT_CONTEXT:
         """.trimIndent() + "\n" + root.toString()
     }
@@ -266,7 +240,7 @@ class NovaAgentEngine(
     ): Boolean {
         return try {
             val verification = parseVerification(
-                client.complete(buildVerificationPrompt(goal, state)),
+                reasoningSession.complete(buildVerificationPrompt(goal, state)),
                 state,
             )
             verification.complete
