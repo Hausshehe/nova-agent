@@ -86,6 +86,7 @@ object BridgeServer {
                     "deepseek_native_prompt" -> deepSeekNativePrompt(context, request)
                     "agent_goal" -> agentGoal(context, request)
                     "agent_status" -> agentStatus(context)
+                    "agent_result" -> agentResult(context, request)
                     "agent_cancel" -> agentCancel(context)
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
@@ -292,13 +293,43 @@ object BridgeServer {
             } else {
                 context.startService(intent)
             }
-            JSONObject().apply {
-                put("ok", true)
-                put("accepted", true)
-                put("status", "running")
+            val waitForResult = request.optBoolean("wait", false)
+            if (waitForResult) {
+                waitForTerminalTask(context, request.optLong("waitTimeoutMs", 300000L))
+            } else {
+                JSONObject().apply {
+                    put("ok", true)
+                    put("accepted", true)
+                    put("status", "running")
+                }
             }
         } catch (e: Throwable) {
             error("unable to start Nova task service: " + (e.message ?: e.javaClass.simpleName))
+        }
+    }
+
+    private fun agentResult(context: Context, request: JSONObject): JSONObject =
+        waitForTerminalTask(context, request.optLong("waitTimeoutMs", 300000L))
+
+    private fun waitForTerminalTask(context: Context, timeoutMs: Long): JSONObject {
+        val timeout = timeoutMs.coerceIn(1000L, 600000L)
+        val deadline = System.currentTimeMillis() + timeout
+        while (System.currentTimeMillis() < deadline) {
+            val task = TaskStore.get(context)
+            if (task != null && task.status !in setOf("running", "pending")) {
+                return JSONObject().apply {
+                    put("ok", task.status == "succeeded")
+                    put("completed", true)
+                    put("task", TaskStore.snapshotJson(context))
+                }
+            }
+            Thread.sleep(250L)
+        }
+        return JSONObject().apply {
+            put("ok", true)
+            put("completed", false)
+            put("timeout", true)
+            put("task", TaskStore.snapshotJson(context))
         }
     }
 
