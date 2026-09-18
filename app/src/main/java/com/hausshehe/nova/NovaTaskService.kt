@@ -73,17 +73,20 @@ class NovaTaskService : Service() {
     }
 
     private fun runActiveTask() {
-        var cycles = 0
-        val maxCycles = 12
+        var retryDelayMs = 1000L
 
-        while (cycles < maxCycles) {
+        while (!Thread.currentThread().isInterrupted) {
             val task = TaskStore.get(this) ?: return
             if (task.status !in setOf("running", "pending")) return
 
             if (task.deadlineMs > 0L && System.currentTimeMillis() >= task.deadlineMs) {
                 val expired = TaskStore.finish(
                     applicationContext,
-                    NovaAgentRunResult(false, task.steps, "task deadline reached before verified completion"),
+                    NovaAgentRunResult(
+                        false,
+                        task.steps,
+                        "task deadline reached before verified completion",
+                    ),
                 )
                 if (expired != null) {
                     updateNotification("Stopped: deadline reached")
@@ -92,16 +95,16 @@ class NovaTaskService : Service() {
                 return
             }
 
-            cycles++
             updateNotification("Working: " + task.goal.take(60))
 
             val result = NovaAgentEngine(applicationContext).run(
                 goal = task.goal,
                 deadlineMs = task.deadlineMs,
-                waitForPackage = sourcePackage.takeIf { it.isNotBlank() },
                 shouldStop = {
                     val current = TaskStore.get(applicationContext)
-                    current == null || current.id != task.id || current.status == "cancelled"
+                    current == null ||
+                        current.id != task.id ||
+                        current.status == "cancelled"
                 },
             ) { progress ->
                 val current = TaskStore.get(applicationContext)
@@ -127,51 +130,51 @@ class NovaTaskService : Service() {
                 return
             }
 
-            if (result.error == "task cancelled") {
-                val latest = TaskStore.get(this)
-                if (latest?.id != task.id) return
+            val latest = TaskStore.get(this)
+            if (latest == null || latest.id != task.id) {
+                return
+            }
+
+            if (result.error == "task cancelled" || latest.status == "cancelled") {
                 updateNotification("Task cancelled")
                 stopSelf()
                 return
             }
 
-            val latest = TaskStore.get(this)
-            if (latest == null || latest.id != task.id) return
-            if (latest.deadlineMs > 0L && System.currentTimeMillis() >= latest.deadlineMs) {
+            if (
+                latest.deadlineMs > 0L &&
+                System.currentTimeMillis() >= latest.deadlineMs
+            ) {
                 TaskStore.finish(applicationContext, result)
                 updateNotification("Stopped: deadline reached")
                 stopSelf()
                 return
             }
 
-            if (result.error?.startsWith("step budget exhausted") == true ||
-                result.error?.startsWith("DeepSeek reasoning failed") == true
-            ) {
-                TaskStore.keepRunning(
-                    applicationContext,
-                    "bounded cycle ended; re-observing current Android state",
-                )
-                Thread.sleep(500L)
-                continue
-            }
-
-            val stopped = TaskStore.finish(applicationContext, result)
-            if (stopped != null) {
-                updateNotification("Stopped: " + (stopped.error ?: "task failed").take(60))
-            }
-            stopSelf()
-            return
-        }
-
-        val latest = TaskStore.get(this)
-        if (latest != null && latest.status in setOf("running", "pending")) {
-            TaskStore.finish(
+            TaskStore.keepRunning(
                 applicationContext,
-                NovaAgentRunResult(false, latest.steps, "bounded recovery cycles exhausted"),
+                "bounded cycle ended; fresh observation will drive the next cycle",
             )
-            updateNotification("Stopped: recovery cycle limit reached")
+
+            val delay = if (result.steps > 0) {
+                retryDelayMs
+            } else {
+                minOf(retryDelayMs * 2L, 30000L)
+            }
+
+            try {
+                Thread.sleep(delay)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return
+            }
+
+            retryDelayMs = if (result.steps > 0) {
+                1000L
+            } else {
+                minOf(delay * 2L, 30000L)
+            }
         }
-        stopSelf()
     }
 
     override fun onDestroy() {
