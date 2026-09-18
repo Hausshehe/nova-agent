@@ -107,6 +107,7 @@ class NovaTaskService : Service() {
                 return
             }
 
+            NovaTrace.record(task.id, "NOVA", "task_cycle_start", mapOf("goal" to task.goal, "deadlineMs" to task.deadlineMs, "stepsSoFar" to task.steps))
             updateNotification("Working: " + task.goal.take(60))
 
             val result = NovaAgentEngine(
@@ -136,12 +137,15 @@ class NovaTaskService : Service() {
                 )
             }
 
+            NovaTrace.record(task.id, "NOVA", "task_cycle_result", mapOf("success" to result.success, "steps" to result.steps, "error" to result.error))
+
             if (result.success) {
                 val completed = TaskStore.finish(applicationContext, result)
                 if (completed != null) {
                     updateNotification("Completed: " + completed.goal.take(60))
                 }
                 ReasoningSessionRegistry.remove(task.id)
+                NovaTrace.record(task.id, "NOVA", "task_finished", mapOf("status" to "succeeded"))
                 stopSelf()
                 return
             }
@@ -174,6 +178,7 @@ class NovaTaskService : Service() {
                     updateNotification("Stopped: bounded cycle ended")
                 }
                 ReasoningSessionRegistry.remove(task.id)
+                NovaTrace.record(task.id, "NOVA", "task_finished", mapOf("status" to "failed", "error" to result.error))
                 stopSelf()
                 return
             }
