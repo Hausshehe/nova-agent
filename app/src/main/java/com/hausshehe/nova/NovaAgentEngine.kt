@@ -380,18 +380,18 @@ class NovaAgentEngine(
         return root
     }
 
+    private fun jsonNullableString(json: JSONObject, key: String): String? {
+        if (!json.has(key) || json.isNull(key)) return null
+        return json.optString(key, "").trim().ifBlank { null }
+    }
+
     private fun parseDecision(raw: String, state: UiSnapshot): AgentDecision {
         val json = extractObject(raw)
         val type = json.optString("action_type", "").trim().lowercase()
-        val targetId = json.optString("target_id", "").trim().ifBlank { null }
+        val targetId = jsonNullableString(json, "target_id")
         val reason = json.optString("reason", "model decision").take(240)
 
-        val valueAny = json.opt("value")
-        val value = when (valueAny) {
-            null, JSONObject.NULL -> null
-            is Number -> valueAny.toString()
-            else -> valueAny.toString()
-        }
+        val value = jsonNullableString(json, "value")
 
         when (type) {
             "tap", "click" -> {
