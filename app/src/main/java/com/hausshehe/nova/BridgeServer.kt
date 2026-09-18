@@ -78,8 +78,16 @@ object BridgeServer {
             try {
                 val reader = BufferedReader(InputStreamReader(s.getInputStream()))
                 val writer = PrintWriter(s.getOutputStream(), true)
-                val request = JSONObject(reader.readLine() ?: return)
-                val response = when (request.optString("command")) {
+                val requestLine = reader.readLine() ?: return
+                val request = JSONObject(requestLine)
+                val command = request.optString("command")
+                Log.i(
+                    TAG,
+                    "BRIDGE_COMMAND_RECEIVED command=" + command +
+                        " thread=" + Thread.currentThread().name +
+                        " remote=" + s.inetAddress?.hostAddress + ":" + s.port
+                )
+                val response = when (command) {
                     "observe" -> observe()
                     "health" -> health()
                     "deepseek_event" -> deepSeekEvent(request)
