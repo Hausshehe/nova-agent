@@ -311,7 +311,7 @@ class NovaVoiceInteractionSession(
         val minute = time.get(java.util.Calendar.MINUTE)
         val marker = if (time.get(java.util.Calendar.AM_PM) == java.util.Calendar.AM) "AM" else "PM"
         return "Started. Deadline " +
-            displayHour + ":" + minute.toString().padStart(2, "0") + " " + marker
+            displayHour + ":" + minute.toString().padStart(2, '0') + " " + marker
     }
 
     private companion object {
