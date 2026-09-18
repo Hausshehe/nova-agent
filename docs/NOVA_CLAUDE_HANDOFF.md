@@ -521,3 +521,40 @@ Important previously discovered points:
 **Make a normal Nova goal use DeepSeek Native as its reasoning engine.**
 
 The current native round-trip is already proven. The next work is integration, not more reverse-engineering for its own sake.
+
+
+## Phase G12 native agent runtime
+
+The next milestone moved the proven DeepSeek native bridge behind a real Android task runtime.
+
+New Android components:
+- `NativeReasoningClient.kt`: Nova localhost client for `deepseek_native_prompt` on port 18765.
+- `NovaAgentEngine.kt`: bounded observe -> reason -> validate -> act -> fresh-observe -> verify loop.
+- `TaskStore.kt`: persistent active-goal/deadline/progress storage in SharedPreferences.
+- `NovaTaskService.kt`: sticky foreground service that runs bounded engine cycles and can re-observe/reason again instead of replaying stale actions.
+- `agent/android_native_agent_smoke.py`: Termux real-device smoke for the complete runtime.
+
+Bridge commands:
+- `agent_goal` starts or replaces the active persisted task.
+- `agent_status` returns the active task snapshot.
+- `agent_cancel` cancels the active task and stops the worker.
+
+The task engine currently accepts only structured single-action decisions: `tap`, `type`, `scroll`, `back`, `wait`, and explicit `http(s)` `open_uri`. Targets are checked against the current Accessibility tree before execution. No coordinates are accepted.
+
+Important lifecycle rule: a successful Android action is not completion. The engine waits for fresh UI state and applies conservative goal verification. If a bounded cycle exhausts its step budget or DeepSeek is temporarily unavailable, the foreground service can start another bounded cycle from a new observation, up to a separate recovery-cycle limit. Cancellation is checked between reasoning cycles/actions.
+
+Assistant entry point:
+- MainActivity now exposes `android.intent.action.ASSIST` and requests `ROLE_ASSISTANT` on Android 10+.
+- When an assistant invocation supplies `Intent.EXTRA_TEXT`, Nova starts the task and backgrounds its own Activity so the previous app can remain foreground.
+- The OEM/system assistant may still control whether the role is offered and what query payload is delivered.
+
+Deadline support:
+- MainActivity recognizes simple English forms such as `by 8 AM`, `by 20:00`, and uses the resulting timestamp as a task deadline.
+- The deadline is checked by the runtime and service. It is not merely a reminder.
+- The parser is intentionally narrow for this milestone. Do not claim arbitrary natural-language deadline parsing.
+
+Gemini Vision is intentionally not fabricated in this phase. Accessibility remains the primary observation channel; a future Gemini adapter can plug into the observation/reasoning seam when accessibility evidence is insufficient.
+
+Real-device test after pull:
+`python -m agent.android_native_agent_smoke --launch-nova --goal "Tap Test Navigation Action" --timeout 120`
+
