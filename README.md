@@ -237,3 +237,7 @@ The smoke polls Nova's persistent task state until the goal is verified or the b
 
 DeepSeek native completion is already proven on-device, including cold-start bootstrap. Gemini Vision remains a separate visual-specialist adapter to add when accessibility evidence is insufficient. The architecture does not require changing the Nova task lifecycle when that adapter is added.
 
+
+The assistant path is now backed by Android's `VoiceInteractionService` + `VoiceInteractionSessionService` model, with a small Nova session UI and optional speech-to-text input. The session captures the foreground application context when the platform supplies it, then hands the goal to the same persistent task runtime.
+
+Long-running execution is deadline-bounded rather than cycle-bounded: when a bounded reasoning/action cycle ends without completion, the service keeps the task in `running`, waits with backoff, and starts another cycle from fresh Android state. A persisted `BOOT_COMPLETED` receiver can restart an unfinished task after a device reboot.
