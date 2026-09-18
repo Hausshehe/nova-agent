@@ -86,6 +86,17 @@ object TaskStore {
     }
 
     @Synchronized
+    fun keepRunning(context: Context, outcome: String): NovaTaskSnapshot? {
+        val existing = get(context) ?: return null
+        return existing.copy(
+            status = "running",
+            lastOutcome = outcome,
+            error = null,
+            updatedAtMs = System.currentTimeMillis(),
+        ).also { save(context, it) }
+    }
+
+    @Synchronized
     fun finish(context: Context, result: NovaAgentRunResult): NovaTaskSnapshot? {
         val existing = get(context) ?: return null
         return existing.copy(
