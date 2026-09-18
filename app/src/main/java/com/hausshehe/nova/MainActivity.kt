@@ -1,6 +1,8 @@
 package com.hausshehe.nova
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.role.RoleManager
 import android.content.Intent
 import android.graphics.Color
@@ -256,6 +258,14 @@ class MainActivity : Activity() {
     }
 
     private fun requestAssistantRole() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO_PERMISSION)
+            agentStatus.text = "Grant microphone access, then tap Make Nova Assistant again"
+            return
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             agentStatus.text = "Assistant role requires Android 10 or newer"
             return
@@ -272,6 +282,23 @@ class MainActivity : Activity() {
             )
         } catch (t: Throwable) {
             agentStatus.text = "Unable to request assistant role: " + (t.message ?: t.javaClass.simpleName)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_AUDIO_PERMISSION) {
+            agentStatus.text = if (
+                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+            ) {
+                "Microphone granted. Tap Make Nova Assistant again."
+            } else {
+                "Microphone denied. Nova can still use typed assistant goals."
+            }
         }
     }
 
