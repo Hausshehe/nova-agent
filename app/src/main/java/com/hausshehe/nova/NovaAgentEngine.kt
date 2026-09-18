@@ -291,13 +291,23 @@ class NovaAgentEngine(
                 You are the semantic authority for completion. Interpret the goal
                 as a human instruction, including compound or sequential goals.
                 Judge the requested OUTCOME, not whether Nova merely executed an
-                action. For example, if the goal says "Open YouTube and then tap
-                Search", a current YouTube search screen is evidence of completion.
-                Do not require Nova to encode every possible natural-language goal
-                as a Kotlin heuristic.
+                action. For compound or sequential goals, every required step must
+                be reflected in the current state or in concrete outcome evidence.
+                The mere presence of a control that was supposed to be tapped is
+                NOT evidence that the tap happened. For example, if the goal says
+                "Open YouTube and then tap Search", a YouTube home screen that still
+                shows a Search button is NOT complete. A resulting YouTube search
+                screen, such as a visible search input or search-page UI, is evidence
+                that the Search action actually took effect.
+
+                The LAST_ACTION and LAST_OUTCOME are supporting execution evidence,
+                not permission to infer a state that is absent from CURRENT_STATE.
+                In particular, do not treat "accepted=true changed=true" as proof
+                that an action achieved its intended semantic outcome when the
+                current observation still shows the pre-action UI.
 
                 Return complete=true only when the visible current state provides
-                concrete evidence that the requested goal is satisfied. If there
+                concrete evidence that the requested outcome is satisfied. If there
                 is meaningful uncertainty, return complete=false.
 
                 Evidence must reference only element ids present in the current
