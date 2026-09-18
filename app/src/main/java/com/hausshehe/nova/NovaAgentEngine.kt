@@ -527,6 +527,15 @@ class NovaAgentEngine(
                 }
             }
 
+            "press_enter" -> {
+                require(targetId != null) { "press_enter requires target" }
+                val target = state.elements.firstOrNull { it.id == targetId }
+                    ?: throw IllegalArgumentException("press_enter target is not present in current observation")
+                require(target.visible && target.enabled && target.editable) {
+                    "press_enter target is not visible, enabled, and editable"
+                }
+            }
+
             "scroll" -> {
                 if (targetId != null) {
                     val target = state.elements.firstOrNull { it.id == targetId }
@@ -611,6 +620,7 @@ class NovaAgentEngine(
             when (decision.type) {
                 "tap", "click" -> executeTap(service, decision.targetId!!)
                 "type", "input_text" -> executeType(service, decision.targetId!!, decision.value!!)
+                "press_enter" -> executePressEnter(service, decision.targetId!!)
                 "scroll" -> executeScroll(service, decision.targetId, decision.value)
                 "back" -> AgentExecution(
                     accepted = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK),
@@ -753,6 +763,48 @@ class NovaAgentEngine(
                         ),
                         changed = false,
                     )
+                }
+            } finally {
+                if (node !== root) node.recycle()
+            }
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun executePressEnter(
+        service: NovaAccessibilityService,
+        targetId: String,
+    ): AgentExecution {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            return AgentExecution(false, false, "press_enter requires Android 11 or newer")
+        }
+
+        val root = service.rootInActiveWindow
+            ?: return AgentExecution(false, false, "no active accessibility window")
+        try {
+            val node = findNode(root, targetId, "0")
+                ?: return AgentExecution(false, false, "press_enter target disappeared before execution")
+            return try {
+                if (!node.isVisibleToUser || !node.isEnabled || !node.isEditable) {
+                    AgentExecution(false, false, "press_enter target is no longer editable")
+                } else {
+                    if (!node.isFocused) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                    }
+                    val supportsImeEnter = node.actionList.any {
+                        it.id == AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id
+                    }
+                    if (!supportsImeEnter) {
+                        AgentExecution(false, false, "target does not expose an IME enter action")
+                    } else {
+                        AgentExecution(
+                            accepted = node.performAction(
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id
+                            ),
+                            changed = false,
+                        )
+                    }
                 }
             } finally {
                 if (node !== root) node.recycle()
