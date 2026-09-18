@@ -18,13 +18,22 @@ class NovaTaskService : Service() {
         private const val ACTION_START = "com.hausshehe.nova.action.START_TASK"
         private const val EXTRA_GOAL = "goal"
         private const val EXTRA_DEADLINE_MS = "deadline_ms"
+        private const val EXTRA_SOURCE_PACKAGE = "source_package"
         private val executor = Executors.newSingleThreadExecutor()
 
-        fun intent(context: Context, goal: String, deadlineMs: Long): Intent =
+        fun intent(
+            context: Context,
+            goal: String,
+            deadlineMs: Long,
+            sourcePackage: String? = null,
+        ): Intent =
             Intent(context, NovaTaskService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_GOAL, goal)
                 putExtra(EXTRA_DEADLINE_MS, deadlineMs)
+                if (!sourcePackage.isNullOrBlank()) {
+                    putExtra(EXTRA_SOURCE_PACKAGE, sourcePackage)
+                }
             }
     }
 
@@ -39,6 +48,7 @@ class NovaTaskService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val goal = intent?.getStringExtra(EXTRA_GOAL)?.trim().orEmpty()
         val deadlineMs = intent?.getLongExtra(EXTRA_DEADLINE_MS, 0L) ?: 0L
+        val sourcePackage = intent?.getStringExtra(EXTRA_SOURCE_PACKAGE)?.trim().orEmpty()
 
         if (goal.isNotBlank()) {
             val existing = TaskStore.get(this)
@@ -87,6 +97,7 @@ class NovaTaskService : Service() {
             val result = NovaAgentEngine(applicationContext).run(
                 goal = task.goal,
                 deadlineMs = task.deadlineMs,
+                waitForPackage = sourcePackage.takeIf { it.isNotBlank() },
                 shouldStop = {
                     val current = TaskStore.get(applicationContext)
                     current == null || current.id != task.id || current.status == "cancelled"
