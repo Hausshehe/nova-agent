@@ -212,6 +212,7 @@ class MainActivity : Activity() {
             agentGoalInput.setText(text)
             agentGoalInput.setSelection(agentGoalInput.text.length)
             runAgentGoal()
+            moveTaskToBack(true)
         } else {
             agentGoalInput.requestFocus()
         }
