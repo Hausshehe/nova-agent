@@ -443,7 +443,9 @@ object BridgeServer {
 
     private fun launch(context: Context, packageName: String): JSONObject {
         val intent = if (packageName == "com.deepseek.chat") {
-            Intent().setClassName(packageName, "com.deepseek.chat.MainActivity")
+            Intent().setClassName(packageName, "com.deepseek.chat.MainActivity").apply {
+                putExtra("com.hausshehe.nova.HEADLESS_BOOTSTRAP", true)
+            }
         } else {
             context.packageManager.getLaunchIntentForPackage(packageName)
         } ?: return error("launch intent not found: $packageName")
