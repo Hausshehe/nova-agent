@@ -558,3 +558,19 @@ Gemini Vision is intentionally not fabricated in this phase. Accessibility remai
 Real-device test after pull:
 `python -m agent.android_native_agent_smoke --launch-nova --goal "Tap Test Navigation Action" --timeout 120`
 
+
+### Voice assistant implementation
+
+The global assistant entry point now uses Android's `VoiceInteractionService` contract. `NovaVoiceInteractionService` is the lightweight system-bound service, and `NovaVoiceInteractionSessionService` creates `NovaVoiceInteractionSession` in a separate process for the visible assistant interaction. The session supports typed goals and one-shot speech recognition when `RECORD_AUDIO` is granted.
+
+The session metadata is in `res/xml/voice_interaction_service.xml`, and the manifest registers the top-level service with `BIND_VOICE_INTERACTION` plus the session service. This follows Android's documented VoiceInteractionService / VoiceInteractionSessionService architecture rather than relying only on an exported ACTION_ASSIST Activity. Android documents ROLE_ASSISTANT as the assistant-app role and requires role qualification before a package becomes the selected assistant. citeturn107554search0turn107554search1
+
+On Android 13, the foreground-app package is not obtained from the API-35 `KEY_FOREGROUND_ACTIVITIES` field, so the session also keeps the legacy `intent` path as a fallback. On API 35+, it uses `KEY_FOREGROUND_ACTIVITIES` when the system supplies it. The platform documents this bundle value as an ArrayList of foreground ComponentName objects. citeturn454943search0
+
+Do not claim that speech recognition is guaranteed on every OEM. Nova falls back to typed goal entry if no recognizer is available or microphone permission is denied.
+
+### Long-running lifecycle
+
+`NovaTaskService` no longer has a fixed recovery-cycle ceiling. Each reasoning run is bounded by its action-step budget, but an unfinished task stays persisted as `running` and the foreground worker starts another bounded cycle with backoff until the goal is verified or the deadline expires. `NovaBootReceiver` restores persisted running tasks after `BOOT_COMPLETED`.
+
+The service intentionally treats the deadline as a hard execution constraint. It does not use the deadline merely to schedule a notification.
