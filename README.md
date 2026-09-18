@@ -241,3 +241,5 @@ DeepSeek native completion is already proven on-device, including cold-start boo
 The assistant path is now backed by Android's `VoiceInteractionService` + `VoiceInteractionSessionService` model, with a small Nova session UI and optional speech-to-text input. The session captures the foreground application context when the platform supplies it, then hands the goal to the same persistent task runtime.
 
 Long-running execution is deadline-bounded rather than cycle-bounded: when a bounded reasoning/action cycle ends without completion, the service keeps the task in `running`, waits with backoff, and starts another cycle from fresh Android state. A persisted `BOOT_COMPLETED` receiver can restart an unfinished task after a device reboot.
+
+The runtime also performs a grounded completion check after fresh observations for goals that are not covered by simple deterministic verification. DeepSeek may claim completion only by citing visible element ids from that current observation; Nova rejects a completion claim without valid visible evidence.
