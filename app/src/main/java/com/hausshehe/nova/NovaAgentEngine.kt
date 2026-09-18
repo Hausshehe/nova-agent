@@ -294,13 +294,16 @@ class NovaAgentEngine(
     ): GoalVerification {
         return try {
             parseVerification(
-                reasoningSession.complete(
+                completeReasoning(
                     buildVerificationPrompt(
                         goal = goal,
                         state = state,
                         lastAction = lastAction,
                         lastOutcome = lastOutcome,
-                    )
+                    ),
+                    goal,
+                    state,
+                    "verification",
                 ),
                 state,
             )
