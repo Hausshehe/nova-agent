@@ -304,21 +304,7 @@ object BridgeServer {
                 context.startService(intent)
             }
             val waitForResult = request.optBoolean("wait", false)
-            val streamTrace = request.optBoolean("streamTrace", false)
-            if (waitForResult && streamTrace) {
-                writer.println(JSONObject().apply {
-                    put("ok", true)
-                    put("accepted", true)
-                    put("streaming", true)
-                    put("taskId", task.id)
-                }.toString())
-                waitForTerminalTaskStreaming(
-                    context,
-                    task.id,
-                    request.optLong("waitTimeoutMs", 300000L),
-                    writer,
-                )
-            } else if (waitForResult) {
+            if (waitForResult) {
                 waitForTerminalTask(context, task.id, request.optLong("waitTimeoutMs", 300000L))
             } else {
                 JSONObject().apply {
@@ -353,49 +339,6 @@ object BridgeServer {
             return error("no active or completed task is available")
         }
         return waitForTerminalTask(context, taskId, request.optLong("waitTimeoutMs", 300000L))
-    }
-
-    private fun waitForTerminalTaskStreaming(
-        context: Context,
-        taskId: String,
-        timeoutMs: Long,
-        writer: PrintWriter,
-    ) {
-        val timeout = timeoutMs.coerceIn(1000L, 600000L)
-        val deadline = System.currentTimeMillis() + timeout
-        var emittedEvents = 0
-        while (System.currentTimeMillis() < deadline) {
-            val events = NovaTrace.snapshot(taskId)
-            while (emittedEvents < events.length()) {
-                writer.println(JSONObject().apply {
-                    put("ok", true)
-                    put("type", "trace")
-                    put("taskId", taskId)
-                    put("event", events.getJSONObject(emittedEvents))
-                }.toString())
-                emittedEvents++
-            }
-
-            val task = TaskStore.get(context)
-            if (task != null && task.id == taskId && task.status !in setOf("running", "pending")) {
-                writer.println(JSONObject().apply {
-                    put("ok", task.status == "succeeded")
-                    put("completed", true)
-                    put("type", "result")
-                    put("task", TaskStore.snapshotJson(context))
-                }.toString())
-                return
-            }
-            Thread.sleep(100L)
-        }
-
-        writer.println(JSONObject().apply {
-            put("ok", true)
-            put("completed", false)
-            put("timeout", true)
-            put("type", "result")
-            put("task", TaskStore.snapshotJson(context))
-        }.toString())
     }
 
     private fun waitForTerminalTask(
