@@ -19,6 +19,7 @@ class NovaTaskService : Service() {
         private const val EXTRA_GOAL = "goal"
         private const val EXTRA_DEADLINE_MS = "deadline_ms"
         private const val EXTRA_SOURCE_PACKAGE = "source_package"
+        private const val EXTRA_TASK_ID = "task_id"
         private val executor = Executors.newSingleThreadExecutor()
 
         fun intent(
@@ -26,6 +27,7 @@ class NovaTaskService : Service() {
             goal: String,
             deadlineMs: Long,
             sourcePackage: String? = null,
+            taskId: String? = null,
         ): Intent =
             Intent(context, NovaTaskService::class.java).apply {
                 action = ACTION_START
@@ -33,6 +35,9 @@ class NovaTaskService : Service() {
                 putExtra(EXTRA_DEADLINE_MS, deadlineMs)
                 if (!sourcePackage.isNullOrBlank()) {
                     putExtra(EXTRA_SOURCE_PACKAGE, sourcePackage)
+                }
+                if (!taskId.isNullOrBlank()) {
+                    putExtra(EXTRA_TASK_ID, taskId)
                 }
             }
     }
@@ -50,19 +55,26 @@ class NovaTaskService : Service() {
         val goal = intent?.getStringExtra(EXTRA_GOAL)?.trim().orEmpty()
         val deadlineMs = intent?.getLongExtra(EXTRA_DEADLINE_MS, 0L) ?: 0L
         val sourcePackage = intent?.getStringExtra(EXTRA_SOURCE_PACKAGE)?.trim().orEmpty()
+        val requestedTaskId = intent?.getStringExtra(EXTRA_TASK_ID)?.trim().orEmpty()
 
         if (goal.isNotBlank()) {
             val existing = TaskStore.get(this)
             if (
                 existing != null &&
                 existing.status in setOf("running", "pending") &&
-                existing.goal != goal
+                existing.id != requestedTaskId
             ) {
                 TaskStore.cancel(this)
                 worker?.cancel(true)
                 worker = null
             }
-            TaskStore.startOrResume(this, goal, deadlineMs)
+            if (requestedTaskId.isNotBlank()) {
+                if (TaskStore.get(this)?.id != requestedTaskId) {
+                    TaskStore.startNew(this, goal, deadlineMs, requestedTaskId)
+                }
+            } else {
+                TaskStore.startOrResume(this, goal, deadlineMs)
+            }
         }
 
         if (worker?.isDone != false) {
