@@ -1,6 +1,7 @@
 package com.hausshehe.nova;
 
 import android.app.Activity;
+import android.view.Window;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -73,6 +74,23 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
 
     private static void hookMainActivity(ClassLoader cl) throws ClassNotFoundException {
         Class<?> mainActivity = XposedHelpers.findClass("com.deepseek.chat.MainActivity", cl);
+        XposedHelpers.findAndHookMethod(mainActivity, "onStart", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                if (!(param.thisObject instanceof Activity)) return;
+                try {
+                    Activity activity = (Activity) param.thisObject;
+                    Window window = activity.getWindow();
+                    window.setAlpha(0.0f);
+                    bootstrapActivity = activity;
+                    Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_EARLY");
+                } catch (Throwable t) {
+                    Log.e(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDE_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED method=onStart");
+
         XposedHelpers.findAndHookMethod(mainActivity, "onCreate", android.os.Bundle.class,
                 new XC_MethodHook() {
                     @Override
