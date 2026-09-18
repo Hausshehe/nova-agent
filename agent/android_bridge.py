@@ -131,6 +131,23 @@ class AndroidBridge:
             return ExecutionResult(bool(response.get("accepted", response.get("ok", True))), bool(response.get("changed", False)))
         return ExecutionResult(False, False, False, f"unsupported action type: {action.type}")
 
+    def start_agent(self, goal: str, deadline_ms: int = 0) -> dict[str, Any]:
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError("goal must not be blank")
+        if deadline_ms < 0:
+            raise ValueError("deadline_ms must not be negative")
+        return self._request({
+            "command": "agent_goal",
+            "goal": goal.strip(),
+            "deadlineMs": int(deadline_ms),
+        })
+
+    def agent_status(self) -> dict[str, Any]:
+        return self._request({"command": "agent_status"})
+
+    def cancel_agent(self) -> dict[str, Any]:
+        return self._request({"command": "agent_cancel"})
+
     def launch(self, package: str = "com.hausshehe.nova", root: bool = False) -> dict[str, Any]:
         try:
             return self._request({"command": "launch", "package": package})
