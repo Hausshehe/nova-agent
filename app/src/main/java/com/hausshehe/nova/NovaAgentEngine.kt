@@ -65,6 +65,7 @@ class NovaAgentEngine(
         shouldStop: () -> Boolean = { false },
         onProgress: (NovaAgentProgress) -> Unit = {},
     ): NovaAgentRunResult {
+        NovaTrace.record(sessionId, "NOVA", "task_run_start", mapOf("goal" to goal, "deadlineMs" to deadlineMs))
         if (goal.isBlank()) return NovaAgentRunResult(false, 0, "goal must not be blank")
 
         val service = NovaAccessibilityService.instance
@@ -83,7 +84,9 @@ class NovaAgentEngine(
 
         try {
             reasoningSession.start()
+            NovaTrace.record(sessionId, "NOVA", "reasoning_bootstrap_complete")
         } catch (t: Throwable) {
+            NovaTrace.record(sessionId, "ERROR", "reasoning_bootstrap_failed", mapOf("error" to (t.message ?: t.javaClass.simpleName)))
             return NovaAgentRunResult(
                 false,
                 0,
@@ -93,6 +96,7 @@ class NovaAgentEngine(
 
         observeNow(service)
         var state = ObservationStore.current()
+        NovaTrace.record(sessionId, "OBSERVATION", "captured", mapOf("observationId" to state.observationId, "package" to state.packageName, "activity" to state.activity, "elementCount" to state.elements.size))
         if (state.elements.isEmpty()) {
             return NovaAgentRunResult(false, 0, "current Android UI observation is empty")
         }
@@ -132,8 +136,10 @@ class NovaAgentEngine(
             }
 
             state = ObservationStore.current()
+            val reasoningPrompt = buildReasoningPrompt(goal, state)
+            NovaTrace.record(sessionId, "NOVA", "action_reasoning_start", mapOf("observationId" to state.observationId, "prompt" to reasoningPrompt))
             val raw = try {
-                completeReasoning(buildReasoningPrompt(goal, state), goal, state, "action")
+                completeReasoning(reasoningPrompt, goal, state, "action")
             } catch (t: Throwable) {
                 return NovaAgentRunResult(
                     false,
@@ -142,6 +148,7 @@ class NovaAgentEngine(
                 )
             }
 
+            NovaTrace.record(sessionId, "NOVA", "action_reasoning_complete", mapOf("rawResponse" to raw))
             val decision = try {
                 parseDecision(raw, state)
             } catch (t: Throwable) {
@@ -166,8 +173,10 @@ class NovaAgentEngine(
 
             invalidDecisions = 0
             attempts++
+            NovaTrace.record(sessionId, "NOVA", "decision", mapOf("step" to attempts, "action" to decision.type, "target" to decision.targetId, "value" to decision.value, "reason" to decision.reason))
 
             val execution = execute(decision, service)
+            NovaTrace.record(sessionId, "ACTION", "execution", mapOf("step" to attempts, "accepted" to execution.accepted, "changed" to execution.changed, "error" to execution.error, "action" to actionSummary(decision)))
             rememberOutcome(
                 "action=" + decision.type +
                     " target=" + decision.targetId.orEmpty() +
@@ -198,6 +207,8 @@ class NovaAgentEngine(
                 }
             }
 
+            NovaTrace.record(sessionId, "OBSERVATION", "fresh_state", mapOf("observationId" to after.observationId, "package" to after.packageName, "activity" to after.activity, "elementCount" to after.elements.size))
+
             // DeepSeek owns semantic goal verification. Nova still enforces the
             // mechanical safety contract for actions and evidence IDs, but it must
             // not decide that a human goal is complete from hard-coded goal syntax.
@@ -209,6 +220,8 @@ class NovaAgentEngine(
                 lastAction = actionSummary(decision),
                 lastOutcome = executionSummary(execution),
             )
+
+            NovaTrace.record(sessionId, "VERIFICATION", "result", mapOf("complete" to verification.complete, "evidenceIds" to verification.evidenceIds, "reason" to verification.reason))
 
             if (verification.complete) {
                 onProgress(
@@ -224,6 +237,7 @@ class NovaAgentEngine(
             }
         }
 
+        NovaTrace.record(sessionId, "ERROR", "task_failed", mapOf("steps" to attempts, "error" to "step budget exhausted before verified completion"))
         return NovaAgentRunResult(
             false,
             attempts,
@@ -249,11 +263,12 @@ class NovaAgentEngine(
         return try {
             reasoningSession.complete(prompt)
         } catch (t: ReasoningSession.RateLimitExhaustedException) {
+            NovaTrace.record(sessionId, "NOVA", "reasoning_rate_limit_handoff", mapOf("mode" to mode, "error" to (t.message ?: t.javaClass.simpleName)))
             val id = sessionId ?: "engine-" + System.identityHashCode(this)
             reasoningSession = ReasoningSessionRegistry.replace(id, client)
-            reasoningSession.complete(
-                buildRateLimitHandoffPrompt(goal, state, mode, prompt)
-            )
+            val handoffPrompt = buildRateLimitHandoffPrompt(goal, state, mode, prompt)
+            NovaTrace.record(sessionId, "DEEPSEEK", "handoff_request", mapOf("prompt" to handoffPrompt))
+            reasoningSession.complete(handoffPrompt)
         }
     }
 
