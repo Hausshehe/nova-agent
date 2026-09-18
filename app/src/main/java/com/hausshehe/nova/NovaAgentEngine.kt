@@ -198,10 +198,19 @@ class NovaAgentEngine(
                 }
             }
 
-            val verified = isGoalComplete(goal, after, state) ||
-                (isVerificationSafeForGoal(goal) && verifyGoalWithDeepSeek(goal, after))
+            // DeepSeek owns semantic goal verification. Nova still enforces the
+            // mechanical safety contract for actions and evidence IDs, but it must
+            // not decide that a human goal is complete from hard-coded goal syntax.
+            // This is especially important for compound goals such as
+            // "Open YouTube and then tap Search".
+            val verification = verifyGoalWithDeepSeek(
+                goal = goal,
+                state = after,
+                lastAction = actionSummary(decision),
+                lastOutcome = executionSummary(execution),
+            )
 
-            if (verified) {
+            if (verification.complete) {
                 onProgress(
                     NovaAgentProgress(
                         steps = attempts,
@@ -239,21 +248,35 @@ class NovaAgentEngine(
     private fun verifyGoalWithDeepSeek(
         goal: String,
         state: UiSnapshot,
-    ): Boolean {
+        lastAction: String,
+        lastOutcome: String,
+    ): GoalVerification {
         return try {
-            val verification = parseVerification(
-                reasoningSession.complete(buildVerificationPrompt(goal, state)),
+            parseVerification(
+                reasoningSession.complete(
+                    buildVerificationPrompt(
+                        goal = goal,
+                        state = state,
+                        lastAction = lastAction,
+                        lastOutcome = lastOutcome,
+                    )
+                ),
                 state,
             )
-            verification.complete
-        } catch (_: Throwable) {
-            false
+        } catch (t: Throwable) {
+            GoalVerification(
+                complete = false,
+                evidenceIds = emptyList(),
+                reason = "DeepSeek verification failed: " + (t.message ?: t.javaClass.simpleName),
+            )
         }
     }
 
     private fun buildVerificationPrompt(
         goal: String,
         state: UiSnapshot,
+        lastAction: String,
+        lastOutcome: String,
     ): String {
         return buildString {
             append(
@@ -263,6 +286,14 @@ class NovaAgentEngine(
                 Decide whether the user goal is ALREADY satisfied by the CURRENT
                 Android observation. Do not suggest another action. Do not rely on
                 memory of previous screens except for the task goal itself.
+
+                You are the semantic authority for completion. Interpret the goal
+                as a human instruction, including compound or sequential goals.
+                Judge the requested OUTCOME, not whether Nova merely executed an
+                action. For example, if the goal says "Open YouTube and then tap
+                Search", a current YouTube search screen is evidence of completion.
+                Do not require Nova to encode every possible natural-language goal
+                as a Kotlin heuristic.
 
                 Return complete=true only when the visible current state provides
                 concrete evidence that the requested goal is satisfied. If there
@@ -284,6 +315,10 @@ class NovaAgentEngine(
             )
             append("\n")
             append(goal)
+            append("\n\nLAST_ACTION:\n")
+            append(lastAction)
+            append("\n\nLAST_OUTCOME:\n")
+            append(lastOutcome)
             append("\n\nCURRENT_STATE:\n")
             append(statePayload(state).toString())
         }
@@ -837,11 +872,6 @@ class NovaAgentEngine(
         }
 
         return false
-    }
-
-    private fun isVerificationSafeForGoal(goal: String): Boolean {
-        val words = tokenize(goal)
-        return words.firstOrNull() !in STATE_VERBS
     }
 
     private fun tokenize(text: String): Set<String> =
