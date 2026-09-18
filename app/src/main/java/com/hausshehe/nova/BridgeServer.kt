@@ -337,23 +337,36 @@ object BridgeServer {
         val taskId = requestedTaskId ?: TaskStore.get(context)?.id
         if (taskId == null) return error("no task id is available for DeepSeek trace")
 
+        val full = request.optBoolean("full", false)
         val events = NovaTrace.snapshot(taskId)
         val messages = JSONArray()
         for (i in 0 until events.length()) {
             val event = events.optJSONObject(i) ?: continue
             if (event.optString("source") != "DEEPSEEK") continue
             when (event.optString("event")) {
-                "request" -> messages.put(JSONObject().apply {
-                    put("type", "request")
-                    put("timestampMs", event.optLong("timestampMs"))
-                    put("attempt", event.optInt("attempt", 1))
-                    put("prompt", event.optString("prompt", ""))
-                })
+                "request" -> messages.put(
+                    if (full) {
+                        JSONObject().apply {
+                            put("type", "request")
+                            put("timestampMs", event.optLong("timestampMs"))
+                            put("attempt", event.optInt("attempt", 1))
+                            put("prompt", event.optString("prompt", ""))
+                        }
+                    } else {
+                        compactDeepSeekRequest(event)
+                    }
+                )
                 "response" -> messages.put(JSONObject().apply {
                     put("type", "response")
                     put("timestampMs", event.optLong("timestampMs"))
                     put("attempt", event.optInt("attempt", 1))
                     put("response", event.optString("response", ""))
+                })
+                "error" -> messages.put(JSONObject().apply {
+                    put("type", "error")
+                    put("timestampMs", event.optLong("timestampMs"))
+                    put("attempt", event.optInt("attempt", 1))
+                    put("error", event.optString("error", "DeepSeek reasoning error"))
                 })
             }
         }
@@ -361,8 +374,88 @@ object BridgeServer {
         return JSONObject().apply {
             put("ok", true)
             put("taskId", taskId)
+            put("full", full)
             put("messages", messages)
         }
+    }
+
+    private fun compactDeepSeekRequest(event: JSONObject): JSONObject {
+        val prompt = event.optString("prompt", "")
+        val mode = when {
+            prompt.contains("TURN MODE: GOAL_VERIFICATION") -> "GOAL_VERIFICATION"
+            prompt.contains("TURN MODE: ACTION_DECISION") -> "ACTION_DECISION"
+            else -> "BOOTSTRAP"
+        }
+
+        val result = JSONObject().apply {
+            put("type", "request")
+            put("timestampMs", event.optLong("timestampMs"))
+            put("attempt", event.optInt("attempt", 1))
+            put("mode", mode)
+        }
+
+        val goal = extractLineValue(prompt, "GOAL:")
+        if (!goal.isNullOrBlank()) result.put("goal", goal)
+
+        val observationText = extractPromptJson(prompt, "CURRENT_STATE:")
+            ?: extractPromptJson(prompt, "CURRENT_CONTEXT:")
+        if (observationText != null) {
+            runCatching {
+                val envelope = JSONObject(observationText)
+                val state = envelope.optJSONObject("current_state") ?: envelope
+                val observation = JSONObject().apply {
+                    put("observationId", state.optString("observation_id", state.optString("observationId", "")))
+                    put("package", state.optString("package", ""))
+                    put("activity", state.optString("activity", ""))
+                    put("elementCount", state.optJSONArray("elements")?.length() ?: 0)
+                }
+                result.put("observation", observation)
+            }
+        }
+
+        return result
+    }
+
+    private fun extractLineValue(text: String, marker: String): String? {
+        val start = text.indexOf(marker)
+        if (start < 0) return null
+        val valueStart = start + marker.length
+        val lineEnd = text.indexOf('\n', valueStart)
+        val value = if (lineEnd >= 0) text.substring(valueStart, lineEnd) else text.substring(valueStart)
+        return value.trim().takeIf { it.isNotEmpty() }
+    }
+
+    private fun extractPromptJson(text: String, marker: String): String? {
+        val markerIndex = text.indexOf(marker)
+        if (markerIndex < 0) return null
+        val jsonStart = text.indexOf('{', markerIndex + marker.length)
+        if (jsonStart < 0) return null
+
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in jsonStart until text.length) {
+            val ch = text[i]
+            if (inString) {
+                if (escaped) {
+                    escaped = false
+                } else if (ch == '\\') {
+                    escaped = true
+                } else if (ch == '"') {
+                    inString = false
+                }
+                continue
+            }
+            when (ch) {
+                '"' -> inString = true
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) return text.substring(jsonStart, i + 1)
+                }
+            }
+        }
+        return null
     }
 
     private fun agentResult(context: Context, request: JSONObject): JSONObject {
