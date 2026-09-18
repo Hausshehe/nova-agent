@@ -49,6 +49,7 @@ class NovaAgentEngine(
     fun run(
         goal: String,
         deadlineMs: Long = 0L,
+        shouldStop: () -> Boolean = { false },
         onProgress: (NovaAgentProgress) -> Unit = {},
     ): NovaAgentRunResult {
         if (goal.isBlank()) return NovaAgentRunResult(false, 0, "goal must not be blank")
@@ -79,6 +80,9 @@ class NovaAgentEngine(
         var attempts = 0
 
         while (attempts < maxSteps) {
+            if (shouldStop()) {
+                return NovaAgentRunResult(false, attempts, "task cancelled")
+            }
             if (deadlineMs > 0L && System.currentTimeMillis() >= deadlineMs) {
                 return NovaAgentRunResult(false, attempts, "task deadline reached before verified completion")
             }
@@ -495,7 +499,11 @@ class NovaAgentEngine(
         after: UiSnapshot,
         before: UiSnapshot? = null,
     ): Boolean {
-        val words = tokenize(goal)
+        val words = tokenize(goal).toMutableList()
+        val deadlineWord = words.indexOf("by")
+        if (deadlineWord >= 0) {
+            words.subList(deadlineWord, words.size).clear()
+        }
         if (words.isEmpty()) return false
 
         val verb = words.first()
