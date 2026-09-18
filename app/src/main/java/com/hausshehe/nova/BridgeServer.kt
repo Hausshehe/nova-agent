@@ -95,6 +95,7 @@ object BridgeServer {
                     "agent_goal" -> agentGoal(context, request)
                     "agent_status" -> agentStatus(context)
                     "agent_trace" -> agentTrace(context, request)
+                    "agent_deepseek_trace" -> agentDeepSeekTrace(context, request)
                     "agent_result" -> agentResult(context, request)
                     "agent_cancel" -> agentCancel(context)
                     "click" -> click(request.optString("elementId"))
@@ -328,6 +329,39 @@ object BridgeServer {
             put("ok", true)
             put("taskId", taskId)
             put("events", trace)
+        }
+    }
+
+    private fun agentDeepSeekTrace(context: Context, request: JSONObject): JSONObject {
+        val requestedTaskId = request.optString("taskId", "").trim().ifBlank { null }
+        val taskId = requestedTaskId ?: TaskStore.get(context)?.id
+        if (taskId == null) return error("no task id is available for DeepSeek trace")
+
+        val events = NovaTrace.snapshot(taskId)
+        val messages = JSONArray()
+        for (i in 0 until events.length()) {
+            val event = events.optJSONObject(i) ?: continue
+            if (event.optString("source") != "DEEPSEEK") continue
+            when (event.optString("event")) {
+                "request" -> messages.put(JSONObject().apply {
+                    put("type", "request")
+                    put("timestampMs", event.optLong("timestampMs"))
+                    put("attempt", event.optInt("attempt", 1))
+                    put("prompt", event.optString("prompt", ""))
+                })
+                "response" -> messages.put(JSONObject().apply {
+                    put("type", "response")
+                    put("timestampMs", event.optLong("timestampMs"))
+                    put("attempt", event.optInt("attempt", 1))
+                    put("response", event.optString("response", ""))
+                })
+            }
+        }
+
+        return JSONObject().apply {
+            put("ok", true)
+            put("taskId", taskId)
+            put("messages", messages)
         }
     }
 
