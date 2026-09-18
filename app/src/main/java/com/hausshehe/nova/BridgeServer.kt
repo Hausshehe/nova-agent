@@ -29,6 +29,8 @@ object BridgeServer {
     private const val DEEPSEEK_CONNECT_TIMEOUT_MS = 1000
     private const val DEEPSEEK_READ_TIMEOUT_MS = 3000
     private const val DEEPSEEK_RESPONSE_TIMEOUT_MS = 30000L
+    private const val DEEPSEEK_BOOTSTRAP_WAIT_MS = 5000L
+    private const val DEEPSEEK_BOOTSTRAP_POLL_MS = 250L
     private val executor = Executors.newCachedThreadPool()
     private val deepSeekResponseLock = Object()
     private var deepSeekResponseActive = false
@@ -81,7 +83,7 @@ object BridgeServer {
                     "observe" -> observe()
                     "health" -> health()
                     "deepseek_event" -> deepSeekEvent(request)
-                    "deepseek_native_prompt" -> deepSeekNativePrompt(request)
+                    "deepseek_native_prompt" -> deepSeekNativePrompt(context, request)
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
@@ -137,7 +139,7 @@ object BridgeServer {
         }
     }
 
-    private fun deepSeekNativePrompt(request: JSONObject): JSONObject {
+    private fun deepSeekNativePrompt(context: Context, request: JSONObject): JSONObject {
         val prompt = request.optString("prompt", "")
         if (prompt.isBlank()) return error("prompt is required")
         if (prompt.length > 12000) return error("prompt too long")
@@ -150,34 +152,52 @@ object BridgeServer {
             deepSeekResponseError = null
         }
 
-        val accepted = try {
-            Socket().use { socket ->
-                socket.connect(
-                    InetSocketAddress("127.0.0.1", DEEPSEEK_NATIVE_PORT),
-                    DEEPSEEK_CONNECT_TIMEOUT_MS,
-                )
-                socket.soTimeout = DEEPSEEK_READ_TIMEOUT_MS
-                val writer = PrintWriter(socket.getOutputStream(), true)
-                writer.println(request.toString())
-                val responseLine = BufferedReader(InputStreamReader(socket.getInputStream())).readLine()
-                    ?: return error("DeepSeek native bridge returned no response").also { clearDeepSeekResponseState() }
-                val nativeResponse = JSONObject(responseLine)
-                if (!nativeResponse.optBoolean("accepted", false)) {
-                    clearDeepSeekResponseState()
+        var nativeResponse: JSONObject? = null
+        var lastError: String? = null
+        var bootstrapStarted = false
+        val deadline = System.currentTimeMillis() + DEEPSEEK_BOOTSTRAP_WAIT_MS
+
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress("127.0.0.1", DEEPSEEK_NATIVE_PORT), DEEPSEEK_CONNECT_TIMEOUT_MS)
+                    socket.soTimeout = DEEPSEEK_READ_TIMEOUT_MS
+                    val writer = PrintWriter(socket.getOutputStream(), true)
+                    writer.println(request.toString())
+                    val responseLine = BufferedReader(InputStreamReader(socket.getInputStream())).readLine()
+                        ?: throw IllegalStateException("DeepSeek native bridge returned no response")
+                    nativeResponse = JSONObject(responseLine)
                 }
-                nativeResponse
+                if (nativeResponse != null) break
+            } catch (e: Exception) {
+                lastError = e.message ?: e.javaClass.simpleName
+                if (!bootstrapStarted) {
+                    bootstrapStarted = true
+                    val bootstrap = launch(context, "com.deepseek.chat")
+                    if (!bootstrap.optBoolean("ok", false)) {
+                        clearDeepSeekResponseState()
+                        return error("DeepSeek bootstrap failed: " + bootstrap.optString("error", "unknown error"))
+                    }
+                    Log.i(TAG, "DEEPSEEK_NATIVE_BOOTSTRAP_STARTED")
+                }
+                Thread.sleep(DEEPSEEK_BOOTSTRAP_POLL_MS)
             }
-        } catch (e: Exception) {
-            clearDeepSeekResponseState()
-            return error("DeepSeek native bridge unavailable: ${e.message ?: e.javaClass.simpleName}")
         }
 
-        if (!accepted.optBoolean("accepted", false)) return accepted
+        val accepted = nativeResponse
+        if (accepted == null) {
+            clearDeepSeekResponseState()
+            return error("DeepSeek native bridge unavailable: " + (lastError ?: "timeout"))
+        }
+        if (!accepted.optBoolean("accepted", false)) {
+            clearDeepSeekResponseState()
+            return accepted
+        }
 
         val completed = synchronized(deepSeekResponseLock) {
-            val deadline = System.currentTimeMillis() + DEEPSEEK_RESPONSE_TIMEOUT_MS
+            val responseDeadline = System.currentTimeMillis() + DEEPSEEK_RESPONSE_TIMEOUT_MS
             while (!deepSeekResponseFinished && deepSeekResponseError == null) {
-                val remaining = deadline - System.currentTimeMillis()
+                val remaining = responseDeadline - System.currentTimeMillis()
                 if (remaining <= 0L) break
                 deepSeekResponseLock.wait(remaining)
             }
@@ -195,7 +215,6 @@ object BridgeServer {
         clearDeepSeekResponseState()
         return completed
     }
-
     private fun clearDeepSeekResponseState() {
         synchronized(deepSeekResponseLock) {
             deepSeekResponseActive = false
