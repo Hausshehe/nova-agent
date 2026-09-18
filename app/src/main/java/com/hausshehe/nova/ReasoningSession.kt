@@ -10,6 +10,7 @@ package com.hausshehe.nova
  */
 class ReasoningSession(
     private val provider: ReasoningProvider,
+    private val traceId: String,
 ) {
     @Volatile
     private var initialized = false
@@ -27,6 +28,7 @@ class ReasoningSession(
     fun start() {
         if (initialized) return
 
+        NovaTrace.record(traceId, "NOVA", "reasoning_session_start")
         val response = completeWithRateLimitRecovery(
             """
             You are Nova's Android reasoning engine.
@@ -84,6 +86,7 @@ class ReasoningSession(
             throw IllegalStateException("DeepSeek bootstrap returned an empty response")
         }
 
+        NovaTrace.record(traceId, "DEEPSEEK", "bootstrap_ack", mapOf("response" to response))
         initialized = true
     }
 
@@ -156,11 +159,14 @@ class ReasoningSession(
         var attempt = 0
         while (true) {
             paceRequest()
+            NovaTrace.record(traceId, "DEEPSEEK", "request", mapOf("attempt" to (attempt + 1), "prompt" to prompt))
             try {
                 val response = provider.complete(prompt)
                 lastRequestAtMs = System.currentTimeMillis()
+                NovaTrace.record(traceId, "DEEPSEEK", "response", mapOf("attempt" to (attempt + 1), "response" to response))
                 return response
             } catch (t: Throwable) {
+                NovaTrace.record(traceId, "DEEPSEEK", "error", mapOf("attempt" to (attempt + 1), "error" to (t.message ?: t.javaClass.simpleName)))
                 lastRequestAtMs = System.currentTimeMillis()
                 if (!isRateLimit(t)) {
                     throw t
@@ -221,11 +227,11 @@ object ReasoningSessionRegistry {
 
     @Synchronized
     fun session(id: String, provider: ReasoningProvider): ReasoningSession =
-        sessions.getOrPut(id) { ReasoningSession(provider) }
+        sessions.getOrPut(id) { ReasoningSession(provider, id) }
 
     @Synchronized
     fun replace(id: String, provider: ReasoningProvider): ReasoningSession {
-        val replacement = ReasoningSession(provider)
+        val replacement = ReasoningSession(provider, id)
         sessions[id] = replacement
         return replacement
     }
