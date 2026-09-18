@@ -186,7 +186,7 @@ class NovaTaskService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("Nova Agent")
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.stat_notify_sync)
+                .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setOngoing(true)
                 .build()
         } else {
