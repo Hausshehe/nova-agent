@@ -34,7 +34,8 @@ class ReasoningSession(
             6. Nova will provide a fresh observation after execution.
             7. Replan from that fresh observation.
             8. If uncertain, do not claim completion.
-            9. Output machine-readable JSON only.
+            9. This bootstrap is initialization only. Do not choose an Android action yet.
+            10. Reply to this bootstrap with exactly: BOOTSTRAP_ACK
 
             Allowed actions:
             tap, type, scroll, back, wait, open_uri, open_system, open_app.
