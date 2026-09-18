@@ -32,6 +32,8 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final int CONTROL_PORT = 18766;
     private static final int MAX_PROMPT_LENGTH = 12000;
     private static final int U_DEFAULT_MASK = 0x4c;
+    private static final long SESSION_READY_WAIT_MS = 5000L;
+    private static final long SESSION_READY_POLL_MS = 100L;
 
     private static volatile Object liveNp1;
     private static volatile Activity bootstrapActivity;
@@ -221,7 +223,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 return;
             }
 
-            Object np1 = liveNp1;
+            Object np1 = awaitNativeSession();
             if (np1 == null) {
                 writer.println(error("DeepSeek native session object is not ready").toString());
                 return;
@@ -260,6 +262,30 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             Log.e(TAG, "DEEPSEEK_NATIVE_CONTROL_REQUEST_FAILED", t);
         }
+    }
+
+    private static Object awaitNativeSession() {
+        Object np1 = liveNp1;
+        if (np1 != null) return np1;
+
+        long deadline = System.nanoTime() + SESSION_READY_WAIT_MS * 1_000_000L;
+        Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_WAIT_BEGIN timeoutMs=" + SESSION_READY_WAIT_MS);
+        while (np1 == null && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(SESSION_READY_POLL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            np1 = liveNp1;
+        }
+
+        if (np1 != null) {
+            Log.i(TAG, "DEEPSEEK_NATIVE_SESSION_WAIT_READY np1=" + identity(np1));
+        } else {
+            Log.w(TAG, "DEEPSEEK_NATIVE_SESSION_WAIT_TIMEOUT timeoutMs=" + SESSION_READY_WAIT_MS);
+        }
+        return np1;
     }
 
     private static JSONObject ok() {
