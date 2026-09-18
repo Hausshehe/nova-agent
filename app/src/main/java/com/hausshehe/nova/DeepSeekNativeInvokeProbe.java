@@ -75,6 +75,24 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static void hookMainActivity(ClassLoader cl) throws ClassNotFoundException {
         Class<?> mainActivity = XposedHelpers.findClass(TARGET_ACTIVITY, cl);
 
+        XposedHelpers.findAndHookMethod(Activity.class, "onCreate", android.os.Bundle.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        if (!(param.thisObject instanceof Activity)) return;
+                        Activity activity = (Activity) param.thisObject;
+                        if (!TARGET_ACTIVITY.equals(activity.getClass().getName())) return;
+                        try {
+                            activity.getWindow().getDecorView().setAlpha(0.0f);
+                            bootstrapActivity = activity;
+                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_BEFORE_ONCREATE");
+                        } catch (Throwable t) {
+                            Log.e(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDE_BEFORE_ONCREATE_FAILED", t);
+                        }
+                    }
+                });
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED class=android.app.Activity method=onCreate");
+
         XposedHelpers.findAndHookMethod(Activity.class, "onStart", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
