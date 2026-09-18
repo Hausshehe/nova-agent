@@ -49,6 +49,26 @@
             android:foregroundServiceType="dataSync" />
 
         <service
+            android:name=".NovaVoiceInteractionService"
+            android:label="Nova Agent"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+        </service>
+
+        <service
+            android:name=".NovaVoiceInteractionSessionService"
+            android:label="Nova Agent"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:process=":voice" />
+
+        <service
             android:name=".NovaAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">
