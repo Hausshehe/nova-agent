@@ -47,7 +47,7 @@ private data class GoalVerification(
 class NovaAgentEngine(
     private val context: Context,
     private val maxSteps: Int = 24,
-    private val client: NativeReasoningClient = NativeReasoningClient(),
+    private val client: ReasoningProvider = NativeReasoningClient(),
 ) {
     private val invalidDecisionBudget = 3
     private val recentOutcomes = ArrayDeque<String>()
@@ -86,7 +86,11 @@ class NovaAgentEngine(
         // "Settings" somewhere in the current UI is not evidence that Settings
         // is actually open. Use the strict evidence-based verifier before allowing
         // a zero-step success.
-        if (verifyGoalWithDeepSeek(goal, state)) {
+        // Deterministic evidence gets first authority for initial state goals.
+        // This prevents model verification from treating historical text inside
+        // another app (for example terminal scrollback containing "Settings")
+        // as proof that the requested screen is actually open.
+        if (isGoalComplete(goal, state, null) || verifyGoalWithDeepSeek(goal, state)) {
             onProgress(
                 NovaAgentProgress(
                     steps = 0,
@@ -656,8 +660,18 @@ class NovaAgentEngine(
 
         if (verb in STATE_VERBS) {
             if (!targetWords.all { it in visibleTokens }) return false
-            if (before == null) return true
 
+            // For "open/show/navigate to X", current application identity is
+            // stronger evidence than arbitrary text. This is what prevents
+            // terminal history, notifications, or hidden content from satisfying
+            // an app/screen goal accidentally.
+            val packageMatchesTarget = currentAppMatchesTarget(targetWords, after)
+
+            if (before == null) {
+                return packageMatchesTarget || strongVisibleTargetEvidence(targetWords, after)
+            }
+
+            val packageChanged = before.packageName != after.packageName
             val activityChanged = before.activity != after.activity
             val wasAlreadyVisible = before.elements.any { element ->
                 element.visible &&
@@ -665,7 +679,11 @@ class NovaAgentEngine(
                         it in tokenize(element.text + " " + element.contentDescription)
                     }
             }
-            return activityChanged || !wasAlreadyVisible
+
+            return packageMatchesTarget ||
+                packageChanged ||
+                activityChanged ||
+                (!wasAlreadyVisible && strongVisibleTargetEvidence(targetWords, after))
         }
 
         val explicitCompletion =
@@ -687,6 +705,41 @@ class NovaAgentEngine(
 
     private fun tokenize(text: String): Set<String> =
         Regex("[A-Za-z0-9]+").findAll(text.lowercase()).map { it.value }.toSet()
+
+    private fun currentAppMatchesTarget(
+        targetWords: Set<String>,
+        state: UiSnapshot,
+    ): Boolean {
+        if (targetWords.isEmpty() || state.packageName.isBlank()) return false
+
+        val packageTokens = tokenize(state.packageName)
+        val label = try {
+            val info = context.packageManager.getApplicationInfo(state.packageName, 0)
+            context.packageManager.getApplicationLabel(info).toString()
+        } catch (_: Throwable) {
+            ""
+        }
+
+        val appTokens = packageTokens + tokenize(label)
+        return targetWords.all { it in appTokens }
+    }
+
+    private fun strongVisibleTargetEvidence(
+        targetWords: Set<String>,
+        state: UiSnapshot,
+    ): Boolean {
+        return state.elements.any { element ->
+            if (!element.visible) return@any false
+            val text = element.text + " " + element.contentDescription
+            val tokens = tokenize(text)
+            targetWords.all { it in tokens } &&
+                (element.className.contains("TextView", true) ||
+                    element.className.contains("Button", true) ||
+                    element.className.contains("Toolbar", true) ||
+                    element.className.contains("EditText", true))
+        }
+    }
+
 
     private fun extractObject(text: String): JSONObject {
         val start = text.indexOf('{')
