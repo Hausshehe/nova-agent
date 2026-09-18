@@ -230,7 +230,9 @@ object BridgeServer {
 
     private fun health(): JSONObject {
         val service = NovaAccessibilityService.instance
-        val activePackage = service?.rootInActiveWindow?.packageName?.toString()
+        val root = service?.rootInActiveWindow
+        val activePackage = root?.packageName?.toString()
+        root?.recycle()
         return JSONObject().apply {
             put("ok", true)
             put("bridge", "running")
