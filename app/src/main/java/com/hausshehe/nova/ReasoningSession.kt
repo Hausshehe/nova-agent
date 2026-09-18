@@ -47,10 +47,11 @@ class ReasoningSession(
             10. Reply to this bootstrap with exactly: BOOTSTRAP_ACK
 
             Allowed actions:
-            tap, type, scroll, back, wait, open_uri, open_system, open_app.
+            tap, type, press_enter, scroll, back, wait, open_uri, open_system, open_app.
 
             Action rules:
-            - tap/type/scroll targets must come from the current observation.
+            - tap/type/press_enter/scroll targets must come from the current observation.
+            - press_enter is for submitting the currently focused editable field using Android's IME action.
             - open_uri is only for explicit http:// or https:// URIs.
             - open_system requires an exact Android settings action such as
               android.settings.SETTINGS.
@@ -68,6 +69,7 @@ class ReasoningSession(
               {"action":"open_system","target":"android.settings.SETTINGS"}
               {"action":"tap","target":"<exact observation id>"}
               {"action":"type","target":"<exact observation id>","value":"<text>"}
+              {"action":"press_enter","target":"<exact editable observation id>"}
               {"action":"scroll","target":"<exact observation id>","value":"down"}
               {"action":"back"}
               {"action":"wait","value":"1000"}
