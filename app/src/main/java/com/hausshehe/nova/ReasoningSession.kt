@@ -48,6 +48,24 @@ class ReasoningSession(
             - open_app uses the installed app's human-readable name.
             - Never output shell, adb, Activity Manager commands, coordinates,
               or an action sequence.
+
+            OUTPUT FORMAT:
+            - For every action response, return exactly ONE valid JSON object and nothing else.
+            - The first character must be { and the last character must be }.
+            - Use the "action" field for the action type and "target" for its target when needed.
+            - Examples:
+              {"action":"open_app","target":"YouTube"}
+              {"action":"open_uri","target":"https://example.com"}
+              {"action":"open_system","target":"android.settings.SETTINGS"}
+              {"action":"tap","target":"<exact observation id>"}
+              {"action":"type","target":"<exact observation id>","value":"<text>"}
+              {"action":"scroll","target":"<exact observation id>","value":"down"}
+              {"action":"back"}
+              {"action":"wait","value":"1000"}
+            - Do NOT use function-call syntax such as open_app({"name":"YouTube"}).
+            - Do NOT use natural-language formats such as "open app: YouTube".
+            - Do NOT use Markdown, code fences, explanations, labels, or multiple actions.
+            - The JSON object must contain only the fields needed for the selected action.
             """.trimIndent(),
         )
 
