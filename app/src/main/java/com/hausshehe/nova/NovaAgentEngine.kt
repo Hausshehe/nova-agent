@@ -367,7 +367,24 @@ class NovaAgentEngine(
     }
 
     private fun parseDecision(raw: String, state: UiSnapshot): AgentDecision {
-        val json = extractObject(raw)
+        val normalized = raw.trim()
+
+        // DeepSeek can return a tool-call-shaped action such as
+        // open_app({"name":"YouTube"}) even when the bootstrap asks for JSON.
+        // Accept that equivalent wire form as well as the documented JSON form.
+        // The executor still receives the same normalized AgentDecision.
+        val functionMatch = Regex(
+            """^([A-Za-z_][A-Za-z0-9_]*)\\s*\\((.*)\\)\\s*$""",
+            setOf(RegexOption.DOT_MATCHES_ALL),
+        ).matchEntire(normalized)
+
+        val functionType = functionMatch?.groupValues?.get(1)?.lowercase()
+        val json = if (functionMatch != null) {
+            val arguments = functionMatch.groupValues[2].trim()
+            if (arguments.isBlank()) JSONObject() else extractObject(arguments)
+        } else {
+            extractObject(raw)
+        }
 
         // The reasoning bootstrap defines the public wire schema as:
         // {"action":"...", "target":"...", ...}
@@ -377,6 +394,7 @@ class NovaAgentEngine(
         val type = (
             jsonNullableString(json, "action_type")
                 ?: jsonNullableString(json, "action")
+                ?: functionType
                 ?: ""
             ).lowercase()
 
@@ -385,8 +403,10 @@ class NovaAgentEngine(
 
         val reason = json.optString("reason", "model decision").take(240)
         val value = jsonNullableString(json, "value")
+        val namedTarget = jsonNullableString(json, "name")
+        val uri = jsonNullableString(json, "uri")
 
-        fun actionValue(): String? = value ?: targetId
+        fun actionValue(): String? = value ?: targetId ?: namedTarget ?: uri
 
         when (type) {
             "tap", "click" -> {
