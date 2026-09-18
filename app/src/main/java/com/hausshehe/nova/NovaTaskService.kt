@@ -88,10 +88,14 @@ class NovaTaskService : Service() {
                 goal = task.goal,
                 deadlineMs = task.deadlineMs,
                 shouldStop = {
-                    TaskStore.get(applicationContext)?.status == "cancelled"
+                    val current = TaskStore.get(applicationContext)
+                    current == null || current.id != task.id || current.status == "cancelled"
                 },
             ) { progress ->
-                TaskStore.update(applicationContext, progress)
+                val current = TaskStore.get(applicationContext)
+                if (current?.id == task.id) {
+                    TaskStore.update(applicationContext, progress)
+                }
                 updateNotification(
                     when (progress.status) {
                         "verified_complete" -> "Goal verified"
@@ -112,13 +116,15 @@ class NovaTaskService : Service() {
             }
 
             if (result.error == "task cancelled") {
+                val latest = TaskStore.get(this)
+                if (latest?.id != task.id) return
                 updateNotification("Task cancelled")
                 stopSelf()
                 return
             }
 
             val latest = TaskStore.get(this)
-            if (latest == null) return
+            if (latest == null || latest.id != task.id) return
             if (latest.deadlineMs > 0L && System.currentTimeMillis() >= latest.deadlineMs) {
                 TaskStore.finish(applicationContext, result)
                 updateNotification("Stopped: deadline reached")
