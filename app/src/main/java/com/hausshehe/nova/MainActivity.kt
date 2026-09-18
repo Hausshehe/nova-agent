@@ -213,7 +213,8 @@ class MainActivity : Activity() {
         if (text.isNotBlank()) {
             agentGoalInput.setText(text)
             agentGoalInput.setSelection(agentGoalInput.text.length)
-            runAgentGoal()
+            val sourcePackage = intent.getStringExtra(Intent.EXTRA_ASSIST_PACKAGE)
+            runAgentGoal(sourcePackage)
             moveTaskToBack(true)
         } else {
             agentGoalInput.requestFocus()
