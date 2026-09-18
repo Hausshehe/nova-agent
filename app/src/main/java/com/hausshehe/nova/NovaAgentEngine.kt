@@ -52,6 +52,12 @@ class NovaAgentEngine(
 ) {
     private val invalidDecisionBudget = 3
     private val recentOutcomes = ArrayDeque<String>()
+    private val reasoningSession: ReasoningSession by lazy {
+        ReasoningSessionRegistry.session(
+            sessionId ?: "engine-" + System.identityHashCode(this),
+            client,
+        )
+    }
 
     fun run(
         goal: String,
@@ -76,10 +82,6 @@ class NovaAgentEngine(
             }
         }
 
-        val reasoningSession = ReasoningSessionRegistry.session(
-            sessionId ?: "engine-" + System.identityHashCode(this),
-            client,
-        )
         try {
             reasoningSession.start()
         } catch (t: Throwable) {
