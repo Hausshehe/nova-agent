@@ -212,6 +212,12 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
         }
         activity.runOnUiThread(() -> {
             try {
+                // The hidden state belongs only to the Nova bootstrap window.
+                // Once native session resolution has completed, clear it before
+                // moving the task to the background. Otherwise Android can later
+                // resume the same Activity from Recents and the onStart hook will
+                // hide the user's normal DeepSeek UI again.
+                headlessBootstrapRequested = false;
                 boolean moved = activity.moveTaskToBack(true);
                 Log.i(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_HIDDEN movedToBack=" + moved);
             } catch (Throwable t) {
