@@ -185,6 +185,7 @@ class MainActivity : Activity() {
         content.addView(multiStepStatus)
 
         setContentView(root)
+        handleAssistIntent(intent)
     }
 
     override fun onResume() {
@@ -201,13 +202,18 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent?.action == Intent.ACTION_ASSIST) {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
-            if (text.isNotBlank() && ::agentGoalInput.isInitialized) {
-                agentGoalInput.setText(text)
-                agentGoalInput.setSelection(agentGoalInput.text.length)
-                runAgentGoal()
-            }
+        handleAssistIntent(intent)
+    }
+
+    private fun handleAssistIntent(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_ASSIST || !::agentGoalInput.isInitialized) return
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+        if (text.isNotBlank()) {
+            agentGoalInput.setText(text)
+            agentGoalInput.setSelection(agentGoalInput.text.length)
+            runAgentGoal()
+        } else {
+            agentGoalInput.requestFocus()
         }
     }
 
