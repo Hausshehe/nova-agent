@@ -260,36 +260,39 @@ class NovaAgentEngine(
         goal: String,
         state: UiSnapshot,
     ): String {
-        return """
-            You are Nova's goal-verification engine.
+        return buildString {
+            append(
+                """
+                You are Nova's goal-verification engine.
 
-            Decide whether the user goal is ALREADY satisfied by the CURRENT
-            Android observation. Do not suggest another action. Do not rely on
-            memory of previous screens except for the task goal itself.
+                Decide whether the user goal is ALREADY satisfied by the CURRENT
+                Android observation. Do not suggest another action. Do not rely on
+                memory of previous screens except for the task goal itself.
 
-            Return complete=true only when the visible current state provides
-            concrete evidence that the requested goal is satisfied. If there
-            is meaningful uncertainty, return complete=false.
+                Return complete=true only when the visible current state provides
+                concrete evidence that the requested goal is satisfied. If there
+                is meaningful uncertainty, return complete=false.
 
-            Evidence must reference only element ids present in the current
-            observation. Never invent ids. A completion decision with no valid
-            visible evidence ids is invalid.
+                Evidence must reference only element ids present in the current
+                observation. Never invent ids. A completion decision with no valid
+                visible evidence ids is invalid.
 
-            Return JSON only:
-            {
-              "complete": true | false,
-              "evidence_ids": ["current element id", "..."],
-              "reason": "brief explanation"
-            }
+                Return JSON only:
+                {
+                  "complete": true | false,
+                  "evidence_ids": ["current element id", "..."],
+                  "reason": "brief explanation"
+                }
 
-            GOAL:
-        """.trimIndent() + "
-" + goal + "
-
-CURRENT_STATE:
-" + statePayload(state).toString()
+                GOAL:
+                """.trimIndent()
+            )
+            append("\n")
+            append(goal)
+            append("\n\nCURRENT_STATE:\n")
+            append(statePayload(state).toString())
+        }
     }
-
     private fun parseVerification(
         raw: String,
         state: UiSnapshot,
