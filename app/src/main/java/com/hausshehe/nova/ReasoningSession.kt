@@ -78,7 +78,46 @@ class ReasoningSession(
 
     fun complete(prompt: String): String {
         start()
-        return provider.complete(prompt)
+
+        // DeepSeek's native machinery keeps the same conversation for the
+        // task. Action generation and semantic verification therefore need an
+        // explicit per-turn mode marker so the previous verification response
+        // cannot become the model's implicit task for the next turn.
+        val trimmed = prompt.trimStart()
+        val turnContract = when {
+            trimmed.startsWith("CURRENT_CONTEXT:") -> {
+                """
+                TURN MODE: ACTION_DECISION
+
+                This is an action-generation turn. Ignore any previous
+                verification answer as an instruction. Inspect only the CURRENT_CONTEXT
+                supplied below and choose exactly ONE next Android action.
+
+                Do not return a verification object. Do not return complete=true/false.
+                Return exactly one action JSON object using the bootstrap action schema.
+                If the goal is not yet satisfied, choose the single next action.
+                If the goal appears satisfied, still do not claim completion here;
+                Nova will run a separate verification turn.
+                """.trimIndent()
+            }
+
+            trimmed.startsWith("You are Nova's goal-verification engine.") -> {
+                """
+                TURN MODE: GOAL_VERIFICATION
+
+                This is a semantic verification turn, not an action-generation turn.
+                Do not output an Android action. Evaluate only the verification request
+                below and return exactly the requested verification JSON object.
+                The next action-generation turn will be explicitly marked separately.
+                """.trimIndent()
+            }
+
+            else -> {
+                "TURN MODE: FOLLOW THE EXPLICIT REQUEST BELOW. Do not infer a different task from earlier turns."
+            }
+        }
+
+        return provider.complete(turnContract + "\n\n" + prompt)
     }
 }
 
