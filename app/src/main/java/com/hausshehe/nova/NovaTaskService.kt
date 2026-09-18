@@ -168,6 +168,16 @@ class NovaTaskService : Service() {
                 return
             }
 
+            if (latest.deadlineMs == 0L) {
+                val failed = TaskStore.finish(applicationContext, result)
+                if (failed != null) {
+                    updateNotification("Stopped: bounded cycle ended")
+                }
+                ReasoningSessionRegistry.remove(task.id)
+                stopSelf()
+                return
+            }
+
             TaskStore.keepRunning(
                 applicationContext,
                 "bounded cycle ended; fresh observation will drive the next cycle",
