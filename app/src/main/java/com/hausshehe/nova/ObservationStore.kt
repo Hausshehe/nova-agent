@@ -13,7 +13,9 @@ object ObservationStore {
     fun update(root: AccessibilityNodeInfo?) {
         if (root == null) return
         val elements = mutableListOf<UiElementSnapshot>()
-        collect(root, elements, "0")
+        val resourceIdCounts = mutableMapOf<String, Int>()
+        countResourceIds(root, resourceIdCounts)
+        collect(root, elements, "0", resourceIdCounts)
         val packageName = root.packageName?.toString() ?: ""
         val className = root.className?.toString() ?: ""
         latest = UiSnapshot(
@@ -26,13 +28,38 @@ object ObservationStore {
 
     fun current(): UiSnapshot = latest
 
+    private fun countResourceIds(
+        node: AccessibilityNodeInfo,
+        counts: MutableMap<String, Int>,
+    ) {
+        node.viewIdResourceName
+            ?.takeIf { it.isNotBlank() }
+            ?.let { counts[it] = (counts[it] ?: 0) + 1 }
+
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { child ->
+                countResourceIds(child, counts)
+                child.recycle()
+            }
+        }
+    }
+
     private fun collect(
         node: AccessibilityNodeInfo,
         out: MutableList<UiElementSnapshot>,
-        path: String
+        path: String,
+        resourceIdCounts: Map<String, Int>,
     ) {
-        val resourceId = node.viewIdResourceName
-        val stableId = resourceId?.takeIf { it.isNotBlank() } ?: "path:$path"
+        val resourceId = node.viewIdResourceName?.takeIf { it.isNotBlank() }
+        // Resource IDs are normally convenient, but Android does not guarantee
+        // that a resource ID identifies one node. When an ID is duplicated in
+        // the current observation, use the node path so the model can name one
+        // exact control and the executor can resolve that same control.
+        val stableId = if (resourceId != null && resourceIdCounts[resourceId] == 1) {
+            resourceId
+        } else {
+            "path:$path"
+        }
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
 
@@ -54,7 +81,7 @@ object ObservationStore {
 
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { child ->
-                collect(child, out, "$path.$i")
+                collect(child, out, "$path.$i", resourceIdCounts)
                 child.recycle()
             }
         }
