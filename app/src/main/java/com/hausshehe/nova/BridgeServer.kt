@@ -84,6 +84,9 @@ object BridgeServer {
                     "health" -> health()
                     "deepseek_event" -> deepSeekEvent(request)
                     "deepseek_native_prompt" -> deepSeekNativePrompt(context, request)
+                    "agent_goal" -> agentGoal(context, request)
+                    "agent_status" -> agentStatus(context)
+                    "agent_cancel" -> agentCancel(context)
                     "click" -> click(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
@@ -233,7 +236,7 @@ object BridgeServer {
             put("bridge", "running")
             put("accessibility_connected", service != null)
             put("active_package", activePackage ?: JSONObject.NULL)
-            put("operational", service != null && activePackage == PACKAGE)
+            put("operational", service != null)
         }
     }
 
@@ -275,6 +278,44 @@ object BridgeServer {
         }
     }
 
+    private fun agentGoal(context: Context, request: JSONObject): JSONObject {
+        val goal = request.optString("goal", "").trim()
+        if (goal.isBlank()) return error("goal is required")
+        val deadlineMs = request.optLong("deadlineMs", 0L)
+        if (deadlineMs < 0L) return error("deadlineMs must not be negative")
+        val intent = NovaTaskService.intent(context, goal, deadlineMs)
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            JSONObject().apply {
+                put("ok", true)
+                put("accepted", true)
+                put("status", "running")
+            }
+        } catch (e: Throwable) {
+            error("unable to start Nova task service: " + (e.message ?: e.javaClass.simpleName))
+        }
+    }
+
+    private fun agentStatus(context: Context): JSONObject = JSONObject().apply {
+        put("ok", true)
+        put("task", TaskStore.snapshotJson(context).opt("task").let { value ->
+            if (value == null || value == JSONObject.NULL) JSONObject.NULL else TaskStore.snapshotJson(context)
+        })
+    }
+
+    private fun agentCancel(context: Context): JSONObject {
+        val task = TaskStore.cancel(context)
+        context.stopService(Intent(context, NovaTaskService::class.java))
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", task != null)
+            put("task", if (task == null) JSONObject.NULL else TaskStore.snapshotJson(context))
+        }
+    }
     private fun click(elementId: String): JSONObject {
         val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
         val root = service.rootInActiveWindow ?: return error("No active accessibility window")
