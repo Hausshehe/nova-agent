@@ -90,7 +90,7 @@ class NovaAgentEngine(
         // This prevents model verification from treating historical text inside
         // another app (for example terminal scrollback containing "Settings")
         // as proof that the requested screen is actually open.
-        if (isGoalComplete(goal, state, null) || verifyGoalWithDeepSeek(goal, state)) {
+        if (isGoalComplete(goal, state, null)) {
             onProgress(
                 NovaAgentProgress(
                     steps = 0,
@@ -182,7 +182,7 @@ class NovaAgentEngine(
             }
 
             val verified = isGoalComplete(goal, after, state) ||
-                verifyGoalWithDeepSeek(goal, after)
+                (isVerificationSafeForGoal(goal) && verifyGoalWithDeepSeek(goal, after))
 
             if (verified) {
                 onProgress(
@@ -235,14 +235,19 @@ class NovaAgentEngine(
               unless new evidence gives a concrete reason to retry.
             - If the UI is loading or temporarily unavailable, use wait with a bounded delay.
             - Use open_uri only for an explicit http:// or https:// URI.
+            - Use open_system for Android system destinations such as Settings when
+              accessibility navigation cannot reach the destination safely.
+            - Never type shell commands, adb commands, or Android Activity Manager
+              commands into terminal or command-line applications. Nova provides
+              system-level actions directly.
             - Never use coordinates or screen positions.
             - Return JSON only.
 
             Required JSON:
             {
-              "action_type": "tap | type | scroll | back | wait | open_uri",
+              "action_type": "tap | type | scroll | back | wait | open_uri | open_system",
               "target_id": "current UI element id or null",
-              "value": "text to type, wait milliseconds, or URI, otherwise null",
+              "value": "text to type, wait milliseconds, URI, or Android system action, otherwise null",
               "reason": "brief reason for this one action"
             }
 
@@ -441,6 +446,14 @@ class NovaAgentEngine(
                 ) { "open_uri requires an http(s) URI" }
             }
 
+            "open_system" -> {
+                require(targetId == null) { "open_system cannot carry target_id" }
+                require(!value.isNullOrBlank()) { "open_system requires an Android system action" }
+                require(value.startsWith("android.settings.", true)) {
+                    "open_system requires an android.settings.* action"
+                }
+            }
+
             else -> throw IllegalArgumentException("unsupported action_type: " + type)
         }
 
@@ -466,6 +479,13 @@ class NovaAgentEngine(
                 }
                 "open_uri" -> {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(decision.value!!)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    AgentExecution(true, true)
+                }
+                "open_system" -> {
+                    val intent = Intent(decision.value!!).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(intent)
@@ -671,8 +691,6 @@ class NovaAgentEngine(
                 return packageMatchesTarget || strongVisibleTargetEvidence(targetWords, after)
             }
 
-            val packageChanged = before.packageName != after.packageName
-            val activityChanged = before.activity != after.activity
             val wasAlreadyVisible = before.elements.any { element ->
                 element.visible &&
                     targetWords.all {
@@ -680,9 +698,10 @@ class NovaAgentEngine(
                     }
             }
 
+            // A package/activity change only proves that navigation happened.
+            // It does NOT prove that the requested destination was reached.
+            // Require destination-specific evidence instead.
             return packageMatchesTarget ||
-                packageChanged ||
-                activityChanged ||
                 (!wasAlreadyVisible && strongVisibleTargetEvidence(targetWords, after))
         }
 
@@ -701,6 +720,11 @@ class NovaAgentEngine(
         }
 
         return false
+    }
+
+    private fun isVerificationSafeForGoal(goal: String): Boolean {
+        val words = tokenize(goal)
+        return words.firstOrNull() !in STATE_VERBS
     }
 
     private fun tokenize(text: String): Set<String> =
