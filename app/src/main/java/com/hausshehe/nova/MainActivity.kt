@@ -275,7 +275,7 @@ class MainActivity : Activity() {
     }
 
     private fun parseDeadline(goal: String): Long {
-        val match = Regex("""(?i)\\bby\\s+(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?\\b""").find(goal)
+        val match = Regex("""(?i)\bby\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b""").find(goal)
             ?: return 0L
 
         val rawHour = match.groupValues[1].toIntOrNull() ?: return 0L
