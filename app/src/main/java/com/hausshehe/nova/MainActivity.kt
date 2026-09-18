@@ -371,4 +371,9 @@ class MainActivity : Activity() {
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.WRAP_CONTENT
     )
+
+    private companion object {
+        const val REQUEST_AUDIO_PERMISSION = 18767
+    }
+
 }
