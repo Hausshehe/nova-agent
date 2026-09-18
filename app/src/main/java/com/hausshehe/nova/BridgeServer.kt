@@ -325,7 +325,23 @@ object BridgeServer {
     private fun launch(context: Context, packageName: String): JSONObject {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return error("launch intent not found: $packageName")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        context.startActivity(intent)
+
+        if (packageName == "com.deepseek.chat") {
+            try {
+                val optionsClass = Class.forName("android.app.ActivityOptions")
+                val options = optionsClass.getMethod("makeBasic").invoke(null)
+                optionsClass.getMethod("setAvoidMoveToFront").invoke(options)
+                val bundle = optionsClass.getMethod("toBundle").invoke(options) as android.os.Bundle
+                context.startActivity(intent, bundle)
+                Log.i(TAG, "DeepSeek launched with avoidMoveToFront")
+            } catch (e: Throwable) {
+                Log.w(TAG, "DeepSeek invisible launch option unavailable; using normal launch: ${e.message}")
+                context.startActivity(intent)
+            }
+        } else {
+            context.startActivity(intent)
+        }
+
         val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
         val deadline = System.currentTimeMillis() + LAUNCH_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
