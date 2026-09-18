@@ -236,7 +236,12 @@ class NovaAgentEngine(
             - If the UI is loading or temporarily unavailable, use wait with a bounded delay.
             - Use open_uri only for an explicit http:// or https:// URI.
             - Use open_system for Android system destinations such as Settings when
-              accessibility navigation cannot reach the destination safely.
+              accessibility navigation cannot reach the destination safely. Its value
+              must be the exact Android settings action, such as android.settings.SETTINGS.
+            - Use open_app when the goal requires launching an installed app and the
+              current accessibility observation does not expose a suitable target.
+              Give the app's human-readable name in value, not a package name.
+              Nova resolves that name against installed applications at runtime.
             - Never type shell commands, adb commands, or Android Activity Manager
               commands into terminal or command-line applications. Nova provides
               system-level actions directly.
@@ -245,7 +250,7 @@ class NovaAgentEngine(
 
             Required JSON:
             {
-              "action_type": "tap | type | scroll | back | wait | open_uri | open_system",
+              "action_type": "tap | type | scroll | back | wait | open_uri | open_system | open_app",
               "target_id": "current UI element id or null",
               "value": "text to type, wait milliseconds, URI, or Android system action, otherwise null",
               "reason": "brief reason for this one action"
@@ -446,6 +451,11 @@ class NovaAgentEngine(
                 ) { "open_uri requires an http(s) URI" }
             }
 
+            "open_app" -> {
+                require(targetId == null) { "open_app cannot carry target_id" }
+                require(!value.isNullOrBlank()) { "open_app requires an app name" }
+            }
+
             "open_system" -> {
                 require(targetId == null) { "open_system cannot carry target_id" }
                 require(!value.isNullOrBlank()) { "open_system requires an Android system action" }
@@ -484,6 +494,7 @@ class NovaAgentEngine(
                     context.startActivity(intent)
                     AgentExecution(true, true)
                 }
+                "open_app" -> executeOpenApp(decision.value!!)
                 "open_system" -> {
                     val intent = Intent(decision.value!!).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -496,6 +507,38 @@ class NovaAgentEngine(
         } catch (t: Throwable) {
             AgentExecution(false, false, t.message ?: t.javaClass.simpleName)
         }
+    }
+
+    private fun executeOpenApp(appName: String): AgentExecution {
+        val wanted = tokenize(appName)
+        if (wanted.isEmpty()) return AgentExecution(false, false, "app name is empty")
+
+        val candidates = context.packageManager.getInstalledApplications(0)
+            .asSequence()
+            .filter { it.packageName != context.packageName }
+            .mapNotNull { info ->
+                val label = context.packageManager.getApplicationLabel(info).toString()
+                val tokens = tokenize(label)
+                if (wanted.all { it in tokens }) info to label else null
+            }
+            .toList()
+
+        if (candidates.size != 1) {
+            return AgentExecution(
+                false,
+                false,
+                if (candidates.isEmpty()) "installed app not found: " + appName
+                else "app name is ambiguous: " + appName,
+            )
+        }
+
+        val packageName = candidates.single().first.packageName
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+            ?: return AgentExecution(false, false, "installed app has no launch intent: " + appName)
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        return AgentExecution(true, true)
     }
 
     private fun executeTap(
