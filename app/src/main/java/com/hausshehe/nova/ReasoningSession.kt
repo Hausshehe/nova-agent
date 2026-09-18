@@ -160,17 +160,22 @@ class ReasoningSession(
                 return response
             } catch (t: Throwable) {
                 lastRequestAtMs = System.currentTimeMillis()
-                if (!isRateLimit(t) || attempt >= MAX_RATE_LIMIT_RETRIES) {
+                if (!isRateLimit(t)) {
                     throw t
                 }
 
-                val delayMs = if (attempt == 0) {
-                    RATE_LIMIT_RETRY_DELAY_MS
-                } else {
-                    RATE_LIMIT_SECOND_RETRY_DELAY_MS
+                if (attempt < MAX_RATE_LIMIT_RETRIES) {
+                    val delayMs = if (attempt == 0) {
+                        RATE_LIMIT_RETRY_DELAY_MS
+                    } else {
+                        RATE_LIMIT_SECOND_RETRY_DELAY_MS
+                    }
+                    attempt += 1
+                    Thread.sleep(delayMs)
+                    continue
                 }
-                attempt += 1
-                Thread.sleep(delayMs)
+
+                throw RateLimitExhaustedException(t)
             }
         }
     }
@@ -182,6 +187,11 @@ class ReasoningSession(
             Thread.sleep(remaining)
         }
     }
+
+    class RateLimitExhaustedException(cause: Throwable) : RuntimeException(
+        "DeepSeek rate limit persisted after bounded retries",
+        cause,
+    )
 
     private fun isRateLimit(t: Throwable): Boolean {
         var current: Throwable? = t
@@ -210,6 +220,13 @@ object ReasoningSessionRegistry {
     @Synchronized
     fun session(id: String, provider: ReasoningProvider): ReasoningSession =
         sessions.getOrPut(id) { ReasoningSession(provider) }
+
+    @Synchronized
+    fun replace(id: String, provider: ReasoningProvider): ReasoningSession {
+        val replacement = ReasoningSession(provider)
+        sessions[id] = replacement
+        return replacement
+    }
 
     @Synchronized
     fun remove(id: String) {
