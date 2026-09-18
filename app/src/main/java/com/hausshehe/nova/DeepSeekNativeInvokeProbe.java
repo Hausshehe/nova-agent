@@ -37,6 +37,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
 
     private static volatile Object liveNp1;
     private static volatile Activity bootstrapActivity;
+    private static volatile boolean headlessBootstrapRequested;
 
     public DeepSeekNativeInvokeProbe() {
     }
@@ -84,9 +85,18 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                         if (!(param.thisObject instanceof Activity)) return;
                         Activity activity = (Activity) param.thisObject;
                         if (!TARGET_ACTIVITY.equals(activity.getClass().getName())) return;
+
                         try {
-                            activity.getWindow().getDecorView().setAlpha(0.0f);
+                            headlessBootstrapRequested = activity.getIntent()
+                                    .getBooleanExtra("com.hausshehe.nova.HEADLESS_BOOTSTRAP", false);
                             bootstrapActivity = activity;
+
+                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_INTENT "
+                                    + "headless=" + headlessBootstrapRequested);
+
+                            if (!headlessBootstrapRequested) return;
+
+                            activity.getWindow().getDecorView().setAlpha(0.0f);
                             Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_BEFORE_ONCREATE");
                         } catch (Throwable t) {
                             Log.e(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDE_BEFORE_ONCREATE_FAILED", t);
@@ -95,21 +105,25 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 });
         Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED class=android.app.Activity method=onCreate");
 
-        XposedHelpers.findAndHookMethod(Activity.class, "onStart", new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                if (!(param.thisObject instanceof Activity)) return;
-                Activity activity = (Activity) param.thisObject;
-                if (!TARGET_ACTIVITY.equals(activity.getClass().getName())) return;
-                try {
-                    activity.getWindow().getDecorView().setAlpha(0.0f);
-                    bootstrapActivity = activity;
-                    Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_EARLY");
-                } catch (Throwable t) {
-                    Log.e(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDE_FAILED", t);
-                }
-            }
-        });
+        XposedHelpers.findAndHookMethod(Activity.class, "onStart",
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        if (!(param.thisObject instanceof Activity)) return;
+                        Activity activity = (Activity) param.thisObject;
+                        if (!TARGET_ACTIVITY.equals(activity.getClass().getName())) return;
+
+                        try {
+                            if (!headlessBootstrapRequested) return;
+
+                            activity.getWindow().getDecorView().setAlpha(0.0f);
+                            bootstrapActivity = activity;
+                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_EARLY");
+                        } catch (Throwable t) {
+                            Log.e(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDE_FAILED", t);
+                        }
+                    }
+                });
         Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED class=android.app.Activity method=onStart");
 
         XposedHelpers.findAndHookMethod(mainActivity, "onCreate", android.os.Bundle.class,
@@ -117,12 +131,38 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
                         if (param.thisObject instanceof Activity) {
-                            bootstrapActivity = (Activity) param.thisObject;
-                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_CAPTURED");
+                            Activity activity = (Activity) param.thisObject;
+                            bootstrapActivity = activity;
+                            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_CAPTURED "
+                                    + "headless=" + headlessBootstrapRequested);
                         }
                     }
                 });
-        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_HOOK_INSTALLED class=" + TARGET_ACTIVITY + " method=onCreate");
+
+        XposedHelpers.findAndHookMethod(mainActivity, "onNewIntent",
+                android.content.Intent.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        if (!(param.thisObject instanceof Activity)) return;
+                        if (!(param.args[0] instanceof android.content.Intent)) return;
+
+                        Activity activity = (Activity) param.thisObject;
+                        android.content.Intent intent =
+                                (android.content.Intent) param.args[0];
+
+                        headlessBootstrapRequested = intent.getBooleanExtra(
+                                "com.hausshehe.nova.HEADLESS_BOOTSTRAP",
+                                false);
+                        bootstrapActivity = activity;
+
+                        Log.i(TAG, "DEEPSEEK_BOOTSTRAP_NEW_INTENT "
+                                + "headless=" + headlessBootstrapRequested);
+                    }
+                });
+
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_HOOK_INSTALLED class="
+                + TARGET_ACTIVITY + " methods=onCreate,onNewIntent");
     }
 
     private static void hookSessionResolution(ClassLoader cl) throws ClassNotFoundException {
@@ -160,6 +200,11 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     }
 
     private static void hideBootstrapActivity() {
+        if (!headlessBootstrapRequested) {
+            Log.i(TAG, "DEEPSEEK_BOOTSTRAP_HIDE_SKIPPED manualLaunch=true");
+            return;
+        }
+
         final Activity activity = bootstrapActivity;
         if (activity == null) {
             Log.w(TAG, "DEEPSEEK_BOOTSTRAP_ACTIVITY_NOT_CAPTURED");
