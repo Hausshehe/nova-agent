@@ -1,7 +1,6 @@
 package com.hausshehe.nova;
 
 import android.app.Activity;
-import android.view.Window;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -80,8 +79,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 if (!(param.thisObject instanceof Activity)) return;
                 try {
                     Activity activity = (Activity) param.thisObject;
-                    Window window = activity.getWindow();
-                    window.setAlpha(0.0f);
+                    activity.getWindow().getDecorView().setAlpha(0.0f);
                     bootstrapActivity = activity;
                     Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_EARLY");
                 } catch (Throwable t) {
