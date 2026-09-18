@@ -3,10 +3,15 @@ package com.hausshehe.nova
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -22,6 +27,7 @@ class NovaVoiceInteractionSession(
     private lateinit var goalInput: EditText
     private lateinit var statusText: TextView
     private var sourcePackage: String? = null
+    private var speechRecognizer: SpeechRecognizer? = null
 
     override fun onCreateContentView(): View {
         val root = LinearLayout(getContext()).apply {
@@ -71,6 +77,12 @@ class NovaVoiceInteractionSession(
         root.addView(cancelButton)
         root.addView(statusText)
 
+        val listenButton = Button(getContext()).apply {
+            text = "Listen"
+            setOnClickListener { startListening() }
+        }
+        root.addView(listenButton)
+
         return root
     }
 
@@ -87,6 +99,13 @@ class NovaVoiceInteractionSession(
             val imm = getContext().getSystemService(InputMethodManager::class.java)
             imm?.showSoftInput(goalInput, InputMethodManager.SHOW_IMPLICIT)
         }
+
+        if (
+            getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            startListening()
+        }
     }
 
     override fun onHandleAssist(state: AssistState) {
@@ -101,13 +120,97 @@ class NovaVoiceInteractionSession(
     }
 
     override fun onHide() {
+        stopListening()
         super.onHide()
         sourcePackage = null
     }
 
     override fun onDestroy() {
+        stopListening()
         sourcePackage = null
         super.onDestroy()
+    }
+
+    private fun startListening() {
+        if (
+            getContext().checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            statusText.text = "Microphone permission is required for voice input"
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(getContext())) {
+            statusText.text = "No speech recognizer is available"
+            return
+        }
+
+        stopListening()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getContext()).also { recognizer ->
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    statusText.text = "Listening..."
+                }
+
+                override fun onBeginningOfSpeech() {
+                    statusText.text = "Listening..."
+                }
+
+                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBufferReceived(buffer: ByteArray?) = Unit
+
+                override fun onEndOfSpeech() {
+                    statusText.text = "Processing..."
+                }
+
+                override fun onError(error: Int) {
+                    statusText.text = "Voice input unavailable. Type the goal instead."
+                }
+
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(
+                        SpeechRecognizer.RESULTS_RECOGNITION
+                    )
+                    val spoken = matches?.firstOrNull()?.trim().orEmpty()
+                    if (spoken.isNotBlank()) {
+                        goalInput.setText(spoken)
+                        goalInput.setSelection(goalInput.text.length)
+                        startGoal()
+                    } else {
+                        statusText.text = "No voice command was detected"
+                    }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) = Unit
+
+                override fun onEvent(eventType: Int, params: Bundle?) = Unit
+            })
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                )
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+
+            try {
+                recognizer.startListening(intent)
+            } catch (t: Throwable) {
+                statusText.text = "Could not start voice input"
+                Log.e(TAG, "Speech recognizer start failed", t)
+            }
+        }
+    }
+
+    private fun stopListening() {
+        speechRecognizer?.let {
+            try {
+                it.cancel()
+            } catch (_: Throwable) {
+            }
+            it.destroy()
+        }
+        speechRecognizer = null
     }
 
     private fun startGoal() {
