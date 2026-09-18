@@ -323,7 +323,11 @@ object BridgeServer {
     }
 
     private fun launch(context: Context, packageName: String): JSONObject {
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return error("launch intent not found: $packageName")
+        val intent = if (packageName == "com.deepseek.chat") {
+            Intent().setClassName(packageName, "com.deepseek.chat.MainActivity")
+        } else {
+            context.packageManager.getLaunchIntentForPackage(packageName)
+        } ?: return error("launch intent not found: $packageName")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
         if (packageName == "com.deepseek.chat") {
