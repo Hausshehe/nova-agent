@@ -15,7 +15,7 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="Nova DeepSeek hook probe" />
+            android:value="Nova Agent Android automation and DeepSeek native reasoning" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
