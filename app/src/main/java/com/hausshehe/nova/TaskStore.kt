@@ -75,11 +75,15 @@ object TaskStore {
     fun update(context: Context, progress: NovaAgentProgress): NovaTaskSnapshot? {
         val existing = get(context) ?: return null
         return existing.copy(
-            status = progress.status,
+            status = "running",
             steps = progress.steps,
             observationId = progress.observationId,
             lastAction = progress.lastAction,
-            lastOutcome = progress.lastOutcome,
+            lastOutcome = progress.status + if (progress.lastOutcome.isNotBlank()) {
+                ": " + progress.lastOutcome
+            } else {
+                ""
+            },
             error = progress.error,
             updatedAtMs = System.currentTimeMillis(),
         ).also { save(context, it) }
