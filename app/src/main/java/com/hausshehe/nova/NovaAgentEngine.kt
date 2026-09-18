@@ -81,7 +81,12 @@ class NovaAgentEngine(
             return NovaAgentRunResult(false, 0, "current Android UI observation is empty")
         }
 
-        if (isGoalComplete(goal, state)) {
+        // Do not trust the heuristic verifier on the initial observation.
+        // For state-change goals such as "open Settings", merely seeing the word
+        // "Settings" somewhere in the current UI is not evidence that Settings
+        // is actually open. Use the strict evidence-based verifier before allowing
+        // a zero-step success.
+        if (verifyGoalWithDeepSeek(goal, state)) {
             onProgress(
                 NovaAgentProgress(
                     steps = 0,
