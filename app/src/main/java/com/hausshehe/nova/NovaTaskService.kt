@@ -41,6 +41,16 @@ class NovaTaskService : Service() {
         val deadlineMs = intent?.getLongExtra(EXTRA_DEADLINE_MS, 0L) ?: 0L
 
         if (goal.isNotBlank()) {
+            val existing = TaskStore.get(this)
+            if (
+                existing != null &&
+                existing.status in setOf("running", "pending") &&
+                existing.goal != goal
+            ) {
+                TaskStore.cancel(this)
+                worker?.cancel(true)
+                worker = null
+            }
             TaskStore.startOrResume(this, goal, deadlineMs)
         }
 
