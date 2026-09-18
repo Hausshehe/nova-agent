@@ -346,6 +346,14 @@ object BridgeServer {
             context.startActivity(intent)
         }
 
+        if (packageName == "com.deepseek.chat") {
+            return JSONObject().apply {
+                put("ok", true)
+                put("accepted", true)
+                put("backgroundBootstrap", true)
+            }
+        }
+
         val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
         val deadline = System.currentTimeMillis() + LAUNCH_WAIT_MS
         while (System.currentTimeMillis() < deadline) {
