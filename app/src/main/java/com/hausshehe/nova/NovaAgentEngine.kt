@@ -487,32 +487,57 @@ class NovaAgentEngine(
         val wanted = tokenize(appName)
         if (wanted.isEmpty()) return AgentExecution(false, false, "app name is empty")
 
-        val candidates = context.packageManager.getInstalledApplications(0)
+        // Resolve the same launcher surface Android exposes to the user. This is
+        // more reliable than getLaunchIntentForPackage() on devices where an app
+        // has a launcher activity but its package-level launch intent is absent or
+        // behaves differently for the current task.
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val launcherActivities = context.packageManager
+            .queryIntentActivities(launcherIntent, 0)
             .asSequence()
-            .filter { it.packageName != context.packageName }
-            .mapNotNull { info ->
-                val label = context.packageManager.getApplicationLabel(info).toString()
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { info ->
+                val label = info.loadLabel(context.packageManager).toString()
+                Triple(info.activityInfo.packageName, info.activityInfo.name, label)
+            }
+            .distinctBy { it.first }
+            .filter { (_, _, label) ->
                 val tokens = tokenize(label)
-                if (wanted.all { it in tokens }) info to label else null
+                wanted.all { it in tokens }
             }
             .toList()
 
-        if (candidates.size != 1) {
+        if (launcherActivities.size != 1) {
             return AgentExecution(
                 false,
                 false,
-                if (candidates.isEmpty()) "installed app not found: " + appName
-                else "app name is ambiguous: " + appName,
+                if (launcherActivities.isEmpty()) {
+                    "installed launcher app not found: " + appName
+                } else {
+                    "app name is ambiguous: " + appName
+                },
             )
         }
 
-        val packageName = candidates.single().first.packageName
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-            ?: return AgentExecution(false, false, "installed app has no launch intent: " + appName)
+        val (packageName, activityName, _) = launcherActivities.single()
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            setClassName(packageName, activityName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
 
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-        return AgentExecution(true, true)
+        return try {
+            context.startActivity(intent)
+            AgentExecution(true, true)
+        } catch (t: Throwable) {
+            AgentExecution(
+                false,
+                false,
+                "failed to launch " + appName + ": " + (t.message ?: t.javaClass.simpleName),
+            )
+        }
     }
 
     private fun executeTap(
