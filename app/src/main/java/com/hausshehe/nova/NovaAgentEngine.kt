@@ -368,15 +368,29 @@ class NovaAgentEngine(
 
     private fun parseDecision(raw: String, state: UiSnapshot): AgentDecision {
         val json = extractObject(raw)
-        val type = json.optString("action_type", "").trim().lowercase()
-        val targetId = jsonNullableString(json, "target_id")
-        val reason = json.optString("reason", "model decision").take(240)
 
+        // The reasoning bootstrap defines the public wire schema as:
+        // {"action":"...", "target":"...", ...}
+        // Older Nova code expected internal field names action_type/target_id.
+        // Accept both forms and normalize them here so the model contract and
+        // executor contract cannot drift apart again.
+        val type = (
+            jsonNullableString(json, "action_type")
+                ?: jsonNullableString(json, "action")
+                ?: ""
+            ).lowercase()
+
+        val targetId = jsonNullableString(json, "target_id")
+            ?: jsonNullableString(json, "target")
+
+        val reason = json.optString("reason", "model decision").take(240)
         val value = jsonNullableString(json, "value")
+
+        fun actionValue(): String? = value ?: targetId
 
         when (type) {
             "tap", "click" -> {
-                require(targetId != null) { "tap requires target_id" }
+                require(targetId != null) { "tap requires target" }
                 val target = state.elements.firstOrNull { it.id == targetId }
                     ?: throw IllegalArgumentException("tap target is not present in current observation")
                 require(target.visible && target.enabled && target.clickable) {
@@ -386,7 +400,7 @@ class NovaAgentEngine(
             }
 
             "type", "input_text" -> {
-                require(targetId != null) { "type requires target_id" }
+                require(targetId != null) { "type requires target" }
                 require(!value.isNullOrEmpty()) { "type requires value" }
                 val target = state.elements.firstOrNull { it.id == targetId }
                     ?: throw IllegalArgumentException("type target is not present in current observation")
@@ -411,7 +425,7 @@ class NovaAgentEngine(
             }
 
             "wait" -> {
-                require(targetId == null) { "wait cannot carry target_id" }
+                require(targetId == null) { "wait cannot carry target" }
                 val waitMs = (value ?: "1000").toLongOrNull()
                     ?: throw IllegalArgumentException("wait value must be milliseconds")
                 require(waitMs in 250L..120000L) {
@@ -420,30 +434,51 @@ class NovaAgentEngine(
             }
 
             "open_uri" -> {
-                require(targetId == null) { "open_uri cannot carry target_id" }
-                require(!value.isNullOrBlank()) { "open_uri requires a URI" }
+                require(targetId == null || value == null) {
+                    "open_uri cannot carry both target and value"
+                }
+                val uri = actionValue()
+                require(!uri.isNullOrBlank()) { "open_uri requires a URI" }
                 require(
-                    value.startsWith("https://", true) || value.startsWith("http://", true)
+                    uri.startsWith("https://", true) || uri.startsWith("http://", true)
                 ) { "open_uri requires an http(s) URI" }
             }
 
             "open_app" -> {
-                require(targetId == null) { "open_app cannot carry target_id" }
-                require(!value.isNullOrBlank()) { "open_app requires an app name" }
+                require(targetId == null || value == null) {
+                    "open_app cannot carry both target and value"
+                }
+                require(!actionValue().isNullOrBlank()) { "open_app requires an app name" }
             }
 
             "open_system" -> {
-                require(targetId == null) { "open_system cannot carry target_id" }
-                require(!value.isNullOrBlank()) { "open_system requires an Android system action" }
-                require(value.startsWith("android.settings.", true)) {
+                require(targetId == null || value == null) {
+                    "open_system cannot carry both target and value"
+                }
+                val systemAction = actionValue()
+                require(!systemAction.isNullOrBlank()) {
+                    "open_system requires an Android system action"
+                }
+                require(systemAction.startsWith("android.settings.", true)) {
                     "open_system requires an android.settings.* action"
                 }
             }
 
-            else -> throw IllegalArgumentException("unsupported action_type: " + type)
+            else -> throw IllegalArgumentException("unsupported action: " + type)
         }
 
-        return AgentDecision(type, targetId, value, reason)
+        return AgentDecision(
+            type = type,
+            targetId = when (type) {
+                "open_app", "open_uri", "open_system" -> null
+                else -> targetId
+            },
+            value = when (type) {
+                "open_app", "open_uri", "open_system" -> actionValue()
+                else -> value
+            },
+            reason = reason,
+        )
     }
 
     private fun execute(
