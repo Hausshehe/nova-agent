@@ -98,23 +98,24 @@ class NovaAgentEngine(
             return NovaAgentRunResult(false, 0, "current Android UI observation is empty")
         }
 
-        // Do not trust the heuristic verifier on the initial observation.
-        // For state-change goals such as "open Settings", merely seeing the word
-        // "Settings" somewhere in the current UI is not evidence that Settings
-        // is actually open. Use the strict evidence-based verifier before allowing
-        // a zero-step success.
-        // Deterministic evidence gets first authority for initial state goals.
-        // This prevents model verification from treating historical text inside
-        // another app (for example terminal scrollback containing "Settings")
-        // as proof that the requested screen is actually open.
-        if (isGoalComplete(goal, state, null)) {
+        // DeepSeek owns semantic verification even before the first action.
+        // Nova supplies the real current Android observation and enforces the
+        // evidence contract; it does not decide what a natural-language goal
+        // means from a fixed verb list.
+        val initialVerification = verifyGoalWithDeepSeek(
+            goal = goal,
+            state = state,
+            lastAction = "",
+            lastOutcome = "initial observation",
+        )
+        if (initialVerification.complete) {
             onProgress(
                 NovaAgentProgress(
                     steps = 0,
                     status = "verified_complete",
                     observationId = state.observationId,
                     lastAction = "",
-                    lastOutcome = "goal already satisfied",
+                    lastOutcome = "DeepSeek verified the current Android state satisfies the goal",
                 )
             )
             return NovaAgentRunResult(true, 0)
