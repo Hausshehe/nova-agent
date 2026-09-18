@@ -202,3 +202,38 @@ The detailed handoff for continuing this project in another coding agent is:
 `docs/NOVA_CLAUDE_HANDOFF.md`
 
 It documents the verified DeepSeek connection, bootstrap sequence, commits, boundaries, current state, and the planned product architecture.
+
+
+## Phase G12: Native Nova Agent Runtime
+
+The proven DeepSeek native completion bridge is now connected to a real Nova task runtime.
+
+The Android runtime path is:
+
+`goal -> current Accessibility observation -> DeepSeek native reasoning -> one structured action -> live action validation -> Android action -> fresh observation -> goal verification -> replan/reason again`
+
+DeepSeek is the reasoning engine. Nova owns the device, action validation, execution, evidence, verification, deadlines, and task persistence. The model never supplies coordinates and never gets to execute an unvalidated target.
+
+The runtime currently supports semantic `tap`, `type`, `scroll`, `back`, bounded `wait`, and explicit HTTP(S) `open_uri` decisions. Invalid or stale targets are rejected against the current Accessibility tree.
+
+Persistent tasks are stored locally with a goal, deadline, status, step count, observation id, last action/outcome, timestamps, and error. `NovaTaskService` is a sticky foreground service, so a service restart can reconstruct the active task from storage and re-observe the live device instead of replaying an old UI state.
+
+The Nova bridge now exposes:
+- `agent_goal`
+- `agent_status`
+- `agent_cancel`
+
+The Activity also exposes an Android assistant entry point and can request the system assistant role on Android 10+.
+
+### Real-device smoke
+
+After pulling this phase, run:
+
+`python -m agent.android_native_agent_smoke --launch-nova --goal "Tap Test Navigation Action" --timeout 120`
+
+The smoke polls Nova's persistent task state until the goal is verified or the bounded runtime fails.
+
+### Current boundary
+
+DeepSeek native completion is already proven on-device, including cold-start bootstrap. Gemini Vision remains a separate visual-specialist adapter to add when accessibility evidence is insufficient. The architecture does not require changing the Nova task lifecycle when that adapter is added.
+
