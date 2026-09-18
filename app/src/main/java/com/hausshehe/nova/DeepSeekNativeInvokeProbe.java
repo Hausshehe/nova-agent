@@ -28,6 +28,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     private static final String TAG = "NovaDeepSeekHook";
     private static final String TARGET_PACKAGE = "com.deepseek.chat";
+    private static final String TARGET_ACTIVITY = "com.deepseek.chat.MainActivity";
     private static final int CONTROL_PORT = 18766;
     private static final int MAX_PROMPT_LENGTH = 12000;
     private static final int U_DEFAULT_MASK = 0x4c;
@@ -72,13 +73,15 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
     }
 
     private static void hookMainActivity(ClassLoader cl) throws ClassNotFoundException {
-        Class<?> mainActivity = XposedHelpers.findClass("com.deepseek.chat.MainActivity", cl);
-        XposedHelpers.findAndHookMethod(mainActivity, "onStart", new XC_MethodHook() {
+        Class<?> mainActivity = XposedHelpers.findClass(TARGET_ACTIVITY, cl);
+
+        XposedHelpers.findAndHookMethod(Activity.class, "onStart", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
                 if (!(param.thisObject instanceof Activity)) return;
+                Activity activity = (Activity) param.thisObject;
+                if (!TARGET_ACTIVITY.equals(activity.getClass().getName())) return;
                 try {
-                    Activity activity = (Activity) param.thisObject;
                     activity.getWindow().getDecorView().setAlpha(0.0f);
                     bootstrapActivity = activity;
                     Log.i(TAG, "DEEPSEEK_BOOTSTRAP_WINDOW_HIDDEN_EARLY");
@@ -87,7 +90,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                 }
             }
         });
-        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED method=onStart");
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_EARLY_HIDE_HOOK_INSTALLED class=android.app.Activity method=onStart");
 
         XposedHelpers.findAndHookMethod(mainActivity, "onCreate", android.os.Bundle.class,
                 new XC_MethodHook() {
@@ -99,7 +102,7 @@ public final class DeepSeekNativeInvokeProbe implements IXposedHookLoadPackage {
                         }
                     }
                 });
-        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_HOOK_INSTALLED class=com.deepseek.chat.MainActivity method=onCreate");
+        Log.i(TAG, "DEEPSEEK_MAIN_ACTIVITY_HOOK_INSTALLED class=" + TARGET_ACTIVITY + " method=onCreate");
     }
 
     private static void hookSessionResolution(ClassLoader cl) throws ClassNotFoundException {
