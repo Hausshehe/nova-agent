@@ -41,6 +41,7 @@ class NovaTaskService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        BridgeServer.start(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, notification("Nova is ready"))
     }
