@@ -294,8 +294,12 @@ object BridgeServer {
                 context.startService(intent)
             }
             val waitForResult = request.optBoolean("wait", false)
+            val taskId = waitForTaskStart(context, goal)
             if (waitForResult) {
-                waitForTerminalTask(context, request.optLong("waitTimeoutMs", 300000L))
+                if (taskId == null) {
+                    return error("Nova task did not become visible in TaskStore after start")
+                }
+                waitForTerminalTask(context, taskId, request.optLong("waitTimeoutMs", 300000L))
             } else {
                 JSONObject().apply {
                     put("ok", true)
@@ -308,15 +312,36 @@ object BridgeServer {
         }
     }
 
-    private fun agentResult(context: Context, request: JSONObject): JSONObject =
-        waitForTerminalTask(context, request.optLong("waitTimeoutMs", 300000L))
+    private fun agentResult(context: Context, request: JSONObject): JSONObject {
+        val requestedTaskId = request.optString("taskId", "").trim().ifBlank { null }
+        val current = TaskStore.get(context)
+        val taskId = requestedTaskId ?: current?.id
+        if (taskId == null) {
+            return error("no active or completed task is available")
+        }
+        return waitForTerminalTask(context, taskId, request.optLong("waitTimeoutMs", 300000L))
+    }
 
-    private fun waitForTerminalTask(context: Context, timeoutMs: Long): JSONObject {
+    private fun waitForTaskStart(context: Context, goal: String): String? {
+        val deadline = System.currentTimeMillis() + 3000L
+        while (System.currentTimeMillis() < deadline) {
+            val task = TaskStore.get(context)
+            if (task != null && task.goal == goal) return task.id
+            Thread.sleep(50L)
+        }
+        return null
+    }
+
+    private fun waitForTerminalTask(
+        context: Context,
+        taskId: String,
+        timeoutMs: Long,
+    ): JSONObject {
         val timeout = timeoutMs.coerceIn(1000L, 600000L)
         val deadline = System.currentTimeMillis() + timeout
         while (System.currentTimeMillis() < deadline) {
             val task = TaskStore.get(context)
-            if (task != null && task.status !in setOf("running", "pending")) {
+            if (task != null && task.id == taskId && task.status !in setOf("running", "pending")) {
                 return JSONObject().apply {
                     put("ok", task.status == "succeeded")
                     put("completed", true)
