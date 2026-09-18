@@ -18,7 +18,7 @@ class NativeReasoningClient(
     private val port: Int = 18765,
     private val timeoutMs: Int = 40000,
 ) : ReasoningProvider {
-    fun complete(prompt: String): String {
+    override fun complete(prompt: String): String {
         require(prompt.isNotBlank()) { "reasoning prompt must not be blank" }
 
         val request = JSONObject().apply {
