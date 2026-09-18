@@ -14,11 +14,20 @@ class ReasoningSession(
     @Volatile
     private var initialized = false
 
+    private var lastRequestAtMs = 0L
+
+    companion object {
+        private const val MIN_REQUEST_GAP_MS = 1000L
+        private const val RATE_LIMIT_RETRY_DELAY_MS = 2000L
+        private const val RATE_LIMIT_SECOND_RETRY_DELAY_MS = 4000L
+        private const val MAX_RATE_LIMIT_RETRIES = 2
+    }
+
     @Synchronized
     fun start() {
         if (initialized) return
 
-        val response = provider.complete(
+        val response = completeWithRateLimitRecovery(
             """
             You are Nova's Android reasoning engine.
 
@@ -138,7 +147,60 @@ class ReasoningSession(
             }
         }
 
-        return provider.complete(turnContract + "\n\n" + prompt)
+        return completeWithRateLimitRecovery(turnContract + "\n\n" + prompt)
+    }
+
+    private fun completeWithRateLimitRecovery(prompt: String): String {
+        var attempt = 0
+        while (true) {
+            paceRequest()
+            try {
+                val response = provider.complete(prompt)
+                lastRequestAtMs = System.currentTimeMillis()
+                return response
+            } catch (t: Throwable) {
+                lastRequestAtMs = System.currentTimeMillis()
+                if (!isRateLimit(t) || attempt >= MAX_RATE_LIMIT_RETRIES) {
+                    throw t
+                }
+
+                val delayMs = if (attempt == 0) {
+                    RATE_LIMIT_RETRY_DELAY_MS
+                } else {
+                    RATE_LIMIT_SECOND_RETRY_DELAY_MS
+                }
+                attempt += 1
+                Thread.sleep(delayMs)
+            }
+        }
+    }
+
+    private fun paceRequest() {
+        val elapsed = System.currentTimeMillis() - lastRequestAtMs
+        val remaining = MIN_REQUEST_GAP_MS - elapsed
+        if (remaining > 0L) {
+            Thread.sleep(remaining)
+        }
+    }
+
+    private fun isRateLimit(t: Throwable): Boolean {
+        var current: Throwable? = t
+        while (current != null) {
+            val message = current.message?.lowercase() ?: ""
+            if (message.contains("too frequent") ||
+                message.contains("rate limit") ||
+                message.contains("rate-limited") ||
+                message.contains("rate limited") ||
+                message.contains("throttl") ||
+                message.contains("http 429") ||
+                message.contains("status 429") ||
+                message.contains(" 429")
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 }
 
