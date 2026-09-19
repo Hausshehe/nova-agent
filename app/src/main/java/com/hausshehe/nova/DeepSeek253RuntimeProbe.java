@@ -35,6 +35,7 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
             hookQi1(cl);
             hookNp6(cl);
             hookXh1(cl);
+            hookNativeCompletionPath(cl);
             Log.i(TAG, "DS253_TRACE_INSTALLED");
         } catch (Throwable t) {
             Log.e(TAG, "DS253_TRACE_INSTALL_FAILED", t);
@@ -155,6 +156,59 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         });
 
         Log.i(TAG, "DS253_XH1_HOOK_INSTALLED");
+    }
+
+    private static void hookNativeCompletionPath(ClassLoader cl) throws ClassNotFoundException {
+        hookMethodTrace(cl, "np6", "A", "DS253_NP6_A");
+        hookMethodTrace(cl, "ra2", "e", "DS253_RA2_E");
+        hookMethodTrace(cl, "ra2", "h", "DS253_RA2_H");
+        hookMethodTrace(cl, "ar1", "k", "DS253_AR1_K");
+        Log.i(TAG, "DS253_NATIVE_COMPLETION_HOOKS_INSTALLED");
+    }
+
+    private static void hookMethodTrace(ClassLoader cl, String className, String methodName, String prefix)
+            throws ClassNotFoundException {
+        Class<?> target = XposedHelpers.findClass(className, cl);
+        XposedBridge.hookAllMethods(target, methodName, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    Log.i(TAG, prefix + "_ENTER receiver=" + identity(param.thisObject)
+                            + " args=" + argumentTypes(param.args));
+                } catch (Throwable t) {
+                    Log.e(TAG, prefix + "_ENTER_LOG_FAILED", t);
+                }
+            }
+
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    Throwable error = param.getThrowable();
+                    if (error != null) {
+                        Log.e(TAG, prefix + "_THROW " + error.getClass().getName()
+                                + ":" + String.valueOf(error.getMessage()));
+                    } else {
+                        Object result = param.getResult();
+                        Log.i(TAG, prefix + "_EXIT result=" + identity(result));
+                    }
+                } catch (Throwable t) {
+                    Log.e(TAG, prefix + "_EXIT_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, prefix + "_HOOK_INSTALLED class=" + className + " method=" + methodName);
+    }
+
+    private static String argumentTypes(Object[] args) {
+        if (args == null) return "null";
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < args.length; i++) {
+            if (i > 0) out.append(" | ");
+            Object value = args[i];
+            out.append(i).append("=")
+                    .append(value == null ? "null" : value.getClass().getName());
+        }
+        return out.toString();
     }
 
     private static void logObjectFields(String prefix, Object value, String[] fields) {
