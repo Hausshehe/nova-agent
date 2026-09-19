@@ -163,7 +163,29 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookMethodTrace(cl, "ra2", "e", "DS253_RA2_E");
         hookMethodTrace(cl, "ra2", "h", "DS253_RA2_H");
         hookMethodTrace(cl, "ar1", "k", "DS253_AR1_K");
+        hookConstructorsTrace(cl, "xa2", "DS253_XA2_CREATED",
+                new String[]{"a", "b", "c", "d", "e", "f"});
+        hookConstructorsTrace(cl, "qh1", "DS253_QH1_CREATED",
+                new String[]{"a", "b", "c", "d"});
         Log.i(TAG, "DS253_NATIVE_COMPLETION_HOOKS_INSTALLED");
+    }
+
+    private static void hookConstructorsTrace(ClassLoader cl, String className, String prefix,
+            String[] fields) throws ClassNotFoundException {
+        Class<?> target = XposedHelpers.findClass(className, cl);
+        XposedBridge.hookAllConstructors(target, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    Log.i(TAG, prefix + " object=" + identity(param.thisObject)
+                            + " argTypes=" + argumentTypes(param.args));
+                    logObjectFields(prefix + "_FIELDS", param.thisObject, fields);
+                } catch (Throwable t) {
+                    Log.e(TAG, prefix + "_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, prefix + "_HOOK_INSTALLED class=" + className);
     }
 
     private static void hookMethodTrace(ClassLoader cl, String className, String methodName, String prefix)
