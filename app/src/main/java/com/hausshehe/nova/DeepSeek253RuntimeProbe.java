@@ -163,6 +163,7 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookMethodTrace(cl, "ra2", "e", "DS253_RA2_E");
         hookMethodTrace(cl, "ra2", "h", "DS253_RA2_H");
         hookMethodTrace(cl, "ar1", "k", "DS253_AR1_K");
+        hookZa2Result(cl);
         hookConstructorsTrace(cl, "xa2", "DS253_XA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f"});
         hookConstructorsTrace(cl, "qh1", "DS253_QH1_CREATED",
@@ -173,6 +174,29 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookConstructorsTrace(cl, "wa2", "DS253_WA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f", "g"});
         Log.i(TAG, "DS253_NATIVE_COMPLETION_HOOKS_INSTALLED");
+    }
+
+    private static void hookZa2Result(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> za2 = XposedHelpers.findClass("za2", cl);
+        XposedBridge.hookAllMethods(za2, "A", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    Object wa2 = XposedHelpers.getObjectField(param.thisObject, "f");
+                    Object result = wa2 == null ? null : XposedHelpers.getObjectField(wa2, "a");
+                    Log.i(TAG, "DS253_ZA2_A_ENTER wa2=" + identity(wa2)
+                            + " result=" + identity(result));
+                    if (result != null && "t47".equals(result.getClass().getName())) {
+                        logObjectFields("DS253_ZA2_T47", result, new String[]{"a", "b"});
+                    }
+                    logObjectFields("DS253_ZA2_WA2", wa2,
+                            new String[]{"a", "b", "c", "d", "e", "f", "g"});
+                } catch (Throwable t) {
+                    Log.e(TAG, "DS253_ZA2_A_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, "DS253_ZA2_A_HOOK_INSTALLED class=za2 method=A");
     }
 
     private static void hookConstructorsTrace(ClassLoader cl, String className, String prefix,
