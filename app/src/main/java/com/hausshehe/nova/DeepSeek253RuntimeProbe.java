@@ -168,7 +168,8 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookConstructorsTrace(cl, "qh1", "DS253_QH1_CREATED",
                 new String[]{"a", "b", "c", "d"});
         hookConstructorsTrace(cl, "t47", "DS253_T47_CREATED",
-                new String[]{"a", "b"});
+                new String[]{"a", "b"},
+                true);
         hookConstructorsTrace(cl, "wa2", "DS253_WA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f", "g"});
         Log.i(TAG, "DS253_NATIVE_COMPLETION_HOOKS_INSTALLED");
@@ -176,6 +177,11 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
 
     private static void hookConstructorsTrace(ClassLoader cl, String className, String prefix,
             String[] fields) throws ClassNotFoundException {
+        hookConstructorsTrace(cl, className, prefix, fields, false);
+    }
+
+    private static void hookConstructorsTrace(ClassLoader cl, String className, String prefix,
+            String[] fields, boolean traceConstructorArgs) throws ClassNotFoundException {
         Class<?> target = XposedHelpers.findClass(className, cl);
         XposedBridge.hookAllConstructors(target, new XC_MethodHook() {
             @Override
@@ -184,6 +190,10 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
                     Log.i(TAG, prefix + " object=" + identity(param.thisObject)
                             + " argTypes=" + argumentTypes(param.args));
                     logObjectFields(prefix + "_FIELDS", param.thisObject, fields);
+                    if (traceConstructorArgs) {
+                        Log.i(TAG, prefix + "_ARGS " + argumentPreviews(param.args));
+                        logCallerStack(prefix + "_STACK");
+                    }
                 } catch (Throwable t) {
                     Log.e(TAG, prefix + "_LOG_FAILED", t);
                 }
@@ -223,6 +233,16 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
             }
         });
         Log.i(TAG, prefix + "_HOOK_INSTALLED class=" + className + " method=" + methodName);
+    }
+
+    private static String argumentPreviews(Object[] args) {
+        if (args == null) return "null";
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < args.length; i++) {
+            if (i > 0) out.append(" | ");
+            out.append(i).append("=").append(preview(args[i]));
+        }
+        return out.toString();
     }
 
     private static String argumentTypes(Object[] args) {
