@@ -108,6 +108,10 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
                             + " args=" + args
                             + " liveSession=" + identity(liveSession));
 
+                    logObjectFields("DS253_NP6_FIELDS", param.thisObject,
+                            new String[]{"a", "b", "c", "d", "e", "f"});
+                    logCallerStack("DS253_NP6_K_STACK");
+
                     if (param.args.length > 0 && param.args[0] != null) {
                         logObjectFields("DS253_SESSION_FIELDS", param.args[0],
                                 new String[]{"a", "e", "n", "o", "p", "r"});
@@ -172,6 +176,27 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         }
 
         Log.i(TAG, out.toString());
+    }
+
+    private static void logCallerStack(String prefix) {
+        try {
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            StringBuilder out = new StringBuilder(prefix);
+            int emitted = 0;
+            for (StackTraceElement frame : stack) {
+                String name = frame.getClassName();
+                if (name.equals(Thread.class.getName())
+                        || name.equals(DeepSeek253RuntimeProbe.class.getName())
+                        || name.startsWith("de.robv.android.xposed.")) {
+                    continue;
+                }
+                out.append(" ").append(frame.toString());
+                if (++emitted >= 8) break;
+            }
+            Log.i(TAG, out.toString());
+        } catch (Throwable t) {
+            Log.e(TAG, prefix + "_FAILED", t);
+        }
     }
 
     private static String preview(Object value) {
