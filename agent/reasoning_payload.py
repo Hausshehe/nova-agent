@@ -8,7 +8,7 @@ from .reasoning_context import ReasoningContext
 def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
     """Convert reasoning context into a stable, model/provider-neutral payload."""
     state = context.state
-    return {
+    payload: dict[str, Any] = {
         "goal": context.goal,
         "state": {
             "package": state.package,
@@ -60,3 +60,15 @@ def reasoning_payload(context: ReasoningContext) -> dict[str, Any]:
             for candidate in context.candidates
         ],
     }
+
+    if context.agent_state is not None:
+        runtime = context.agent_state
+        payload["runtime"] = {
+            "step": runtime.step,
+            "status": runtime.status,
+            "failure_count": runtime.failure_count,
+            "last_error": runtime.last_error,
+            "plan": list(runtime.plan),
+        }
+
+    return payload
