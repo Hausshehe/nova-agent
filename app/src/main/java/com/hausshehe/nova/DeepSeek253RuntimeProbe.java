@@ -164,6 +164,8 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookMethodTrace(cl, "ra2", "h", "DS253_RA2_H");
         hookMethodTrace(cl, "ar1", "k", "DS253_AR1_K");
         hookLl7T(cl);
+        hookConstructorsTrace(cl, "xy1", "DS253_XY1_CREATED", new String[]{"a"});
+        hookConstructorsTrace(cl, "yy1", "DS253_YY1_CREATED", new String[]{"a"});
         hookZa2Result(cl);
         hookConstructorsTrace(cl, "xa2", "DS253_XA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f"});
