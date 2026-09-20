@@ -37,10 +37,38 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
             hookXh1(cl);
             hookNativeCompletionPath(cl);
             hookPipelineRegistrations(cl);
+            hookYg1Events(cl);
             Log.i(TAG, "DS253_TRACE_INSTALLED");
         } catch (Throwable t) {
             Log.e(TAG, "DS253_TRACE_INSTALL_FAILED", t);
         }
+    }
+
+    /**
+     * Observation-only trace at DeepSeek 2.5.3's native SSE/event consumer.
+     * Logs event structure before yg1 routes it into application state.
+     */
+    private static void hookYg1Events(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> yg1 = XposedHelpers.findClass("yg1", cl);
+        XposedBridge.hookAllMethods(yg1, "a", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    if (param.args.length == 0 || param.args[0] == null) return;
+                    Object event = param.args[0];
+                    if (!"as9".equals(event.getClass().getName())) return;
+                    Object name = XposedHelpers.getObjectField(event, "a");
+                    Object data = XposedHelpers.getObjectField(event, "b");
+                    Log.i(TAG, "DS253_YG1_EVENT name=" + preview(name)
+                            + " dataClass=" + (data == null ? "null" : data.getClass().getName())
+                            + " dataLength=" + (data == null ? 0 : String.valueOf(data).length())
+                            + " dataPreview=" + preview(data));
+                } catch (Throwable t) {
+                    Log.e(TAG, "DS253_YG1_EVENT_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, "DS253_YG1_EVENT_HOOK_INSTALLED class=yg1 method=a");
     }
 
     private static void hookQi1(ClassLoader cl) throws ClassNotFoundException {
