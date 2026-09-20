@@ -163,6 +163,7 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookMethodTrace(cl, "ra2", "e", "DS253_RA2_E");
         hookMethodTrace(cl, "ra2", "h", "DS253_RA2_H");
         hookMethodTrace(cl, "ar1", "k", "DS253_AR1_K");
+        hookLl7T(cl);
         hookZa2Result(cl);
         hookConstructorsTrace(cl, "xa2", "DS253_XA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f"});
@@ -174,6 +175,45 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
         hookConstructorsTrace(cl, "wa2", "DS253_WA2_CREATED",
                 new String[]{"a", "b", "c", "d", "e", "f", "g"});
         Log.i(TAG, "DS253_NATIVE_COMPLETION_HOOKS_INSTALLED");
+    }
+
+    private static void hookLl7T(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> ll7 = XposedHelpers.findClass("ll7", cl);
+        XposedBridge.hookAllMethods(ll7, "t", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    Log.i(TAG, "DS253_LL7_T_ENTER args=" + argumentTypes(param.args));
+                } catch (Throwable t) {
+                    Log.e(TAG, "DS253_LL7_T_ENTER_LOG_FAILED", t);
+                }
+            }
+
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    Throwable error = param.getThrowable();
+                    if (error != null) {
+                        Log.e(TAG, "DS253_LL7_T_THROW " + error.getClass().getName()
+                                + ":" + String.valueOf(error.getMessage()));
+                        return;
+                    }
+                    Object result = param.getResult();
+                    Log.i(TAG, "DS253_LL7_T_EXIT result=" + identity(result));
+                    if (result != null && "xy1".equals(result.getClass().getName())) {
+                        logObjectFields("DS253_LL7_T_XY1", result, new String[]{"a"});
+                        Object failure = XposedHelpers.getObjectField(result, "a");
+                        logObjectFields("DS253_LL7_T_U47", failure,
+                                new String[]{"a", "b", "c"});
+                    } else if (result != null && "yy1".equals(result.getClass().getName())) {
+                        logObjectFields("DS253_LL7_T_YY1", result, new String[]{"a"});
+                    }
+                } catch (Throwable t) {
+                    Log.e(TAG, "DS253_LL7_T_EXIT_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, "DS253_LL7_T_HOOK_INSTALLED class=ll7 method=t");
     }
 
     private static void hookZa2Result(ClassLoader cl) throws ClassNotFoundException {
