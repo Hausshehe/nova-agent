@@ -36,6 +36,7 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
             hookNp6(cl);
             hookXh1(cl);
             hookNativeCompletionPath(cl);
+            hookPipelineRegistrations(cl);
             Log.i(TAG, "DS253_TRACE_INSTALLED");
         } catch (Throwable t) {
             Log.e(TAG, "DS253_TRACE_INSTALL_FAILED", t);
@@ -254,6 +255,42 @@ public final class DeepSeek253RuntimeProbe implements IXposedHookLoadPackage {
             }
         });
         Log.i(TAG, "DS253_LL7_T_HOOK_INSTALLED class=ll7 method=t");
+    }
+
+    /**
+     * Observation-only trace of Ktor pipeline interceptor registration.
+     * This is the shortest way to identify the concrete Parse/Transform
+     * interceptors without guessing from obfuscated source names.
+     */
+    private static void hookPipelineRegistrations(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> et7 = XposedHelpers.findClass("et7", cl);
+        XposedBridge.hookAllMethods(et7, "g", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    Object pipeline = param.thisObject;
+                    String pipelineClass = pipeline == null ? "null" : pipeline.getClass().getName();
+                    Object phase = param.args.length > 0 ? param.args[0] : null;
+                    Object interceptor = param.args.length > 1 ? param.args[1] : null;
+                    String phaseName = phase == null ? "null" : String.valueOf(phase);
+                    String interceptorType = interceptor == null ? "null" : interceptor.getClass().getName();
+                    String interceptorValue = interceptor == null ? "null" : preview(interceptor);
+                    String pipelineKind = "unknown";
+                    try {
+                        pipelineKind = String.valueOf(XposedHelpers.getIntField(pipeline, "e"));
+                    } catch (Throwable ignored) {
+                    }
+                    Log.i(TAG, "DS253_PIPELINE_REGISTER pipeline=" + pipelineClass
+                            + " kind=" + pipelineKind
+                            + " phase=" + phaseName
+                            + " interceptor=" + interceptorType
+                            + " value=" + interceptorValue);
+                } catch (Throwable t) {
+                    Log.e(TAG, "DS253_PIPELINE_REGISTER_LOG_FAILED", t);
+                }
+            }
+        });
+        Log.i(TAG, "DS253_PIPELINE_REGISTRATION_HOOK_INSTALLED class=et7 method=g");
     }
 
     private static void hookZa2Result(ClassLoader cl) throws ClassNotFoundException {
