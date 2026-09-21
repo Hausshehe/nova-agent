@@ -35,13 +35,22 @@ def build_capability_router(
 
     for capability, capability_responders in responders.items():
         normalized = capability if isinstance(capability, Capability) else Capability(capability)
+        eligible_responders = [
+            (name, responder)
+            for name, responder in capability_responders
+            if any(
+                profile.name == name and profile.supports(normalized)
+                for profile in profile_tuple
+            )
+        ]
+        if not eligible_responders:
+            continue
         eligible = capability_pool(
             normalized,
-            capability_responders,
+            eligible_responders,
             profile_tuple,
             **kwargs,
         )
-        if eligible.providers():
-            router.register(normalized, eligible)
+        router.register(normalized, eligible)
 
     return router
