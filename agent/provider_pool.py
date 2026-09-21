@@ -13,18 +13,9 @@ Sleeper = Callable[[float], None]
 Clock = Callable[[], float]
 
 _TRANSIENT_ERROR_MARKERS = (
-    "http 408",
-    "http 429",
-    "http 500",
-    "http 502",
-    "http 503",
-    "http 504",
-    "temporarily overloaded",
-    "timed out",
-    "timeout",
-    "connection",
-    "connection aborted",
-    "software caused connection abort",
+    "http 408", "http 429", "http 500", "http 502", "http 503", "http 504",
+    "temporarily overloaded", "timed out", "timeout", "connection",
+    "connection aborted", "software caused connection abort",
 )
 _RETRY_AFTER_RE = re.compile(r"retry[-_ ]after\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
 
@@ -37,15 +28,7 @@ class _ProviderState:
 
 
 class ReasoningProviderPool:
-    """Route requests across providers with bounded retries and cooldowns.
-
-    Providers are independent capacity pools. A rate-limited provider is not
-    retried immediately when another provider is available. Other transient
-    failures receive one bounded retry. With only one provider configured, a
-    temporary 429 receives one bounded retry after the provider's advertised
-    retry-after delay when available, rather than immediately repeating a
-    request that is known to be rate-limited.
-    """
+    """Route requests across providers with bounded retries and cooldowns."""
 
     def __init__(
         self,
@@ -76,10 +59,12 @@ class ReasoningProviderPool:
         self._states = {name: _ProviderState() for name, _ in self._responders}
         self._cursor = 0
 
+    def providers(self) -> tuple[str, ...]:
+        return tuple(name for name, _ in self._responders)
+
     @staticmethod
     def _is_transient(exc: Exception) -> bool:
-        message = str(exc).lower()
-        return any(marker in message for marker in _TRANSIENT_ERROR_MARKERS)
+        return any(marker in str(exc).lower() for marker in _TRANSIENT_ERROR_MARKERS)
 
     @staticmethod
     def _is_rate_limited(exc: Exception) -> bool:
@@ -130,11 +115,9 @@ class ReasoningProviderPool:
                     if self._is_rate_limited(exc):
                         if len(self._responders) == 1 and attempts < self._transient_retries:
                             attempts += 1
-                            delay = self._retry_after(exc)
-                            self._sleeper(delay if delay is not None else self._retry_delay_seconds)
+                            self._sleeper(self._retry_after(exc) or self._retry_delay_seconds)
                             continue
-                        retry_after = self._retry_after(exc)
-                        cooldown = retry_after if retry_after is not None else self._rate_limit_cooldown_seconds
+                        cooldown = self._retry_after(exc) or self._rate_limit_cooldown_seconds
                         state.cooldown_until = self._clock() + cooldown
                         break
                     if not self._is_transient(exc) or attempts >= self._transient_retries:
@@ -142,7 +125,6 @@ class ReasoningProviderPool:
                         break
                     attempts += 1
                     self._sleeper(self._retry_delay_seconds)
-
         raise RuntimeError("all reasoning providers failed: " + "; ".join(failures))
 
     def health(self) -> dict[str, dict[str, float | int]]:
