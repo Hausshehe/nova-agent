@@ -30,3 +30,20 @@ PROVIDER_PROFILE_MAP = {
     profile.name: profile
     for profile in PROVIDER_PROFILES
 }
+
+# Derived capability coverage. Keep this metadata-only: a capability is eligible
+# for provider routing only when at least one real adapter is declared for it.
+CAPABILITY_PROVIDERS = {
+    capability: tuple(
+        profile.name
+        for profile in PROVIDER_PROFILES
+        if profile.supports(capability)
+    )
+    for capability in Capability
+}
+
+UNPROVISIONED_CAPABILITIES = tuple(
+    capability
+    for capability in Capability
+    if not CAPABILITY_PROVIDERS[capability]
+)
