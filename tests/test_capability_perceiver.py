@@ -2,6 +2,7 @@ from agent.capability import Capability
 from agent.capability_router import CapabilityRouter, pool
 from nova_core.capability_perceiver import CapabilityRoutedPerceiver
 from nova_core.models import Observation
+import pytest
 
 
 def _observation() -> Observation:
@@ -40,3 +41,24 @@ def test_perceiver_preserves_authoritative_observation_when_provider_returns_inv
 
     assert response.observation is observation
     assert response.summary == "advisory"
+
+
+def test_perceiver_rejects_non_string_summary():
+    def perception(prompt):
+        return {"summary": {"invented": "state"}}
+
+    router = CapabilityRouter({
+        Capability.PERCEPTION: pool([("perception-provider", perception)]),
+    })
+
+    with pytest.raises(ValueError, match="perception summary must be a string"):
+        CapabilityRoutedPerceiver(router).assess(_observation())
+
+
+def test_perceiver_fails_closed_when_perception_capability_is_missing():
+    router = CapabilityRouter({
+        Capability.REASONING: pool([("reasoner", lambda prompt: {"decision": {}})]),
+    })
+
+    with pytest.raises(RuntimeError, match="no provider pool configured for capability: perception"):
+        CapabilityRoutedPerceiver(router).assess(_observation())
