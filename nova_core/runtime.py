@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from .action_guard import ActionGuard
+from .capability_perceiver import CapabilityRoutedPerceiver
 from .evidence import EvidenceTracker
 from .learning_memory import LearningMemory, MissionLearningRecord
 from .learning_policy import LearningApplicationPolicy
-from .models import ExecutionResult, Goal, RunResult
+from .models import ExecutionResult, Goal, Observation, RunResult
 from .planning import GoalPlanner, Planner, Plan
 from .ports import Executor, FreshObserver, Observer, Reasoner, Verifier
 from .run_controller import RunController
@@ -37,6 +38,7 @@ class Runtime:
         learning_memory: LearningMemory | None = None,
         learning_policy: LearningApplicationPolicy | None = None,
         intent_verifier: Verifier | None = None,
+        perceiver: CapabilityRoutedPerceiver | None = None,
     ) -> None:
         if max_invalid_decisions < 0:
             raise ValueError("max_invalid_decisions must not be negative")
@@ -49,6 +51,7 @@ class Runtime:
         self.executor = executor
         self.verifier = verifier
         self.intent_verifier = intent_verifier
+        self.perceiver = perceiver
         self.action_guard = action_guard or ActionGuard()
         self.evidence = EvidenceTracker(max_rejections=max(1, max_invalid_decisions + 2))
         self.invalid_decisions = 0
@@ -63,8 +66,24 @@ class Runtime:
         self._replan_requested = False
         self._unchanged_actions = 0
 
+    def _observe(self, *, fresh_from: Observation | None = None) -> Observation:
+        """Observe Android first, then optionally enrich reasoning with perception."""
+        if fresh_from is not None and isinstance(self.observer, FreshObserver):
+            observation = self.observer.observe_fresh(fresh_from)
+        else:
+            observation = self.observer.observe()
+
+        self.brain.record_perception("")
+        if self.perceiver is not None:
+            try:
+                perception = self.perceiver.assess(observation)
+            except (ValueError, RuntimeError, TypeError):
+                perception = None
+            if perception is not None:
+                self.brain.record_perception(perception.summary)
+        return observation
+
     def _record_invalid_decision(self, error: str) -> None:
-        """Record one model/guard rejection without consuming action progress."""
         self.invalid_decisions += 1
         self.evidence.record_rejection(self.controller.decision, error)
 
@@ -86,7 +105,6 @@ class Runtime:
 
     @staticmethod
     def _skip_replayed_replan_intents(previous: Plan, replacement: Plan, evidence: object) -> Plan:
-        """Do not immediately replay an intent that just produced no progress."""
         if (
             getattr(evidence, "last_execution_accepted", None) is not True
             or getattr(evidence, "last_execution_changed", None) is not False
@@ -101,10 +119,6 @@ class Runtime:
         return adjusted
 
     def _update_plan_after_observation(self) -> None:
-        """Create or replace the bounded plan only from fresh runtime evidence."""
-        # Never spend a planning/replanning cycle after the action budget is
-        # exhausted. The step budget is the outer safety boundary and must
-        # take precedence over all lower-level planning budgets.
         if self.controller.steps >= self.controller.max_steps:
             self.brain.fail("step budget exhausted")
             return
@@ -137,7 +151,7 @@ class Runtime:
             self.brain.start()
             return self.brain.state
         if state is RunState.OBSERVING:
-            observation = self.observer.observe()
+            observation = self._observe()
             self.evidence.observe(observation)
             self.brain.record_observation(observation)
             if self.brain.state is RunState.DECIDING:
@@ -161,7 +175,7 @@ class Runtime:
             return self.brain.state
         if state is RunState.EXECUTING:
             assert self.controller.decision is not None
-            guard = self.action_guard.check(self.controller.decision, self.controller.observation)  # type: ignore[arg-type]
+            guard = self.action_guard.check(self.controller.decision, self.controller.observation)
             if not guard.allowed:
                 self._record_invalid_decision(guard.reason)
                 execution = ExecutionResult(False, False, guard.reason)
@@ -174,10 +188,7 @@ class Runtime:
             decision = self.controller.decision
             execution = self.controller.last_execution
             assert before is not None and decision is not None and execution is not None
-            if isinstance(self.observer, FreshObserver) and execution.accepted and execution.changed:
-                after = self.observer.observe_fresh(before)
-            else:
-                after = self.observer.observe()
+            after = self._observe(fresh_from=before if execution.accepted and execution.changed else None)
             self.evidence.observe(after)
             achieved = self.verifier.verify(self.controller.goal, before, decision, execution, after)
             current_intent = self.brain.plan.current if self.brain.plan is not None else None
@@ -185,11 +196,7 @@ class Runtime:
                 intent_achieved = execution.accepted and execution.changed
             elif current_intent is not None and execution.accepted and execution.changed:
                 intent_achieved = self.intent_verifier.verify(
-                    Goal(current_intent.description),
-                    before,
-                    decision,
-                    execution,
-                    after,
+                    Goal(current_intent.description), before, decision, execution, after
                 )
             else:
                 intent_achieved = False
