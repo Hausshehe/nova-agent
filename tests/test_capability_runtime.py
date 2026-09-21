@@ -1,6 +1,5 @@
-from agent.capability import Capability
 from nova_core.capability_runtime import build_capability_runtime
-from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation
+from nova_core.models import ExecutionResult, Goal, Observation
 
 
 class FakeObserver:
@@ -69,4 +68,5 @@ def test_runtime_factory_does_not_fabricate_unprovisioned_capabilities():
         action_responders=[("cerebras", _action_responder)],
     )
 
-    assert runtime.planner is None
+    from nova_core.planning import GoalPlanner
+    assert isinstance(runtime.planner, GoalPlanner)
