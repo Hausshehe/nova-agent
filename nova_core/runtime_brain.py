@@ -24,6 +24,7 @@ class RuntimeBrain:
     memory: WorkingMemory = field(init=False)
     mission: MissionState = field(init=False)
     plan: Plan | None = field(default=None, init=False)
+    perception_summary: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
         self.memory = WorkingMemory(goal=self.controller.goal)
@@ -53,6 +54,11 @@ class RuntimeBrain:
         self.mission = self.mission.observed(observation)
         self.controller.move(RunState.DECIDING)
 
+    def record_perception(self, summary: str) -> None:
+        if not isinstance(summary, str):
+            raise ValueError("perception summary must be a string")
+        self.perception_summary = summary
+
     def set_plan(self, plan: Plan) -> None:
         self.plan = plan
 
@@ -80,6 +86,7 @@ class RuntimeBrain:
             relevant_learning=relevant_learning,
             learning_assessment=learning_assessment,
             uncertainty=self.mission.uncertainty,
+            perception_summary=self.perception_summary,
         )
 
     def record_decision(self, decision: Decision) -> None:
