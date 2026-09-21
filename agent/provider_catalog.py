@@ -21,7 +21,7 @@ SUPPORTED_PROVIDERS = (
 PROVIDER_PROFILES = tuple(
     ProviderProfile.create(
         name,
-        (Capability.REASONING, Capability.ACTION_SELECTION),
+        (Capability.REASONING, Capability.PLANNING, Capability.ACTION_SELECTION),
     )
     for name in SUPPORTED_PROVIDERS
 )
