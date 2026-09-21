@@ -35,7 +35,11 @@ def test_same_provider_can_be_assigned_to_multiple_capabilities_without_shared_h
         return {"verified": True}
 
     router = CapabilityRouter({
-        Capability.REASONING: pool([("groq", reasoning)], rate_limit_cooldown_seconds=30),
+        Capability.REASONING: pool(
+            [("groq", reasoning)],
+            transient_retries=0,
+            rate_limit_cooldown_seconds=30,
+        ),
         Capability.VERIFICATION: pool([("groq", verification)]),
     })
 
