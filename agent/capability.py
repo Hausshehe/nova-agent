@@ -7,6 +7,7 @@ from enum import Enum
 
 class Capability(str, Enum):
     REASONING = "reasoning"
+    PLANNING = "planning"
     PERCEPTION = "perception"
     ACTION_SELECTION = "action_selection"
     VERIFICATION = "verification"
