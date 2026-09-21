@@ -1,6 +1,8 @@
 from agent.capability_router import Capability
 from nova_core.capability_contracts import (
     ActionSelectionRequest,
+    PlanningRequest,
+    PlanningResponse,
     ActionSelectionResponse,
     PerceptionRequest,
     PerceptionResponse,
@@ -11,6 +13,7 @@ from nova_core.capability_contracts import (
     VerificationStatus,
 )
 from nova_core.models import Action, ActionType, Decision, ExecutionResult, Goal, Observation, UiElement
+from nova_core.planning import Plan, PlanStep
 from nova_core.reasoning import ReasoningContext
 
 
@@ -83,9 +86,20 @@ def test_verification_confidence_is_bounded():
         raise AssertionError("expected invalid confidence to fail")
 
 
+def test_planning_contract_carries_reasoning_context_and_plan():
+    context = _context()
+    plan = Plan((PlanStep("finish the task"),))
+    request = PlanningRequest(context)
+    response = PlanningResponse(plan)
+
+    assert request.context is context
+    assert response.plan == plan
+
+
 def test_capability_contract_names_match_router_capabilities():
     assert {item.value for item in Capability} == {
         "reasoning",
+        "planning",
         "perception",
         "action_selection",
         "verification",
