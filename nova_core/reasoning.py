@@ -28,3 +28,4 @@ class ReasoningContext:
     relevant_learning: tuple[MissionLearningRecord, ...] = ()
     learning_assessment: LearningAssessment | None = None
     uncertainty: UncertaintyAssessment | None = None
+    perception_summary: str = ""
