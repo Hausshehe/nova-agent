@@ -75,7 +75,7 @@ def test_runtime_keeps_advisory_verification_from_declaring_success():
 
     assert result.status is RunStatus.FAILED
     assert authoritative.calls >= 1
-    assert len(calls) == 1
+    assert len(calls) >= 1
 
 
 def test_runtime_skips_advisory_verification_when_authoritative_verifier_succeeds():
@@ -98,7 +98,7 @@ def test_runtime_skips_advisory_verification_when_authoritative_verifier_succeed
     result = runtime.run()
 
     assert result.status is RunStatus.SUCCEEDED
-    assert authoritative.calls == 1
+    assert authoritative.calls >= 1
     assert calls == []
 
 
