@@ -8,5 +8,5 @@ def test_catalog_names_and_profiles_share_one_source_of_truth():
 
 
 def test_catalog_declares_only_capabilities_current_adapters_serve():
-    expected = frozenset({Capability.REASONING, Capability.ACTION_SELECTION})
+    expected = frozenset({Capability.REASONING, Capability.PLANNING, Capability.ACTION_SELECTION})
     assert all(profile.capabilities == expected for profile in PROVIDER_PROFILES)
