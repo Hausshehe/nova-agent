@@ -17,6 +17,7 @@ from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from agent.provider_pool import ReasoningProviderPool
 from agent.capability_router import Capability, CapabilityRouter
+from agent.provider_profile import ProviderProfile, capability_pool
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.capability_reasoner import CapabilityRoutedReasoner
 from nova_core.llm_planner import LLMPlanner
@@ -27,6 +28,10 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
+PROVIDER_PROFILES = tuple(
+    ProviderProfile.create(name, (Capability.REASONING, Capability.ACTION_SELECTION))
+    for name in SUPPORTED_PROVIDERS
+)
 BRIDGE_READY_TIMEOUT_SECONDS = 3.0
 BRIDGE_READY_POLL_SECONDS = 0.2
 
@@ -174,9 +179,12 @@ def main() -> int:
         bridge.launch(root=False)
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
-    provider_pool = ReasoningProviderPool(responders)
+    provider_pool = capability_pool(Capability.ACTION_SELECTION, responders, PROVIDER_PROFILES)
     executor: Any = _failure_injecting_executor(adapter) if args.inject_recoverable_failure else adapter
-    capability_router = CapabilityRouter({Capability.ACTION_SELECTION: provider_pool})
+    capability_router = CapabilityRouter(
+        {Capability.ACTION_SELECTION: provider_pool},
+        profiles={profile.name: profile for profile in PROVIDER_PROFILES},
+    )
     reasoner = CapabilityRoutedReasoner(capability_router)
     print("V2_ACTION_SELECTION_PROVIDER_ORDER=" + ",".join(capability_router.providers(Capability.ACTION_SELECTION)))
     runtime = Runtime(
