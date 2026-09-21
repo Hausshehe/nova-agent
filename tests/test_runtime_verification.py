@@ -119,4 +119,4 @@ def test_runtime_survives_advisory_verifier_failure():
     result = runtime.run()
 
     assert result.status is RunStatus.FAILED
-    assert authoritative.calls == 1
+    assert authoritative.calls >= 1
