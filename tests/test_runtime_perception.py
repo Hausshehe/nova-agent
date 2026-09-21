@@ -64,7 +64,7 @@ def test_observe_preserves_authoritative_observation_and_records_perception():
     assert result is observation
     assert observer.calls == [("observe", None)]
     assert perceiver.observations == [observation]
-    assert runtime.brain.summaries == ["screen looks ready"]
+    assert runtime.brain.summaries == ["", "screen looks ready"]
 
 
 def test_observe_without_perceiver_preserves_existing_behavior():
@@ -149,4 +149,4 @@ def test_perception_cannot_replace_authoritative_observation():
     result = runtime._observe()
 
     assert result is observation
-    assert runtime.brain.summaries == ["fake"]
+    assert runtime.brain.summaries == ["", "fake"]
