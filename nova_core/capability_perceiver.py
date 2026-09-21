@@ -28,20 +28,19 @@ class CapabilityRoutedPerceiver:
 
     @staticmethod
     def _response(value: Mapping[str, Any], fallback: Observation) -> PerceptionResponse:
-        observation = value.get("observation", fallback)
-        if not isinstance(observation, Observation):
-            observation = fallback
         summary = value.get("summary", "")
         if not isinstance(summary, str):
             raise ValueError("perception summary must be a string")
-        return PerceptionResponse(observation=observation, summary=summary)
+        # Provider output cannot replace authoritative Android evidence. The
+        # capability currently enriches that evidence with interpretation only.
+        return PerceptionResponse(observation=fallback, summary=summary)
 
     def assess(self, observation: Observation) -> PerceptionResponse:
         request = PerceptionRequest(observation)
         prompt = (
             "Summarize the supplied Android observation for Nova's reasoning layer. "
             "Do not invent UI state or change the observation. Return a concise "
-            "summary and preserve the supplied observation as the source of truth.\n\n"
+            "summary while treating the supplied observation as authoritative.\n\n"
             f"Observation: {request.observation!r}"
         )
         return self._response(self._router(self._capability, prompt), observation)
