@@ -100,21 +100,18 @@ def _instrument_responders(responders: list[tuple[str, object]], *, label: str) 
     return instrumented
 
 
-def _planner(responders: list[tuple[str, object]], capability_router: CapabilityRouter, *, gemini_timeout_seconds: float | None = None) -> tuple[LLMPlanner | None, object | None]:
-    if not responders:
+def _planner(capability_router) -> tuple[LLMPlanner | None, object | None]:
+    if not capability_router.providers(Capability.PLANNING):
         return None, None
-    if gemini_timeout_seconds is not None:
-        names = {name for name, _ in responders}
-        configured = _configured_responders(None, task="planning", gemini_timeout_seconds=gemini_timeout_seconds)
-        responders = [(name, responder) for name, responder in configured if name in names]
-    planning_responders = _instrument_responders(responders, label="PLANNING")
-    planning_pool = capability_pool(Capability.PLANNING, planning_responders, PROVIDER_PROFILES)
-    capability_router.register(Capability.PLANNING, planning_pool)
 
     def complete(prompt: str) -> str:
-        return json.dumps(capability_router(Capability.PLANNING, prompt), ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(
+            capability_router(Capability.PLANNING, prompt),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
-    return LLMPlanner(complete), planning_pool
+    return LLMPlanner(complete), capability_router.providers(Capability.PLANNING)
 
 
 class _FailureInjectingExecutor:
@@ -164,10 +161,14 @@ def main() -> int:
     if not responders:
         parser.error("no configured provider from V2_REASONING_PROVIDER_ORDER; set the required provider API key(s)")
     responders = _instrument_responders(responders, label="REASONING")
+    planning_responders = _instrument_responders(planning_responders, label="PLANNING")
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
-    capability_router = CapabilityRouter(profiles={profile.name: profile for profile in PROVIDER_PROFILES})
-    planner, planner_pool = _planner(planning_responders, capability_router, gemini_timeout_seconds=args.gemini_timeout)
+    capability_router = build_capability_router({
+        Capability.ACTION_SELECTION: responders,
+        Capability.PLANNING: planning_responders,
+    })
+    planner, planner_pool = _planner(capability_router)
     print("V2_MISSION_PLANNER=" + ("capability-router" if planner is not None else "goal-default"))
     print("V2_PLANNING_PROVIDER_ORDER=" + (",".join(capability_router.providers(Capability.PLANNING)) or "NONE"))
     bridge = AndroidBridge()
@@ -177,8 +178,6 @@ def main() -> int:
         bridge.launch(root=False)
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
-    provider_pool = capability_pool(Capability.ACTION_SELECTION, responders, PROVIDER_PROFILES)
-    capability_router.register(Capability.ACTION_SELECTION, provider_pool)
     executor: Any = _failure_injecting_executor(adapter) if args.inject_recoverable_failure else adapter
     reasoner = CapabilityRoutedReasoner(capability_router)
     print("V2_ACTION_SELECTION_PROVIDER_ORDER=" + ",".join(capability_router.providers(Capability.ACTION_SELECTION)))
