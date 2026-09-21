@@ -40,12 +40,12 @@ class CapabilityRouter:
     def register_profile(self, profile: ProviderProfile) -> None:
         if not isinstance(profile, ProviderProfile):
             raise TypeError("provider profile must be a ProviderProfile")
-        self._profiles[profile.name] = profile
         for capability, pool in self._pools.items():
             if profile.name in pool.providers() and not profile.supports(capability):
                 raise ValueError(
                     f"provider {profile.name!r} does not support capability {capability.value!r}"
                 )
+        self._profiles[profile.name] = profile
 
     def profiles(self) -> tuple[ProviderProfile, ...]:
         return tuple(self._profiles.values())
