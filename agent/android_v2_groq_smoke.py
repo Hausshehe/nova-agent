@@ -16,10 +16,11 @@ from agent.groq_responder import GroqResponder
 from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from agent.provider_pool import ReasoningProviderPool
+from agent.capability_router import Capability, CapabilityRouter
 from nova_core.adapters.android import AndroidBridgeAdapter
+from nova_core.capability_reasoner import CapabilityRoutedReasoner
 from nova_core.llm_planner import LLMPlanner
 from nova_core.models import ExecutionResult, Goal, RunStatus
-from nova_core.reasoning_adapter import LLMReasoner
 from nova_core.runtime import Runtime
 from nova_core.semantic_verifier import SemanticGoalVerifier
 
@@ -175,8 +176,11 @@ def main() -> int:
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = ReasoningProviderPool(responders)
     executor: Any = _failure_injecting_executor(adapter) if args.inject_recoverable_failure else adapter
+    capability_router = CapabilityRouter({Capability.ACTION_SELECTION: provider_pool})
+    reasoner = CapabilityRoutedReasoner(capability_router)
+    print("V2_ACTION_SELECTION_PROVIDER_ORDER=" + ",".join(capability_router.providers(Capability.ACTION_SELECTION)))
     runtime = Runtime(
-        Goal(args.goal), adapter, LLMReasoner(provider_pool), executor, SemanticGoalVerifier(),
+        Goal(args.goal), adapter, reasoner, executor, SemanticGoalVerifier(),
         max_steps=args.max_steps, planner=planner, replan_after_progress=False,
         max_replans=max(2, args.max_steps),
     )
