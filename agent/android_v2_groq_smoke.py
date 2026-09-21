@@ -17,7 +17,8 @@ from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
 from agent.provider_pool import ReasoningProviderPool
 from agent.capability_router import Capability, CapabilityRouter
-from agent.provider_profile import ProviderProfile, capability_pool
+from agent.provider_catalog import PROVIDER_PROFILES, SUPPORTED_PROVIDERS
+from agent.provider_profile import capability_pool
 from nova_core.adapters.android import AndroidBridgeAdapter
 from nova_core.capability_reasoner import CapabilityRoutedReasoner
 from nova_core.llm_planner import LLMPlanner
@@ -27,11 +28,6 @@ from nova_core.semantic_verifier import SemanticGoalVerifier
 
 PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
-SUPPORTED_PROVIDERS = ("groq", "openrouter", "gemini", "mistral", "cerebras")
-PROVIDER_PROFILES = tuple(
-    ProviderProfile.create(name, (Capability.REASONING, Capability.ACTION_SELECTION))
-    for name in SUPPORTED_PROVIDERS
-)
 BRIDGE_READY_TIMEOUT_SECONDS = 3.0
 BRIDGE_READY_POLL_SECONDS = 0.2
 
