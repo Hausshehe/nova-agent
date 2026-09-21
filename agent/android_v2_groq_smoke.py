@@ -15,7 +15,6 @@ from agent.gemini_responder import GeminiResponder
 from agent.groq_responder import GroqResponder
 from agent.mistral_responder import MistralResponder
 from agent.openrouter_responder import OpenRouterResponder
-from agent.provider_pool import ReasoningProviderPool
 from agent.capability_router import Capability, CapabilityRouter
 from agent.provider_catalog import PROVIDER_PROFILES, SUPPORTED_PROVIDERS
 from agent.provider_profile import capability_pool
@@ -101,19 +100,21 @@ def _instrument_responders(responders: list[tuple[str, object]], *, label: str) 
     return instrumented
 
 
-def _planner(responders: list[tuple[str, object]], *, gemini_timeout_seconds: float | None = None) -> tuple[LLMPlanner | None, ReasoningProviderPool | None]:
+def _planner(responders: list[tuple[str, object]], capability_router: CapabilityRouter, *, gemini_timeout_seconds: float | None = None) -> tuple[LLMPlanner | None, object | None]:
     if not responders:
         return None, None
     if gemini_timeout_seconds is not None:
         names = {name for name, _ in responders}
         configured = _configured_responders(None, task="planning", gemini_timeout_seconds=gemini_timeout_seconds)
         responders = [(name, responder) for name, responder in configured if name in names]
-    pool = ReasoningProviderPool(_instrument_responders(responders, label="PLANNING"))
+    planning_responders = _instrument_responders(responders, label="PLANNING")
+    planning_pool = capability_pool(Capability.PLANNING, planning_responders, PROVIDER_PROFILES)
+    capability_router.register(Capability.PLANNING, planning_pool)
 
     def complete(prompt: str) -> str:
-        return json.dumps(pool(prompt), ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(capability_router(Capability.PLANNING, prompt), ensure_ascii=False, separators=(",", ":"))
 
-    return LLMPlanner(complete), pool
+    return LLMPlanner(complete), planning_pool
 
 
 class _FailureInjectingExecutor:
@@ -165,9 +166,10 @@ def main() -> int:
     responders = _instrument_responders(responders, label="REASONING")
     print("V2_REASONING_PROVIDER_ORDER=" + ",".join(name for name, _ in responders))
     print("V2_REASONING_PROVIDER_BACKUP=" + (",".join(name for name, _ in responders[1:]) or "NONE"))
-    planner, planner_pool = _planner(planning_responders, gemini_timeout_seconds=args.gemini_timeout)
-    print("V2_MISSION_PLANNER=" + ("provider-pool" if planner is not None else "goal-default"))
-    print("V2_PLANNING_PROVIDER_ORDER=" + (",".join(name for name, _ in planning_responders) or "NONE"))
+    capability_router = CapabilityRouter(profiles={profile.name: profile for profile in PROVIDER_PROFILES})
+    planner, planner_pool = _planner(planning_responders, capability_router, gemini_timeout_seconds=args.gemini_timeout)
+    print("V2_MISSION_PLANNER=" + ("capability-router" if planner is not None else "goal-default"))
+    print("V2_PLANNING_PROVIDER_ORDER=" + (",".join(capability_router.providers(Capability.PLANNING)) or "NONE"))
     bridge = AndroidBridge()
     if args.launch_nova:
         _reset_nova_process(bridge.timeout)
@@ -176,11 +178,8 @@ def main() -> int:
     _wait_for_bridge(bridge)
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     provider_pool = capability_pool(Capability.ACTION_SELECTION, responders, PROVIDER_PROFILES)
+    capability_router.register(Capability.ACTION_SELECTION, provider_pool)
     executor: Any = _failure_injecting_executor(adapter) if args.inject_recoverable_failure else adapter
-    capability_router = CapabilityRouter(
-        {Capability.ACTION_SELECTION: provider_pool},
-        profiles={profile.name: profile for profile in PROVIDER_PROFILES},
-    )
     reasoner = CapabilityRoutedReasoner(capability_router)
     print("V2_ACTION_SELECTION_PROVIDER_ORDER=" + ",".join(capability_router.providers(Capability.ACTION_SELECTION)))
     runtime = Runtime(
@@ -189,9 +188,7 @@ def main() -> int:
         max_replans=max(2, args.max_steps),
     )
     result = runtime.run()
-    print("V2_PROVIDER_HEALTH=" + json.dumps(provider_pool.health(), sort_keys=True))
-    if planner_pool is not None:
-        print("V2_PLANNER_PROVIDER_HEALTH=" + json.dumps(planner_pool.health(), sort_keys=True))
+    print("V2_PROVIDER_HEALTH=" + json.dumps(capability_router.health(), sort_keys=True))
     if runtime.brain.plan is not None:
         plan = runtime.brain.plan
         print(f"V2_MISSION_PLAN revision={plan.revision} cursor={plan.cursor} complete={plan.complete}")
