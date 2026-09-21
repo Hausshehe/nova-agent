@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet, Iterable
 
-from .capability_router import Capability
+from .capability import Capability
 
 
 @dataclass(frozen=True)
