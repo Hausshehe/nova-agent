@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .models import Decision, ExecutionResult, Goal, Observation
+from .planning import Plan
 from .reasoning import ReasoningContext
 
 
@@ -37,6 +38,19 @@ class ReasoningResponse:
     decision: Decision
     rationale: str = ""
 
+
+@dataclass(frozen=True)
+class PlanningRequest:
+    """Context supplied to the mission-planning capability."""
+
+    context: ReasoningContext
+
+
+@dataclass(frozen=True)
+class PlanningResponse:
+    """Provider-neutral mission plan returned by planning."""
+
+    plan: Plan
 
 @dataclass(frozen=True)
 class ActionSelectionRequest:
