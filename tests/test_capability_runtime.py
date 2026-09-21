@@ -1,5 +1,6 @@
 from nova_core.capability_runtime import build_capability_runtime
 from nova_core.models import ExecutionResult, Goal, Observation
+from nova_core.reasoning import ReasoningContext
 
 
 class FakeObserver:
@@ -56,7 +57,8 @@ def test_runtime_factory_connects_planning_through_the_same_capability_boundary(
     )
 
     assert runtime.planner is not None
-    assert runtime.planner.plan(runtime.brain.reasoning_context()).steps[0].description == "advance the current mission"
+    context = ReasoningContext(Goal("Finish the mission"), Observation(package="nova", activity="MainActivity", revision=1))
+    assert runtime.planner.plan(context).steps[0].description == "advance the current mission"
 
 
 def test_runtime_factory_does_not_fabricate_unprovisioned_capabilities():
