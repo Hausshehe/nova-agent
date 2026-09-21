@@ -9,6 +9,7 @@ behind the Observer/Executor ports.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import json
 from typing import Any
 
 from agent.capability import Capability
@@ -56,7 +57,7 @@ def build_capability_runtime(
     planner = None
     if router.providers(Capability.PLANNING):
         planner = LLMPlanner(
-            lambda prompt: __import__("json").dumps(
+            lambda prompt: json.dumps(
                 router(Capability.PLANNING, prompt),
                 ensure_ascii=False,
                 separators=(",", ":"),
