@@ -77,7 +77,7 @@ def main() -> int:
         Goal("Complete Recovery"), adapter, adapter, verifier,
         action_responders=[("cerebras", _action_responder)],
         planning_responders=[("cerebras", _planning_responder)],
-        intent_verifier=verifier, max_steps=2, max_replans=1,
+        intent_verifier=verifier, max_steps=4, max_replans=1,
     )
     result = runtime.run()
     history = runtime.controller.history
