@@ -95,6 +95,9 @@ class AndroidBridge:
     def click(self, element_id: str) -> dict[str, Any]:
         return self._request({"command": "click", "elementId": element_id})
 
+    def scroll(self, element_id: str) -> dict[str, Any]:
+        return self._request({"command": "scroll", "elementId": element_id})
+
     def open_uri(self, uri: str, package: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"command": "open_uri", "uri": uri}
         if package:
@@ -115,6 +118,19 @@ class AndroidBridge:
                 return ExecutionResult(False, False, False, "click action has no target")
             try:
                 response = self.click(action.target.element_id)
+            except AndroidBridgeError as exc:
+                return ExecutionResult(False, False, False, str(exc))
+            return ExecutionResult(
+                accepted=bool(response.get("accepted", response.get("ok", True))),
+                changed=bool(response.get("changed", False)),
+                verified=bool(response.get("verified", False)),
+                error=response.get("error"),
+            )
+        if action.type == ActionType.SCROLL:
+            if action.target is None:
+                return ExecutionResult(False, False, False, "scroll action has no target")
+            try:
+                response = self.scroll(action.target.element_id)
             except AndroidBridgeError as exc:
                 return ExecutionResult(False, False, False, str(exc))
             return ExecutionResult(
