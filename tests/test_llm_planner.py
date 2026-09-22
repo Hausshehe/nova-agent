@@ -1,5 +1,6 @@
 import pytest
 
+from nova_core.evidence import StateEvidence
 from nova_core.llm_planner import LLMPlanner
 from nova_core.models import Goal, Observation, UiElement
 from nova_core.reasoning import ReasoningContext
@@ -78,3 +79,28 @@ def test_llm_planner_rejects_overlarge_response():
 
     with pytest.raises(ValueError, match="more than 8"):
         LLMPlanner(lambda _prompt: response).plan(_context())
+
+
+def test_llm_planner_replan_preserves_recovery_intent_after_ineffective_action():
+    context = _context()
+    context = ReasoningContext(
+        goal=context.goal,
+        observation=Observation(
+            package="com.example.app",
+            activity="MainActivity",
+            revision=4,
+            elements=(
+                UiElement(id="primary", text="Recovery Primary Action", clickable=True),
+                UiElement(id="fallback", text="Recovery Fallback Action", clickable=True),
+            ),
+        ),
+        evidence=StateEvidence(
+            current_revision=4,
+            previous_revision=3,
+            last_execution_accepted=True,
+            last_execution_changed=False,
+        ),
+    )
+    planner = LLMPlanner(lambda _prompt: '{"steps":["Complete Recovery with Recovery Fallback Action"]}')
+    replacement = planner.replan(context, planner.plan(_context()))
+    assert replacement.steps[0].description == "Complete Recovery with Recovery Fallback Action"
