@@ -33,12 +33,25 @@ def _planning_responder_factory():
 def _action_responder(prompt: str):
     payload = json.loads(prompt)
     current = payload["plan"]["current"]
-    target_id = (
-        f"{PACKAGE_NAME}:id/recovery_fallback"
-        if "fallback" in current.casefold()
-        else f"{PACKAGE_NAME}:id/recovery_primary"
-    )
-    return {"action_type": "tap", "target_id": target_id, "reason": current}
+    actions = payload["observation"]["actions"]
+
+    if "fallback" in current.casefold():
+        fallback_id = f"{PACKAGE_NAME}:id/recovery_fallback"
+        if any(item["id"] == fallback_id and item.get("tap") for item in actions):
+            return {"action_type": "tap", "target_id": fallback_id, "reason": current}
+
+        scroll_target = next(
+            (item["id"] for item in actions if item.get("scroll")),
+            None,
+        )
+        if scroll_target is not None:
+            return {"action_type": "scroll", "target_id": scroll_target, "reason": current}
+
+    return {
+        "action_type": "tap",
+        "target_id": f"{PACKAGE_NAME}:id/recovery_primary",
+        "reason": current,
+    }
 
 
 class RecoveryVerifier:
