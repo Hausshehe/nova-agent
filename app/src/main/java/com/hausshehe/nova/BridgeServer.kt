@@ -99,6 +99,7 @@ object BridgeServer {
                     "agent_result" -> agentResult(context, request)
                     "agent_cancel" -> agentCancel(context)
                     "click" -> click(request.optString("elementId"))
+                    "scroll" -> scroll(request.optString("elementId"))
                     "back" -> back()
                     "launch" -> launch(context, request.optString("package", PACKAGE))
                     "open_uri" -> openUri(context, request.optString("uri"), request.optString("package").takeIf { it.isNotBlank() })
@@ -565,6 +566,27 @@ object BridgeServer {
             child.recycle()
         }
         return null
+    }
+
+    private fun scroll(elementId: String): JSONObject {
+        val service = NovaAccessibilityService.instance ?: return error("Nova accessibility service is not connected")
+        val root = service.rootInActiveWindow ?: return error("No active accessibility window")
+        ObservationStore.update(root)
+        val before = ObservationStore.current()
+        val node = findNode(root, elementId) ?: run {
+            root.recycle()
+            return error("element not found: $elementId")
+        }
+        val accepted = node.isEnabled && node.isScrollable &&
+            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        node.recycle()
+        root.recycle()
+        val changed = accepted && waitForObservableChange(service, before)
+        return JSONObject().apply {
+            put("ok", true)
+            put("accepted", accepted)
+            put("changed", changed)
+        }
     }
 
     private fun back(): JSONObject {
