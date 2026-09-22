@@ -86,8 +86,10 @@ class RecoveryVerifier:
         )
 
 
-def _reset_nova() -> None:
-    subprocess.run(["am", "start", "-S", "-n", MAIN_ACTIVITY], check=True, capture_output=True, text=True)
+def _reset_nova(bridge: AndroidBridge) -> None:
+    # Do not force-stop Nova from shell: that also kills the accessibility
+    # service and can leave Android reporting a launcher root during the smoke.
+    bridge.launch(PACKAGE_NAME, root=False)
 
 
 def main() -> int:
@@ -97,7 +99,7 @@ def main() -> int:
 
     bridge = AndroidBridge()
     if args.launch_nova:
-        _reset_nova()
+        _reset_nova(bridge)
     else:
         bridge.launch(root=False)
 
