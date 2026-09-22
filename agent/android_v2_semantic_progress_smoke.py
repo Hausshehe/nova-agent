@@ -36,6 +36,10 @@ def _action_responder(prompt: str):
     observation = payload["observation"]
     actions = observation["actions"]
     if "fallback" in current.casefold():
+        print(
+            f"SEMANTIC_ACTION_OBSERVATION_PACKAGE={observation.get('package')!r} "
+            f"SEMANTIC_SCROLL_CANDIDATES={[(item['id'], item.get('class_name', ''), item.get('scroll', False)) for item in actions if item.get('scroll')]!r}"
+        )
         if observation.get("package") != PACKAGE_NAME:
             return {
                 "action_type": "wait",
