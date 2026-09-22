@@ -535,8 +535,12 @@ object BridgeServer {
         }
     }
 
-    private fun waitForObservableChange(service: NovaAccessibilityService, before: UiSnapshot): Boolean {
-        val deadline = System.currentTimeMillis() + ACTION_CHANGE_TIMEOUT_MS
+    private fun waitForObservableChange(
+        service: NovaAccessibilityService,
+        before: UiSnapshot,
+        timeoutMs: Long = ACTION_CHANGE_TIMEOUT_MS,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val root = service.rootInActiveWindow
             if (root != null) {
@@ -580,18 +584,35 @@ object BridgeServer {
             root.recycle()
             return error("element not found: $elementId")
         }
-        val accepted = if (!node.isEnabled || !node.isScrollable) {
-            false
-        } else {
-            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ||
-                performScrollGesture(service, node)
+        if (!node.isEnabled || !node.isScrollable) {
+            node.recycle()
+            root.recycle()
+            return JSONObject().apply {
+                put("ok", true)
+                put("accepted", false)
+                put("changed", false)
+            }
         }
+
+        // Some Android containers report ACTION_SCROLL_FORWARD as accepted
+        // even when the visible content does not move. Do not let that
+        // successful-but-ineffective accessibility action suppress the
+        // gesture fallback.
+        val actionAccepted = node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        var changed = actionAccepted && waitForObservableChange(service, before, 700L)
+        var gestureAccepted = false
+        if (!changed) {
+            gestureAccepted = performScrollGesture(service, node)
+            if (gestureAccepted) {
+                changed = waitForObservableChange(service, before, ACTION_CHANGE_TIMEOUT_MS)
+            }
+        }
+
         node.recycle()
         root.recycle()
-        val changed = accepted && waitForObservableChange(service, before)
         return JSONObject().apply {
             put("ok", true)
-            put("accepted", accepted)
+            put("accepted", actionAccepted || gestureAccepted)
             put("changed", changed)
         }
     }
