@@ -33,7 +33,18 @@ def _planning_responder_factory():
 def _action_responder(prompt: str):
     payload = json.loads(prompt)
     current = payload["plan"]["current"]
-    actions = payload["observation"]["actions"]
+    observation = payload["observation"]
+    actions = observation["actions"]
+    if "fallback" in current.casefold():
+        scroll_debug = [
+            (item["id"], item.get("class_name", ""), item.get("scroll", False))
+            for item in actions
+            if item.get("scroll")
+        ]
+        print(
+            f"SEMANTIC_ACTION_OBSERVATION_PACKAGE={observation.get('package')!r} "
+            f"SEMANTIC_SCROLL_CANDIDATES={scroll_debug!r}"
+        )
 
     if "fallback" in current.casefold():
         fallback_id = f"{PACKAGE_NAME}:id/recovery_fallback"
