@@ -600,7 +600,6 @@ object BridgeServer {
         service: NovaAccessibilityService,
         node: AccessibilityNodeInfo,
     ): Boolean {
-        if (!service.canPerformGestures()) return false
         val bounds = android.graphics.Rect()
         node.getBoundsInScreen(bounds)
         val centerX = bounds.centerX().toFloat()
