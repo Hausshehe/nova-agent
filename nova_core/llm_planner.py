@@ -72,6 +72,15 @@ class LLMPlanner:
         return tuple(label for _, label in candidates)
 
     def _ground_steps(self, steps: tuple[PlanStep, ...], context: ReasoningContext) -> tuple[PlanStep, ...]:
+        # After an accepted action produces no change, preserve the replacement
+        # intent instead of grounding it back to the same stale stage candidate.
+        # Replanning exists precisely to escape an ineffective action.
+        evidence = context.evidence
+        if (
+            getattr(evidence, "last_execution_accepted", None) is True
+            and getattr(evidence, "last_execution_changed", None) is False
+        ):
+            return steps
         candidates = self._goal_stage_candidates(context)
         if not candidates or not steps:
             return steps
