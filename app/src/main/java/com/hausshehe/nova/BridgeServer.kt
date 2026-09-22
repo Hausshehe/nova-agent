@@ -577,8 +577,16 @@ object BridgeServer {
             root.recycle()
             return error("element not found: $elementId")
         }
-        val accepted = node.isEnabled && node.isScrollable &&
-            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        val accepted = if (!node.isEnabled || !node.isScrollable) {
+            false
+        } else {
+            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ||
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_DOWN)
+                } else {
+                    false
+                }
+        }
         node.recycle()
         root.recycle()
         val changed = accepted && waitForObservableChange(service, before)
