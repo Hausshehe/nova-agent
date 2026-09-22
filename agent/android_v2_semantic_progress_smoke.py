@@ -103,8 +103,6 @@ def main() -> int:
     bridge = AndroidBridge()
     if args.launch_nova:
         _reset_nova(bridge)
-    else:
-        bridge.launch(root=False)
 
     deadline = time.monotonic() + 3.0
     while True:
