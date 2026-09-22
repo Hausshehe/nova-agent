@@ -40,6 +40,11 @@ def _action_responder(prompt: str):
         if any(item["id"] == fallback_id and item.get("tap") for item in actions):
             return {"action_type": "tap", "target_id": fallback_id, "reason": current}
 
+        scroll_candidates = [
+            item["id"]
+            for item in actions
+            if item.get("scroll")
+        ]
         scroll_target = next(
             (
                 item["id"]
@@ -47,7 +52,7 @@ def _action_responder(prompt: str):
                 if item.get("scroll")
                 and "scrollview" in item.get("class_name", "").casefold()
             ),
-            None,
+            scroll_candidates[0] if scroll_candidates else None,
         )
         if scroll_target is not None:
             return {"action_type": "scroll", "target_id": scroll_target, "reason": current}
