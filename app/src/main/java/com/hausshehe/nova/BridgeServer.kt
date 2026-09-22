@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.graphics.Path
+import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -577,8 +580,12 @@ object BridgeServer {
             root.recycle()
             return error("element not found: $elementId")
         }
-        val accepted = node.isEnabled && node.isScrollable &&
-            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        val accepted = if (!node.isEnabled || !node.isScrollable) {
+            false
+        } else {
+            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ||
+                performScrollGesture(service, node)
+        }
         node.recycle()
         root.recycle()
         val changed = accepted && waitForObservableChange(service, before)
@@ -587,6 +594,34 @@ object BridgeServer {
             put("accepted", accepted)
             put("changed", changed)
         }
+    }
+
+    private fun performScrollGesture(
+        service: NovaAccessibilityService,
+        node: AccessibilityNodeInfo,
+    ): Boolean {
+        if (!service.canPerformGestures()) return false
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+        val centerX = bounds.centerX().toFloat()
+        val startY = (bounds.bottom - bounds.height() * 0.25f).toFloat()
+        val endY = (bounds.top + bounds.height() * 0.25f).toFloat()
+        if (bounds.width() <= 0 || bounds.height() <= 0 || startY <= endY) return false
+
+        val path = Path().apply {
+            moveTo(centerX, startY)
+            lineTo(centerX, endY)
+        }
+        val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(
+            path,
+            0L,
+            350L,
+        )
+        val gesture = android.accessibilityservice.GestureDescription.Builder()
+            .addStroke(stroke)
+            .build()
+
+        return service.dispatchGesture(gesture, null, null)
     }
 
     private fun back(): JSONObject {
