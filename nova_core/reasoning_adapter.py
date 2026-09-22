@@ -66,7 +66,7 @@ def _observation_payload(observation: Observation) -> dict[str, Any]:
         actionable = element.enabled and (element.clickable or element.editable or element.scrollable)
         if not actionable:
             continue
-        item = {"id": element.id, "label": label or None}
+        item = {"id": element.id, "label": label or None, "class_name": element.class_name}
         if element.clickable: item["tap"] = True
         if element.editable: item["type"] = True
         if element.scrollable: item["scroll"] = True
