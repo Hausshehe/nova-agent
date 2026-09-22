@@ -36,6 +36,12 @@ def _action_responder(prompt: str):
     observation = payload["observation"]
     actions = observation["actions"]
     if "fallback" in current.casefold():
+        if observation.get("package") != PACKAGE_NAME:
+            return {
+                "action_type": "wait",
+                "target_id": None,
+                "reason": f"foreign foreground package: {observation.get('package')!r}",
+            }
         scroll_debug = [
             (item["id"], item.get("class_name", ""), item.get("scroll", False))
             for item in actions
