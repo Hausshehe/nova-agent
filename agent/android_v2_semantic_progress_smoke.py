@@ -17,11 +17,17 @@ PACKAGE_NAME = "com.hausshehe.nova"
 MAIN_ACTIVITY = f"{PACKAGE_NAME}/.MainActivity"
 
 
-def _planning_responder(prompt: str):
-    payload = json.loads(prompt.split("PREVIOUS_PLAN_REMAINING:", 1)[1].strip())
-    if payload:
-        return {"steps": ["Complete Recovery with Recovery Fallback Action"]}
-    return {"steps": ["Attempt Recovery Primary Action"]}
+def _planning_responder_factory():
+    calls = 0
+
+    def respond(prompt: str):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            return {"steps": ["Complete Recovery with Recovery Fallback Action"]}
+        return {"steps": ["Attempt Recovery Primary Action"]}
+
+    return respond
 
 
 def _action_responder(prompt: str):
@@ -73,10 +79,11 @@ def main() -> int:
 
     adapter = AndroidBridgeAdapter(bridge, expected_package=PACKAGE_NAME)
     verifier = RecoveryVerifier()
+    planning_responder = _planning_responder_factory()
     runtime = build_capability_runtime(
         Goal("Complete Recovery"), adapter, adapter, verifier,
         action_responders=[("cerebras", _action_responder)],
-        planning_responders=[("cerebras", _planning_responder)],
+        planning_responders=[("cerebras", planning_responder)],
         intent_verifier=verifier, max_steps=4, max_replans=1,
     )
     result = runtime.run()
@@ -88,6 +95,7 @@ def main() -> int:
     print(f"SEMANTIC_REPLANS={runtime.replans}")
     print(f"SEMANTIC_PLAN_CURSOR={plan.cursor if plan else None}")
     print(f"SEMANTIC_PLAN_REVISION={plan.revision if plan else None}")
+    print(f"SEMANTIC_PLAN_CURRENT={plan.current.description if plan and plan.current else None!r}")
     for index, step in enumerate(history, start=1):
         print(f"SEMANTIC_ACTION_{index}=target:{step.decision.action.target_id!r} accepted:{step.execution.accepted} changed:{step.execution.changed}")
 
