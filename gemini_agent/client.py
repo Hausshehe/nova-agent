@@ -386,8 +386,12 @@ class GeminiClient:
             except (KeyError, IndexError, TypeError) as exc:
                 raise RuntimeError(f"Gemini returned an unexpected response: {result}") from exc
 
-            function_call = next((part["functionCall"] for part in parts if "functionCall" in part), None)
-            if function_call is None:
+            function_calls = [
+                part["functionCall"]
+                for part in parts
+                if isinstance(part, dict) and "functionCall" in part
+            ]
+            if not function_calls:
                 metadata = result.get("candidates", [{}])[0].get("groundingMetadata", {})
                 chunks = metadata.get("groundingChunks", [])
                 self.last_grounding_sources = [
@@ -405,25 +409,35 @@ class GeminiClient:
                 except (KeyError, TypeError) as exc:
                     raise RuntimeError(f"Gemini returned an unexpected response: {result}") from exc
 
-            name = function_call.get("name")
-            args = function_call.get("args", {})
-            handler = self.tool_handlers.get(name)
-            if handler is None:
-                raise RuntimeError(f"Gemini requested an unknown tool: {name}")
+            function_responses = []
+            for function_call in function_calls:
+                name = function_call.get("name")
+                args = function_call.get("args", {}) or {}
+                if not isinstance(args, dict):
+                    raise RuntimeError(f"Gemini returned invalid arguments for tool: {name}")
+                handler = self.tool_handlers.get(name)
+                if handler is None:
+                    raise RuntimeError(f"Gemini requested an unknown tool: {name}")
 
-            try:
-                tool_result = handler(**args)
-            except (KeyError, TypeError, ValueError) as exc:
-                tool_result = f"Tool error: {exc}"
+                try:
+                    tool_result = handler(**args)
+                except (KeyError, TypeError, ValueError) as exc:
+                    tool_result = f"Tool error: {exc}"
 
-            call_trace = {"name": name, "args": args, "result": tool_result}
-            if "expression" in args:
-                call_trace["expression"] = str(args["expression"])
-            self.last_tool_calls.append(call_trace)
+                call_trace = {"name": name, "args": args, "result": tool_result}
+                if "expression" in args:
+                    call_trace["expression"] = str(args["expression"])
+                self.last_tool_calls.append(call_trace)
+                function_responses.append({
+                    "functionResponse": {
+                        "name": name,
+                        "response": {"result": tool_result},
+                    }
+                })
 
             contents.extend([
                 {"role": "model", "parts": parts},
-                {"role": "user", "parts": [{"functionResponse": {"name": name, "response": {"result": tool_result}}}]},
+                {"role": "user", "parts": function_responses},
             ])
             result = self._generate_gemini(contents, system_instruction)
 
