@@ -129,11 +129,11 @@ class GeminiClient:
                     "content": "".join(text_parts),
                 })
 
-        payload = {
-            "model": self.groq_model,
-            "messages": messages,
-            "max_tokens": 1024,
-            "tools": [
+        if self.web_search:
+            # browser_search is server-side and must own its internal browsing loop.
+            tools = [{"type": "browser_search"}]
+        else:
+            tools = [
                 {
                     "type": "function",
                     "function": {
@@ -143,10 +143,15 @@ class GeminiClient:
                     },
                 }
                 for declaration in TOOL_DECLARATIONS
-            ],
+            ]
+
+        payload = {
+            "model": self.groq_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "tools": tools,
         }
         if self.web_search:
-            payload["tools"].insert(0, {"type": "browser_search"})
             payload["tool_choice"] = "required"
 
         for _ in range(3):
