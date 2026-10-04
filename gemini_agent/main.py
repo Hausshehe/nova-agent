@@ -6,6 +6,7 @@ from gemini_agent.client import GeminiClient
 def main() -> None:
     client = GeminiClient()
     print("Gemini agent ready. Type /exit to quit.")
+    history: list[dict] = []
     while True:
         try:
             prompt = input("\nYou: ").strip()
@@ -18,7 +19,12 @@ def main() -> None:
         if not prompt:
             continue
         try:
-            print(f"\nGemini: {client.ask(prompt)}")
+            answer = client.ask(prompt, history)
+            history.extend([
+                {"role": "user", "parts": [{"text": prompt}]},
+                {"role": "model", "parts": [{"text": answer}]},
+            ])
+            print(f"\nGemini: {answer}")
         except RuntimeError as exc:
             print(f"\nError: {exc}")
 
