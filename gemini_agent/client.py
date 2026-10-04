@@ -6,6 +6,8 @@ import time
 import urllib.error
 import urllib.request
 
+from gemini_agent.tools import calculator
+
 
 class GeminiClient:
     def __init__(
@@ -19,14 +21,30 @@ class GeminiClient:
         self.model = model
         self.fallback_model = fallback_model
 
-    def ask(
+    def _generate(
         self,
-        prompt: str,
-        history: list[dict] | None = None,
-        system_instruction: str | None = None,
-    ) -> str:
-        contents = list(history or []) + [{"role": "user", "parts": [{"text": prompt}]}]
-        payload = {"contents": contents}
+        contents: list[dict],
+        system_instruction: str | None,
+    ) -> dict:
+        payload = {
+            "contents": contents,
+            "tools": [{
+                "function_declarations": [{
+                    "name": "calculator",
+                    "description": "Calculate basic arithmetic expressions.",
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "expression": {
+                                "type": "STRING",
+                                "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
+                            }
+                        },
+                        "required": ["expression"],
+                    },
+                }]
+            }],
+        }
         if system_instruction:
             payload["system_instruction"] = {"parts": [{"text": system_instruction}]}
         body = json.dumps(payload).encode()
@@ -35,7 +53,6 @@ class GeminiClient:
         if self.fallback_model and self.fallback_model != self.model:
             models.append(self.fallback_model)
 
-        last_error: RuntimeError | None = None
         for model_index, model in enumerate(models):
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -45,6 +62,9 @@ class GeminiClient:
                 url, data=body, headers={"Content-Type": "application/json"}, method="POST"
             )
             saw_503 = False
+            result = None
+            last_error: RuntimeError | None = None
+
             for attempt in range(3):
                 try:
                     with urllib.request.urlopen(request, timeout=60) as response:
@@ -62,15 +82,64 @@ class GeminiClient:
                     time.sleep(2 ** attempt)
                 except urllib.error.URLError as exc:
                     raise RuntimeError(f"Could not reach Gemini: {exc.reason}") from exc
-            else:
-                continue
 
-            if "result" in locals():
-                break
+            if result is not None:
+                return result
             if not (saw_503 and model_index + 1 < len(models)):
                 raise last_error or RuntimeError("Gemini request failed.")
 
-        try:
-            return result["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError(f"Gemini returned an unexpected response: {result}") from exc
+        raise RuntimeError("Gemini request failed.")
+
+    def ask(
+        self,
+        prompt: str,
+        history: list[dict] | None = None,
+        system_instruction: str | None = None,
+    ) -> str:
+        contents = list(history or []) + [{"role": "user", "parts": [{"text": prompt}]}]
+
+        for _ in range(3):
+            result = self._generate(contents, system_instruction)
+            try:
+                parts = result["candidates"][0]["content"]["parts"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise RuntimeError(
+                    f"Gemini returned an unexpected response: {result}"
+                ) from exc
+
+            function_call = next(
+                (part["functionCall"] for part in parts if "functionCall" in part),
+                None,
+            )
+            if function_call is None:
+                try:
+                    return "".join(part["text"] for part in parts if "text" in part)
+                except (KeyError, TypeError) as exc:
+                    raise RuntimeError(
+                        f"Gemini returned an unexpected response: {result}"
+                    ) from exc
+
+            name = function_call.get("name")
+            args = function_call.get("args", {})
+            if name != "calculator":
+                raise RuntimeError(f"Gemini requested an unknown tool: {name}")
+
+            try:
+                tool_result = calculator(str(args["expression"]))
+            except (KeyError, TypeError, ValueError) as exc:
+                tool_result = f"Tool error: {exc}"
+
+            contents.extend([
+                {"role": "model", "parts": parts},
+                {
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": name,
+                            "response": {"result": tool_result},
+                        }
+                    }],
+                },
+            ])
+
+        raise RuntimeError("Gemini requested too many tool calls.")
