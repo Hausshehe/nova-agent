@@ -43,6 +43,8 @@ def main() -> None:
                 args = ", ".join(f"{key}={value!r}" for key, value in call["args"].items())
                 print(f"\nTool: {call['name']}({args}) = {call['result']}")
             print(f"\nGemini: {answer}")
+            for source in client.last_grounding_sources:
+                print(f"Source: {source['title']} - {source['uri']}")
         except RuntimeError as exc:
             print(f"\nError: {exc}")
 
