@@ -67,6 +67,37 @@ class GeminiClientTests(unittest.TestCase):
             "You are Nova.",
         )
 
+    def test_uses_calculator_tool(self):
+        tool_call = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "calculator",
+                            "args": {"expression": "12 * 7"},
+                        }
+                    }]
+                }
+            }]
+        }
+        final = {
+            "candidates": [{
+                "content": {"parts": [{"text": "84"}]}
+            }]
+        }
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_call), FakeResponse(final)],
+        ) as open_url:
+            answer = GeminiClient().ask("What is 12 times 7?")
+
+        self.assertEqual(answer, "84")
+        self.assertEqual(open_url.call_count, 2)
+        second = json.loads(open_url.call_args_list[1].args[0].data)
+        function_response = second["contents"][-1]["parts"][0]["functionResponse"]
+        self.assertEqual(function_response["name"], "calculator")
+        self.assertEqual(function_response["response"]["result"], "84")
+
     def test_rejects_unexpected_response(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
             "urllib.request.urlopen", return_value=FakeResponse({"candidates": []})
