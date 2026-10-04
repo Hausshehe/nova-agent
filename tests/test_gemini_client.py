@@ -1,8 +1,10 @@
 """Offline tests for the minimal Gemini client."""
 
 import json
+import io
 import os
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from gemini_agent.client import GeminiClient
@@ -75,7 +77,7 @@ class GeminiClientTests(unittest.TestCase):
     def test_falls_back_to_secondary_model_after_503(self):
         error_body = b'{"error":{"message":"busy"}}'
         busy = urllib.error.HTTPError(
-            "https://example.test", 503, "busy", {}, __import__("io").BytesIO(error_body)
+            "https://example.test", 503, "busy", {}, io.BytesIO(error_body)
         )
         payload = {"candidates": [{"content": {"parts": [{"text": "Fallback"}]}}]}
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
