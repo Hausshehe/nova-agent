@@ -127,6 +127,7 @@ class GeminiClient:
                 headers={
                     "Authorization": f"Bearer {self.groq_api_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "curl/8.0",
                 },
                 method="POST",
             )
