@@ -42,6 +42,11 @@ def current_datetime() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def remember_fact(key: str, value: str) -> str:
+    """Placeholder handler overridden by the agent with persistent memory."""
+    raise RuntimeError("Persistent memory is not configured.")
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -65,9 +70,28 @@ TOOL_DECLARATIONS = [
             "properties": {},
         },
     },
+    {
+        "name": "remember_fact",
+        "description": "Store a durable fact about the user for future conversations.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "key": {
+                    "type": "STRING",
+                    "description": "Short fact name, such as favorite_color or hometown.",
+                },
+                "value": {
+                    "type": "STRING",
+                    "description": "The value to remember.",
+                },
+            },
+            "required": ["key", "value"],
+        },
+    },
 ]
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
     "current_datetime": current_datetime,
+    "remember_fact": remember_fact,
 }
