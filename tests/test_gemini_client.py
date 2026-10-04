@@ -450,6 +450,70 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(function_response["name"], "calculator")
         self.assertEqual(function_response["response"]["result"], "84")
 
+    def test_executes_multiple_gemini_tool_calls(self):
+        tool_calls = {
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "name": "calculator",
+                                "args": {"expression": "12 * 7"},
+                            }
+                        },
+                        {
+                            "functionCall": {
+                                "name": "calculator",
+                                "args": {"expression": "5 + 6"},
+                            }
+                        },
+                    ]
+                }
+            }]
+        }
+        final = {
+            "candidates": [{
+                "content": {"parts": [{"text": "84 and 11"}]}
+            }]
+        }
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_calls), FakeResponse(final)],
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Calculate both 12 times 7 and 5 plus 6.")
+
+        self.assertEqual(answer, "84 and 11")
+        self.assertEqual(open_url.call_count, 2)
+        self.assertEqual(
+            client.last_tool_calls,
+            [
+                {
+                    "name": "calculator",
+                    "args": {"expression": "12 * 7"},
+                    "result": "84",
+                    "expression": "12 * 7",
+                },
+                {
+                    "name": "calculator",
+                    "args": {"expression": "5 + 6"},
+                    "result": "11",
+                    "expression": "5 + 6",
+                },
+            ],
+        )
+        second = json.loads(open_url.call_args_list[1].args[0].data)
+        response_parts = second["contents"][-1]["parts"]
+        self.assertEqual(len(response_parts), 2)
+        self.assertEqual(
+            response_parts[0]["functionResponse"]["response"]["result"],
+            "84",
+        )
+        self.assertEqual(
+            response_parts[1]["functionResponse"]["response"]["result"],
+            "11",
+        )
+
     def test_uses_custom_tool_handler(self):
         tool_call = {
             "candidates": [{
