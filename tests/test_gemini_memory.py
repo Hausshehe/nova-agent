@@ -36,6 +36,23 @@ class ConversationMemoryTests(unittest.TestCase):
             loaded = ConversationMemory(path)
             self.assertEqual(loaded.facts, {})
 
+    def test_forget_removes_fact_from_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "memory.json"
+            memory = ConversationMemory(path)
+            memory.remember_fact("favorite_food", "pizza")
+            memory.add_exchange("What is my favorite food?", "Your favorite food is pizza!")
+            memory.add_exchange("Something unrelated", "A normal answer.")
+            self.assertEqual(memory.forget_fact("favorite_food"), "Forgot favorite_food.")
+            history_text = " ".join(
+                part["text"]
+                for item in memory.history
+                for part in item["parts"]
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            ).lower()
+            self.assertNotIn("favorite food", history_text)
+            self.assertNotIn("pizza", history_text)
+
     def test_forget_missing_fact_is_safe(self):
         with tempfile.TemporaryDirectory() as directory:
             memory = ConversationMemory(Path(directory) / "memory.json")
