@@ -17,7 +17,10 @@ python -m gemini_agent.main
 Type a message to chat. Use `/exit` or `/quit` to stop.
 
 ## Memory
-Conversation history is saved locally in `memory.json` and loaded the next time the agent starts. The file is ignored by Git because it may contain private conversation data. The agent keeps the most recent 40 messages (about 20 exchanges) to limit request size. This is conversation-history persistence, not yet a separate system for extracting and managing durable facts.
+Conversation history is saved locally in `memory.json` and loaded the next time the agent starts. The file is ignored by Git because it may contain private conversation data. The agent keeps the most recent 40 messages (about 20 exchanges) to limit request size. Durable facts are stored separately and can be remembered or forgotten.
+
+## Web search
+Set `GEMINI_WEB_SEARCH=1` to let Gemini use Google Search grounding for current information. Search is opt-in because Google Search grounding may incur separate usage charges. When grounding is used, the CLI prints the returned source URLs.
 
 ## Tests
 Run offline tests with:
