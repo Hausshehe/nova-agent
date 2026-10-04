@@ -153,6 +153,9 @@ class GeminiClientTests(unittest.TestCase):
         sent = json.loads(open_url.call_args.args[0].data)
         self.assertEqual(sent["tools"][0], {"type": "browser_search"})
         self.assertTrue(any(tool.get("type") == "function" for tool in sent["tools"][1:]))
+        calculator = next(tool for tool in sent["tools"] if tool.get("type") == "function" and tool["function"]["name"] == "calculator")
+        self.assertEqual(calculator["function"]["parameters"]["type"], "object")
+        self.assertEqual(calculator["function"]["parameters"]["properties"]["expression"]["type"], "string")
         self.assertEqual(sent["tool_choice"], "required")
 
     def test_groq_fallback_uses_local_tool(self):
