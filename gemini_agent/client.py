@@ -183,7 +183,6 @@ class GeminiClient:
 
             content = message.get("content")
             if content:
-                self.last_grounding_sources = self._extract_openrouter_sources(message)
                 return str(content)
 
             tool_calls = message.get("tool_calls") or []
@@ -301,6 +300,7 @@ class GeminiClient:
 
             content = message.get("content")
             if content:
+                self.last_grounding_sources = self._extract_openrouter_sources(message)
                 return str(content)
 
             tool_calls = message.get("tool_calls") or []
