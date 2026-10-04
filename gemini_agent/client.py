@@ -107,6 +107,18 @@ class GeminiClient:
             convert(converted)
         return converted
 
+    @staticmethod
+    def _parse_tool_arguments(arguments) -> dict:
+        """Accept JSON-string or already-decoded tool arguments from fallbacks."""
+        if arguments in (None, ""):
+            return {}
+        if isinstance(arguments, dict):
+            return arguments
+        parsed = json.loads(arguments)
+        if not isinstance(parsed, dict):
+            raise ValueError("Tool arguments must be a JSON object.")
+        return parsed
+
     def _generate_groq(
         self,
         contents: list[dict],
@@ -132,7 +144,6 @@ class GeminiClient:
                 })
 
         if self.web_search:
-            # browser_search is server-side and must own its internal browsing loop.
             tools = [{"type": "browser_search"}]
         else:
             tools = [
@@ -198,9 +209,10 @@ class GeminiClient:
                     raise RuntimeError(f"Groq requested an unknown tool: {name}")
 
                 try:
-                    args = json.loads(function.get("arguments", "{}"))
+                    args = self._parse_tool_arguments(function.get("arguments", "{}"))
                     tool_result = handler(**args)
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    args = {}
                     tool_result = f"Tool error: {exc}"
 
                 call_trace = {"name": name, "args": args, "result": tool_result}
@@ -316,9 +328,10 @@ class GeminiClient:
                     raise RuntimeError(f"OpenRouter requested an unknown tool: {name}")
 
                 try:
-                    args = json.loads(function.get("arguments", "{}"))
+                    args = self._parse_tool_arguments(function.get("arguments", "{}"))
                     tool_result = handler(**args)
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    args = {}
                     tool_result = f"Tool error: {exc}"
 
                 call_trace = {"name": name, "args": args, "result": tool_result}
@@ -333,7 +346,6 @@ class GeminiClient:
                 })
 
         raise RuntimeError("OpenRouter requested too many tool calls.")
-
 
     def _generate(
         self,
