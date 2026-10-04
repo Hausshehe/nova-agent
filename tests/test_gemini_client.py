@@ -154,6 +154,63 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(sent["tools"], [{"type": "browser_search"}])
         self.assertEqual(sent["tool_choice"], "required")
 
+    def test_groq_fallback_uses_local_tool(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
+        )
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": None,
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": '{"expression":"12 * 7"}',
+                        },
+                    }],
+                }
+            }]
+        }
+        final_response = {
+            "choices": [{"message": {"content": "84"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-key", "GROQ_API_KEY": "groq-key"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                quota, quota, quota, quota, quota, quota,
+                FakeResponse(tool_response),
+                FakeResponse(final_response),
+            ],
+        ) as open_url, patch("time.sleep"):
+            client = GeminiClient()
+            answer = client.ask("What is 12 times 7?")
+
+        self.assertEqual(answer, "84")
+        self.assertEqual(
+            client.last_tool_calls,
+            [{"name": "calculator", "args": {"expression": "12 * 7"}, "result": "84", "expression": "12 * 7"}],
+        )
+        groq_request = open_url.call_args_list[6].args[0]
+        sent = json.loads(groq_request.data)
+        function_tools = [
+            tool for tool in sent["tools"]
+            if tool.get("type") == "function"
+        ]
+        self.assertTrue(
+            any(tool["function"]["name"] == "calculator" for tool in function_tools)
+        )
+        second_groq_request = open_url.call_args_list[7].args[0]
+        second_sent = json.loads(second_groq_request.data)
+        self.assertEqual(second_sent["messages"][-1]["content"], "84")
+
+
     def test_uses_calculator_tool(self):
         tool_call = {
             "candidates": [{
