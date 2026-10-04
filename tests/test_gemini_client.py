@@ -72,6 +72,25 @@ class GeminiClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unexpected response"):
                 GeminiClient().ask("Hi")
 
+    def test_falls_back_to_secondary_model_after_503(self):
+        error_body = b'{"error":{"message":"busy"}}'
+        busy = urllib.error.HTTPError(
+            "https://example.test", 503, "busy", {}, __import__("io").BytesIO(error_body)
+        )
+        payload = {"candidates": [{"content": {"parts": [{"text": "Fallback"}]}}]}
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
+            "urllib.request.urlopen",
+            side_effect=[busy, busy, busy, FakeResponse(payload)],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Hi")
+
+        self.assertEqual(answer, "Fallback")
+        self.assertEqual(open_url.call_count, 4)
+        first_url = open_url.call_args_list[0].args[0].full_url
+        fallback_url = open_url.call_args_list[3].args[0].full_url
+        self.assertIn("models/gemini-3.8-flash:", first_url)
+        self.assertIn("models/gemini-3.7-flash:", fallback_url)
+
 
 if __name__ == "__main__":
     unittest.main()
