@@ -47,6 +47,11 @@ def remember_fact(key: str, value: str) -> str:
     raise RuntimeError("Persistent memory is not configured.")
 
 
+def forget_fact(key: str) -> str:
+    """Placeholder handler overridden by the agent with persistent memory."""
+    raise RuntimeError("Persistent memory is not configured.")
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -88,10 +93,25 @@ TOOL_DECLARATIONS = [
             "required": ["key", "value"],
         },
     },
+    {
+        "name": "forget_fact",
+        "description": "Delete a durable fact about the user from memory.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "key": {
+                    "type": "STRING",
+                    "description": "The fact name to forget, such as favorite_color or hometown.",
+                }
+            },
+            "required": ["key"],
+        },
+    },
 ]
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
     "current_datetime": current_datetime,
     "remember_fact": remember_fact,
+    "forget_fact": forget_fact,
 }
