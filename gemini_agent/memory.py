@@ -47,8 +47,12 @@ class ConversationMemory:
             and isinstance(item.get("parts"), list)
         ]
 
+    @staticmethod
+    def _normalize_key(key: str) -> str:
+        return key.strip().lower().replace(" ", "_")
+
     def remember_fact(self, key: str, value: str) -> str:
-        key = key.strip().lower().replace(" ", "_")
+        key = self._normalize_key(key)
         value = value.strip()
         if not key or not value:
             raise ValueError("Both fact key and value are required.")
@@ -56,14 +60,26 @@ class ConversationMemory:
         self._save()
         return f"Remembered {key} = {value}"
 
+    def forget_fact(self, key: str) -> str:
+        key = self._normalize_key(key)
+        if not key:
+            raise ValueError("A fact key is required.")
+        if key not in self.facts:
+            return f"No remembered fact named {key}."
+        del self.facts[key]
+        self._save()
+        return f"Forgot {key}."
+
     def context(self) -> list[dict]:
         if not self.facts:
             return list(self.history)
-        facts = "\n".join(f"- {key}: {value}" for key, value in sorted(self.facts.items()))
+        facts = "
+".join(f"- {key}: {value}" for key, value in sorted(self.facts.items()))
         return [
             {
                 "role": "user",
-                "parts": [{"text": f"Durable memory about the user:\n{facts}"}],
+                "parts": [{"text": f"Durable memory about the user:
+{facts}"}],
             },
             *self.history,
         ]
@@ -79,6 +95,7 @@ class ConversationMemory:
     def _save(self) -> None:
         data = {"facts": self.facts, "history": self.history}
         self.path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(data, ensure_ascii=False, indent=2) + "
+",
             encoding="utf-8",
         )
