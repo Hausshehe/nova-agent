@@ -6,7 +6,7 @@ import time
 import urllib.error
 import urllib.request
 
-from gemini_agent.tools import calculator
+from gemini_agent.tools import TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -29,22 +29,7 @@ class GeminiClient:
     ) -> dict:
         payload = {
             "contents": contents,
-            "tools": [{
-                "function_declarations": [{
-                    "name": "calculator",
-                    "description": "Calculate basic arithmetic expressions.",
-                    "parameters": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "expression": {
-                                "type": "STRING",
-                                "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
-                            }
-                        },
-                        "required": ["expression"],
-                    },
-                }]
-            }],
+            "tools": [{"function_declarations": TOOL_DECLARATIONS}],
         }
         if system_instruction:
             payload["system_instruction"] = {"parts": [{"text": system_instruction}]}
@@ -124,20 +109,19 @@ class GeminiClient:
 
             name = function_call.get("name")
             args = function_call.get("args", {})
-            if name != "calculator":
+            handler = TOOL_HANDLERS.get(name)
+            if handler is None:
                 raise RuntimeError(f"Gemini requested an unknown tool: {name}")
 
-            expression = str(args.get("expression", ""))
             try:
-                tool_result = calculator(expression)
+                tool_result = handler(**args)
             except (KeyError, TypeError, ValueError) as exc:
                 tool_result = f"Tool error: {exc}"
 
-            self.last_tool_calls.append({
-                "name": name,
-                "expression": expression,
-                "result": tool_result,
-            })
+            call_trace = {"name": name, "args": args, "result": tool_result}
+            if "expression" in args:
+                call_trace["expression"] = str(args["expression"])
+            self.last_tool_calls.append(call_trace)
 
             contents.extend([
                 {"role": "model", "parts": parts},
