@@ -355,14 +355,23 @@ class GeminiClient:
         try:
             return self._generate_gemini(contents, system_instruction)
         except RuntimeError as gemini_error:
-            if self.groq_api_key and ("API error (429)" in str(gemini_error) or "API error (503)" in str(gemini_error)):
+            error_text = str(gemini_error)
+            gemini_retryable = any(
+                f"API error ({code})" in error_text
+                for code in (429, 500, 502, 503, 504)
+            )
+            if not gemini_retryable:
+                raise
+
+            if self.groq_api_key:
                 try:
                     return self._generate_groq(contents, system_instruction)
                 except RuntimeError as groq_error:
                     if self.openrouter_api_key:
                         return self._generate_openrouter(contents, system_instruction)
                     raise groq_error
-            if self.openrouter_api_key and "API error (429)" in str(gemini_error):
+
+            if self.openrouter_api_key:
                 return self._generate_openrouter(contents, system_instruction)
             raise
 
