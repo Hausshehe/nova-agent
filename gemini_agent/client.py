@@ -132,6 +132,7 @@ class GeminiClient:
         payload = {
             "model": self.groq_model,
             "messages": messages,
+            "max_tokens": 1024,
             "tools": [
                 {
                     "type": "function",
