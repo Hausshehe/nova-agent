@@ -3,7 +3,9 @@
 import ast
 import datetime as dt
 import operator
+import os
 from collections.abc import Callable
+from pathlib import Path
 
 
 _OPERATORS = {
@@ -16,6 +18,8 @@ _OPERATORS = {
     ast.USub: operator.neg,
     ast.UAdd: operator.pos,
 }
+
+_MAX_READ_BYTES = 64 * 1024
 
 
 def _evaluate(node: ast.AST) -> float | int:
@@ -40,6 +44,45 @@ def calculator(expression: str) -> str:
 def current_datetime() -> str:
     """Return the device's current local date and time."""
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _filesystem_root() -> Path:
+    return Path(os.environ.get("NOVA_FILES_ROOT", os.getcwd())).expanduser().resolve()
+
+
+def _safe_path(path: str) -> Path:
+    root = _filesystem_root()
+    target = (root / path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Path is outside the allowed filesystem root.") from exc
+    return target
+
+
+def list_directory(path: str = ".") -> str:
+    """List entries under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if not target.is_dir():
+        raise ValueError(f"Not a directory: {path}")
+    entries = []
+    for entry in sorted(target.iterdir(), key=lambda item: item.name.lower()):
+        kind = "directory" if entry.is_dir() else "file" if entry.is_file() else "other"
+        entries.append(f"{kind}: {entry.name}")
+    return "\n".join(entries) if entries else "(empty directory)"
+
+
+def read_text_file(path: str) -> str:
+    """Read a UTF-8 text file under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if not target.is_file():
+        raise ValueError(f"Not a file: {path}")
+    if target.stat().st_size > _MAX_READ_BYTES:
+        raise ValueError(f"File is larger than {_MAX_READ_BYTES} bytes.")
+    try:
+        return target.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("File is not valid UTF-8 text.") from exc
 
 
 def remember_fact(key: str, value: str) -> str:
@@ -107,6 +150,33 @@ TOOL_DECLARATIONS = [
             "required": ["key"],
         },
     },
+    {
+        "name": "list_directory",
+        "description": "List files and directories under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {
+                    "type": "STRING",
+                    "description": "Relative directory path, defaulting to the root.",
+                }
+            },
+        },
+    },
+    {
+        "name": "read_text_file",
+        "description": "Read a UTF-8 text file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {
+                    "type": "STRING",
+                    "description": "Relative path to the text file.",
+                }
+            },
+            "required": ["path"],
+        },
+    },
 ]
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
@@ -114,4 +184,6 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
+    "list_directory": list_directory,
+    "read_text_file": read_text_file,
 }
