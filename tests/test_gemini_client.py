@@ -219,7 +219,6 @@ class GeminiClientTests(unittest.TestCase):
             "urllib.request.urlopen",
             side_effect=[
                 quota, quota, quota, quota, quota, quota,
-                quota,
                 FakeResponse(response),
             ],
         ) as open_url, patch("time.sleep"):
@@ -264,7 +263,6 @@ class GeminiClientTests(unittest.TestCase):
             "urllib.request.urlopen",
             side_effect=[
                 quota, quota, quota, quota, quota, quota,
-                quota,
                 FakeResponse(response),
             ],
         ) as open_url, patch("time.sleep"):
@@ -309,7 +307,6 @@ class GeminiClientTests(unittest.TestCase):
             "urllib.request.urlopen",
             side_effect=[
                 quota, quota, quota, quota, quota, quota,
-                quota,
                 FakeResponse(response),
             ],
         ) as open_url, patch("time.sleep"):
