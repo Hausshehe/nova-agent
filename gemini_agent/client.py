@@ -5,6 +5,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 
 from gemini_agent.tools import TOOL_DECLARATIONS, TOOL_HANDLERS
 
@@ -14,12 +15,14 @@ class GeminiClient:
         self,
         model: str = "gemini-3.5-flash-lite",
         fallback_model: str = "gemini-3.5-flash",
+        tool_handlers: dict[str, Callable[..., str]] | None = None,
     ) -> None:
         self.api_key = os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
         self.model = model
         self.fallback_model = fallback_model
+        self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         self.last_tool_calls: list[dict] = []
 
     def _generate(
@@ -44,9 +47,7 @@ class GeminiClient:
                 "https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{model}:generateContent?key={self.api_key}"
             )
-            request = urllib.request.Request(
-                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
-            )
+            request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
             result = None
             last_error: RuntimeError | None = None
             retryable_error = False
@@ -61,9 +62,7 @@ class GeminiClient:
                     if exc.code in (429, 500, 502, 503, 504):
                         retryable_error = True
                     if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
-                        last_error = RuntimeError(
-                            f"Gemini API error ({exc.code}): {details}"
-                        )
+                        last_error = RuntimeError(f"Gemini API error ({exc.code}): {details}")
                         break
                     time.sleep(2 ** attempt)
                 except urllib.error.URLError as exc:
@@ -91,25 +90,18 @@ class GeminiClient:
             try:
                 parts = result["candidates"][0]["content"]["parts"]
             except (KeyError, IndexError, TypeError) as exc:
-                raise RuntimeError(
-                    f"Gemini returned an unexpected response: {result}"
-                ) from exc
+                raise RuntimeError(f"Gemini returned an unexpected response: {result}") from exc
 
-            function_call = next(
-                (part["functionCall"] for part in parts if "functionCall" in part),
-                None,
-            )
+            function_call = next((part["functionCall"] for part in parts if "functionCall" in part), None)
             if function_call is None:
                 try:
                     return "".join(part["text"] for part in parts if "text" in part)
                 except (KeyError, TypeError) as exc:
-                    raise RuntimeError(
-                        f"Gemini returned an unexpected response: {result}"
-                    ) from exc
+                    raise RuntimeError(f"Gemini returned an unexpected response: {result}") from exc
 
             name = function_call.get("name")
             args = function_call.get("args", {})
-            handler = TOOL_HANDLERS.get(name)
+            handler = self.tool_handlers.get(name)
             if handler is None:
                 raise RuntimeError(f"Gemini requested an unknown tool: {name}")
 
@@ -125,15 +117,7 @@ class GeminiClient:
 
             contents.extend([
                 {"role": "model", "parts": parts},
-                {
-                    "role": "user",
-                    "parts": [{
-                        "functionResponse": {
-                            "name": name,
-                            "response": {"result": tool_result},
-                        }
-                    }],
-                },
+                {"role": "user", "parts": [{"functionResponse": {"name": name, "response": {"result": tool_result}}}]},
             ])
 
         raise RuntimeError("Gemini requested too many tool calls.")
