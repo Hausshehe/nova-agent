@@ -88,6 +88,23 @@ class GeminiClient:
 
         raise last_error or RuntimeError("Gemini request failed.")
 
+    @staticmethod
+    def _groq_parameters(parameters: dict) -> dict:
+        """Convert Gemini tool-schema type names to standard JSON Schema."""
+        converted = json.loads(json.dumps(parameters))
+        if isinstance(converted, dict):
+            def convert(node):
+                if isinstance(node, dict):
+                    if isinstance(node.get("type"), str):
+                        node["type"] = node["type"].lower()
+                    for value in node.values():
+                        convert(value)
+                elif isinstance(node, list):
+                    for value in node:
+                        convert(value)
+            convert(converted)
+        return converted
+
     def _generate_groq(
         self,
         contents: list[dict],
@@ -121,7 +138,7 @@ class GeminiClient:
                     "function": {
                         "name": declaration["name"],
                         "description": declaration["description"],
-                        "parameters": declaration["parameters"],
+                        "parameters": self._groq_parameters(declaration["parameters"]),
                     },
                 }
                 for declaration in TOOL_DECLARATIONS
