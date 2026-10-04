@@ -183,6 +183,7 @@ class GeminiClient:
 
             content = message.get("content")
             if content:
+                self.last_grounding_sources = self._extract_openrouter_sources(message)
                 return str(content)
 
             tool_calls = message.get("tool_calls") or []
@@ -215,6 +216,20 @@ class GeminiClient:
                 })
 
         raise RuntimeError("Groq requested too many browser-search tool calls.")
+
+    @staticmethod
+    def _extract_openrouter_sources(message: dict) -> list[dict[str, str]]:
+        annotations = message.get("annotations") or []
+        return [
+            {
+                "title": str(annotation.get("title") or annotation.get("url", "Untitled")),
+                "uri": str(annotation["url"]),
+            }
+            for annotation in annotations
+            if isinstance(annotation, dict)
+            and annotation.get("type") == "url_citation"
+            and annotation.get("url")
+        ]
 
     def _generate_openrouter(
         self,
