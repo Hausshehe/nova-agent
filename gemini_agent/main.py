@@ -9,7 +9,8 @@ def main() -> None:
     memory = ConversationMemory()
     system_instruction = (
         "You are Nova, a concise personal assistant. Use the conversation history "
-        "as memory, answer directly, and do not invent facts about the user."
+        "as memory, answer directly, and do not invent facts about the user. "
+        "When arithmetic is needed, use the calculator tool instead of calculating mentally."
     )
     print("Gemini agent ready. Type /exit to quit.")
     while True:
