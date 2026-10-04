@@ -67,8 +67,32 @@ class ConversationMemory:
         if key not in self.facts:
             return f"No remembered fact named {key}."
         del self.facts[key]
+        self.history = self._history_without_fact(key)
         self._save()
         return f"Forgot {key}."
+
+    def _history_without_fact(self, key: str) -> list[dict]:
+        """Remove history entries that explicitly expose the forgotten fact.
+
+        This keeps a deleted durable fact from remaining available through the
+        recent-conversation context sent back to the model.
+        """
+        markers = {
+            key,
+            key.replace("_", " "),
+        }
+        filtered: list[dict] = []
+        for item in self.history:
+            texts = [
+                str(part.get("text", ""))
+                for part in item.get("parts", [])
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            ]
+            text = " ".join(texts).lower()
+            if any(marker.lower() in text for marker in markers):
+                continue
+            filtered.append(item)
+        return filtered[-self.max_messages:]
 
     def context(self) -> list[dict]:
         if not self.facts:
