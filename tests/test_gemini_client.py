@@ -131,6 +131,45 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(groq_request.full_url, "https://api.groq.com/openai/v1/chat/completions")
         self.assertEqual(groq_request.headers["Authorization"], "Bearer groq-key")
 
+    def test_openrouter_fallback_after_groq_quota(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
+        )
+        groq_quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{"error":{"message":"groq quota exceeded"}}'),
+        )
+        openrouter_payload = {
+            "choices": [{"message": {"content": "OpenRouter fallback"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "GROQ_API_KEY": "groq-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                quota, quota, quota, quota, quota, quota,
+                groq_quota,
+                FakeResponse(openrouter_payload),
+            ],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Hi")
+
+        self.assertEqual(answer, "OpenRouter fallback")
+        self.assertEqual(open_url.call_count, 8)
+        request = open_url.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://openrouter.ai/api/v1/chat/completions",
+        )
+        self.assertEqual(request.headers["Authorization"], "Bearer openrouter-key")
+
     def test_groq_fallback_uses_browser_search(self):
         quota = urllib.error.HTTPError(
             "https://example.test", 429, "quota", {},
