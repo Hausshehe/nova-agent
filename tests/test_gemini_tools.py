@@ -1,13 +1,19 @@
 """Offline tests for Nova's local tools."""
 
+import os
 import re
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from gemini_agent.tools import (
     TOOL_DECLARATIONS,
     TOOL_HANDLERS,
     calculator,
     current_datetime,
+    list_directory,
+    read_text_file,
 )
 
 
@@ -35,6 +41,45 @@ class DateTimeToolTests(unittest.TestCase):
     def test_current_datetime_has_iso_format(self):
         value = current_datetime()
         self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
+
+
+class FilesystemToolTests(unittest.TestCase):
+    def test_lists_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            (root / "subdir").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = list_directory()
+        self.assertIn("file: notes.txt", result)
+        self.assertIn("directory: subdir", result)
+
+    def test_reads_text_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello Nova", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(read_text_file("notes.txt"), "hello Nova")
+
+    def test_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    read_text_file("../outside.txt")
+
+    def test_rejects_oversized_text_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.txt"
+            path.write_bytes(b"x" * (64 * 1024 + 1))
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "larger"):
+                    read_text_file("large.txt")
+
+    def test_filesystem_tools_are_registered(self):
+        self.assertIs(TOOL_HANDLERS["list_directory"], list_directory)
+        self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
+        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "list_directory")
+        self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "read_text_file")
 
 
 if __name__ == "__main__":
