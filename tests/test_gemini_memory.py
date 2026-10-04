@@ -27,6 +27,23 @@ class ConversationMemoryTests(unittest.TestCase):
             self.assertEqual(loaded.facts, {"favorite_color": "purple"})
             self.assertIn("favorite_color: purple", loaded.context()[0]["parts"][0]["text"])
 
+    def test_forgets_structured_fact_and_persists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "memory.json"
+            memory = ConversationMemory(path)
+            memory.remember_fact("favorite_color", "purple")
+            self.assertEqual(memory.forget_fact("favorite_color"), "Forgot favorite_color.")
+            loaded = ConversationMemory(path)
+            self.assertEqual(loaded.facts, {})
+
+    def test_forget_missing_fact_is_safe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = ConversationMemory(Path(directory) / "memory.json")
+            self.assertEqual(
+                memory.forget_fact("favorite_color"),
+                "No remembered fact named favorite_color.",
+            )
+
     def test_limits_history(self):
         with tempfile.TemporaryDirectory() as directory:
             memory = ConversationMemory(Path(directory) / "memory.json", max_messages=2)
