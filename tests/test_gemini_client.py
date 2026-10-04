@@ -129,7 +129,7 @@ class GeminiClientTests(unittest.TestCase):
             answer = GeminiClient().ask("Hi")
 
         self.assertEqual(answer, "OpenRouter fallback")
-        self.assertEqual(open_url.call_count, 4)
+        self.assertEqual(open_url.call_count, 7)
         self.assertIn(
             "https://openrouter.ai/api/v1/chat/completions",
             open_url.call_args.args[0].full_url,
