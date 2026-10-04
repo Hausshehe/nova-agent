@@ -5,6 +5,7 @@ import io
 import os
 import unittest
 import urllib.error
+from unittest import mock
 from unittest.mock import patch
 
 from gemini_agent.client import GeminiClient
@@ -97,6 +98,36 @@ class GeminiClientTests(unittest.TestCase):
         function_response = second["contents"][-1]["parts"][0]["functionResponse"]
         self.assertEqual(function_response["name"], "calculator")
         self.assertEqual(function_response["response"]["result"], "84")
+
+    def test_uses_custom_tool_handler(self):
+        tool_call = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "remember_fact",
+                            "args": {"key": "favorite_color", "value": "purple"},
+                        }
+                    }]
+                }
+            }]
+        }
+        final = {
+            "candidates": [{
+                "content": {"parts": [{"text": "Remembered."}]}
+            }]
+        }
+        remember = mock.Mock(return_value="Remembered favorite_color = purple")
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_call), FakeResponse(final)],
+        ):
+            answer = GeminiClient(tool_handlers={"remember_fact": remember}).ask(
+                "Remember my favorite color is purple."
+            )
+
+        self.assertEqual(answer, "Remembered.")
+        remember.assert_called_once_with(key="favorite_color", value="purple")
 
     def test_rejects_unexpected_response(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
