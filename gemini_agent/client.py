@@ -221,13 +221,13 @@ class GeminiClient:
         annotations = message.get("annotations") or []
         return [
             {
-                "title": str(annotation.get("title") or annotation.get("url", "Untitled")),
-                "uri": str(annotation["url"]),
+                "title": str((annotation.get("url_citation") or {}).get("title") or annotation.get("title") or annotation.get("url", "Untitled")),
+                "uri": str((annotation.get("url_citation") or {}).get("url") or annotation["url"]),
             }
             for annotation in annotations
             if isinstance(annotation, dict)
             and annotation.get("type") == "url_citation"
-            and annotation.get("url")
+            and (annotation.get("url") or isinstance(annotation.get("url_citation"), dict) and annotation["url_citation"].get("url"))
         ]
 
     def _generate_openrouter(
