@@ -251,6 +251,8 @@ class GeminiClient:
             }
             for declaration in TOOL_DECLARATIONS
         ]
+        if self.web_search:
+            tools.insert(0, {"type": "openrouter:web_search"})
         payload = {
             "model": self.openrouter_model,
             "messages": messages,
