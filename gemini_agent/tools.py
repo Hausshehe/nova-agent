@@ -71,8 +71,7 @@ def list_directory(path: str = ".") -> str:
     for entry in sorted(target.iterdir(), key=lambda item: item.name.lower()):
         kind = "directory" if entry.is_dir() else "file" if entry.is_file() else "other"
         entries.append(f"{kind}: {entry.name}")
-    return "
-".join(entries) if entries else "(empty directory)"
+    return "\n".join(entries) if entries else "(empty directory)"
 
 
 def read_text_file(path: str) -> str:
@@ -108,10 +107,8 @@ def find_files(pattern: str, path: str = ".") -> str:
                     continue
                 results.append(str(candidate.relative_to(_filesystem_root())))
                 if len(results) >= _MAX_FIND_RESULTS:
-                    return "
-".join(results)
-    return "
-".join(results) if results else "(no matches)"
+                    return "\n".join(results)
+    return "\n".join(results) if results else "(no matches)"
 
 
 def remember_fact(key: str, value: str) -> str:
