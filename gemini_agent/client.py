@@ -359,8 +359,6 @@ class GeminiClient:
 
             function_call = next((part["functionCall"] for part in parts if "functionCall" in part), None)
             if function_call is None:
-                if self.web_search and not self.last_grounding_sources:
-                    print(f"\n[debug] Gemini response had no grounding sources: {json.dumps(result, ensure_ascii=False)[:4000]}")
                 metadata = result.get("candidates", [{}])[0].get("groundingMetadata", {})
                 chunks = metadata.get("groundingChunks", [])
                 self.last_grounding_sources = [
