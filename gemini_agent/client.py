@@ -12,8 +12,8 @@ from gemini_agent.tools import calculator
 class GeminiClient:
     def __init__(
         self,
-        model: str = "gemini-3.8-flash",
-        fallback_model: str = "gemini-3.7-flash",
+        model: str = "gemini-2.5-flash-lite",
+        fallback_model: str = "gemini-2.5-flash",
     ) -> None:
         self.api_key = os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
