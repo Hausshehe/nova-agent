@@ -13,6 +13,7 @@ from gemini_agent.tools import (
     calculator,
     current_datetime,
     find_files,
+    search_text,
     list_directory,
     read_text_file,
 )
@@ -95,6 +96,37 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIn("notes.txt", result)
         self.assertIn("nested/todo.txt", result)
         self.assertNotIn("image.png", result)
+
+
+    def test_searches_text_in_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello Nova\nsecond line", encoding="utf-8")
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "todo.txt").write_text("HELLO again", encoding="utf-8")
+            (root / "binary.bin").write_bytes(b"\x00hello")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = search_text("hello")
+        self.assertIn("notes.txt:1: hello Nova", result)
+        self.assertIn("nested/todo.txt:1: HELLO again", result)
+        self.assertNotIn("binary.bin", result)
+
+    def test_search_rejects_empty_pattern(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "empty"):
+                    search_text("")
+
+    def test_search_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    search_text("hello", "../")
+
+    def test_search_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["search_text"], search_text)
+        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "search_text")
 
     def test_find_rejects_empty_pattern(self):
         with tempfile.TemporaryDirectory() as directory:
