@@ -39,6 +39,20 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(request.method, "POST")
         self.assertEqual(json.loads(request.data)["contents"][0]["parts"][0]["text"], "Hi")
 
+    def test_sends_conversation_history(self):
+        payload = {"candidates": [{"content": {"parts": [{"text": "Two"}]}}]}
+        history = [
+            {"role": "user", "parts": [{"text": "One"}]},
+            {"role": "model", "parts": [{"text": "First reply"}]},
+        ]
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
+            "urllib.request.urlopen", return_value=FakeResponse(payload)
+        ) as open_url:
+            GeminiClient().ask("Continue", history)
+        sent = json.loads(open_url.call_args.args[0].data)["contents"]
+        self.assertEqual([item["role"] for item in sent], ["user", "model", "user"])
+        self.assertEqual(sent[-1]["parts"][0]["text"], "Continue")
+
     def test_rejects_unexpected_response(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
             "urllib.request.urlopen", return_value=FakeResponse({"candidates": []})
