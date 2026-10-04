@@ -107,6 +107,32 @@ class GeminiClientTests(unittest.TestCase):
             [{"title": "Example", "uri": "https://example.com"}],
         )
 
+
+    def test_falls_back_to_openrouter_after_gemini_network_error(self):
+        network_error = urllib.error.URLError("temporary network failure")
+        response = {
+            "choices": [{"message": {"content": "OpenRouter after network failure"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[network_error, FakeResponse(response)],
+        ) as open_url:
+            answer = GeminiClient().ask("Hi")
+
+        self.assertEqual(answer, "OpenRouter after network failure")
+        self.assertEqual(open_url.call_count, 2)
+        self.assertIn(
+            "https://openrouter.ai/api/v1/chat/completions",
+            open_url.call_args.args[0].full_url,
+        )
+
     def test_openrouter_fallback_after_gemini_server_error_without_groq(self):
         busy = urllib.error.HTTPError(
             "https://example.test", 500, "server error", {},
