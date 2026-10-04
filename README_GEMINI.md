@@ -16,7 +16,14 @@ python -m gemini_agent.main
 
 Type a message to chat. Use `/exit` or `/quit` to stop.
 
-The default model is `gemini-2.5-flash`. The client uses only Python's standard library and sends prompts to Gemini's `generateContent` endpoint.
+## Memory
+Conversation history is saved locally in `memory.json` and loaded the next time the agent starts. The file is ignored by Git because it may contain private conversation data. The agent keeps the most recent 40 messages (about 20 exchanges) to limit request size. This is conversation-history persistence, not yet a separate system for extracting and managing durable facts.
 
-## Current scope
-This milestone verifies only the API connection and basic request/response loop. It does not yet control Android, use accessibility, plan actions, or retain conversation history.
+## Tests
+Run offline tests with:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+The client uses Python's standard library and sends prompts to Gemini's `generateContent` endpoint. It does not yet control Android or plan actions.
