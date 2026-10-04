@@ -3,6 +3,7 @@
 import ast
 import datetime as dt
 import fnmatch
+import re
 import operator
 import os
 from collections.abc import Callable
@@ -22,6 +23,7 @@ _OPERATORS = {
 
 _MAX_READ_BYTES = 64 * 1024
 _MAX_FIND_RESULTS = 100
+_MAX_SEARCH_RESULTS = 100
 
 
 def _evaluate(node: ast.AST) -> float | int:
@@ -111,6 +113,36 @@ def find_files(pattern: str, path: str = ".") -> str:
     return "\n".join(results) if results else "(no matches)"
 
 
+
+def search_text(pattern: str, path: str = ".") -> str:
+    """Find literal text matches in UTF-8 files under the bounded root."""
+    if not pattern:
+        raise ValueError("Search pattern cannot be empty.")
+    target = _safe_path(path)
+    if not target.is_dir():
+        raise ValueError(f"Not a directory: {path}")
+
+    needle = re.compile(re.escape(pattern), re.IGNORECASE)
+    results = []
+    for directory, dirnames, filenames in os.walk(target, followlinks=False):
+        current_dir = _safe_path(directory)
+        dirnames[:] = [name for name in dirnames if not (current_dir / name).is_symlink()]
+        for name in sorted(filenames, key=str.casefold):
+            candidate = _safe_path(str(Path(directory) / name))
+            if candidate.is_symlink() or candidate.stat().st_size > _MAX_READ_BYTES:
+                continue
+            try:
+                lines = candidate.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            relative = candidate.relative_to(_filesystem_root())
+            for line_number, line in enumerate(lines, start=1):
+                if needle.search(line):
+                    results.append(f"{relative}:{line_number}: {line}")
+                    if len(results) >= _MAX_SEARCH_RESULTS:
+                        return "\n".join(results)
+    return "\n".join(results) if results else "(no matches)"
+
 def remember_fact(key: str, value: str) -> str:
     """Placeholder handler overridden by the agent with persistent memory."""
     raise RuntimeError("Persistent memory is not configured.")
@@ -186,6 +218,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "search_text",
+        "description": "Find literal text in UTF-8 files under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Text to find, matched case-insensitively."},
+                "path": {"type": "STRING", "description": "Relative directory to search."},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
         "name": "find_files",
         "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
         "parameters": {
@@ -207,4 +251,5 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "find_files": find_files,
+    "search_text": search_text,
 }
