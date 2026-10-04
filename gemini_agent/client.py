@@ -62,9 +62,9 @@ class GeminiClient:
             request = urllib.request.Request(
                 url, data=body, headers={"Content-Type": "application/json"}, method="POST"
             )
-            saw_503 = False
             result = None
             last_error: RuntimeError | None = None
+            retryable_error = False
 
             for attempt in range(3):
                 try:
@@ -73,8 +73,8 @@ class GeminiClient:
                     break
                 except urllib.error.HTTPError as exc:
                     details = exc.read().decode(errors="replace")
-                    if exc.code == 503:
-                        saw_503 = True
+                    if exc.code in (429, 500, 502, 503, 504):
+                        retryable_error = True
                     if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
                         last_error = RuntimeError(
                             f"Gemini API error ({exc.code}): {details}"
@@ -86,8 +86,9 @@ class GeminiClient:
 
             if result is not None:
                 return result
-            if not (saw_503 and model_index + 1 < len(models)):
-                raise last_error or RuntimeError("Gemini request failed.")
+            if retryable_error and model_index + 1 < len(models):
+                continue
+            raise last_error or RuntimeError("Gemini request failed.")
 
         raise RuntimeError("Gemini request failed.")
 
