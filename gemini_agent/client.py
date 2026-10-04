@@ -22,12 +22,14 @@ class GeminiClient:
             raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
         self.model = model
         self.fallback_model = fallback_model
+        self.groq_api_key = os.environ.get("GROQ_API_KEY")
+        self.groq_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
 
-    def _generate(
+    def _generate_gemini(
         self,
         contents: list[dict],
         system_instruction: str | None,
@@ -47,14 +49,19 @@ class GeminiClient:
         if self.fallback_model and self.fallback_model != self.model:
             models.append(self.fallback_model)
 
+        last_error: RuntimeError | None = None
         for model_index, model in enumerate(models):
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{model}:generateContent?key={self.api_key}"
             )
-            request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+            request = urllib.request.Request(
+                url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
             result = None
-            last_error: RuntimeError | None = None
             retryable_error = False
 
             for attempt in range(3):
@@ -77,9 +84,76 @@ class GeminiClient:
                 return result
             if retryable_error and model_index + 1 < len(models):
                 continue
-            raise last_error or RuntimeError("Gemini request failed.")
+            break
 
-        raise RuntimeError("Gemini request failed.")
+        raise last_error or RuntimeError("Gemini request failed.")
+
+    def _generate_groq(
+        self,
+        contents: list[dict],
+        system_instruction: str | None,
+    ) -> str:
+        if not self.groq_api_key:
+            raise RuntimeError("Gemini quota exhausted and GROQ_API_KEY is not configured.")
+
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        for item in contents:
+            role = item.get("role")
+            text_parts = [
+                part["text"]
+                for part in item.get("parts", [])
+                if isinstance(part, dict) and "text" in part
+            ]
+            if role in {"user", "model"} and text_parts:
+                messages.append({
+                    "role": "assistant" if role == "model" else "user",
+                    "content": "".join(text_parts),
+                })
+
+        payload = {
+            "model": self.groq_model,
+            "messages": messages,
+        }
+        if self.web_search:
+            payload["tools"] = [{"type": "browser_search"}]
+            payload["tool_choice"] = "required"
+
+        request = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self.groq_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                result = json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode(errors="replace")
+            raise RuntimeError(f"Groq API error ({exc.code}): {details}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Could not reach Groq: {exc.reason}") from exc
+
+        try:
+            return str(result["choices"][0]["message"]["content"])
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError(f"Groq returned an unexpected response: {result}") from exc
+
+    def _generate(
+        self,
+        contents: list[dict],
+        system_instruction: str | None,
+    ) -> dict | str:
+        try:
+            return self._generate_gemini(contents, system_instruction)
+        except RuntimeError as exc:
+            if self.groq_api_key and ("API error (429)" in str(exc) or "API error (503)" in str(exc)):
+                return self._generate_groq(contents, system_instruction)
+            raise
 
     def ask(
         self,
@@ -91,8 +165,11 @@ class GeminiClient:
         self.last_tool_calls = []
         self.last_grounding_sources = []
 
+        result = self._generate(contents, system_instruction)
+        if isinstance(result, str):
+            return result
+
         for _ in range(3):
-            result = self._generate(contents, system_instruction)
             try:
                 parts = result["candidates"][0]["content"]["parts"]
             except (KeyError, IndexError, TypeError) as exc:
@@ -137,5 +214,6 @@ class GeminiClient:
                 {"role": "model", "parts": parts},
                 {"role": "user", "parts": [{"functionResponse": {"name": name, "response": {"result": tool_result}}}]},
             ])
+            result = self._generate_gemini(contents, system_instruction)
 
         raise RuntimeError("Gemini requested too many tool calls.")
