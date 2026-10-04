@@ -7,6 +7,10 @@ from gemini_agent.memory import ConversationMemory
 def main() -> None:
     client = GeminiClient()
     memory = ConversationMemory()
+    system_instruction = (
+        "You are Nova, a concise personal assistant. Use the conversation history "
+        "as memory, answer directly, and do not invent facts about the user."
+    )
     print("Gemini agent ready. Type /exit to quit.")
     while True:
         try:
@@ -20,7 +24,7 @@ def main() -> None:
         if not prompt:
             continue
         try:
-            answer = client.ask(prompt, memory.history)
+            answer = client.ask(prompt, memory.history, system_instruction)
             memory.add_exchange(prompt, answer)
             print(f"\nGemini: {answer}")
         except RuntimeError as exc:
