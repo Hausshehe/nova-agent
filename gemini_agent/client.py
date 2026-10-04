@@ -23,16 +23,21 @@ class GeminiClient:
         self.model = model
         self.fallback_model = fallback_model
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
+        self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
+        self.last_grounding_sources: list[dict[str, str]] = []
 
     def _generate(
         self,
         contents: list[dict],
         system_instruction: str | None,
     ) -> dict:
+        tools = [{"function_declarations": TOOL_DECLARATIONS}]
+        if self.web_search:
+            tools.append({"google_search": {}})
         payload = {
             "contents": contents,
-            "tools": [{"function_declarations": TOOL_DECLARATIONS}],
+            "tools": tools,
         }
         if system_instruction:
             payload["system_instruction"] = {"parts": [{"text": system_instruction}]}
@@ -84,6 +89,7 @@ class GeminiClient:
     ) -> str:
         contents = list(history or []) + [{"role": "user", "parts": [{"text": prompt}]}]
         self.last_tool_calls = []
+        self.last_grounding_sources = []
 
         for _ in range(3):
             result = self._generate(contents, system_instruction)
@@ -94,6 +100,18 @@ class GeminiClient:
 
             function_call = next((part["functionCall"] for part in parts if "functionCall" in part), None)
             if function_call is None:
+                metadata = result.get("candidates", [{}])[0].get("groundingMetadata", {})
+                chunks = metadata.get("groundingChunks", [])
+                self.last_grounding_sources = [
+                    {
+                        "title": str(chunk["web"].get("title", "Untitled")),
+                        "uri": str(chunk["web"]["uri"]),
+                    }
+                    for chunk in chunks
+                    if isinstance(chunk, dict)
+                    and isinstance(chunk.get("web"), dict)
+                    and chunk["web"].get("uri")
+                ]
                 try:
                     return "".join(part["text"] for part in parts if "text" in part)
                 except (KeyError, TypeError) as exc:
