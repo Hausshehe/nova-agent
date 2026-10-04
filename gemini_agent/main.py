@@ -18,7 +18,7 @@ def main() -> None:
         "fact or preference that should be remembered, use remember_fact. When the user "
         "asks you to forget a remembered fact, use forget_fact. Do not invent facts about "
         "the user. When arithmetic is needed, use the calculator tool instead of calculating "
-        "mentally."
+        "mentally. When web search is enabled, use it for current or time-sensitive information."
     )
     print("Gemini agent ready. Type /exit to quit.")
     while True:
