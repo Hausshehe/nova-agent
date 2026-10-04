@@ -1,0 +1,1 @@
+"""Minimal Gemini-powered agent."""
