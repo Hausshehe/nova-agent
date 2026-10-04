@@ -80,7 +80,9 @@ class GeminiClient:
                         break
                     time.sleep(2 ** attempt)
                 except urllib.error.URLError as exc:
-                    raise RuntimeError(f"Could not reach Gemini: {exc.reason}") from exc
+                    last_error = RuntimeError(f"Could not reach Gemini: {exc.reason}")
+                    retryable_error = True
+                    break
 
             if result is not None:
                 return result
@@ -356,9 +358,12 @@ class GeminiClient:
             return self._generate_gemini(contents, system_instruction)
         except RuntimeError as gemini_error:
             error_text = str(gemini_error)
-            gemini_retryable = any(
-                f"API error ({code})" in error_text
-                for code in (429, 500, 502, 503, 504)
+            gemini_retryable = (
+                any(
+                    f"API error ({code})" in error_text
+                    for code in (429, 500, 502, 503, 504)
+                )
+                or error_text.startswith("Could not reach Gemini:")
             )
             if not gemini_retryable:
                 raise
