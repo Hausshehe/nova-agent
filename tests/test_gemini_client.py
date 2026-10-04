@@ -121,8 +121,8 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 4)
         first_url = open_url.call_args_list[0].args[0].full_url
         fallback_url = open_url.call_args_list[3].args[0].full_url
-        self.assertIn("models/gemini-2.5-flash-lite:", first_url)
-        self.assertIn("models/gemini-2.5-flash:", fallback_url)
+        self.assertIn("models/gemini-3.5-flash-lite:", first_url)
+        self.assertIn("models/gemini-3.5-flash:", fallback_url)
 
 
 if __name__ == "__main__":
