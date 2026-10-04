@@ -73,13 +73,13 @@ class ConversationMemory:
     def context(self) -> list[dict]:
         if not self.facts:
             return list(self.history)
-        facts = "
-".join(f"- {key}: {value}" for key, value in sorted(self.facts.items()))
+        facts = "\n".join(
+            f"- {key}: {value}" for key, value in sorted(self.facts.items())
+        )
         return [
             {
                 "role": "user",
-                "parts": [{"text": f"Durable memory about the user:
-{facts}"}],
+                "parts": [{"text": f"Durable memory about the user:\n{facts}"}],
             },
             *self.history,
         ]
@@ -95,7 +95,6 @@ class ConversationMemory:
     def _save(self) -> None:
         data = {"facts": self.facts, "history": self.history}
         self.path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "
-",
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
