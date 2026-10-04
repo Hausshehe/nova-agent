@@ -18,7 +18,11 @@ def main() -> None:
         "fact or preference that should be remembered, use remember_fact. When the user "
         "asks you to forget a remembered fact, use forget_fact. Do not invent facts about "
         "the user. When arithmetic is needed, use the calculator tool instead of calculating "
-        "mentally. When web search is enabled, use it for current or time-sensitive information."
+        "mentally. For any question asking for the current date, current time, or current "
+        "date and time, ALWAYS use the current_datetime tool. Never use web search, web "
+        "grounding, or an external clock for those questions. Treat the current_datetime "
+        "tool result as authoritative. When web search is enabled, use it for current or "
+        "time-sensitive information other than the device's current date and time."
     )
     print("Gemini agent ready. Type /exit to quit.")
     while True:
