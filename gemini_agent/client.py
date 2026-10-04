@@ -14,12 +14,13 @@ class GeminiClient:
             raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
         self.model = model
 
-    def ask(self, prompt: str) -> str:
+    def ask(self, prompt: str, history: list[dict] | None = None) -> str:
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.model}:generateContent?key={self.api_key}"
         )
-        body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+        contents = list(history or []) + [{"role": "user", "parts": [{"text": prompt}]}]
+        body = json.dumps({"contents": contents}).encode()
         request = urllib.request.Request(
             url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
