@@ -33,6 +33,7 @@ class MainContextTests(unittest.TestCase):
 
         class FakeClient:
             web_search = False
+            last_grounding_sources = []
 
             def __init__(self, **kwargs):
                 pass
