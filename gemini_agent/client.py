@@ -115,9 +115,20 @@ class GeminiClient:
         payload = {
             "model": self.groq_model,
             "messages": messages,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": declaration["name"],
+                        "description": declaration["description"],
+                        "parameters": declaration["parameters"],
+                    },
+                }
+                for declaration in TOOL_DECLARATIONS
+            ],
         }
         if self.web_search:
-            payload["tools"] = [{"type": "browser_search"}]
+            payload["tools"].insert(0, {"type": "browser_search"})
             payload["tool_choice"] = "required"
 
         for _ in range(3):
@@ -155,10 +166,27 @@ class GeminiClient:
 
             payload["messages"].append(message)
             for tool_call in tool_calls:
+                function = tool_call.get("function") or {}
+                name = function.get("name")
+                handler = self.tool_handlers.get(name)
+                if handler is None:
+                    raise RuntimeError(f"Groq requested an unknown tool: {name}")
+
+                try:
+                    args = json.loads(function.get("arguments", "{}"))
+                    tool_result = handler(**args)
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    tool_result = f"Tool error: {exc}"
+
+                call_trace = {"name": name, "args": args, "result": tool_result}
+                if "expression" in args:
+                    call_trace["expression"] = str(args["expression"])
+                self.last_tool_calls.append(call_trace)
+
                 payload["messages"].append({
                     "role": "tool",
                     "tool_call_id": tool_call.get("id", ""),
-                    "content": "",
+                    "content": str(tool_result),
                 })
 
         raise RuntimeError("Groq requested too many browser-search tool calls.")
