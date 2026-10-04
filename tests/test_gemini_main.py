@@ -10,7 +10,8 @@ from gemini_agent import main as agent_main
 class MainContextTests(unittest.TestCase):
     def test_passes_previous_exchange_into_next_request(self):
         answers = iter(["First answer", "Second answer"])
-        calls = []
+        request_calls = []
+        saved_exchanges = []
 
         class FakeMemory:
             def __init__(self):
@@ -20,10 +21,10 @@ class MainContextTests(unittest.TestCase):
                 ]]
 
             def context(self):
-                return self.contexts[len(calls)]
+                return self.contexts[len(request_calls)]
 
             def add_exchange(self, prompt, answer):
-                calls.append((prompt, answer))
+                saved_exchanges.append((prompt, answer))
 
             def remember_fact(self, key, value):
                 return f"Remembered {key} = {value}"
@@ -39,19 +40,26 @@ class MainContextTests(unittest.TestCase):
                 pass
 
             def ask(self, prompt, history, system_instruction):
-                calls.append((prompt, history))
+                request_calls.append((prompt, history))
                 return next(answers)
 
         inputs = iter(["first question", "second question", "/exit"])
-        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True),              patch.object(agent_main, "ConversationMemory", FakeMemory),              patch.object(agent_main, "GeminiClient", FakeClient),              patch("builtins.input", side_effect=lambda _: next(inputs)):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True), patch.object(agent_main, "ConversationMemory", FakeMemory), patch.object(agent_main, "GeminiClient", FakeClient), patch("builtins.input", side_effect=lambda _: next(inputs)):
             agent_main.main()
 
-        self.assertEqual(calls[1][0], "second question")
+        self.assertEqual(request_calls[1][0], "second question")
         self.assertEqual(
-            calls[1][1],
+            request_calls[1][1],
             [
                 {"role": "user", "parts": [{"text": "first question"}]},
                 {"role": "model", "parts": [{"text": "First answer"}]},
+            ],
+        )
+        self.assertEqual(
+            saved_exchanges,
+            [
+                ("first question", "First answer"),
+                ("second question", "Second answer"),
             ],
         )
 
