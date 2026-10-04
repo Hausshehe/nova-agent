@@ -363,6 +363,18 @@ class GeminiClient:
             if not gemini_retryable:
                 raise
 
+            if self.web_search:
+                if self.openrouter_api_key:
+                    try:
+                        return self._generate_openrouter(contents, system_instruction)
+                    except RuntimeError as openrouter_error:
+                        if self.groq_api_key:
+                            return self._generate_groq(contents, system_instruction)
+                        raise openrouter_error
+
+                if self.groq_api_key:
+                    return self._generate_groq(contents, system_instruction)
+
             if self.groq_api_key:
                 try:
                     return self._generate_groq(contents, system_instruction)
