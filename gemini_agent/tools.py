@@ -2,6 +2,7 @@
 
 import ast
 import datetime as dt
+import fnmatch
 import operator
 import os
 from collections.abc import Callable
@@ -20,6 +21,7 @@ _OPERATORS = {
 }
 
 _MAX_READ_BYTES = 64 * 1024
+_MAX_FIND_RESULTS = 100
 
 
 def _evaluate(node: ast.AST) -> float | int:
@@ -69,7 +71,8 @@ def list_directory(path: str = ".") -> str:
     for entry in sorted(target.iterdir(), key=lambda item: item.name.lower()):
         kind = "directory" if entry.is_dir() else "file" if entry.is_file() else "other"
         entries.append(f"{kind}: {entry.name}")
-    return "\n".join(entries) if entries else "(empty directory)"
+    return "
+".join(entries) if entries else "(empty directory)"
 
 
 def read_text_file(path: str) -> str:
@@ -83,6 +86,32 @@ def read_text_file(path: str) -> str:
         return target.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("File is not valid UTF-8 text.") from exc
+
+
+def find_files(pattern: str, path: str = ".") -> str:
+    """Find files and directories by name pattern under the bounded root."""
+    if not pattern:
+        raise ValueError("File pattern cannot be empty.")
+    target = _safe_path(path)
+    if not target.is_dir():
+        raise ValueError(f"Not a directory: {path}")
+
+    results = []
+    for directory, dirnames, filenames in os.walk(target, followlinks=False):
+        current_dir = _safe_path(directory)
+        dirnames[:] = [name for name in dirnames if not (current_dir / name).is_symlink()]
+        names = sorted(dirnames + filenames, key=str.casefold)
+        for name in names:
+            if fnmatch.fnmatchcase(name.casefold(), pattern.casefold()):
+                candidate = _safe_path(str(Path(directory) / name))
+                if candidate.is_symlink():
+                    continue
+                results.append(str(candidate.relative_to(_filesystem_root())))
+                if len(results) >= _MAX_FIND_RESULTS:
+                    return "
+".join(results)
+    return "
+".join(results) if results else "(no matches)"
 
 
 def remember_fact(key: str, value: str) -> str:
@@ -113,10 +142,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "current_datetime",
         "description": "Get the device's current local date and time.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {},
-        },
+        "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
         "name": "remember_fact",
@@ -124,14 +150,8 @@ TOOL_DECLARATIONS = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "key": {
-                    "type": "STRING",
-                    "description": "Short fact name, such as favorite_color or hometown.",
-                },
-                "value": {
-                    "type": "STRING",
-                    "description": "The value to remember.",
-                },
+                "key": {"type": "STRING", "description": "Short fact name."},
+                "value": {"type": "STRING", "description": "The value to remember."},
             },
             "required": ["key", "value"],
         },
@@ -142,10 +162,7 @@ TOOL_DECLARATIONS = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "key": {
-                    "type": "STRING",
-                    "description": "The fact name to forget, such as favorite_color or hometown.",
-                }
+                "key": {"type": "STRING", "description": "The fact name to forget."}
             },
             "required": ["key"],
         },
@@ -156,10 +173,7 @@ TOOL_DECLARATIONS = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "path": {
-                    "type": "STRING",
-                    "description": "Relative directory path, defaulting to the root.",
-                }
+                "path": {"type": "STRING", "description": "Relative directory path."}
             },
         },
     },
@@ -169,12 +183,21 @@ TOOL_DECLARATIONS = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "path": {
-                    "type": "STRING",
-                    "description": "Relative path to the text file.",
-                }
+                "path": {"type": "STRING", "description": "Relative path to the text file."}
             },
             "required": ["path"],
+        },
+    },
+    {
+        "name": "find_files",
+        "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Filename pattern such as *.txt."},
+                "path": {"type": "STRING", "description": "Relative directory to search."},
+            },
+            "required": ["pattern"],
         },
     },
 ]
@@ -186,4 +209,5 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "forget_fact": forget_fact,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
+    "find_files": find_files,
 }
