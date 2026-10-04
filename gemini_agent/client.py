@@ -24,6 +24,8 @@ class GeminiClient:
         self.fallback_model = fallback_model
         self.groq_api_key = os.environ.get("GROQ_API_KEY")
         self.groq_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+        self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
+        self.openrouter_model = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
@@ -214,6 +216,108 @@ class GeminiClient:
 
         raise RuntimeError("Groq requested too many browser-search tool calls.")
 
+    def _generate_openrouter(
+        self,
+        contents: list[dict],
+        system_instruction: str | None,
+    ) -> str:
+        if not self.openrouter_api_key:
+            raise RuntimeError("No OpenRouter fallback is configured.")
+
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        for item in contents:
+            role = item.get("role")
+            text_parts = [
+                part["text"]
+                for part in item.get("parts", [])
+                if isinstance(part, dict) and "text" in part
+            ]
+            if role in {"user", "model"} and text_parts:
+                messages.append({
+                    "role": "assistant" if role == "model" else "user",
+                    "content": "".join(text_parts),
+                })
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": declaration["name"],
+                    "description": declaration["description"],
+                    "parameters": self._groq_parameters(declaration["parameters"]),
+                },
+            }
+            for declaration in TOOL_DECLARATIONS
+        ]
+        payload = {
+            "model": self.openrouter_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "tools": tools,
+        }
+
+        for _ in range(3):
+            request = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                data=json.dumps(payload).encode(),
+                headers={
+                    "Authorization": f"Bearer {self.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    result = json.loads(response.read().decode())
+            except urllib.error.HTTPError as exc:
+                details = exc.read().decode(errors="replace")
+                raise RuntimeError(f"OpenRouter API error ({exc.code}): {details}") from exc
+            except urllib.error.URLError as exc:
+                raise RuntimeError(f"Could not reach OpenRouter: {exc.reason}") from exc
+
+            try:
+                message = result["choices"][0]["message"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise RuntimeError(f"OpenRouter returned an unexpected response: {result}") from exc
+
+            content = message.get("content")
+            if content:
+                return str(content)
+
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                raise RuntimeError(f"OpenRouter returned an unexpected response: {result}")
+
+            payload["messages"].append(message)
+            for tool_call in tool_calls:
+                function = tool_call.get("function") or {}
+                name = function.get("name")
+                handler = self.tool_handlers.get(name)
+                if handler is None:
+                    raise RuntimeError(f"OpenRouter requested an unknown tool: {name}")
+
+                try:
+                    args = json.loads(function.get("arguments", "{}"))
+                    tool_result = handler(**args)
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    tool_result = f"Tool error: {exc}"
+
+                call_trace = {"name": name, "args": args, "result": tool_result}
+                if "expression" in args:
+                    call_trace["expression"] = str(args["expression"])
+                self.last_tool_calls.append(call_trace)
+
+                payload["messages"].append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id", ""),
+                    "content": str(tool_result),
+                })
+
+        raise RuntimeError("OpenRouter requested too many tool calls.")
+
+
     def _generate(
         self,
         contents: list[dict],
@@ -221,9 +325,16 @@ class GeminiClient:
     ) -> dict | str:
         try:
             return self._generate_gemini(contents, system_instruction)
-        except RuntimeError as exc:
-            if self.groq_api_key and ("API error (429)" in str(exc) or "API error (503)" in str(exc)):
-                return self._generate_groq(contents, system_instruction)
+        except RuntimeError as gemini_error:
+            if self.groq_api_key and ("API error (429)" in str(gemini_error) or "API error (503)" in str(gemini_error)):
+                try:
+                    return self._generate_groq(contents, system_instruction)
+                except RuntimeError as groq_error:
+                    if self.openrouter_api_key:
+                        return self._generate_openrouter(contents, system_instruction)
+                    raise groq_error
+            if self.openrouter_api_key and "API error (429)" in str(gemini_error):
+                return self._generate_openrouter(contents, system_instruction)
             raise
 
     def ask(
