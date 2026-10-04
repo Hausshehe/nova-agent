@@ -1,6 +1,7 @@
 """Offline tests for Nova's local tools."""
 
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,7 +41,7 @@ class DateTimeToolTests(unittest.TestCase):
 
     def test_current_datetime_has_iso_format(self):
         value = current_datetime()
-        self.assertRegex(value, r"^d{4}-d{2}-d{2}Td{2}:d{2}:d{2}[+-]d{2}:d{2}$")
+        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
 
 
 class FilesystemToolTests(unittest.TestCase):
@@ -78,8 +79,8 @@ class FilesystemToolTests(unittest.TestCase):
     def test_filesystem_tools_are_registered(self):
         self.assertIs(TOOL_HANDLERS["list_directory"], list_directory)
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
-        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "list_directory")
-        self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "read_text_file")
+        self.assertEqual(TOOL_DECLARATIONS[-3]["name"], "list_directory")
+        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "read_text_file")
 
     def test_finds_files_by_name(self):
         with tempfile.TemporaryDirectory() as directory:
