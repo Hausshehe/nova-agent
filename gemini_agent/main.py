@@ -27,6 +27,8 @@ def main() -> None:
         try:
             answer = client.ask(prompt, memory.history, system_instruction)
             memory.add_exchange(prompt, answer)
+            for call in client.last_tool_calls:
+                print(f"\nTool: {call['name']}({call['expression']}) = {call['result']}")
             print(f"\nGemini: {answer}")
         except RuntimeError as exc:
             print(f"\nError: {exc}")
