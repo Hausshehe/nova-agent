@@ -124,7 +124,7 @@ class GeminiClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[busy, busy, busy, FakeResponse(response)],
+            side_effect=[busy, busy, busy, busy, busy, busy, FakeResponse(response)],
         ) as open_url, patch("time.sleep"):
             answer = GeminiClient().ask("Hi")
 
