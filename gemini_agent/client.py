@@ -7,7 +7,7 @@ import urllib.request
 
 
 class GeminiClient:
-    def __init__(self, model: str = "gemini-2.5-flash") -> None:
+    def __init__(self, model: str = "gemini-3.8-flash") -> None:
         self.api_key = os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
