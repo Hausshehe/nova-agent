@@ -20,6 +20,7 @@ class GeminiClient:
             raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
         self.model = model
         self.fallback_model = fallback_model
+        self.last_tool_calls: list[dict] = []
 
     def _generate(
         self,
@@ -97,6 +98,7 @@ class GeminiClient:
         system_instruction: str | None = None,
     ) -> str:
         contents = list(history or []) + [{"role": "user", "parts": [{"text": prompt}]}]
+        self.last_tool_calls = []
 
         for _ in range(3):
             result = self._generate(contents, system_instruction)
@@ -124,10 +126,17 @@ class GeminiClient:
             if name != "calculator":
                 raise RuntimeError(f"Gemini requested an unknown tool: {name}")
 
+            expression = str(args.get("expression", ""))
             try:
-                tool_result = calculator(str(args["expression"]))
+                tool_result = calculator(expression)
             except (KeyError, TypeError, ValueError) as exc:
                 tool_result = f"Tool error: {exc}"
+
+            self.last_tool_calls.append({
+                "name": name,
+                "expression": expression,
+                "result": tool_result,
+            })
 
             contents.extend([
                 {"role": "model", "parts": parts},
