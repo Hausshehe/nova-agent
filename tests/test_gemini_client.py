@@ -107,6 +107,34 @@ class GeminiClientTests(unittest.TestCase):
             [{"title": "Example", "uri": "https://example.com"}],
         )
 
+    def test_openrouter_fallback_after_gemini_server_error_without_groq(self):
+        busy = urllib.error.HTTPError(
+            "https://example.test", 500, "server error", {},
+            io.BytesIO(b'{"error":{"message":"server error"}}'),
+        )
+        response = {
+            "choices": [{"message": {"content": "OpenRouter fallback"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[busy, busy, busy, FakeResponse(response)],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Hi")
+
+        self.assertEqual(answer, "OpenRouter fallback")
+        self.assertEqual(open_url.call_count, 4)
+        self.assertIn(
+            "https://openrouter.ai/api/v1/chat/completions",
+            open_url.call_args.args[0].full_url,
+        )
+
     def test_groq_fallback_after_gemini_quota(self):
         quota = urllib.error.HTTPError(
             "https://example.test", 429, "quota", {},
