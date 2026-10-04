@@ -68,6 +68,45 @@ class GeminiClientTests(unittest.TestCase):
             "You are Nova.",
         )
 
+    def test_enables_google_search_when_requested(self):
+        payload = {"candidates": [{"content": {"parts": [{"text": "Searched"}]}}]}
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-key", "GEMINI_WEB_SEARCH": "1"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen", return_value=FakeResponse(payload)
+        ) as open_url:
+            GeminiClient().ask("What happened today?")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(sent["tools"][1], {"google_search": {}})
+
+    def test_extracts_grounding_sources(self):
+        payload = {
+            "candidates": [{
+                "content": {"parts": [{"text": "Answer"}]},
+                "groundingMetadata": {
+                    "groundingChunks": [
+                        {"web": {"title": "Example", "uri": "https://example.com"}}
+                    ]
+                },
+            }]
+        }
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-key", "GEMINI_WEB_SEARCH": "1"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen", return_value=FakeResponse(payload)
+        ):
+            client = GeminiClient()
+            answer = client.ask("Search this")
+        self.assertEqual(answer, "Answer")
+        self.assertEqual(
+            client.last_grounding_sources,
+            [{"title": "Example", "uri": "https://example.com"}],
+        )
+
     def test_uses_calculator_tool(self):
         tool_call = {
             "candidates": [{
