@@ -39,9 +39,6 @@ def main() -> None:
         try:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
-            for call in client.last_tool_calls:
-                args = ", ".join(f"{key}={value!r}" for key, value in call["args"].items())
-                print(f"\nTool: {call['name']}({args}) = {call['result']}")
             print(f"\nGemini: {answer}")
             for source in client.last_grounding_sources:
                 print(f"Source: {source['title']} - {source['uri']}")
