@@ -1,12 +1,13 @@
 """Command-line chat loop for the minimal Gemini agent."""
 
 from gemini_agent.client import GeminiClient
+from gemini_agent.memory import ConversationMemory
 
 
 def main() -> None:
     client = GeminiClient()
+    memory = ConversationMemory()
     print("Gemini agent ready. Type /exit to quit.")
-    history: list[dict] = []
     while True:
         try:
             prompt = input("\nYou: ").strip()
@@ -19,11 +20,8 @@ def main() -> None:
         if not prompt:
             continue
         try:
-            answer = client.ask(prompt, history)
-            history.extend([
-                {"role": "user", "parts": [{"text": prompt}]},
-                {"role": "model", "parts": [{"text": answer}]},
-            ])
+            answer = client.ask(prompt, memory.history)
+            memory.add_exchange(prompt, answer)
             print(f"\nGemini: {answer}")
         except RuntimeError as exc:
             print(f"\nError: {exc}")
