@@ -2,6 +2,7 @@
 
 import ast
 import operator
+from collections.abc import Callable
 
 
 _OPERATORS = {
@@ -33,3 +34,23 @@ def calculator(expression: str) -> str:
         return str(_evaluate(tree.body))
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
+
+
+TOOL_DECLARATIONS = [{
+    "name": "calculator",
+    "description": "Calculate basic arithmetic expressions.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "expression": {
+                "type": "STRING",
+                "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
+            }
+        },
+        "required": ["expression"],
+    },
+}]
+
+TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "calculator": calculator,
+}
