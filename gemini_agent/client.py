@@ -80,9 +80,7 @@ class GeminiClient:
                         break
                     time.sleep(2 ** attempt)
                 except urllib.error.URLError as exc:
-                    last_error = RuntimeError(f"Could not reach Gemini: {exc.reason}")
-                    retryable_error = True
-                    break
+                    raise RuntimeError(f"Could not reach Gemini: {exc.reason}") from exc
 
             if result is not None:
                 return result
