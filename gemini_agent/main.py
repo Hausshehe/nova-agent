@@ -6,13 +6,19 @@ from gemini_agent.memory import ConversationMemory
 
 def main() -> None:
     memory = ConversationMemory()
-    client = GeminiClient(tool_handlers={"remember_fact": memory.remember_fact})
+    client = GeminiClient(
+        tool_handlers={
+            "remember_fact": memory.remember_fact,
+            "forget_fact": memory.forget_fact,
+        }
+    )
     system_instruction = (
         "You are Nova, a concise personal assistant. Use durable memory and recent "
         "conversation context when answering. When the user tells you a stable personal "
-        "fact or preference that should be remembered, use remember_fact. Do not invent "
-        "facts about the user. When arithmetic is needed, use the calculator tool instead "
-        "of calculating mentally."
+        "fact or preference that should be remembered, use remember_fact. When the user "
+        "asks you to forget a remembered fact, use forget_fact. Do not invent facts about "
+        "the user. When arithmetic is needed, use the calculator tool instead of calculating "
+        "mentally."
     )
     print("Gemini agent ready. Type /exit to quit.")
     while True:
