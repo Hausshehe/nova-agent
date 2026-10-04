@@ -1,6 +1,7 @@
 """Small, safe local tools available to Nova."""
 
 import ast
+import datetime as dt
 import operator
 from collections.abc import Callable
 
@@ -36,21 +37,37 @@ def calculator(expression: str) -> str:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
 
 
-TOOL_DECLARATIONS = [{
-    "name": "calculator",
-    "description": "Calculate basic arithmetic expressions.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "expression": {
-                "type": "STRING",
-                "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
-            }
+def current_datetime() -> str:
+    """Return the device's current local date and time."""
+    return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+TOOL_DECLARATIONS = [
+    {
+        "name": "calculator",
+        "description": "Calculate basic arithmetic expressions.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "expression": {
+                    "type": "STRING",
+                    "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
+                }
+            },
+            "required": ["expression"],
         },
-        "required": ["expression"],
     },
-}]
+    {
+        "name": "current_datetime",
+        "description": "Get the device's current local date and time.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {},
+        },
+    },
+]
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
+    "current_datetime": current_datetime,
 }
