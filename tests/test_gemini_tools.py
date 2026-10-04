@@ -1,7 +1,6 @@
 """Offline tests for Nova's local tools."""
 
 import os
-import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +11,7 @@ from gemini_agent.tools import (
     TOOL_HANDLERS,
     calculator,
     current_datetime,
+    find_files,
     list_directory,
     read_text_file,
 )
@@ -40,7 +40,7 @@ class DateTimeToolTests(unittest.TestCase):
 
     def test_current_datetime_has_iso_format(self):
         value = current_datetime()
-        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
+        self.assertRegex(value, r"^d{4}-d{2}-d{2}Td{2}:d{2}:d{2}[+-]d{2}:d{2}$")
 
 
 class FilesystemToolTests(unittest.TestCase):
@@ -80,6 +80,36 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "list_directory")
         self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "read_text_file")
+
+    def test_finds_files_by_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            (root / "image.png").write_bytes(b"data")
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "todo.txt").write_text("todo", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = find_files("*.txt")
+        self.assertIn("notes.txt", result)
+        self.assertIn("nested/todo.txt", result)
+        self.assertNotIn("image.png", result)
+
+    def test_find_rejects_empty_pattern(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "empty"):
+                    find_files("")
+
+    def test_find_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    find_files("*.txt", "../")
+
+    def test_find_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["find_files"], find_files)
+        self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
 
 
 if __name__ == "__main__":
