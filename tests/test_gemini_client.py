@@ -318,10 +318,6 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(sent["tool_choice"], "required")
 
     def test_openrouter_fallback_accepts_decoded_tool_arguments(self):
-        quota = urllib.error.HTTPError(
-            "https://example.test", 429, "quota", {},
-            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
-        )
         tool_response = {
             "choices": [{
                 "message": {
@@ -349,21 +345,20 @@ class GeminiClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[
-                quota, quota, quota,
-                FakeResponse(tool_response),
-                FakeResponse(final_response),
-            ],
-        ) as open_url, patch("time.sleep"):
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ) as open_url:
             client = GeminiClient()
-            answer = client.ask("What is 12 times 7?")
+            answer = client._generate_openrouter(
+                [{"role": "user", "parts": [{"text": "What is 12 times 7?"}]}],
+                None,
+            )
 
         self.assertEqual(answer, "84")
         self.assertEqual(
             client.last_tool_calls,
             [{"name": "calculator", "args": {"expression": "12 * 7"}, "result": "84", "expression": "12 * 7"}],
         )
-        second_request = open_url.call_args_list[4].args[0]
+        second_request = open_url.call_args_list[1].args[0]
         sent = json.loads(second_request.data)
         self.assertEqual(sent["messages"][-1]["content"], "84")
 
