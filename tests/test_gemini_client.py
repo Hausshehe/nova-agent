@@ -107,6 +107,53 @@ class GeminiClientTests(unittest.TestCase):
             [{"title": "Example", "uri": "https://example.com"}],
         )
 
+    def test_groq_fallback_after_gemini_quota(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
+        )
+        groq_payload = {
+            "choices": [{"message": {"content": "Groq fallback"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-key", "GROQ_API_KEY": "groq-key"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[quota, quota, quota, quota, quota, quota, FakeResponse(groq_payload)],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Hi")
+
+        self.assertEqual(answer, "Groq fallback")
+        self.assertEqual(open_url.call_count, 7)
+        groq_request = open_url.call_args.args[0]
+        self.assertEqual(groq_request.full_url, "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(groq_request.headers["Authorization"], "Bearer groq-key")
+
+    def test_groq_fallback_uses_browser_search(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
+        )
+        groq_payload = {
+            "choices": [{"message": {"content": "Searched fallback"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-key", "GROQ_API_KEY": "groq-key", "GEMINI_WEB_SEARCH": "1"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[quota, quota, quota, quota, quota, quota, FakeResponse(groq_payload)],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Latest news")
+
+        self.assertEqual(answer, "Searched fallback")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(sent["tools"], [{"type": "browser_search"}])
+        self.assertEqual(sent["tool_choice"], "required")
+
     def test_uses_calculator_tool(self):
         tool_call = {
             "candidates": [{
@@ -209,7 +256,7 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(answer, "Fallback")
         self.assertEqual(open_url.call_count, 4)
         first_url = open_url.call_args_list[0].args[0].full_url
-        fallback_url = open_url.call_args_list[3].args[0].full_url
+        fallback_url = open_url.call_args_list[3].args[0].args[0].full_url
         self.assertIn("models/gemini-3.5-flash-lite:", first_url)
         self.assertIn("models/gemini-3.5-flash:", fallback_url)
 
