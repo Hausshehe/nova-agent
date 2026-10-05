@@ -459,6 +459,35 @@ def get_screen_density() -> str:
     raise RuntimeError("System screen density is unavailable.")
 
 
+
+def get_media_volume() -> str:
+    """Return the current Android media-stream volume as a percentage."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/dumpsys audio"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = result.stdout
+        match = re.search(
+            r"(?ms)^\s*-?STREAM_MUSIC:.*?\bMin:\s*(\d+)\s*Max:\s*(\d+)\s*Current:\s*(\d+)\b",
+            output,
+        )
+        if not match:
+            match = re.search(
+                r"(?ms)^\s*STREAM_MUSIC:.*?\b(?:Min|Index Min):\s*(\d+).*?\b(?:Max|Index Max):\s*(\d+).*?\bCurrent(?: Index)?:\s*(\d+)\b",
+                output,
+            )
+        if match:
+            minimum, maximum, current = (int(value) for value in match.groups())
+            if maximum > minimum and minimum <= current <= maximum:
+                percentage = (current - minimum) * 100 / (maximum - minimum)
+                return f"Media volume: {percentage:.0f}% ({current}/{maximum})"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Android media volume is unavailable.") from exc
+    raise RuntimeError("Android media volume is unavailable.")
+
 def get_screen_refresh_rate() -> str:
     """Return the Android display refresh rate in Hz."""
     try:
@@ -2064,6 +2093,12 @@ GET_SYSTEM_SCREEN_DENSITY_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_MEDIA_VOLUME_DECLARATION = {
+    "name": "get_media_volume",
+    "description": "Get the current Android media-stream volume as a percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
     "name": "get_screen_refresh_rate",
     "description": "Get the current Android display refresh rate in Hz.",
@@ -2147,6 +2182,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_screen_orientation": get_screen_orientation,
     "get_screen_resolution": get_screen_resolution,
     "get_screen_density": get_screen_density,
+    "get_media_volume": get_media_volume,
     "get_screen_refresh_rate": get_screen_refresh_rate,
     "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
