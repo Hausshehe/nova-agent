@@ -221,6 +221,8 @@ def get_airplane_mode() -> str:
         "/system/bin/settings get global airplane_mode_on",
         "/system/bin/settings get system airplane_mode_on",
         "/system/bin/settings get secure airplane_mode_on",
+        "/system/bin/dumpsys connectivity",
+        "/system/bin/dumpsys wifi",
     )
     try:
         for command in commands:
@@ -230,11 +232,19 @@ def get_airplane_mode() -> str:
                 text=True,
                 check=False,
             )
-            output = (result.stdout or "").strip()
-            if output == "1":
+            output = (result.stdout or "") + "\n" + (result.stderr or "")
+            stripped = output.strip()
+            if stripped == "1":
                 return "Airplane mode: Enabled"
-            if output == "0":
+            if stripped == "0":
                 return "Airplane mode: Disabled"
+            match = re.search(
+                r"(?im)\b(?:mAirplaneModeOn|airplaneMode|airplane_mode_on)\s*[:=]\s*(true|false|1|0)\b",
+                output,
+            )
+            if match:
+                value = match.group(1).lower()
+                return "Airplane mode: " + ("Enabled" if value in {"true", "1"} else "Disabled")
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Airplane mode status is unavailable.") from exc
     raise RuntimeError("Airplane mode status is unavailable.")
