@@ -302,6 +302,29 @@ class GeminiClient:
                         },
                     }]
 
+            # Explicit directory-size requests must use the user's path.
+            if requested_tool == "get_directory_size":
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"get_directory_size\s+.*?(?:of|for|directory)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-directory-size",
+                        "type": "function",
+                        "function": {
+                            "name": "get_directory_size",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             # For explicit copy_directory requests, derive source and destination
             # from the user's instruction instead of trusting model-generated arguments.
             if requested_tool == "copy_directory" and (native_tool_calls or (not tool_calls and not content)):
