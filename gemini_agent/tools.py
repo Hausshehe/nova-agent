@@ -301,6 +301,8 @@ def get_screen_brightness() -> str:
     commands = (
         ("/system/bin/settings get system screen_brightness", "integer"),
         ("/system/bin/settings get system screen_brightness_float", "float"),
+        ("/system/bin/dumpsys power", "dumpsys"),
+        ("/system/bin/dumpsys display", "dumpsys"),
     )
     try:
         for command, value_type in commands:
@@ -310,16 +312,32 @@ def get_screen_brightness() -> str:
                 text=True,
                 check=False,
             )
-            value = result.stdout.strip()
-            if value_type == "integer" and re.fullmatch(r"\d+", value):
-                brightness = int(value)
+            output = result.stdout.strip()
+            if value_type == "integer" and re.fullmatch(r"\d+", output):
+                brightness = int(output)
                 if 0 <= brightness <= 255:
                     percentage = brightness * 100 / 255
                     return f"Brightness: {percentage:.0f}% ({brightness}/255)"
-            elif value_type == "float" and re.fullmatch(r"(?:0|1)(?:\.\d+)?", value):
-                brightness = float(value)
+            elif value_type == "float" and re.fullmatch(r"(?:0|1)(?:\.\d+)?", output):
+                brightness = float(output)
                 percentage = brightness * 100
                 return f"Brightness: {percentage:.0f}% ({brightness:.2f})"
+            elif value_type == "dumpsys":
+                match = re.search(
+                    r"(?im)\b(?:mScreenBrightness|screenBrightness|brightness)\s*[=:]\s*(0(?:\.\d+)?|1(?:\.0+)?)\b",
+                    output,
+                )
+                if match:
+                    brightness = float(match.group(1))
+                    return f"Brightness: {brightness * 100:.0f}% ({brightness:.2f})"
+            elif value_type == "dumpsys":
+                match = re.search(
+                    r"(?im)\b(?:mScreenBrightness|screenBrightness|brightness)\s*[=:]\s*(0(?:\.\d+)?|1(?:\.0+)?)\b",
+                    output,
+                )
+                if match:
+                    brightness = float(match.group(1))
+                    return f"Brightness: {brightness * 100:.0f}% ({brightness:.2f})"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("System screen brightness is unavailable.") from exc
     raise RuntimeError("System screen brightness is unavailable.")
