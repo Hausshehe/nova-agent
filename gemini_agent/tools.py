@@ -97,7 +97,7 @@ def send_android_intent(action: str) -> str:
 
 
 def discover_camera_control() -> str:
-    """Inspect Android for safe, read-only camera control mechanisms."""
+    """Inspect Android for safe camera control mechanisms and foreground the camera for UI inspection."""
     results = []
 
     for executable in ("cmd", "dumpsys", "am"):
@@ -139,9 +139,9 @@ def discover_camera_control() -> str:
     results.append(f"camera UI hierarchy:\n{hierarchy}")
 
     return (
-        "Camera control environment discovery (read-only):\n"
+        "Camera control environment discovery:\n"
         + "\n".join(results)
-        + "\nNo camera action was performed."
+        + "\nCamera was foregrounded for UI inspection; no shutter action was performed."
     )
 
 def assess_capability_gap(request: str) -> str:
