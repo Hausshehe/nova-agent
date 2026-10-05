@@ -213,6 +213,35 @@ def get_wifi_status() -> str:
     raise RuntimeError("Wi-Fi status is unavailable.")
 
 
+def get_bluetooth_status() -> str:
+    """Return the Android Bluetooth radio state."""
+    commands = (
+        "/system/bin/settings get global bluetooth_on",
+        "/system/bin/dumpsys bluetooth_manager",
+    )
+    try:
+        for command in commands:
+            result = subprocess.run(
+                ["su", "-c", command],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = (result.stdout or "") + "\\n" + (getattr(result, "stderr", "") or "")
+            if re.fullmatch(r"\\s*1\\s*", result.stdout or ""):
+                return "Bluetooth: Enabled"
+            if re.fullmatch(r"\\s*0\\s*", result.stdout or ""):
+                return "Bluetooth: Disabled"
+            lowered = output.lower()
+            if re.search(r"\\b(?:enabled|on)\\b", lowered) and "bluetooth" in lowered:
+                return "Bluetooth: Enabled"
+            if re.search(r"\\b(?:disabled|off)\\b", lowered) and "bluetooth" in lowered:
+                return "Bluetooth: Disabled"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Bluetooth status is unavailable.") from exc
+    raise RuntimeError("Bluetooth status is unavailable.")
+
+
 def get_cpu_count() -> str:
     """Return the number of logical CPUs visible to the runtime."""
     count = os.cpu_count()
@@ -1470,6 +1499,7 @@ def list_memory() -> str:
 
 
 TOOL_DECLARATIONS = [
+    GET_BLUETOOTH_STATUS_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
@@ -2116,6 +2146,12 @@ GET_WIFI_STATUS_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_BLUETOOTH_STATUS_DECLARATION = {
+    "name": "get_bluetooth_status",
+    "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_NETWORK_ADDRESSES_DECLARATION = {
     "name": "get_network_addresses",
     "description": "Get unique IP addresses resolved for the local device hostname.",
@@ -2232,6 +2268,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
     "get_wifi_status": get_wifi_status,
+    "get_bluetooth_status": get_bluetooth_status,
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
