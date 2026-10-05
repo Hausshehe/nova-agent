@@ -138,8 +138,8 @@ class CloudflareClientTests(unittest.TestCase):
                     "arguments": json.dumps({
                         "request": "control the phone camera shutter",
                         "path": "gemini_agent/tools.py",
-                        "old_text": "VALUE = 1",
-                        "new_text": "VALUE = 2",
+                        "function_source": "def camera_shutter():\n    return \"ok\"",
+                        "declaration_description": "Take a photo with the phone camera.",
                     }),
                 },
             }]}}]
@@ -168,6 +168,8 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Repository inspection was performed locally", inspection)
         self.assertIn("def apply_capability_extension", inspection)
         self.assertIn("gemini_agent/tools.py", inspection)
+        self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
+        self.assertIn("def camera_shutter(", inspection)
 
     def test_natural_extension_application_returns_first_transaction_result(self):
         tool_response = {
