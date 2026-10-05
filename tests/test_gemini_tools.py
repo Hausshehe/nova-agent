@@ -213,13 +213,13 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             target.parent.mkdir()
             target.write_text(self._source(), encoding="utf-8")
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
-                result = apply_capability_extension(
-                    "control the phone camera shutter",
-                    "gemini_agent/capabilities/camera_shutter.py",
-                    'def camera_shutter():\n    return "ok"',
-                    "Take a photo with the phone camera.",
-                )
-            self.assertIn("target is not a regular source file", result)
+                with self.assertRaises(ValueError):
+                    apply_capability_extension(
+                        "control the phone camera shutter",
+                        "gemini_agent/capabilities/camera_shutter.py",
+                        'def camera_shutter():\n    return "ok"',
+                        "Take a photo with the phone camera.",
+                    )
 
     def test_apply_capability_extension_rejects_existing_capability(self):
         result = apply_capability_extension(
