@@ -180,6 +180,26 @@ def get_process_uptime() -> str:
     return f"{max(0.0, uptime):.3f} seconds"
 
 
+def list_processes() -> str:
+    """List visible Linux processes by PID and command name."""
+    rows = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            name = ""
+            for line in (entry / "status").read_text(encoding="utf-8").splitlines():
+                if line.startswith("Name:"):
+                    name = line.split(":", 1)[1].strip()
+                    break
+            if name:
+                rows.append((int(entry.name), name))
+        except (OSError, UnicodeError):
+            continue
+    rows.sort()
+    return "\n".join(f"{pid} {name}" for pid, name in rows[:100]) or "(no visible processes)"
+
+
 def get_process_thread_count() -> str:
     """Return the number of threads in Nova's current process."""
     status = Path("/proc/self/status")
@@ -1103,9 +1123,15 @@ RUN_COMMAND_DECLARATION = {
         "required": ["command"],
     },
 }
+LIST_PROCESSES_DECLARATION = {
+    "name": "list_processes",
+    "description": "List visible local processes by PID and command name.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
+    "list_processes": list_processes,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
