@@ -43,6 +43,7 @@ from gemini_agent.tools import (
     get_network_interfaces,
     get_wifi_status,
     get_bluetooth_status,
+    get_airplane_mode,
     get_load_average,
     get_system_memory_usage,
     get_system_cpu_usage,
@@ -278,6 +279,27 @@ class GetBluetoothStatusToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_bluetooth_status"], get_bluetooth_status)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_bluetooth_status", names)
+
+
+
+
+class GetAirplaneModeToolTests(unittest.TestCase):
+    def test_get_airplane_mode_parses_enabled_state(self):
+        completed = type("Completed", (), {"stdout": "1\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_airplane_mode()
+        self.assertEqual(result, "Airplane mode: Enabled")
+        self.assertEqual(run.call_args.args[0], ["su", "-c", "/system/bin/settings get global airplane_mode_on"])
+
+    def test_get_airplane_mode_parses_disabled_state(self):
+        completed = type("Completed", (), {"stdout": "0\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_airplane_mode(), "Airplane mode: Disabled")
+
+    def test_get_airplane_mode_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_airplane_mode"], get_airplane_mode)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_airplane_mode", names)
 
 
 class GetNetworkInterfacesToolTests(unittest.TestCase):
