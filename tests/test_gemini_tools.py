@@ -105,7 +105,7 @@ from gemini_agent.tools import (
 class SelfTestToolTests(unittest.TestCase):
     def test_self_test_passes(self):
         result = self_test()
-        self.assertRegex(result, r"^Self-test: PASS \\(5/5 checks passed\\)$")
+        self.assertRegex(result, r"^Self-test: PASS \(5/5 checks passed\)$")
 
     def test_self_test_is_registered(self):
         self.assertIs(TOOL_HANDLERS["self_test"], self_test)
