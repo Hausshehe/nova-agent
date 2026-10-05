@@ -41,6 +41,7 @@ from gemini_agent.tools import (
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
+    get_wifi_status,
     get_load_average,
     get_system_memory_usage,
     get_system_cpu_usage,
@@ -237,6 +238,26 @@ class GetNetworkAddressesToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_network_addresses"], get_network_addresses)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_network_addresses", names)
+
+
+class GetWifiStatusToolTests(unittest.TestCase):
+    def test_get_wifi_status_parses_enabled_state(self):
+        completed = type("Completed", (), {"stdout": "Wi-Fi is enabled\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_wifi_status()
+        self.assertEqual(result, "Wi-Fi: Enabled")
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "/system/bin/cmd wifi status\n")
+
+    def test_get_wifi_status_parses_disabled_state(self):
+        completed = type("Completed", (), {"stdout": "Wi-Fi is disabled\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_wifi_status(), "Wi-Fi: Disabled")
+
+    def test_get_wifi_status_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_wifi_status"], get_wifi_status)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_wifi_status", names)
 
 
 class GetNetworkInterfacesToolTests(unittest.TestCase):
