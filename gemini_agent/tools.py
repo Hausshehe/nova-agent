@@ -238,6 +238,34 @@ def get_system_boot_time() -> str:
         raise RuntimeError("System boot time is unavailable.") from exc
     return boot_time.isoformat(timespec="seconds")
 
+def get_system_cpu_usage() -> str:
+    """Return the current aggregate system CPU usage percentage."""
+    def read_cpu_times() -> tuple[int, int]:
+        try:
+            line = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0]
+        except (OSError, UnicodeError, IndexError) as exc:
+            raise RuntimeError("System CPU usage is unavailable.") from exc
+        parts = line.split()
+        if len(parts) < 5 or parts[0] != "cpu":
+            raise RuntimeError("System CPU usage is unavailable.")
+        try:
+            values = [int(value) for value in parts[1:]]
+        except ValueError as exc:
+            raise RuntimeError("System CPU usage is unavailable.") from exc
+        total = sum(values)
+        idle = values[3] + (values[4] if len(values) > 4 else 0)
+        return total, idle
+
+    first_total, first_idle = read_cpu_times()
+    time.sleep(0.1)
+    second_total, second_idle = read_cpu_times()
+    total_delta = second_total - first_total
+    idle_delta = second_idle - first_idle
+    if total_delta <= 0:
+        raise RuntimeError("System CPU usage is unavailable.")
+    usage = max(0.0, min(100.0, 100.0 * (total_delta - idle_delta) / total_delta))
+    return f"{usage:.2f}%"
+
 def get_system_swap_usage() -> str:
     """Return total, used, and free system swap in bytes."""
     try:
@@ -1086,6 +1114,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_cpu_usage",
+        "description": "Get the current aggregate system CPU usage percentage.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_memory_usage",
         "description": "Get total, used, and available system memory in bytes. Call this tool with an empty JSON object: {}.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1624,6 +1657,12 @@ GET_NETWORK_ADDRESSES_DECLARATION = {
     "description": "Get unique IP addresses resolved for the local device hostname.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_SYSTEM_CPU_USAGE_DECLARATION = {
+    "name": "get_system_cpu_usage",
+    "description": "Get the current aggregate system CPU usage percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_MEMORY_USAGE_DECLARATION = {
     "name": "get_system_memory_usage",
     "description": "Get total, used, and available system memory in bytes.",
@@ -1679,6 +1718,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
+    "get_system_cpu_usage": get_system_cpu_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
