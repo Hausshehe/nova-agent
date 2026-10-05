@@ -115,6 +115,39 @@ def assess_capability_gap(request: str) -> str:
     )
 
 
+def plan_capability_extension(request: str) -> str:
+    """Create a bounded implementation plan for a capability Nova does not currently expose."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+
+    gap = assess_capability_gap(request)
+    if gap.startswith("Capability match:"):
+        return f"Extension not needed: {gap}"
+
+    normalized = re.sub(r"[^a-z0-9]+", " ", request.lower()).strip()
+    words = [word for word in normalized.split() if word not in {
+        "the", "a", "an", "to", "of", "do", "i", "have", "can", "you",
+        "capability", "capabilities", "control", "phone",
+    }]
+    suffix = "_".join(words[:5]) or "requested_capability"
+    tool_name = f"extend_{suffix}"
+
+    return (
+        "Extension plan: capability is missing.\n"
+        f"Requested capability: {request.strip()}\n"
+        f"Proposed tool: {tool_name}\n"
+        "Implementation boundary: inspect Android reality first; do not assume an API, "
+        "permission, executable, or service exists.\n"
+        "Implementation steps: discover the narrowest supported mechanism; implement a "
+        "bounded tool with explicit inputs and safety checks; register its declaration and "
+        "handler; add deterministic unit tests; run the real-device test; only then expose "
+        "the capability to Nova.\n"
+        "Verification: execute the new capability on the device and verify the resulting "
+        "state or observable output.\n"
+        "Status: plan only; no code or device state was modified."
+    )
+
+
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
     checks = []
@@ -1982,6 +2015,17 @@ TOOL_DECLARATIONS = [
             "required": ["request"],
         },
     },
+    {
+        "name": "plan_capability_extension",
+        "description": "Create a bounded implementation plan for a missing capability without modifying code or device state.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The missing capability to plan an extension for."}
+            },
+            "required": ["request"],
+        },
+    },
     FIND_EXECUTABLE_DECLARATION,
     DIAGNOSE_COMMAND_FAILURE_DECLARATION,
     VERIFY_COMMAND_RESULT_DECLARATION,
@@ -2729,6 +2773,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "plan_capability_extension": plan_capability_extension,
     "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
     "self_test": self_test,
