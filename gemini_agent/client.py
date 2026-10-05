@@ -86,6 +86,8 @@ class GeminiClient:
             return "list_processes"
         if "get_process_status" in user_text:
             return "get_process_status"
+        if "process status" in user_text:
+            return "get_process_status"
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
