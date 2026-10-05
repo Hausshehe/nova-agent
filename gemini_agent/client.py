@@ -389,6 +389,19 @@ class GeminiClient:
                     "model": self.cloudflare_model,
                     "messages": extension_messages,
                     "max_completion_tokens": 512,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "type": "object",
+                            "properties": {
+                                "request": {"type": "string"},
+                                "path": {"type": "string"},
+                                "old_text": {"type": "string"},
+                                "new_text": {"type": "string"},
+                            },
+                            "required": ["request", "path", "old_text", "new_text"],
+                        },
+                    },
                 }
                 request = urllib.request.Request(
                     "https://api.cloudflare.com/client/v4/accounts/"
