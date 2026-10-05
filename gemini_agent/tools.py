@@ -7,6 +7,7 @@ import hashlib
 import re
 import operator
 import shlex
+import shutil
 import subprocess
 import shutil
 import os
@@ -80,6 +81,41 @@ _ROOT_DIAGNOSTIC_PATTERNS = (
     re.compile(r"^(?:id|whoami|pwd)$"),
 )
 
+
+
+_EXECUTABLE_SEARCH_PATHS = (
+    "/system/bin",
+    "/system/xbin",
+    "/vendor/bin",
+    "/product/bin",
+    "/odm/bin",
+    "/data/data/com.termux/files/usr/bin",
+)
+
+
+def find_executable(name: str) -> str:
+    """Find an executable in PATH and common Android executable directories."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Executable name cannot be empty.")
+    candidate = name.strip()
+    if any(char in candidate for char in ("\n", "\r", "\x00", ";", "|", "&")):
+        raise ValueError("Executable name contains unsupported characters.")
+    if "/" in candidate:
+        path = os.path.realpath(candidate)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return f"Executable: {path}"
+        return f"Executable not found: {candidate}"
+
+    found = shutil.which(candidate)
+    if found:
+        return f"Executable: {os.path.realpath(found)}"
+
+    for directory in _EXECUTABLE_SEARCH_PATHS:
+        path = os.path.join(directory, candidate)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return f"Executable: {path}"
+
+    return f"Executable not found: {candidate}"
 
 
 def run_command(command: str) -> str:
@@ -1620,6 +1656,7 @@ RUN_ROOT_COMMAND_DECLARATION = {
 }
 
 TOOL_DECLARATIONS = [
+    FIND_EXECUTABLE_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
@@ -2170,6 +2207,18 @@ TOOL_DECLARATIONS = [
         },
     },
 ]
+
+FIND_EXECUTABLE_DECLARATION = {
+    "name": "find_executable",
+    "description": "Find an executable by name in Nova's PATH and common Android executable directories. Use this when a command may have failed because its executable path is unknown.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "Executable name such as dumpsys, python, or settings."}
+        },
+        "required": ["name"],
+    },
+}
 
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
