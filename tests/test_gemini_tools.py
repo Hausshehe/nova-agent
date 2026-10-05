@@ -103,6 +103,7 @@ from gemini_agent.tools import (
     get_process_cpu_time,
     get_process_memory_usage,
     get_process_nice,
+    send_android_intent,
 )
 
 
@@ -121,6 +122,20 @@ class CapabilityInventoryToolTests(unittest.TestCase):
 
 
 class AndroidActionToolTests(unittest.TestCase):
+    def test_send_android_intent_validates_and_uses_root_shell(self):
+        with patch("gemini_agent.tools._run_bounded_root_action", return_value="Exit code: 0") as root:
+            result = send_android_intent("IMAGE_CAPTURE")
+        self.assertIn("Android intent android.media.action.IMAGE_CAPTURE started.", result)
+        root.assert_called_once_with("am start -a android.media.action.IMAGE_CAPTURE")
+
+    def test_send_android_intent_rejects_unsupported_action(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported Android intent action"):
+            send_android_intent("android.intent.action.DELETE")
+
+    def test_send_android_intent_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["send_android_intent"], send_android_intent)
+        self.assertIn("send_android_intent", [d["name"] for d in TOOL_DECLARATIONS])
+
     def test_send_android_keyevent_validates_and_uses_root_shell(self):
         completed = type("Completed", (), {"stdout": "", "stderr": "", "returncode": 0})()
         with patch("gemini_agent.tools._run_bounded_root_action", return_value="Exit code: 0") as root:
