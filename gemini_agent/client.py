@@ -61,7 +61,10 @@ class GeminiClient:
             raise ValueError("Tool arguments must be a JSON object.")
         return parsed
 
-    _CLOUD_TOOL_NAMES = {\n        "read_text_file": "read_file",\n        "create_directory": "make_directory",\n    }
+    _CLOUD_TOOL_NAMES = {
+        "read_text_file": "read_file",
+        "create_directory": "make_directory",
+    }
 
     @classmethod
     def _requested_local_tool(cls, contents: list[dict]) -> str | None:
