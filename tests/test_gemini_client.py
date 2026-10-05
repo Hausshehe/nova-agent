@@ -382,6 +382,23 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn(f"PID: {os.getpid()}", answer)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_get_process_command_line_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(first_response),
+        ) as open_url:
+            answer = GeminiClient().ask(
+                f"Use the get_process_command_line tool for pid {os.getpid()}."
+            )
+        self.assertTrue(answer)
+        self.assertIn("python", answer.lower())
+        self.assertEqual(open_url.call_count, 1)
+
     def test_run_command_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
