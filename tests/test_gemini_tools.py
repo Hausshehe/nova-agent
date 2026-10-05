@@ -35,6 +35,7 @@ from gemini_agent.tools import (
     get_screen_brightness_mode,
     get_screen_orientation,
     get_screen_resolution,
+    get_screen_density,
     get_screen_refresh_rate,
     get_hostname,
     get_network_addresses,
@@ -1371,6 +1372,26 @@ class GetScreenOrientationToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_screen_resolution"], get_screen_resolution)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_screen_resolution", names)
+
+
+class GetScreenDensityToolTests(unittest.TestCase):
+    def test_get_screen_density_prefers_override_density(self):
+        completed = type("Completed", (), {"stdout": "Physical density: 320\nOverride density: 440\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_density()
+        self.assertEqual(result, "Screen density: 440 dpi")
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "/system/bin/wm density\n")
+
+    def test_get_screen_density_falls_back_to_physical_density(self):
+        completed = type("Completed", (), {"stdout": "Physical density: 320\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_screen_density(), "Screen density: 320 dpi")
+
+    def test_get_screen_density_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_density"], get_screen_density)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_density", names)
 
 
 class GetScreenRefreshRateToolTests(unittest.TestCase):
