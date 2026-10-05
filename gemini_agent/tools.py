@@ -1771,11 +1771,6 @@ TOOL_DECLARATIONS = [
             "required": ["pattern"],
         },
     },
-    {
-        "name": "get_screen_timeout",
-        "description": "Get the Android screen-off timeout duration.",
-        "parameters": {"type": "OBJECT", "properties": {}},
-    },
 ]
 
 RUN_COMMAND_DECLARATION = {
