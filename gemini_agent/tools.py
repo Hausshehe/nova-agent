@@ -95,6 +95,11 @@ def get_temp_directory() -> str:
     return tempfile.gettempdir()
 
 
+def get_home_directory() -> str:
+    """Return the home directory used by Nova."""
+    return str(Path.home())
+
+
 def get_process_id() -> str:
     """Return the current Nova process ID."""
     return str(os.getpid())
@@ -604,6 +609,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_home_directory",
+        "description": "Get the home directory used by Nova.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -928,6 +938,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_cpu_count": get_cpu_count,
     "get_memory_usage": get_memory_usage,
     "get_temp_directory": get_temp_directory,
+    "get_home_directory": get_home_directory,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
