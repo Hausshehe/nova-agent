@@ -226,6 +226,30 @@ def get_system_uptime() -> str:
         raise RuntimeError("System uptime is unavailable.") from exc
     return f"{max(0.0, seconds):.3f} seconds"
 
+
+def get_system_swap_usage() -> str:
+    """Return total, used, and free system swap in bytes."""
+    try:
+        result = subprocess.run(
+            ["cat", "/proc/meminfo"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System swap usage is unavailable.") from exc
+    values = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].rstrip(":") in {"SwapTotal", "SwapFree"} and parts[1].isdigit():
+            values[parts[0].rstrip(":")] = int(parts[1]) * 1024
+    if "SwapTotal" not in values or "SwapFree" not in values:
+        raise RuntimeError("System swap usage is unavailable.")
+    total = values["SwapTotal"]
+    free = min(total, values["SwapFree"])
+    used = max(0, total - free)
+    return f"Total: {total} bytes\\nUsed: {used} bytes\\nFree: {free} bytes"
+
 def get_memory_usage() -> str:
     """Return the current Nova process resident memory usage in bytes."""
     status = Path("/proc/self/status")
@@ -1585,6 +1609,12 @@ GET_SYSTEM_MEMORY_USAGE_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_SWAP_USAGE_DECLARATION = {
+    "name": "get_system_swap_usage",
+    "description": "Get total, used, and free system swap in bytes.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_LOAD_AVERAGE_DECLARATION = {
     "name": "get_load_average",
     "description": "Get the 1, 5, and 15 minute system load averages.",
@@ -1620,6 +1650,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_network_addresses": get_network_addresses,
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
+    "get_system_swap_usage": get_system_swap_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
