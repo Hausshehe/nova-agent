@@ -15,6 +15,7 @@ from gemini_agent.tools import (
     current_datetime,
     delete_file,
     find_files,
+    move_file,
     search_text,
     write_text_file,
     list_directory,
@@ -88,6 +89,41 @@ class FilesystemToolTests(unittest.TestCase):
             "list_directory", "read_text_file", "search_text", "write_text_file",
             "append_text_file", "delete_file", "find_files"
         ])
+
+    def test_moves_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = move_file("notes.txt", "archive/notes.txt")
+            self.assertEqual(result, "Moved notes.txt to archive/notes.txt")
+            self.assertFalse((root / "notes.txt").exists())
+            self.assertEqual(
+                (root / "archive/notes.txt").read_text(encoding="utf-8"),
+                "hello",
+            )
+
+    def test_move_rejects_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            (root / "other.txt").write_text("keep", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    move_file("notes.txt", "other.txt")
+
+    def test_move_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    move_file("notes.txt", "../outside.txt")
+
+    def test_move_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["move_file"], move_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("move_file", names)
 
     def test_deletes_file(self):
         with tempfile.TemporaryDirectory() as directory:
