@@ -10,6 +10,7 @@ import shutil
 import os
 import platform
 import socket
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -87,6 +88,11 @@ def get_memory_usage() -> str:
                 if len(parts) >= 2 and parts[1].isdigit():
                     return str(int(parts[1]) * 1024)
     raise RuntimeError("Process memory usage is unavailable.")
+
+
+def get_temp_directory() -> str:
+    """Return the operating system temporary directory used by Nova."""
+    return tempfile.gettempdir()
 
 
 def get_process_id() -> str:
@@ -593,6 +599,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_temp_directory",
+        "description": "Get the operating system temporary directory used by Nova.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -916,6 +927,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_python_executable": get_python_executable,
     "get_cpu_count": get_cpu_count,
     "get_memory_usage": get_memory_usage,
+    "get_temp_directory": get_temp_directory,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
