@@ -30,6 +30,7 @@ class GeminiClient:
         self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
+        self._disabled_providers: set[str] = set()
 
     def _generate_gemini(
         self,
@@ -445,6 +446,24 @@ class GeminiClient:
 
         raise RuntimeError("OpenRouter requested too many tool calls.")
 
+    @staticmethod
+    def _is_hard_provider_failure(error_text: str) -> bool:
+        """Return true for failures where immediate retries are wasteful."""
+        lowered = error_text.lower()
+        return any(marker in lowered for marker in (
+            "free-models-per-day",
+            "daily limit",
+            "quota exhausted",
+            "internal server error",
+        ))
+
+    def _disable_provider(self, provider: str, error_text: str) -> None:
+        if self._is_hard_provider_failure(error_text):
+            self._disabled_providers.add(provider)
+
+    def _provider_enabled(self, provider: str) -> bool:
+        return provider not in self._disabled_providers
+
     def _generate(
         self,
         contents: list[dict],
@@ -465,27 +484,33 @@ class GeminiClient:
                 raise
 
             if self.web_search:
-                if self.openrouter_api_key:
+                if self.openrouter_api_key and self._provider_enabled("openrouter"):
                     try:
                         return self._generate_openrouter(contents, system_instruction)
                     except RuntimeError as openrouter_error:
-                        if self.groq_api_key:
+                        self._disable_provider("openrouter", str(openrouter_error))
+                        if self.groq_api_key and self._provider_enabled("groq"):
                             return self._generate_groq(contents, system_instruction)
                         raise openrouter_error
 
-                if self.groq_api_key:
+                if self.groq_api_key and self._provider_enabled("groq"):
                     return self._generate_groq(contents, system_instruction)
 
-            if self.groq_api_key:
+            if self.groq_api_key and self._provider_enabled("groq"):
                 try:
                     return self._generate_groq(contents, system_instruction)
                 except RuntimeError as groq_error:
-                    if self.openrouter_api_key:
+                    self._disable_provider("groq", str(groq_error))
+                    if self.openrouter_api_key and self._provider_enabled("openrouter"):
                         return self._generate_openrouter(contents, system_instruction)
                     raise groq_error
 
-            if self.openrouter_api_key:
-                return self._generate_openrouter(contents, system_instruction)
+            if self.openrouter_api_key and self._provider_enabled("openrouter"):
+                try:
+                    return self._generate_openrouter(contents, system_instruction)
+                except RuntimeError as openrouter_error:
+                    self._disable_provider("openrouter", str(openrouter_error))
+                    raise openrouter_error
             raise
 
     def ask(
