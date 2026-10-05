@@ -63,6 +63,20 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(names, ["discover_android_mechanisms"])
 
 
+    def test_inspect_android_ui_routes_without_cloudflare(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            client.tool_handlers["inspect_android_ui"] = lambda: (
+                "Android UI inspection (read-only): <hierarchy/>"
+            )
+            answer = client.ask("Inspect the current Android UI without interacting with it.")
+        self.assertIn("Android UI inspection", answer)
+        open_url.assert_not_called()
+
     def test_resolve_android_intent_uses_prompt_action_deterministically(self):
         with patch.dict(
             os.environ,
