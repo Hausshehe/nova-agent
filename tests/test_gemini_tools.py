@@ -135,6 +135,13 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIn("Proposed tool: extend_camera_shutter", result)
         self.assertIn("Status: plan only; no code or device state was modified.", result)
 
+    def test_capability_extension_plan_ignores_model_generated_camera_filler(self):
+        result = plan_capability_extension(
+            "add a capability to open the device camera and capture a photo"
+        )
+        self.assertIn("Proposed tool: extend_camera_shutter", result)
+        self.assertNotIn("extend_add_open_device_camera_and", result)
+
     def test_capability_extension_plan_is_registered(self):
         self.assertIs(TOOL_HANDLERS["plan_capability_extension"], plan_capability_extension)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
