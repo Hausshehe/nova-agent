@@ -280,6 +280,32 @@ def get_process_parent_name(pid: str) -> str:
     raise RuntimeError(f"Parent process name is unavailable: {pid}")
 
 
+def get_process_cpu_time(pid: str) -> str:
+    """Return user, system, and total CPU time of a visible Linux process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    stat_path = Path("/proc") / pid / "stat"
+    if not stat_path.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        fields = stat_path.read_text(encoding="utf-8").split()
+        if len(fields) < 15:
+            raise RuntimeError(f"Process CPU time is unavailable: {pid}")
+        clock_ticks = os.sysconf("SC_CLK_TCK")
+        if clock_ticks <= 0:
+            raise RuntimeError(f"Process CPU time is unavailable: {pid}")
+        user_seconds = int(fields[13]) / clock_ticks
+        system_seconds = int(fields[14]) / clock_ticks
+        total_seconds = user_seconds + system_seconds
+        return (
+            f"User: {user_seconds:.3f} seconds\n"
+            f"System: {system_seconds:.3f} seconds\n"
+            f"Total: {total_seconds:.3f} seconds"
+        )
+    except (OSError, UnicodeError, ValueError, IndexError) as exc:
+        raise RuntimeError(f"Process CPU time is unavailable: {pid}") from exc
+
+
 def get_process_start_time(pid: str) -> str:
     """Return the local start time of a visible Linux process as ISO-8601 text."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -864,6 +890,15 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_process_cpu_time",
+        "description": "Get user, system, and total CPU time of a visible local process.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+            "required": ["pid"],
+        },
+    },
+    {
         "name": "get_process_id",
         "description": "Get the process ID of the running Nova process.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1347,6 +1382,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_working_directory": get_process_working_directory,
     "get_process_parent_name": get_process_parent_name,
     "get_process_start_time": get_process_start_time,
+    "get_process_cpu_time": get_process_cpu_time,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
