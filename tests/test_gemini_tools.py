@@ -73,7 +73,7 @@ class RunCommandToolTests(unittest.TestCase):
             })(),
         ) as run:
             result = run_command("pwd")
-        self.assertEqual(result, "Exit code: 0\\nstdout:\\nhello")
+        self.assertEqual(result, "Exit code: 0\nstdout:\nhello")
         run.assert_called_once()
 
     def test_run_command_rejects_unapproved_command(self):
