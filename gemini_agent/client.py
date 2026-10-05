@@ -229,6 +229,38 @@ class GeminiClient:
         raise RuntimeError("Groq requested too many browser-search tool calls.")
 
     @staticmethod
+    def _requires_local_tool(contents: list[dict]) -> bool:
+        """Require a local tool when the user explicitly asks for a filesystem action."""
+        user_text = ""
+        for item in reversed(contents):
+            if item.get("role") == "user":
+                user_text = " ".join(
+                    part.get("text", "")
+                    for part in item.get("parts", [])
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                ).lower()
+                break
+        return any(
+            term in user_text
+            for term in (
+                "append_text_file",
+                "write_text_file",
+                "read_text_file",
+                "list_directory",
+                "find_files",
+                "search_text",
+                "append ",
+                "write ",
+                "read ",
+                "create ",
+                "overwrite ",
+                "file",
+                "directory",
+                "folder",
+            )
+        )
+
+    @staticmethod
     def _extract_openrouter_sources(message: dict) -> list[dict[str, str]]:
         annotations = message.get("annotations") or []
         return [
@@ -285,6 +317,8 @@ class GeminiClient:
             "max_tokens": 1024,
             "tools": tools,
         }
+        if self._requires_local_tool(contents):
+            payload["tool_choice"] = "required"
 
         for _ in range(3):
             request = urllib.request.Request(
