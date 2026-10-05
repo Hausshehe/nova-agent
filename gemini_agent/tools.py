@@ -222,23 +222,20 @@ def get_system_uptime() -> str:
     """Return total system uptime in seconds."""
     try:
         result = subprocess.run(
-            ["uptime"],
+            ["cat", "/proc/stat"],
             capture_output=True,
             text=True,
             check=True,
         )
-        output = result.stdout.strip()
-        match = re.search(
-            r"\\bup\\s+(?:(\\d+)\\s+days?,\\s+)?(\\d+):(\\d+)",
-            output,
-        )
-        if not match:
+        boot_time = None
+        for line in result.stdout.splitlines():
+            if line.startswith("btime "):
+                boot_time = float(line.split()[1])
+                break
+        if boot_time is None:
             raise RuntimeError("System uptime is unavailable.")
-        days = int(match.group(1) or 0)
-        hours = int(match.group(2))
-        minutes = int(match.group(3))
-        seconds = days * 86400 + hours * 3600 + minutes * 60
-    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as exc:
+        seconds = max(0.0, dt.datetime.now().timestamp() - boot_time)
+    except (OSError, UnicodeError, ValueError, IndexError, subprocess.SubprocessError) as exc:
         raise RuntimeError("System uptime is unavailable.") from exc
     return f"{seconds:.3f} seconds"
 
