@@ -235,14 +235,29 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
         self.assertIn("not launched", result)
 
-    def test_inspect_android_ui_is_read_only_and_registered(self):
+    def test_inspect_android_ui_captures_hierarchy_and_cleans_up(self):
         with patch(
             "gemini_agent.tools.run_root_command",
-            return_value="Exit code: 0\nstdout:\n<hierarchy rotation=\"0\"></hierarchy>",
+            side_effect=[
+                "Exit code: 0",
+                "Exit code: 0\nstdout:\n<hierarchy rotation=\"0\"><node text=\"Camera\" /></hierarchy>",
+                "Exit code: 0",
+            ],
         ) as root:
             result = inspect_android_ui()
-        root.assert_called_once_with("uiautomator dump /dev/tty")
-        self.assertIn("Android UI inspection (read-only):", result)
+        self.assertEqual(
+            root.call_args_list[0].args[0],
+            "uiautomator dump /data/local/tmp/nova-ui-hierarchy.xml",
+        )
+        self.assertEqual(
+            root.call_args_list[1].args[0],
+            "cat /data/local/tmp/nova-ui-hierarchy.xml",
+        )
+        self.assertEqual(
+            root.call_args_list[2].args[0],
+            "rm -f /data/local/tmp/nova-ui-hierarchy.xml",
+        )
+        self.assertIn('text=\"Camera\"', result)
         self.assertIn("no interaction", result)
         self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
