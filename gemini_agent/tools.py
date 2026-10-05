@@ -248,7 +248,7 @@ def get_system_swap_usage() -> str:
     total = values["SwapTotal"]
     free = min(total, values["SwapFree"])
     used = max(0, total - free)
-    return f"Total: {total} bytes\\nUsed: {used} bytes\\nFree: {free} bytes"
+    return f"Total: {total} bytes\nUsed: {used} bytes\nFree: {free} bytes"
 
 def get_memory_usage() -> str:
     """Return the current Nova process resident memory usage in bytes."""
