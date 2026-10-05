@@ -22,6 +22,7 @@ from gemini_agent.tools import (
     _dump_camera_ui_hierarchy,
     capability_inventory,
     discover_camera_control,
+    discover_android_mechanisms,
     plan_capability_extension,
     apply_capability_extension,
     count_file_lines,
@@ -107,6 +108,28 @@ from gemini_agent.tools import (
     get_process_nice,
     send_android_intent,
 )
+
+
+
+class AndroidMechanismDiscoveryTests(unittest.TestCase):
+    def test_discover_android_mechanisms_reports_candidates_without_action(self):
+        with patch(
+            "gemini_agent.tools.find_executable",
+            side_effect=lambda name: f"Executable: /system/bin/{name}",
+        ), patch(
+            "gemini_agent.tools.run_root_command",
+            return_value="Currently running services:\ncamera\naudio\nwindow",
+        ):
+            result = discover_android_mechanisms("control the camera")
+        self.assertIn("Android mechanism discovery (read-only):", result)
+        self.assertIn("dumpsys: Executable: /system/bin/dumpsys", result)
+        self.assertIn("Candidate Android services:", result)
+        self.assertIn("camera", result)
+        self.assertIn("No action was performed", result)
+
+    def test_discover_android_mechanisms_rejects_empty_request(self):
+        with self.assertRaises(ValueError):
+            discover_android_mechanisms("")
 
 
 
