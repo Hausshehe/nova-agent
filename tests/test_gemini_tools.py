@@ -28,6 +28,7 @@ from gemini_agent.tools import (
     get_file_permissions,
     path_exists,
     hash_file,
+    get_directory_entry_count,
     get_directory_size,
     delete_directory,
     delete_file,
@@ -323,6 +324,34 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("hash_file", names)
 
+    def test_get_directory_entry_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "one.txt").write_text("1", encoding="utf-8")
+            (root / "nested").mkdir()
+            (root / "nested" / "two.txt").write_text("2", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(get_directory_entry_count("."), "2")
+
+    def test_get_directory_entry_count_rejects_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "one.txt").write_text("1", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "Not a directory"):
+                    get_directory_entry_count("one.txt")
+
+    def test_get_directory_entry_count_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    get_directory_entry_count("../outside")
+
+    def test_get_directory_entry_count_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_directory_entry_count"], get_directory_entry_count)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_directory_entry_count", names)
+
     def test_get_directory_size(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -574,7 +603,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("path_exists"):names.index("find_files") + 1], [
-            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_file_parent", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_file_parent", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_entry_count", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
