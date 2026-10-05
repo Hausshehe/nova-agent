@@ -66,6 +66,12 @@ def _safe_path(path: str) -> Path:
     return target
 
 
+def path_exists(path: str) -> str:
+    """Return whether a path exists under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    return "true" if target.exists() else "false"
+
+
 def create_directory(path: str) -> str:
     """Create a directory within the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -453,6 +459,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "path_exists",
+        "description": "Check whether a file or directory exists under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to check."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "create_directory",
         "description": "Create a directory within Nova's allowed local filesystem root.",
         "parameters": {
@@ -676,6 +693,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
+    "path_exists": path_exists,
     "create_directory": create_directory,
     "delete_directory": delete_directory,
     "get_file_info": get_file_info,
