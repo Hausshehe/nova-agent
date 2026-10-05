@@ -128,17 +128,7 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "plan_capability_extension")
         self.assertEqual(open_url.call_count, 1)
 
-    def test_natural_extension_application_inspects_then_applies(self):
-        inspect_response = {
-            "choices": [{"message": {"content": "", "tool_calls": [{
-                "id": "call-read-extension-source",
-                "type": "function",
-                "function": {
-                    "name": "read_text_file",
-                    "arguments": '{"path":"gemini_agent/tools.py"}',
-                },
-            }]}}]
-        }
+    def test_natural_extension_application_uses_local_inspection_then_applies(self):
         apply_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
                 "id": "call-apply-extension",
@@ -150,7 +140,7 @@ class CloudflareClientTests(unittest.TestCase):
             }]}}]
         }
         success = (
-            "Edited gemini_agent/tools.py\n"
+            "Edited gemini_agent/tools.py\\n"
             "Extension status: source edit applied and transaction committed."
         )
         with patch.dict(
@@ -159,22 +149,31 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[FakeResponse(inspect_response), FakeResponse(apply_response)],
+            return_value=FakeResponse(apply_response),
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
-            {
-                "read_text_file": lambda **kwargs: "VALUE = 1",
-                "apply_capability_extension": lambda **kwargs: success,
-            },
+            {"apply_capability_extension": lambda **kwargs: success},
         ):
             client = GeminiClient()
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
         self.assertIn("Extension status: source edit applied and transaction committed.", answer)
         self.assertEqual(
             [trace["name"] for trace in client.last_tool_calls],
-            ["read_text_file", "apply_capability_extension"],
+            ["apply_capability_extension"],
         )
-        self.assertEqual(open_url.call_count, 2)
+        self.assertEqual(open_url.call_count, 1)
+        payload = json.loads(open_url.call_args.kwargs["data"].decode())
+        self.assertEqual(
+            payload["tool_choice"],
+            {"type": "function", "function": {"name": "apply_capability_extension"}},
+        )
+        inspection = next(
+            message["content"]
+            for message in payload["messages"]
+            if message.get("role") == "system" and "Repository inspection was performed locally" in message.get("content", "")
+        )
+        self.assertIn("def apply_capability_extension", inspection)
+        self.assertIn("gemini_agent/tools.py", inspection)
 
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
