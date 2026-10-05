@@ -146,9 +146,9 @@ class CloudflareClientTests(unittest.TestCase):
         ), patch(
             "urllib.request.urlopen",
             return_value=FakeResponse(tool_response),
-        ) as open_url, patch(
-            "gemini_agent.tools.apply_capability_extension",
-            return_value="Extension status: source edit applied.",
+        ) as open_url, patch.dict(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {"apply_capability_extension": lambda **kwargs: "Extension status: source edit applied."},
         ):
             client = GeminiClient()
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
