@@ -1050,7 +1050,7 @@ def _read_bounded_root_file(path: str, max_bytes: int) -> str:
     try:
         completed = subprocess.run(
             ["su"],
-            input=f"cat {path}\n",
+            input=f"cat {path}\n".encode("utf-8"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=False,
