@@ -296,6 +296,27 @@ def get_screen_state() -> str:
             return "Screen: ON" if state in {"awake", "dreaming"} else "Screen: OFF"
     raise RuntimeError("System screen state is unavailable.")
 
+def get_screen_brightness() -> str:
+    """Return the Android device screen brightness as a percentage."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/settings get system screen_brightness"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen brightness is unavailable.") from exc
+
+    value = result.stdout.strip()
+    if not re.fullmatch(r"\d+", value):
+        raise RuntimeError("System screen brightness is unavailable.")
+    brightness = int(value)
+    if not 0 <= brightness <= 255:
+        raise RuntimeError("System screen brightness is unavailable.")
+    percentage = brightness * 100 / 255
+    return f"Brightness: {percentage:.0f}% ({brightness}/255)"
+
 
 def get_system_battery_status() -> str:
     """Return the Android device battery level, status, health, temperature, and power source."""
@@ -1224,6 +1245,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_brightness",
+        "description": "Get the Android device screen brightness as a percentage.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_cpu_usage",
         "description": "Get the current aggregate system CPU usage percentage.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1772,6 +1798,11 @@ GET_SYSTEM_SCREEN_STATE_DECLARATION = {
     "description": "Get whether the Android device screen is currently on or off.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION = {
+    "name": "get_screen_brightness",
+    "description": "Get the Android device screen brightness as a percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
 
 GET_SYSTEM_BATTERY_STATUS_DECLARATION = {
     "name": "get_system_battery_status",
@@ -1842,7 +1873,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_swap_usage": get_system_swap_usage,
     "get_system_battery_status": get_system_battery_status,
     "get_screen_state": get_screen_state,
-    "get_screen_state": get_screen_state,
+    "get_screen_brightness": get_screen_brightness,
     "get_system_cpu_usage": get_system_cpu_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
