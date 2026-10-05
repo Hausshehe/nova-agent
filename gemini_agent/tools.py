@@ -121,6 +121,14 @@ def get_file_extension(path: str) -> str:
     return target.suffix.lower()
 
 
+def get_file_name(path: str) -> str:
+    """Return a file's base name under Nova's allowed local filesystem root."""
+    target = _safe_path(path)
+    if not target.exists() or target.is_symlink():
+        raise ValueError(f"Path does not exist: {path}")
+    return target.name
+
+
 def list_directory_recursive(path: str = ".") -> str:
     """List all non-symlink files and directories recursively under the bounded root."""
     target = _safe_path(path)
@@ -541,6 +549,11 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_file_name",
+        "description": "Get the base name of a file or directory under Nova's allowed local filesystem root.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to inspect."}}, "required": ["path"]},
+    },
+    {
         "name": "list_directory_recursive",
         "description": "Recursively list files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -737,6 +750,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_file_info": get_file_info,
     "get_file_modified_time": get_file_modified_time,
     "get_file_extension": get_file_extension,
+    "get_file_name": get_file_name,
     "list_directory_recursive": list_directory_recursive,
     "move_directory": move_directory,
     "copy_directory": copy_directory,
