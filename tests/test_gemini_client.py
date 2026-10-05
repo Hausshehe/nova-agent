@@ -258,6 +258,19 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, screen)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_get_screen_brightness_mode_explicit_request_does_not_match_brightness(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        mode = "Brightness mode: Automatic"
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient(tool_handlers={"get_screen_brightness_mode": lambda: mode})
+            answer = client.ask("Use the get_screen_brightness_mode tool to show Nova's current screen brightness mode.")
+        self.assertEqual(answer, mode)
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_screen_brightness_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         brightness = "Brightness: 50% (128/255)"
