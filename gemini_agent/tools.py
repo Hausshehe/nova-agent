@@ -421,6 +421,23 @@ def get_screen_orientation() -> str:
     raise RuntimeError("System screen orientation is unavailable.")
 
 
+def get_screen_resolution() -> str:
+    """Return the Android physical display resolution."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/wm size"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        match = re.search(r"(?im)^Physical size:\s*(\d+)x(\d+)\s*$", result.stdout)
+        if match:
+            return f"Screen resolution: {match.group(1)}x{match.group(2)}"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen resolution is unavailable.") from exc
+    raise RuntimeError("System screen resolution is unavailable.")
+
+
 def get_screen_timeout() -> str:
     """Return the Android screen-off timeout."""
     commands = (
@@ -1570,6 +1587,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_resolution",
+        "description": "Get the Android physical display resolution.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_screen_timeout",
         "description": "Get the Android screen-off timeout duration.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1974,6 +1996,12 @@ GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION = {
+    "name": "get_screen_resolution",
+    "description": "Get the Android physical display resolution.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "name": "get_screen_timeout",
     "description": "Get the Android screen-off timeout duration.",
@@ -2049,6 +2077,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_swap_usage": get_system_swap_usage,
     "get_screen_brightness_mode": get_screen_brightness_mode,
     "get_screen_orientation": get_screen_orientation,
+    "get_screen_resolution": get_screen_resolution,
     "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
     "get_screen_state": get_screen_state,
