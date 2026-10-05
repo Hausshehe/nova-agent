@@ -1,4 +1,4 @@
-"""Cloudflare Workers AI client for the minimal Nova agent."""
+import re\n"""Cloudflare Workers AI client for the minimal Nova agent."""
 
 import json
 import os
@@ -213,6 +213,38 @@ class GeminiClient:
                                 }]
                         except (json.JSONDecodeError, TypeError):
                             pass
+
+                    if not tool_calls:
+                        tool_call_match = re.search(
+                            r"<tool_call>\\s*([a-zA-Z_][a-zA-Z0-9_]*)"
+                            r"(.*?)</tool_call>",
+                            content,
+                            re.DOTALL,
+                        )
+                        if tool_call_match:
+                            local_name = tool_call_match.group(1)
+                            body = tool_call_match.group(2)
+                            pairs = re.findall(
+                                r"<arg_key>\\s*([^<]+?)\\s*</arg_key>"
+                                r"\\s*<arg_value>\\s*(.*?)\\s*</arg_value>",
+                                body,
+                                re.DOTALL,
+                            )
+                            if local_name in {d["name"] for d in TOOL_DECLARATIONS}:
+                                arguments = {
+                                    key.strip(): value.strip() for key, value in pairs
+                                }
+                                cloud_name = self._CLOUD_TOOL_NAMES.get(
+                                    local_name, local_name
+                                )
+                                tool_calls = [{
+                                    "id": "content-xml-tool-call",
+                                    "type": "function",
+                                    "function": {
+                                        "name": cloud_name,
+                                        "arguments": arguments,
+                                    },
+                                }]
 
             if tool_calls:
                 if native_tool_calls:
