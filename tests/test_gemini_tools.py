@@ -591,6 +591,15 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_file_modified_time", names)
 
+    def test_get_system_info_returns_runtime_details(self):
+        result = get_system_info()
+        self.assertRegex(result, r"^OS: .+\nArchitecture: .+\nPython: \d+\.\d+\.\d+$")
+
+    def test_get_system_info_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_info"], get_system_info)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_info", names)
+
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
