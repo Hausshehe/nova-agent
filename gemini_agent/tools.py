@@ -1033,7 +1033,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "get_system_memory_usage",
-        "description": "Get total, used, and available system memory in bytes.",
+        "description": "Get total, used, and available system memory in bytes. Call this tool with an empty JSON object: {}.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
