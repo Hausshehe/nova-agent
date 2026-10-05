@@ -2482,7 +2482,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "send_android_keyevent",
-        "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, CAMERA.",
+        "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, VOLUME_DOWN, CAMERA.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
