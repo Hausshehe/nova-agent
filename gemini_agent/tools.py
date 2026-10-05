@@ -1090,18 +1090,19 @@ TOOL_DECLARATIONS = [
             "required": ["pattern"],
         },
     },
-    {
-        "name": "run_command",
-        "description": "Run one approved read-only command from Nova's bounded working root.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
-            },
-            "required": ["command"],
-        },
-    },
 ]
+
+TOOL_DECLARATIONS.append({
+    "name": "run_command",
+    "description": "Run one approved read-only command from Nova's bounded working root.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Approved command and arguments to run."}
+        },
+        "required": ["command"],
+    },
+})
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
