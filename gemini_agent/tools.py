@@ -246,6 +246,19 @@ def get_process_executable(pid: str) -> str:
         raise RuntimeError(f"Process executable is unavailable: {pid}") from exc
 
 
+def get_process_working_directory(pid: str) -> str:
+    """Return the working directory of a visible local process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    working_directory = Path("/proc") / pid / "cwd"
+    if not working_directory.exists():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        return os.readlink(working_directory)
+    except OSError as exc:
+        raise RuntimeError(f"Process working directory is unavailable: {pid}") from exc
+
+
 def get_process_command_line(pid: str) -> str:
     """Return the command line of a visible local process."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -1213,6 +1226,17 @@ GET_PROCESS_EXECUTABLE_DECLARATION = {
         "required": ["pid"],
     },
 }
+GET_PROCESS_WORKING_DIRECTORY_DECLARATION = {
+    "name": "get_process_working_directory",
+    "description": "Get the working directory of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_COMMAND_LINE_DECLARATION = {
     "name": "get_process_command_line",
     "description": "Get the command line of a visible local process.",
@@ -1243,6 +1267,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_status": get_process_status,
     "get_process_command_line": get_process_command_line,
     "get_process_executable": get_process_executable,
+    "get_process_working_directory": get_process_working_directory,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
