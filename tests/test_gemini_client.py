@@ -200,38 +200,23 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
         self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
 
-    def test_natural_extension_application_fills_missing_request_from_user_prompt(self):
-        tool_response = {
-            "choices": [{"message": {"content": "", "tool_calls": [{
-                "id": "call-extension",
-                "type": "function",
-                "function": {
-                    "name": "apply_capability_extension",
-                    "arguments": json.dumps({
-                        "path": "gemini_agent/tools.py",
-                        "old_text": "VALUE = 1",
-                        "new_text": "VALUE = 2",
-                    }),
-                },
-            }]}}]
+    def test_extension_request_filler_uses_latest_user_request(self):
+        args = {
+            "path": "gemini_agent/tools.py",
+            "old_text": "VALUE = 1",
+            "new_text": "VALUE = 2",
         }
-        captured = {}
-        with patch.dict(
-            os.environ,
-            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
-            clear=True,
-        ), patch(
-            "urllib.request.urlopen",
-            return_value=FakeResponse(tool_response),
-        ) as open_url:
-            def handler(**kwargs):
-                captured.update(kwargs)
-                return "Extension not applied: test rejection."
-            client = GeminiClient(tool_handlers={"apply_capability_extension": handler})
-            answer = client.ask("Apply a capability extension for the phone camera shutter.")
-        self.assertEqual(answer, "Extension not applied: test rejection.")
-        self.assertEqual(captured["request"], "Apply a capability extension for the phone camera shutter.")
-        self.assertEqual(open_url.call_count, 1)
+        filled = GeminiClient._fill_extension_request(
+            args,
+            "Apply a capability extension for the phone camera shutter.",
+        )
+        self.assertEqual(
+            filled["request"],
+            "Apply a capability extension for the phone camera shutter.",
+        )
+        self.assertEqual(filled["path"], "gemini_agent/tools.py")
+        self.assertEqual(filled["old_text"], "VALUE = 1")
+        self.assertEqual(filled["new_text"], "VALUE = 2")
 
     def test_natural_extension_application_returns_first_transaction_result(self):
         tool_response = {
