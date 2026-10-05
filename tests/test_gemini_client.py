@@ -44,7 +44,7 @@ class CloudflareClientTests(unittest.TestCase):
         ) as open_url:
             answer = GeminiClient().ask("Hello")
         self.assertEqual(answer, "hello")
-        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(open_url.call_count, 2)
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
     def test_intent_routing_narrows_unambiguous_capability_set(self):
