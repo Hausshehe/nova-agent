@@ -25,7 +25,6 @@ def main() -> None:
         "search, or otherwise modify a local file or directory, you MUST call the relevant "
         "filesystem tool. Never claim that a filesystem action was completed unless the "
         "tool was actually called and returned successfully."
-        + search_instruction
     )
     print("Nova agent ready. Type /exit to quit.")
     while True:
