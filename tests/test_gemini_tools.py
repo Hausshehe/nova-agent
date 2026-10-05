@@ -17,6 +17,7 @@ from gemini_agent.tools import (
     copy_directory,
     calculator,
     self_test,
+    send_android_keyevent,
     capability_inventory,
     discover_camera_control,
     plan_capability_extension,
@@ -117,6 +118,23 @@ class CapabilityInventoryToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["capability_inventory"], capability_inventory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("capability_inventory", names)
+
+
+class AndroidActionToolTests(unittest.TestCase):
+    def test_send_android_keyevent_validates_and_uses_root_shell(self):
+        completed = type("Completed", (), {"stdout": "", "stderr": "", "returncode": 0})()
+        with patch("gemini_agent.tools.run_root_command", return_value="Exit code: 0") as root:
+            result = send_android_keyevent("CAMERA")
+        self.assertIn("Android key event 27 sent.", result)
+        root.assert_called_once_with("input keyevent 27")
+
+    def test_send_android_keyevent_rejects_unsupported_key(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported Android keycode"):
+            send_android_keyevent("POWER")
+
+    def test_send_android_keyevent_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["send_android_keyevent"], send_android_keyevent)
+        self.assertIn("send_android_keyevent", [d["name"] for d in TOOL_DECLARATIONS])
 
 
 class CapabilityExtensionToolTests(unittest.TestCase):
