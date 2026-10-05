@@ -32,6 +32,7 @@ from gemini_agent.tools import (
     get_current_working_directory,
     get_python_executable,
     get_cpu_count,
+    get_memory_usage,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -85,6 +86,14 @@ class CurrentWorkingDirectoryToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_python_executable"], get_python_executable)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_python_executable", names)
+
+    def test_memory_usage_returns_positive_bytes(self):
+        self.assertGreater(int(get_memory_usage()), 0)
+
+    def test_memory_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_memory_usage"], get_memory_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_memory_usage", names)
 
 
 class DateTimeToolTests(unittest.TestCase):
