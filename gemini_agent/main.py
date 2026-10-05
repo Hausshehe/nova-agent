@@ -1,4 +1,4 @@
-"""Command-line chat loop for the minimal Gemini agent."""
+""""Command-line chat loop for the minimal Gemini agent."""
 
 from gemini_agent.client import GeminiClient
 from gemini_agent.memory import ConversationMemory
@@ -27,7 +27,10 @@ def main() -> None:
         "mentally. For any question asking for the current date, current time, or current "
         "date and time, ALWAYS use the current_datetime tool. Never use web search, web "
         "grounding, or an external clock for those questions. Treat the current_datetime "
-        "tool result as authoritative."
+        "tool result as authoritative. For any request to read, create, overwrite, append to, "
+        "search, or otherwise modify a local file or directory, you MUST call the relevant "
+        "filesystem tool. Never claim that a filesystem action was completed unless the "
+        "tool was actually called and returned successfully."
         + search_instruction
     )
     print("Gemini agent ready. Type /exit to quit.")
@@ -54,3 +57,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+"
