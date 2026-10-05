@@ -268,6 +268,17 @@ def _extension_registered_capability_error(original: str, updated: str, request:
     return None
 
 
+def _normalize_extension_fragment(fragment: str) -> str:
+    """Normalize model-copied source excerpts without changing source semantics."""
+    value = fragment.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    lines = value.split("\\n")
+    normalized = []
+    for line in lines:
+        match = re.match(r"^\\s*\\d+: ?(.*)$", line)
+        normalized.append(match.group(1) if match else line)
+    return "\\n".join(normalized)
+
+
 def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
     """Apply one bounded, syntax-checked, test-verified source edit transaction."""
     if not isinstance(request, str) or not request.strip():
@@ -308,13 +319,19 @@ def apply_capability_extension(request: str, path: str, old_text: str, new_text:
         raise ValueError(f"Extension target is not a regular file: {relative}")
 
     original = target.read_text(encoding="utf-8")
-    count = original.count(old_text)
+    source_fragment = old_text
+    count = original.count(source_fragment)
+    if count == 0:
+        normalized = _normalize_extension_fragment(old_text)
+        if normalized != old_text:
+            source_fragment = normalized
+            count = original.count(source_fragment)
     if count == 0:
         return f"Extension not applied: source fragment was not found in {relative}."
     if count > 1:
         return f"Extension not applied: source fragment occurs {count} times in {relative}; edit must identify exactly one location."
 
-    updated = original.replace(old_text, new_text, 1)
+    updated = original.replace(source_fragment, new_text, 1)
     try:
         ast.parse(updated, filename=relative)
     except SyntaxError as exc:
