@@ -47,6 +47,29 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
+    def test_natural_capability_request_uses_capability_inventory(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-capabilities",
+                "type": "function",
+                "function": {"name": "capability_inventory", "arguments": "{}"},
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("List Nova's capabilities and what each tool does.")
+        self.assertIn("Capabilities (", answer)
+        self.assertIn("- calculator: Calculate basic arithmetic expressions.", answer)
+        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(client.last_tool_calls[0]["name"], "capability_inventory")
+
     def test_natural_self_test_request_uses_self_test_tool(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
