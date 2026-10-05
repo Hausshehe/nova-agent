@@ -26,6 +26,7 @@ from gemini_agent.tools import (
     resolve_android_intent,
     inspect_android_ui,
     discover_android_ui_actions,
+    validate_android_mechanism,
     get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
@@ -279,6 +280,25 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertEqual(root.call_args_list[1].args[0], "rm -f /data/local/tmp/nova-ui-actions.xml")
         self.assertIs(TOOL_HANDLERS["discover_android_ui_actions"], discover_android_ui_actions)
         self.assertIn("discover_android_ui_actions", [d["name"] for d in TOOL_DECLARATIONS])
+
+    def test_validate_android_mechanism_validates_without_executing_capability(self):
+        with patch(
+            "gemini_agent.tools.resolve_android_intent",
+            return_value=(
+                "Android intent resolution (read-only): android.media.action.IMAGE_CAPTURE\n"
+                "Exit code: 0\nstdout:\ncom.transsion.camera/.app.CaptureActivity"
+            ),
+        ) as resolver:
+            result = validate_android_mechanism(
+                "capture a photo",
+                "intent:android.media.action.IMAGE_CAPTURE",
+            )
+        self.assertIn("Status: VIABLE", result)
+        self.assertIn("CaptureActivity", result)
+        self.assertIn("No capability action was executed", result)
+        resolver.assert_called_once_with("android.media.action.IMAGE_CAPTURE")
+        self.assertIs(TOOL_HANDLERS["validate_android_mechanism"], validate_android_mechanism)
+        self.assertIn("validate_android_mechanism", [d["name"] for d in TOOL_DECLARATIONS])
 
     def test_inspect_android_ui_captures_hierarchy_and_cleans_up(self):
         with patch(
