@@ -12,12 +12,6 @@ def main() -> None:
             "forget_fact": memory.forget_fact,
         }
     )
-    search_instruction = (
-        " When web search is enabled, use it for current or time-sensitive information "
-        "other than the device's current date and time. If the user asks for current news "
-        "or other up-to-date information, you MUST perform a web search before answering; "
-        "do not claim that web access is unavailable unless the search tool actually fails."
-    ) if client.web_search else ""
     system_instruction = (
         "You are Nova, a concise personal assistant. Use durable memory and recent "
         "conversation context when answering. When the user tells you a stable personal "
@@ -33,7 +27,7 @@ def main() -> None:
         "tool was actually called and returned successfully."
         + search_instruction
     )
-    print("Gemini agent ready. Type /exit to quit.")
+    print("Nova agent ready. Type /exit to quit.")
     while True:
         try:
             prompt = input("\nYou: ").strip()
@@ -48,9 +42,7 @@ def main() -> None:
         try:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
-            print(f"\nGemini: {answer}")
-            for source in client.last_grounding_sources:
-                print(f"Source: {source['title']} - {source['uri']}")
+            print(f"\nNova: {answer}")
         except RuntimeError as exc:
             print(f"\nError: {exc}")
 
