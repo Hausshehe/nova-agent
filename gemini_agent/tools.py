@@ -135,6 +135,11 @@ def get_parent_process_id() -> str:
     return str(os.getppid())
 
 
+def get_process_group_id() -> str:
+    """Return the process group ID of the running Nova process."""
+    return str(os.getpgrp())
+
+
 def get_umask() -> str:
     """Return Nova's process file-creation mask as four-digit octal text."""
     status = Path("/proc/self/status")
@@ -680,6 +685,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_process_group_id",
+        "description": "Get the process group ID of the running Nova process.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_umask",
         "description": "Get Nova's process file-creation mask as four-digit octal text.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1013,6 +1023,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_uptime": get_process_uptime,
     "get_process_thread_count": get_process_thread_count,
     "get_parent_process_id": get_parent_process_id,
+    "get_process_group_id": get_process_group_id,
     "get_umask": get_umask,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
