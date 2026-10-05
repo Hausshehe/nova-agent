@@ -463,6 +463,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "copy_directory",
+        "description": "Copy a directory within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative source directory path."},
+                "destination": {"type": "STRING", "description": "Relative destination directory path."},
+            },
+            "required": ["path", "destination"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
