@@ -1281,7 +1281,7 @@ class FilesystemToolTests(unittest.TestCase):
 class GetSystemMemoryUsageToolTests(unittest.TestCase):
     def test_get_system_memory_usage_returns_memory_values(self):
         result = get_system_memory_usage()
-        self.assertRegex(result, r"^Total: \d+ bytes\\nUsed: \d+ bytes\\nAvailable: \d+ bytes$")
+        self.assertRegex(result, r"^Total: \d+ bytes\nUsed: \d+ bytes\nAvailable: \d+ bytes$")
         values = [int(line.split()[1]) for line in result.splitlines()]
         self.assertEqual(len(values), 3)
         self.assertGreater(values[0], 0)
