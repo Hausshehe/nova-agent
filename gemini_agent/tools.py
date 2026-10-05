@@ -113,6 +113,14 @@ def get_file_modified_time(path: str) -> str:
     return dt.datetime.fromtimestamp(target.stat().st_mtime).astimezone().isoformat(timespec="seconds")
 
 
+def get_file_extension(path: str) -> str:
+    """Return a file's lowercase extension, including the leading dot."""
+    target = _safe_path(path)
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    return target.suffix.lower()
+
+
 def list_directory_recursive(path: str = ".") -> str:
     """List all non-symlink files and directories recursively under the bounded root."""
     target = _safe_path(path)
@@ -522,6 +530,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_file_extension",
+        "description": "Get a file's lowercase extension under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to inspect."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "list_directory_recursive",
         "description": "Recursively list files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -717,6 +736,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "delete_directory": delete_directory,
     "get_file_info": get_file_info,
     "get_file_modified_time": get_file_modified_time,
+    "get_file_extension": get_file_extension,
     "list_directory_recursive": list_directory_recursive,
     "move_directory": move_directory,
     "copy_directory": copy_directory,
