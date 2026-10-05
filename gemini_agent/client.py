@@ -448,6 +448,11 @@ class GeminiClient:
             ),
             "",
         )
+        if requested_tool == "resolve_android_intent":
+            normalized = request_text.upper()
+            action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
+            return str(self.tool_handlers["resolve_android_intent"](action=action))
+
         if requested_tool == "apply_capability_extension":
             inspection = self._extension_inspection_context(request_text)
             messages = [
