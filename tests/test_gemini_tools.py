@@ -33,6 +33,7 @@ from gemini_agent.tools import (
     get_network_interfaces,
     get_load_average,
     get_system_memory_usage,
+    get_system_cpu_usage,
     get_system_swap_usage,
     get_system_boot_time,
     get_system_uptime,
@@ -1279,6 +1280,26 @@ class FilesystemToolTests(unittest.TestCase):
     def test_find_tool_is_registered(self):
         self.assertIs(TOOL_HANDLERS["find_files"], find_files)
         self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
+
+
+class GetSystemCpuUsageToolTests(unittest.TestCase):
+    def test_get_system_cpu_usage_returns_percentage(self):
+        samples = [
+            "cpu  100 20 30 850 0 0 0 0 0 0",
+            "cpu  110 22 33 855 0 0 0 0 0 0",
+        ]
+        with patch.object(Path, "read_text", side_effect=samples):
+            with patch("gemini_agent.tools.time.sleep"):
+                result = get_system_cpu_usage()
+        self.assertRegex(result, r"^\d+\.\d{2}%$")
+        value = float(result[:-1])
+        self.assertGreaterEqual(value, 0.0)
+        self.assertLessEqual(value, 100.0)
+
+    def test_get_system_cpu_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_cpu_usage"], get_system_cpu_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_cpu_usage", names)
 
 
 class GetSystemMemoryUsageToolTests(unittest.TestCase):
