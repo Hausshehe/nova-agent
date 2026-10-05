@@ -1049,6 +1049,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_uptime",
+        "description": "Get total system uptime in seconds.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_memory_usage",
         "description": "Get total, used, and available system memory in bytes. Call this tool with an empty JSON object: {}.",
         "parameters": {"type": "OBJECT", "properties": {}},
