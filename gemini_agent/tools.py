@@ -2008,7 +2008,10 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "delete_file": delete_file,
     "find_files": find_files,
     "search_text": search_text,
-}GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
+}
+
+
+GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "name": "get_screen_timeout",
     "description": "Get the Android screen-off timeout duration.",
     "parameters": {"type": "OBJECT", "properties": {}},
