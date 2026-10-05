@@ -264,16 +264,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         )
         with patch(
             "gemini_agent.tools.run_root_command",
-            side_effect=["Exit code: 0", xml, "Exit code: 0"],
-        ) as root:
+            side_effect=["Exit code: 0", "Exit code: 0"],
+        ) as root, patch(
+            "gemini_agent.tools._read_bounded_root_file",
+            return_value=xml.split("stdout:\\n", 1)[1],
+        ) as bounded_read:
             result = discover_android_ui_actions()
         self.assertIn("Clickable enabled controls found: 1", result)
         self.assertIn("shutter_button", result)
         self.assertIn("Capture", result)
         self.assertIn("no interaction or device state change", result)
         self.assertEqual(root.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-actions.xml")
-        self.assertEqual(root.call_args_list[1].args[0], "cat /data/local/tmp/nova-ui-actions.xml")
-        self.assertEqual(root.call_args_list[2].args[0], "rm -f /data/local/tmp/nova-ui-actions.xml")
+        bounded_read.assert_called_once_with("/data/local/tmp/nova-ui-actions.xml", 64 * 1024)
+        self.assertEqual(root.call_args_list[1].args[0], "rm -f /data/local/tmp/nova-ui-actions.xml")
         self.assertIs(TOOL_HANDLERS["discover_android_ui_actions"], discover_android_ui_actions)
         self.assertIn("discover_android_ui_actions", [d["name"] for d in TOOL_DECLARATIONS])
 
