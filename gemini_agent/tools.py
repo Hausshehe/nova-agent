@@ -302,7 +302,18 @@ def recover_command(command: str) -> str:
                 for pattern in _ROOT_DIAGNOSTIC_PATTERNS
             )
             if root_safe:
-                root_result = run_root_command(command)
+                try:
+                    root_result = run_root_command(command)
+                except (RuntimeError, ValueError) as exc:
+                    if command.strip() == "dumpsys" and "timed out" in str(exc).lower():
+                        try:
+                            root_result = run_root_command("dumpsys -l")
+                        except (RuntimeError, ValueError) as retry_exc:
+                            root_result = f"Tool error: {retry_exc}"
+                        if root_result.startswith("Exit code: 0"):
+                            return diagnosis + "\nRecovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic and command succeeded.\n" + root_result
+                        return diagnosis + "\nRecovery: bare dumpsys was unbounded; bounded manual-su diagnostic also failed.\n" + root_result
+                    root_result = f"Tool error: {exc}"
                 if root_result.startswith("Exit code: 0"):
                     return diagnosis + "\nRecovery: executable discovered; used the manual-su root workflow and command succeeded.\n" + root_result
                 return diagnosis + "\nRecovery: executable discovered; root workflow attempted but command failed.\n" + root_result
