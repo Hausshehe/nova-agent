@@ -1390,6 +1390,16 @@ GET_PROCESS_MEMORY_USAGE_DECLARATION = {
     "description": "Get resident memory usage in bytes for a visible local process.",
     "parameters": {"type": "OBJECT", "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}}, "required": ["pid"]},
 }
+
+GET_PROCESS_NICE_DECLARATION = {
+    "name": "get_process_nice",
+    "description": "Get the Unix nice value of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_CPU_TIME_DECLARATION = {
     "name": "get_process_cpu_time",
     "description": "Get user, system, and total CPU time of a visible local process.",
