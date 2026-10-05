@@ -1526,6 +1526,12 @@ GET_BLUETOOTH_STATUS_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_AIRPLANE_MODE_DECLARATION = {
+    "name": "get_airplane_mode",
+    "description": "Get whether Android airplane mode is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -2167,12 +2173,6 @@ GET_PROCESS_COMMAND_LINE_DECLARATION = {
         },
         "required": ["pid"],
     },
-}
-
-GET_AIRPLANE_MODE_DECLARATION = {
-    "name": "get_airplane_mode",
-    "description": "Get whether Android airplane mode is currently enabled or disabled.",
-    "parameters": {"type": "OBJECT", "properties": {}},
 }
 
 GET_WIFI_STATUS_DECLARATION = {
