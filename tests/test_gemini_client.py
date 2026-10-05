@@ -255,6 +255,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertTrue(answer)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_get_python_executable_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the get_python_executable tool.")
+        self.assertTrue(answer)
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_cpu_count_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
