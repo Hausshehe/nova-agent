@@ -1485,6 +1485,8 @@ class GeminiClient:
 
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        if local_name == "apply_capability_extension" and not str(args.get("request", "")).strip():
+                            args["request"] = request_text
                         tool_result = handler(**args)
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
