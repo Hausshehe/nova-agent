@@ -267,7 +267,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             side_effect=["Exit code: 0", "Exit code: 0"],
         ) as root, patch(
             "gemini_agent.tools._read_bounded_root_file",
-            return_value=xml.split("stdout:\\n", 1)[1],
+            return_value=xml.split("stdout:\n", 1)[1],
         ) as bounded_read:
             result = discover_android_ui_actions()
         self.assertIn("Clickable enabled controls found: 1", result)
