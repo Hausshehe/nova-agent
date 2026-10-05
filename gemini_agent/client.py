@@ -104,6 +104,8 @@ class GeminiClient:
             return "resolve_android_intent"
         if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy")):
             return "inspect_android_ui"
+        if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy")):
+            return "inspect_android_ui"
         if any(phrase in user_text for phrase in ("discover camera control", "camera control environment", "camera shutter mechanism")):
             return "discover_camera_control"
         if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
