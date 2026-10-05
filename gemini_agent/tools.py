@@ -1075,6 +1075,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_swap_usage",
+        "description": "Get total, used, and free system swap in bytes. Call this tool with an empty JSON object: {}.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_network_interfaces",
         "description": "List local network interface names and their operational state.",
         "parameters": {"type": "OBJECT", "properties": {}},
