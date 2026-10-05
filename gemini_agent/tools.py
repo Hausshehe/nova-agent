@@ -187,6 +187,87 @@ def _run_extension_test_suite() -> tuple[bool, str]:
     return True, "Extension verification: deterministic test suite passed."
 
 
+def _extension_registered_capability_error(original: str, updated: str, request: str) -> str | None:
+    """Reject source edits that declare a new tool without implementing it."""
+    plan = plan_capability_extension(request)
+    prefix = "Proposed tool: "
+    if prefix not in plan:
+        return "Extension not applied: could not determine the proposed capability name."
+    proposed = plan.split(prefix, 1)[1].splitlines()[0].strip()
+    if proposed.startswith("extend_"):
+        proposed = proposed[len("extend_"):]
+    if not proposed:
+        return "Extension not applied: proposed capability name is empty."
+
+    def source_names(source: str) -> set[str]:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return set()
+        names = set()
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                names.add(node.name)
+        return names
+
+    def literal_tool_names(source: str) -> set[str]:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return set()
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if isinstance(key, ast.Constant) and key.value == "name":
+                        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                            names.add(value.value)
+        return names
+
+    def handler_keys(source: str) -> set[str]:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return set()
+        keys = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                if not any(
+                    isinstance(target, ast.Name) and target.id == "TOOL_HANDLERS"
+                    for target in node.targets
+                ):
+                    continue
+                if isinstance(node.value, ast.Dict):
+                    for key in node.value.keys:
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                            keys.add(key.value)
+        return keys
+
+    before_names = literal_tool_names(original)
+    after_names = literal_tool_names(updated)
+    added_names = after_names - before_names
+    if proposed not in added_names:
+        return (
+            f"Extension not applied: proposed capability '{proposed}' was not added "
+            "as a new tool declaration."
+        )
+
+    functions = source_names(updated)
+    handlers = handler_keys(updated)
+    missing = []
+    if proposed not in functions:
+        missing.append("implementation function")
+    if proposed not in handlers:
+        missing.append("TOOL_HANDLERS registration")
+    if missing:
+        return (
+            f"Extension not applied: capability '{proposed}' is declared but missing "
+            + " and ".join(missing)
+            + ". A declaration alone is not an implementation."
+        )
+    return None
+
+
 def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
     """Apply one bounded, syntax-checked, test-verified source edit transaction."""
     if not isinstance(request, str) or not request.strip():
@@ -238,6 +319,10 @@ def apply_capability_extension(request: str, path: str, old_text: str, new_text:
         ast.parse(updated, filename=relative)
     except SyntaxError as exc:
         return f"Extension not applied: proposed source is invalid Python: {exc}"
+
+    registration_error = _extension_registered_capability_error(original, updated, request)
+    if registration_error:
+        return registration_error
 
     temporary_path = None
     try:
