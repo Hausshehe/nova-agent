@@ -441,7 +441,11 @@ class GeminiClient:
                     feedback = "\\nPrevious edit attempt failed with this result: " + str(tool_result) + "\\nChoose a corrected exact source fragment and return ONLY the JSON object."
                     continue
                 return str(tool_result)
-            return str(tool_result)
+            return (
+                str(tool_result)
+                if "tool_result" in locals()
+                else "Extension not applied: no valid extension proposal was produced after 3 attempts."
+            )
         declarations = self._relevant_tool_declarations(contents)
         if requested_tool:
             declarations = [
