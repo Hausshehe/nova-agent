@@ -119,7 +119,7 @@ class CloudflareClientTests(unittest.TestCase):
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch("urllib.request.urlopen", side_effect=error):
-            with self.assertRaisesRegex(RuntimeError, "Cloudflare API error \(400\)"):
+            with self.assertRaisesRegex(RuntimeError, r"Cloudflare API error \(400\)"):
                 GeminiClient().ask("Hello")
 
 
