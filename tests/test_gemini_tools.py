@@ -35,6 +35,7 @@ from gemini_agent.tools import (
     get_memory_usage,
     get_temp_directory,
     get_home_directory,
+    get_umask,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -645,6 +646,15 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_home_directory"], get_home_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_home_directory", names)
+
+    def test_get_umask_returns_octal_value(self):
+        result = get_umask()
+        self.assertRegex(result, r"^0[0-7]{3}$")
+
+    def test_get_umask_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_umask"], get_umask)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_umask", names)
 
     def test_get_hostname_returns_nonempty_value(self):
         self.assertTrue(get_hostname())
