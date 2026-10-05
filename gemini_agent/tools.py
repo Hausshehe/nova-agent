@@ -2649,6 +2649,11 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "inspect_android_ui",
+        "description": "Inspect the current foreground Android UI hierarchy using read-only diagnostics without interacting with the UI.",
+        "parameters": {"type": "OBJECT", "properties": {}, "required": []},
+    },
+    {
         "name": "send_android_intent",
         "description": "Launch one bounded Android intent action from Nova's allowlisted action set.",
         "parameters": {
@@ -3485,6 +3490,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_nice": get_process_nice,
         "get_process_memory_usage": get_process_memory_usage,
     "send_android_keyevent": send_android_keyevent,
+    "inspect_android_ui": inspect_android_ui,
     "send_android_intent": send_android_intent,
     "calculator": calculator,
     "current_datetime": current_datetime,
