@@ -279,6 +279,12 @@ class GeminiClient:
             }
             for declaration in declarations
         ]
+        payload = {
+            "model": self.cloudflare_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "tools": tools,
+        }
         if requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
