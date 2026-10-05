@@ -679,17 +679,6 @@ def list_memory() -> str:
 
 TOOL_DECLARATIONS = [
     {
-        "name": "run_command",
-        "description": "Run one approved read-only command from Nova's bounded working root.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
-            },
-            "required": ["command"],
-        },
-    },
-    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -701,6 +690,17 @@ TOOL_DECLARATIONS = [
                 }
             },
             "required": ["expression"],
+        },
+    },
+    {
+        "name": "run_command",
+        "description": "Run one approved read-only command from Nova's bounded working root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
+            },
+            "required": ["command"],
         },
     },
     {
