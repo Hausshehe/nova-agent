@@ -1826,19 +1826,16 @@ class RecoverCommandToolTests(unittest.TestCase):
         run.assert_called_once_with("pwd")
 
     def test_recover_command_discovers_missing_executable(self):
-        with patch("gemini_agent.tools.run_command", side_effect=[
-            "Exit code: 127\nstderr:\ncommand not found",
-            "Exit code: 0\nstdout:\n/system/bin/dumpsys",
-        ]) as run:
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 127\nstderr:\ncommand not found") as run:
             with patch("gemini_agent.tools.find_executable", return_value="Executable: /system/bin/dumpsys") as find:
-                result = recover_command("dumpsys")
+                with patch("gemini_agent.tools.run_root_command", return_value="Exit code: 0\nstdout:\n/system/bin/dumpsys") as root:
+                    result = recover_command("dumpsys")
         self.assertIn("executable or path not found", result)
-        self.assertIn("Recovery: executable path discovered and command succeeded.", result)
+        self.assertIn("Recovery: executable discovered; used the manual-su root workflow and command succeeded.", result)
         self.assertIn("/system/bin/dumpsys", result)
-        self.assertEqual(run.call_count, 2)
-        run.assert_any_call("dumpsys")
-        run.assert_any_call("/system/bin/dumpsys")
+        run.assert_called_once_with("dumpsys")
         find.assert_called_once_with("dumpsys")
+        root.assert_called_once_with("dumpsys")
 
 
     def test_recover_command_retries_timeout(self):
