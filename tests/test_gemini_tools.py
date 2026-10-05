@@ -289,8 +289,8 @@ class GetAirplaneModeToolTests(unittest.TestCase):
         with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
             result = get_airplane_mode()
         self.assertEqual(result, "Airplane mode: Enabled")
-            self.assertEqual(run.call_args.args[0], ["su"])
-            self.assertEqual(run.call_args.kwargs["input"], "/system/bin/settings get global airplane_mode_on\n")
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "/system/bin/settings get global airplane_mode_on\n")
 
     def test_get_airplane_mode_parses_disabled_state(self):
         completed = type("Completed", (), {"stdout": "0\n", "stderr": ""})()
