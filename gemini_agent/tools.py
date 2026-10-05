@@ -147,8 +147,13 @@ def run_command(command: str) -> str:
     if not parts:
         raise ValueError("Command cannot be empty.")
     executable = Path(parts[0]).name
-    if parts[0] != executable or executable not in _RUN_COMMAND_ALLOWED:
+    if executable not in _RUN_COMMAND_ALLOWED:
         raise ValueError(f"Command is not allowed: {executable}")
+    if "/" in parts[0]:
+        resolved = os.path.realpath(parts[0])
+        discovered = find_executable(executable)
+        if discovered != f"Executable: {resolved}":
+            raise ValueError(f"Executable path is not the discovered path: {parts[0]}")
     arguments = tuple(parts[1:])
     if arguments not in _RUN_COMMAND_ALLOWED[executable]:
         raise ValueError(f"Arguments are not allowed for {executable}.")
@@ -282,6 +287,17 @@ def recover_command(command: str) -> str:
     executable = Path(shlex.split(command)[0]).name
     if any(term in lowered for term in ("not found", "no such file or directory", "command not found")):
         discovered = find_executable(executable)
+        if discovered.startswith("Executable: "):
+            discovered_path = discovered.removeprefix("Executable: ")
+            parts = shlex.split(command)
+            recovered_command = " ".join([shlex.quote(discovered_path), *(shlex.quote(part) for part in parts[1:])])
+            try:
+                recovered_result = run_command(recovered_command)
+            except (RuntimeError, ValueError) as exc:
+                recovered_result = f"Recovery execution failed: {exc}"
+            if recovered_result.startswith("Exit code: 0"):
+                return diagnosis + "\nRecovery: executable path discovered and command succeeded.\n" + recovered_result
+            return diagnosis + "\nRecovery: executable path discovered but corrected command failed.\n" + recovered_result
         return diagnosis + "\n" + discovered
 
     return diagnosis + "\nRecovery: no automatic retry performed."
