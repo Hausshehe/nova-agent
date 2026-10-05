@@ -135,6 +135,22 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             '    return \"ok\"\n'
         )
 
+    def test_plan_capability_extension_blocks_unsupported_camera(self):
+        result = plan_capability_extension("control the phone's camera shutter")
+        self.assertIn("Extension blocked: no existing local primitive", result)
+        self.assertIn("Environment discovery is required", result)
+
+    def test_apply_capability_extension_blocks_unsupported_camera(self):
+        result = apply_capability_extension(
+            "control the phone's camera shutter",
+            "gemini_agent/tools.py",
+            "existing_tool",
+            "<none>",
+            "{}",
+            "Take a photo with the phone camera.",
+        )
+        self.assertIn("Extension blocked: no existing local primitive", result)
+
     def test_apply_capability_extension_structured_transaction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
