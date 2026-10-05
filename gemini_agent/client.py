@@ -862,6 +862,28 @@ class GeminiClient:
                     }]
                     native_tool_calls = False
 
+            if requested_tool == "find_executable" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r'find_executable\s+tool\s+to\s+find\s+["\']?([^"\'.]+?)["\']?(?:\s+and\s+show|[.]\s*$)',
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-find-executable",
+                        "type": "function",
+                        "function": {
+                            "name": "find_executable",
+                            "arguments": json.dumps({"name": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             if requested_tool == "run_command" and loop_index == 0:
                 user_text = ""
                 for item in reversed(payload["messages"]):
