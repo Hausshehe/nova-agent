@@ -129,6 +129,14 @@ def get_file_name(path: str) -> str:
     return target.name
 
 
+def get_file_stem(path: str) -> str:
+    """Return a file's stem without its final extension."""
+    target = _safe_path(path)
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    return target.stem
+
+
 def list_directory_recursive(path: str = ".") -> str:
     """List all non-symlink files and directories recursively under the bounded root."""
     target = _safe_path(path)
@@ -554,6 +562,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to inspect."}}, "required": ["path"]},
     },
     {
+        "name": "get_file_stem",
+        "description": "Get a file's name without its final extension under Nova's allowed local filesystem root.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to the file to inspect."}}, "required": ["path"]},
+    },
+    {
         "name": "list_directory_recursive",
         "description": "Recursively list files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -751,6 +764,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_file_modified_time": get_file_modified_time,
     "get_file_extension": get_file_extension,
     "get_file_name": get_file_name,
+    "get_file_stem": get_file_stem,
     "list_directory_recursive": list_directory_recursive,
     "move_directory": move_directory,
     "copy_directory": copy_directory,
