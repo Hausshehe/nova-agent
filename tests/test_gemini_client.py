@@ -151,6 +151,35 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(follow_up["messages"][-2]["role"], "assistant")
         self.assertEqual(follow_up["messages"][-1]["role"], "tool")
 
+    def test_xml_content_form_tool_call_is_executed(self):
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": '<tool_call>move_file<arg_key>path</arg_key><arg_value>test-write.txt</arg_value><arg_key>destination</arg_key><arg_value>moved-test-write.txt</arg_value></tool_call>'
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "Moved successfully."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "move_file": lambda path, destination: f"Moved {path} to {destination}",
+                }
+            )
+            answer = client.ask("Use the move_file tool to move test-write.txt to moved-test-write.txt.")
+        self.assertEqual(answer, "Moved successfully.")
+        self.assertEqual(
+            client.last_tool_calls[0]["args"],
+            {"path": "test-write.txt", "destination": "moved-test-write.txt"},
+        )
+
     def test_list_memory_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
