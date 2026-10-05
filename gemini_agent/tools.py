@@ -79,7 +79,7 @@ def send_android_keyevent(keycode: str) -> str:
     normalized = aliases.get(normalized, normalized)
     if normalized not in allowed:
         raise ValueError("Unsupported Android keycode. Allowed actions: HOME, BACK, CAMERA.")
-    result = run_root_command(f"input keyevent {normalized}")
+    result = _run_bounded_root_action(f"input keyevent {normalized}")
     return f"Android key event {normalized} sent.\n{result}"
 
 def discover_camera_control() -> str:
@@ -754,6 +754,35 @@ def run_command(command: str) -> str:
 
     stdout = trim_output(completed.stdout)
     stderr = trim_output(completed.stderr)
+    result = f"Exit code: {completed.returncode}"
+    if stdout:
+        result += f"\nstdout:\n{stdout}"
+    if stderr:
+        result += f"\nstderr:\n{stderr}"
+    return result
+
+
+def _run_bounded_root_action(command: str) -> str:
+    """Run one explicitly allowlisted Android action inside a root shell."""
+    if command not in {"input keyevent 3", "input keyevent 4", "input keyevent 27"}:
+        raise ValueError("Root action is not allowed.")
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=command + "\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=_ROOT_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Root action timed out after {_ROOT_COMMAND_TIMEOUT_SECONDS} seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Root action failed to start: {exc}") from exc
+
+    stdout = (completed.stdout or "").encode("utf-8", errors="replace")[:_ROOT_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="ignore").rstrip()
+    stderr = (completed.stderr or "").encode("utf-8", errors="replace")[:_ROOT_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="ignore").rstrip()
     result = f"Exit code: {completed.returncode}"
     if stdout:
         result += f"\nstdout:\n{stdout}"
