@@ -585,6 +585,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to the file to inspect."}}, "required": ["path"]},
     },
     {
+        "name": "get_file_permissions",
+        "description": "Get a file or directory's Unix permission mode under Nova's allowed local filesystem root.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to inspect."}}, "required": ["path"]},
+    },
+    {
         "name": "get_file_parent",
         "description": "Get a file or directory's parent path under Nova's allowed local filesystem root.",
         "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path to inspect."}}, "required": ["path"]},
