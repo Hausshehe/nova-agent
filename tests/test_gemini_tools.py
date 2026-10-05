@@ -147,7 +147,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "existing_tool",
             "<none>",
             "{}",
-            "Take a photo with the phone camera.",
+            "Combine the existing operations.",
         )
         self.assertIn("Extension blocked: no existing local primitive", result)
 
@@ -161,12 +161,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with patch("gemini_agent.tools.subprocess.run", return_value=completed):
                     result = apply_capability_extension(
-                        "control the phone camera shutter",
+                        "combine two existing local operations",
                         "gemini_agent/tools.py",
                         "existing_tool",
                         "calculator",
                         '{"expression": "2 + 2"}',
-                        "Take a photo with the phone camera.",
+                        "Combine the existing operations.",
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
             updated = target.read_text(encoding="utf-8")
@@ -185,12 +185,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with patch("gemini_agent.tools.subprocess.run", return_value=completed):
                     result = apply_capability_extension(
-                        "control the phone camera shutter",
+                        "combine two existing local operations",
                         "gemini_agent/tools.py",
                         "existing_tool",
                         "calculator",
                         '{"expression": "2 + 2"}',
-                        "Take a photo with the phone camera.",
+                        "Combine the existing operations.",
                     )
             self.assertIn("Extension rolled back:", result)
             self.assertEqual(target.read_text(encoding="utf-8"), original)
@@ -203,12 +203,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             target.write_text(self._source(), encoding="utf-8")
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 result = apply_capability_extension(
-                    "control the phone camera shutter",
+                    "combine two existing local operations",
                     "gemini_agent/tools.py",
                     "invalid_kind",
                     "calculator",
                     '{"expression": "2 + 2"}',
-                    "Take a photo with the phone camera.",
+                    "Combine the existing operations.",
                 )
             self.assertIn("implementation_kind must be 'existing_tool'", result)
 
@@ -220,12 +220,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             target.write_text(self._source(), encoding="utf-8")
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 result = apply_capability_extension(
-                    "control the phone camera shutter",
+                    "combine two existing local operations",
                     "gemini_agent/tools.py",
                     "existing_tool",
                     "not_a_real_tool",
                     "{}",
-                    "Take a photo with the phone camera.",
+                    "Combine the existing operations.",
                 )
             self.assertIn("is not available", result)
 
@@ -238,12 +238,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with self.assertRaises(ValueError):
                     apply_capability_extension(
-                        "control the phone camera shutter",
+                        "combine two existing local operations",
                         "gemini_agent/capabilities/camera_shutter.py",
                         "existing_tool",
                         "calculator",
                         '{"expression": "2 + 2"}',
-                        "Take a photo with the phone camera.",
+                        "Combine the existing operations.",
                     )
 
     def test_apply_capability_extension_rejects_existing_capability(self):
@@ -253,7 +253,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "existing_tool",
             "calculator",
             '{"expression": "2 + 2"}',
-            "Take a photo with the phone camera.",
+            "Combine the existing operations.",
         )
         self.assertIn("Extension not applied:", result)
 
@@ -270,10 +270,22 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIn("Capability gap:", result)
 
     def test_capability_extension_plan_for_missing_capability(self):
-        result = plan_capability_extension("control the phone camera shutter")
+        result = plan_capability_extension("combine two existing local operations")
         self.assertIn("Extension plan: capability is missing.", result)
         self.assertIn("Proposed tool: extend_camera_shutter", result)
         self.assertIn("Status: plan only; no code or device state was modified.", result)
+
+    def test_apply_capability_extension_blocks_camera_without_real_primitive(self):
+        result = apply_capability_extension(
+            "control the phone camera shutter",
+            "gemini_agent/tools.py",
+            "existing_tool",
+            "calculator",
+            '{"expression": "2 + 2"}',
+            "Take a photo with the phone camera.",
+        )
+        self.assertIn("Extension blocked: no existing local primitive can safely implement camera shutter.", result)
+        self.assertIn("Environment discovery is required", result)
 
     def test_capability_extension_plan_ignores_model_generated_camera_filler(self):
         result = plan_capability_extension(
