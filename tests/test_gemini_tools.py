@@ -165,8 +165,8 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "control the phone's camera shutter",
             "gemini_agent/tools.py",
             "existing_tool",
-            "calculator",
-            '{"expression": "2 + 2"}',
+            "discover_camera_control",
+            "{}",
             "Take a photo with the phone camera.",
         )
         self.assertIn("Extension blocked:", result)
