@@ -278,16 +278,16 @@ def _normalize_extension_fragment(fragment: str) -> str:
         normalized.append(match.group(1) if match else line)
     return "\n".join(normalized)
 
-def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
-    """Apply one bounded, syntax-checked, test-verified source edit transaction."""
+def apply_capability_extension(request: str, path: str, function_source: str, declaration_description: str) -> str:
+    """Apply one bounded structured capability implementation transaction."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(path, str) or not path.strip():
         raise ValueError("Path cannot be empty.")
-    if not isinstance(old_text, str) or not old_text:
-        raise ValueError("Existing source fragment cannot be empty.")
-    if not isinstance(new_text, str):
-        raise ValueError("Replacement source must be text.")
+    if not isinstance(function_source, str) or not function_source.strip():
+        raise ValueError("Function source cannot be empty.")
+    if not isinstance(declaration_description, str) or not declaration_description.strip():
+        raise ValueError("Declaration description cannot be empty.")
 
     gap = assess_capability_gap(request)
     if not gap.startswith("Capability gap:"):
@@ -295,42 +295,83 @@ def apply_capability_extension(request: str, path: str, old_text: str, new_text:
 
     target = _safe_path(path)
     relative = target.relative_to(_filesystem_root()).as_posix()
-    if not relative.endswith(".py"):
-        raise ValueError("Extension edits are limited to Python source files.")
-    if not (relative.startswith("gemini_agent/") or relative.startswith("tests/")):
-        raise ValueError("Extension edits are limited to gemini_agent/ and tests/.")
-    if not target.exists():
-        candidates = []
-        for root_name in ("gemini_agent", "tests"):
-            root = _filesystem_root() / root_name
-            if root.is_dir():
-                for candidate in root.rglob("*.py"):
-                    if candidate.is_file() and not candidate.is_symlink():
-                        candidates.append(candidate.relative_to(_filesystem_root()).as_posix())
-        preview = ", ".join(sorted(candidates)[:12])
-        suffix = "..." if len(candidates) > 12 else ""
-        return (
-            f"Extension not applied: target does not exist: {relative}. "
-            "Inspect the repository and choose an existing Python source or test file. "
-            f"Available targets: {preview}{suffix}"
-        )
-    if not target.is_file() or target.is_symlink():
-        raise ValueError(f"Extension target is not a regular file: {relative}")
+    if relative != "gemini_agent/tools.py":
+        raise ValueError("Structured capability extensions must target gemini_agent/tools.py.")
+    if not target.exists() or not target.is_file() or target.is_symlink():
+        return f"Extension not applied: target is not a regular source file: {relative}"
+
+    try:
+        function_tree = ast.parse(function_source, filename="<extension>")
+    except SyntaxError as exc:
+        return f"Extension not applied: implementation is invalid Python: {exc}"
+    functions = [node for node in function_tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    if len(functions) != 1:
+        return "Extension not applied: function_source must contain exactly one top-level function."
+    function = functions[0]
+    tool_name = function.name
+    if not re.fullmatch(r"[a-z_][a-z0-9_]*", tool_name):
+        return f"Extension not applied: invalid capability function name: {tool_name}"
+    if tool_name.startswith("_"):
+        return "Extension not applied: capability function must be public."
+
+    plan = plan_capability_extension(request)
+    proposed = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
+    if proposed.startswith("extend_"):
+        proposed = proposed[len("extend_"):]
+    if tool_name != proposed:
+        return f"Extension not applied: implementation function '{tool_name}' does not match proposed capability '{proposed}'."
 
     original = target.read_text(encoding="utf-8")
-    source_fragment = old_text
-    count = original.count(source_fragment)
-    if count == 0:
-        normalized = _normalize_extension_fragment(old_text)
-        if normalized != old_text:
-            source_fragment = normalized
-            count = original.count(source_fragment)
-    if count == 0:
-        return f"Extension not applied: source fragment was not found in {relative}."
-    if count > 1:
-        return f"Extension not applied: source fragment occurs {count} times in {relative}; edit must identify exactly one location."
+    try:
+        tree = ast.parse(original, filename=relative)
+    except SyntaxError as exc:
+        return f"Extension not applied: existing source is invalid Python: {exc}"
 
-    updated = original.replace(source_fragment, new_text, 1)
+    existing_functions = {
+        node.name for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    if tool_name in existing_functions:
+        return f"Extension not applied: capability function '{tool_name}' already exists."
+
+    try:
+        anchor_tree = ast.parse(
+            "TOOL_DECLARATIONS = []\nTOOL_HANDLERS = {}\n",
+            filename="<anchors>",
+        )
+    except SyntaxError:
+        return "Extension not applied: internal anchor validation failed."
+
+    declaration = (
+        "    {\n"
+        f'        "name": "{tool_name}",\n'
+        f'        "description": {declaration_description.strip()!r},\n'
+        '        "parameters": {"type": "OBJECT", "properties": {}},\n'
+        "    },\n"
+    )
+    declaration_marker = "TOOL_DECLARATIONS = ["
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
+    if declaration_marker not in original or handler_marker not in original:
+        return "Extension not applied: required tool integration anchors were not found."
+
+    handler_line = f'    "{tool_name}": {tool_name},\n'
+    updated = original.replace(
+        declaration_marker,
+        declaration_marker + "\n" + declaration,
+        1,
+    )
+    updated = updated.replace(
+        handler_marker,
+        handler_marker + "\n" + handler_line,
+        1,
+    )
+
+    function_insert = function_source.strip() + "\n\n"
+    insertion_anchor = "\ndef self_test()"
+    if insertion_anchor not in updated:
+        return "Extension not applied: implementation insertion anchor was not found."
+    updated = updated.replace(insertion_anchor, "\n\n" + function_insert + "def self_test()", 1)
+
     try:
         ast.parse(updated, filename=relative)
     except SyntaxError as exc:
@@ -2271,16 +2312,16 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "apply_capability_extension",
-        "description": "Apply one bounded transactional source edit for a genuinely missing capability; syntax-check it, run Nova's deterministic tests, and roll back on verification failure.",
+        "description": "Apply one bounded structured implementation for a genuinely missing capability. The transaction adds the implementation function, tool declaration, and TOOL_HANDLERS registration, syntax-checks it, runs Nova's deterministic tests, and rolls back on verification failure.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "request": {"type": "STRING", "description": "The missing capability being extended."},
-                "path": {"type": "STRING", "description": "Python source or test path under gemini_agent/ or tests/."},
-                "old_text": {"type": "STRING", "description": "Exactly one existing source fragment to replace."},
-                "new_text": {"type": "STRING", "description": "Replacement source fragment."}
+                "path": {"type": "STRING", "description": "Existing Python source path under gemini_agent/."},
+                "function_source": {"type": "STRING", "description": "Complete Python function definition implementing the capability. It must be bounded and use only mechanisms supported by the inspected environment."},
+                "declaration_description": {"type": "STRING", "description": "Description for the new tool declaration."}
             },
-            "required": ["request", "path", "old_text", "new_text"],
+            "required": ["request", "path", "function_source", "declaration_description"],
         },
     },
     {
