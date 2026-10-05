@@ -1839,6 +1839,17 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIn("Attempts: 2", result)
         self.assertEqual(run.call_count, 2)
 
+    def test_recover_command_executes_discovered_executable_path(self):
+        with patch(
+            "gemini_agent.tools.run_command",
+            side_effect=[RuntimeError("Command failed to start: No such file or directory"), "Exit code: 0\\nstdout:\\nPython 3"],
+        ) as run:
+            with patch("gemini_agent.tools.find_executable", return_value="Executable: /system/bin/python"):
+                result = recover_command("python --version")
+        self.assertIn("Recovery: executable path discovered and command succeeded.", result)
+        self.assertIn("Exit code: 0", result)
+        self.assertEqual(run.call_args_list[1].args, ("/system/bin/python --version",))
+
     def test_recover_command_is_registered(self):
         self.assertIs(TOOL_HANDLERS["recover_command"], recover_command)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
