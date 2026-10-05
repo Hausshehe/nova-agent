@@ -391,7 +391,8 @@ class GeminiClient:
                     "max_completion_tokens": 2048,
                 }
                 request = urllib.request.Request(
-                    url,
+                    "https://api.cloudflare.com/client/v4/accounts/"
+                    f"{self.cloudflare_account_id}/ai/v1/chat/completions",
                     data=json.dumps(payload).encode(),
                     headers={
                         "Authorization": f"Bearer {self.cloudflare_api_token}",
