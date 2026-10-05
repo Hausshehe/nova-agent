@@ -31,6 +31,7 @@ from gemini_agent.tools import (
     get_system_battery_status,
     get_screen_state,
     get_screen_brightness,
+    get_screen_timeout,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1303,6 +1304,38 @@ class GetScreenStateToolTests(unittest.TestCase):
         self.assertIn("get_screen_state", names)
 
     
+class GetScreenTimeoutToolTests(unittest.TestCase):
+    def test_get_screen_timeout_parses_android_setting(self):
+        completed = type("Completed", (), {"stdout": "600000\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_timeout()
+        self.assertEqual(result, "Screen timeout: 10 minutes (600000 ms)")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["su", "-c", "/system/bin/settings get system screen_off_timeout"],
+        )
+
+    def test_get_screen_timeout_falls_back_to_dumpsys(self):
+        responses = [
+            type("Completed", (), {"stdout": "settings unavailable\n"})(),
+            type("Completed", (), {"stdout": "mScreenOffTimeoutSetting=600000\n"})(),
+        ]
+        with patch("gemini_agent.tools.subprocess.run", side_effect=responses) as run:
+            result = get_screen_timeout()
+        self.assertEqual(result, "Screen timeout: 10 minutes (600000 ms)")
+        self.assertEqual(run.call_count, 2)
+
+    def test_get_screen_timeout_formats_seconds(self):
+        completed = type("Completed", (), {"stdout": "45000\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_screen_timeout(), "Screen timeout: 45 seconds (45000 ms)")
+
+    def test_get_screen_timeout_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_timeout"], get_screen_timeout)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_timeout", names)
+
+
 class GetScreenBrightnessToolTests(unittest.TestCase):
     def test_get_screen_brightness_parses_android_setting(self):
         completed = type("Completed", (), {"stdout": "128\n"})()
