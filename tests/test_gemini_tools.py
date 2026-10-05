@@ -18,6 +18,7 @@ from gemini_agent.tools import (
     calculator,
     self_test,
     capability_inventory,
+    discover_camera_control,
     plan_capability_extension,
     apply_capability_extension,
     count_file_lines,
@@ -134,6 +135,25 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "def self_test():\n"
             '    return \"ok\"\n'
         )
+
+    def test_discover_camera_control_is_read_only_and_registered(self):
+        with patch("gemini_agent.tools.find_executable", side_effect=lambda name: f"Executable: /system/bin/{name}"):
+            with patch(
+                "gemini_agent.tools.run_root_command",
+                side_effect=[
+                    "Exit code: 0\nstdout:\npriority=ResolverActivity",
+                    "Exit code: 0\nstdout:\nCamera service available",
+                ],
+            ):
+                result = discover_camera_control()
+        self.assertIn("Camera control environment discovery (read-only):", result)
+        self.assertIn("cmd: Executable: /system/bin/cmd", result)
+        self.assertIn("image-capture activity:", result)
+        self.assertIn("camera service:", result)
+        self.assertIn("No camera action was performed.", result)
+        self.assertIs(TOOL_HANDLERS["discover_camera_control"], discover_camera_control)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("discover_camera_control", names)
 
     def test_plan_capability_extension_for_camera_is_plan_only(self):
         result = plan_capability_extension("control the phone's camera shutter")
