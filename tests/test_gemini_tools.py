@@ -28,6 +28,7 @@ from gemini_agent.tools import (
     get_file_permissions,
     get_system_info,
     get_hostname,
+    get_cpu_count,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -609,6 +610,14 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_system_info"], get_system_info)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_system_info", names)
+
+    def test_get_cpu_count_returns_positive_integer(self):
+        self.assertGreater(int(get_cpu_count()), 0)
+
+    def test_get_cpu_count_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_cpu_count"], get_cpu_count)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_cpu_count", names)
 
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
