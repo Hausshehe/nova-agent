@@ -807,6 +807,7 @@ def _run_bounded_root_action(command: str) -> str:
         "input keyevent 25",
         "input keyevent 27",
         "am start -a android.media.action.IMAGE_CAPTURE",
+        "am start -a android.media.action.STILL_IMAGE_CAMERA",
     }
     if command not in allowed_commands:
         raise ValueError("Root action is not allowed.")
