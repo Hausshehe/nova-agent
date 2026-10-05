@@ -227,10 +227,11 @@ def get_bluetooth_status() -> str:
                 text=True,
                 check=False,
             )
-            output = (result.stdout or "") + "\\n" + (getattr(result, "stderr", "") or "")
-            if re.fullmatch(r"\s*1\s*", result.stdout or ""):
+            stdout = (result.stdout or "").replace("\\n", "\n")
+            output = stdout + "\n" + (getattr(result, "stderr", "") or "")
+            if re.fullmatch(r"\s*1\s*", stdout):
                 return "Bluetooth: Enabled"
-            if re.fullmatch(r"\s*0\s*", result.stdout or ""):
+            if re.fullmatch(r"\s*0\s*", stdout):
                 return "Bluetooth: Disabled"
             lowered = output.lower()
             if re.search(r"\b(?:enabled|on)\b", lowered) and "bluetooth" in lowered:
