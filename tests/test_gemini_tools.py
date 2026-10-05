@@ -135,19 +135,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             '    return \"ok\"\n'
         )
 
-    def test_plan_capability_extension_blocks_unsupported_camera(self):
+    def test_plan_capability_extension_for_camera_is_plan_only(self):
         result = plan_capability_extension("control the phone's camera shutter")
-        self.assertIn("Extension blocked: no existing local primitive", result)
-        self.assertIn("Environment discovery is required", result)
+        self.assertIn("Extension plan: capability is missing.", result)
+        self.assertIn("Proposed tool: extend_camera_shutter", result)
 
     def test_apply_capability_extension_blocks_unsupported_camera(self):
         result = apply_capability_extension(
             "control the phone's camera shutter",
             "gemini_agent/tools.py",
             "existing_tool",
-            "<none>",
-            "{}",
-            "Combine the existing operations.",
+            "calculator",
+            '{"expression": "2 + 2"}',
+            "Take a photo with the phone camera.",
         )
         self.assertIn("Extension blocked: no existing local primitive", result)
 
@@ -161,7 +161,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with patch("gemini_agent.tools.subprocess.run", return_value=completed):
                     result = apply_capability_extension(
-                        "combine two existing local operations",
+                        "camera shutter capability for a generic test",
                         "gemini_agent/tools.py",
                         "existing_tool",
                         "calculator",
@@ -170,9 +170,9 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
             updated = target.read_text(encoding="utf-8")
-            self.assertIn("def camera_shutter()", updated)
-            self.assertIn('"name": "camera_shutter"', updated)
-            self.assertIn('"camera_shutter": camera_shutter', updated)
+            self.assertIn("def camera_shutter_capability_for_a_generic_test()", updated)
+            self.assertIn('"name": "camera_shutter_capability_for_a_generic_test"', updated)
+            self.assertIn('"camera_shutter_capability_for_a_generic_test": camera_shutter_capability_for_a_generic_test', updated)
 
     def test_apply_capability_extension_rolls_back_when_tests_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
