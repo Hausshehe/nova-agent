@@ -80,6 +80,8 @@ class GeminiClient:
                     if isinstance(part, dict) and isinstance(part.get("text"), str)
                 ).lower()
                 break
+        if "run_command" in user_text:
+            return "run_command"
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
@@ -201,7 +203,7 @@ class GeminiClient:
                 if isinstance(content, str):
                     lines = content.strip().splitlines()
                     if len(lines) >= 2 and lines[0].strip() in {
-                        d["name"] for d in TOOL_DECLARATIONS
+                        d["name"] for d in self.tool_declarations
                     }:
                         try:
                             parsed_args = json.loads("\n".join(lines[1:]))
