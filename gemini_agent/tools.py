@@ -1219,6 +1219,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_state",
+        "description": "Get whether the Android device screen is currently on or off.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_cpu_usage",
         "description": "Get the current aggregate system CPU usage percentage.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1836,6 +1841,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
     "get_system_battery_status": get_system_battery_status,
+    "get_screen_state": get_screen_state,
     "get_screen_state": get_screen_state,
     "get_system_cpu_usage": get_system_cpu_usage,
     "get_system_memory_usage": get_system_memory_usage,
