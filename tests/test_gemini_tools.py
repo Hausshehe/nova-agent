@@ -1283,6 +1283,24 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
 
 
+class GetScreenStateToolTests(unittest.TestCase):
+    def test_get_screen_state_parses_display_power(self):
+        completed = type(
+            "Completed",
+            (),
+            {"stdout": "Display Power: state=ON\n"},
+        )()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_state()
+        self.assertEqual(result, "Screen: ON")
+        self.assertEqual(run.call_args.args[0], ["su", "-c", "/system/bin/dumpsys power"])
+
+    def test_get_screen_state_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_state"], get_screen_state)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_state", names)
+
+
 class GetSystemBatteryStatusToolTests(unittest.TestCase):
     def test_get_system_battery_status_parses_android_dumpsys(self):
         completed = type(
