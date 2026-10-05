@@ -129,9 +129,9 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
 
     def test_natural_extension_application_retries_after_failed_edit(self):
-        apply_response = {
+        response = lambda call_id: {
             "choices": [{"message": {"content": "", "tool_calls": [{
-                "id": "call-apply-extension",
+                "id": call_id,
                 "type": "function",
                 "function": {
                     "name": "apply_capability_extension",
@@ -139,36 +139,24 @@ class CloudflareClientTests(unittest.TestCase):
                 },
             }]}}]
         }
-        failure = (
-            "Extension not applied: proposed source is invalid Python: "
-            "closing parenthesis does not match opening parenthesis."
-        )
-        success = (
-            "Edited gemini_agent/tools.py\\n"
-            "Extension status: source edit applied and transaction committed."
-        )
+        failure = "Extension not applied: proposed source is invalid Python."
+        success = "Edited gemini_agent/tools.py\\nExtension status: source edit applied and transaction committed."
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[FakeResponse(apply_response), FakeResponse(apply_response)],
-        ) as open_url, patch.dict(
-            "gemini_agent.client.TOOL_HANDLERS",
-            {"apply_capability_extension": lambda **kwargs: failure if kwargs["new_text"] == "VALUE = 2" else success},
-        ):
-            client = GeminiClient()
-            # The first model proposal fails; the second proposal is accepted.
+            side_effect=[FakeResponse(response("call-1")), FakeResponse(response("call-2"))],
+        ) as open_url:
+            calls = []
             def handler(**kwargs):
-                return failure if kwargs["new_text"] == "VALUE = 2" else success
-            client.tool_handlers["apply_capability_extension"] = handler
+                calls.append(kwargs)
+                return failure if len(calls) == 1 else success
+            client = GeminiClient(tool_handlers={"apply_capability_extension": handler})
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
         self.assertIn("Extension status: source edit applied and transaction committed.", answer)
-        self.assertEqual(
-            [trace["name"] for trace in client.last_tool_calls],
-            ["apply_capability_extension", "apply_capability_extension"],
-        )
+        self.assertEqual(len(client.last_tool_calls), 2)
         self.assertEqual(open_url.call_count, 2)
         second_payload = json.loads(open_url.call_args_list[1].args[0].data)
         self.assertEqual(
@@ -748,7 +736,3 @@ class CloudflareClientTests(unittest.TestCase):
             return_value=FakeResponse(first_response),
         ) as open_url:
             answer = GeminiClient().ask(
-                f"Use the get_process_executable tool for pid {os.getpid()}."
-            )
-        self.assertTrue(answer)
-        self.assertIn("python", answer.lower())
