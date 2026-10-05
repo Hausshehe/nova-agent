@@ -866,6 +866,28 @@ class GeminiClient:
                     }]
                     native_tool_calls = False
 
+            if requested_tool == "run_command" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r'run_command.*?run\\s+[\`"]([^\`"]+)[\`"]',
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-run-command",
+                        "type": "function",
+                        "function": {
+                            "name": "run_command",
+                            "arguments": json.dumps({"command": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             if requested_tool == "diagnose_command_failure" and loop_index == 0:
                 user_text = ""
                 for item in reversed(payload["messages"]):
