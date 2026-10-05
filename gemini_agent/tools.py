@@ -298,24 +298,31 @@ def get_screen_state() -> str:
 
 def get_screen_brightness() -> str:
     """Return the Android device screen brightness as a percentage."""
+    commands = (
+        ("/system/bin/settings get system screen_brightness", "integer"),
+        ("/system/bin/settings get system screen_brightness_float", "float"),
+    )
     try:
-        result = subprocess.run(
-            ["su", "-c", "/system/bin/settings get system screen_brightness"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        for command, value_type in commands:
+            result = subprocess.run(
+                ["su", "-c", command],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            value = result.stdout.strip()
+            if value_type == "integer" and re.fullmatch(r"\d+", value):
+                brightness = int(value)
+                if 0 <= brightness <= 255:
+                    percentage = brightness * 100 / 255
+                    return f"Brightness: {percentage:.0f}% ({brightness}/255)"
+            elif value_type == "float" and re.fullmatch(r"(?:0|1)(?:\.\d+)?", value):
+                brightness = float(value)
+                percentage = brightness * 100
+                return f"Brightness: {percentage:.0f}% ({brightness:.2f})"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("System screen brightness is unavailable.") from exc
-
-    value = result.stdout.strip()
-    if not re.fullmatch(r"\d+", value):
-        raise RuntimeError("System screen brightness is unavailable.")
-    brightness = int(value)
-    if not 0 <= brightness <= 255:
-        raise RuntimeError("System screen brightness is unavailable.")
-    percentage = brightness * 100 / 255
-    return f"Brightness: {percentage:.0f}% ({brightness}/255)"
+    raise RuntimeError("System screen brightness is unavailable.")
 
 
 def get_system_battery_status() -> str:
