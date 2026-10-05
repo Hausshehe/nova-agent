@@ -25,6 +25,7 @@ from gemini_agent.tools import (
     discover_android_mechanisms,
     resolve_android_intent,
     inspect_android_ui,
+    get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
     count_file_lines,
@@ -234,6 +235,23 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("android.media.action.IMAGE_CAPTURE", result)
         self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
         self.assertIn("not launched", result)
+
+    def test_get_foreground_android_component_is_read_only_and_registered(self):
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            return_value="Exit code: 0\nstdout:\nResumedActivity: com.termux/.app.TermuxActivity",
+        ) as root:
+            result = get_foreground_android_component()
+        root.assert_called_once_with("dumpsys activity activities")
+        self.assertIn("com.termux/.app.TermuxActivity", result)
+        self.assertIn("read-only", result)
+        self.assertIn("No interaction", result)
+        self.assertIs(
+            TOOL_HANDLERS["get_foreground_android_component"],
+            get_foreground_android_component,
+        )
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_foreground_android_component", names)
 
     def test_inspect_android_ui_captures_hierarchy_and_cleans_up(self):
         with patch(
