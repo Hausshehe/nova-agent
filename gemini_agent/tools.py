@@ -147,6 +147,13 @@ def plan_capability_extension(request: str) -> str:
         suffix = "_".join(words[:5]) or "requested_capability"
         tool_name = f"extend_{suffix}"
 
+    if tool_name == "extend_camera_shutter" and "camera_shutter" not in TOOL_HANDLERS:
+        return (
+            "Extension blocked: no existing local primitive can safely implement camera shutter.\n"
+            "Environment discovery is required before Nova can extend this capability.\n"
+            "Status: no code or device state was modified."
+        )
+
     return (
         "Extension plan: capability is missing.\n"
         f"Requested capability: {request.strip()}\n"
@@ -323,6 +330,8 @@ def apply_capability_extension(
         return f"Extension not applied: target is not a regular source file: {relative}"
 
     plan = plan_capability_extension(request)
+    if plan.startswith("Extension blocked:"):
+        return plan
     proposed = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
     if proposed.startswith("extend_"):
         proposed = proposed[len("extend_"):]
