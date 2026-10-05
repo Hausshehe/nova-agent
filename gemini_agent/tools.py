@@ -11,6 +11,7 @@ import os
 import platform
 import socket
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -98,6 +99,22 @@ def get_temp_directory() -> str:
 def get_home_directory() -> str:
     """Return the home directory used by Nova."""
     return str(Path.home())
+
+
+def get_process_uptime() -> str:
+    """Return Nova's current process uptime in seconds."""
+    status = Path("/proc/self/stat")
+    if not status.is_file():
+        raise RuntimeError("Process uptime is unavailable.")
+    fields = status.read_text(encoding="utf-8").split()
+    if len(fields) < 22:
+        raise RuntimeError("Process uptime is unavailable.")
+    start_ticks = int(fields[21])
+    clock_ticks = os.sysconf("SC_CLK_TCK")
+    if clock_ticks <= 0:
+        raise RuntimeError("Process clock tick rate is unavailable.")
+    uptime = (time.monotonic_ns() / 1_000_000_000) - (start_ticks / clock_ticks)
+    return f"{max(0.0, uptime):.3f} seconds"
 
 
 def get_umask() -> str:
@@ -630,6 +647,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_process_uptime",
+        "description": "Get the current uptime of the Nova process in seconds.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_umask",
         "description": "Get Nova's process file-creation mask as four-digit octal text.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -960,6 +982,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_memory_usage": get_memory_usage,
     "get_temp_directory": get_temp_directory,
     "get_home_directory": get_home_directory,
+    "get_process_uptime": get_process_uptime,
     "get_umask": get_umask,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
