@@ -66,6 +66,7 @@ from gemini_agent.tools import (
     get_process_working_directory,
     get_process_parent_name,
     get_process_start_time,
+    get_process_cpu_time,
 )
 
 
@@ -169,6 +170,23 @@ class GetProcessStartTimeToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_process_start_time"], get_process_start_time)
 
 
+
+
+class GetProcessCpuTimeToolTests(unittest.TestCase):
+    def test_get_process_cpu_time_returns_components(self):
+        result = get_process_cpu_time(str(os.getpid()))
+        self.assertRegex(result, r"^User: \d+\.\d{3} seconds\\nSystem: \d+\.\d{3} seconds\\nTotal: \d+\.\d{3} seconds$")
+
+    def test_get_process_cpu_time_rejects_invalid_pid(self):
+        with self.assertRaisesRegex(ValueError, "PID"):
+            get_process_cpu_time("not-a-pid")
+
+    def test_get_process_cpu_time_rejects_missing_process(self):
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            get_process_cpu_time("999999999")
+
+    def test_get_process_cpu_time_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_cpu_time"], get_process_cpu_time)
 
 
 class GetProcessCommandLineToolTests(unittest.TestCase):
