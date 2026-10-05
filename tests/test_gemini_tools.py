@@ -1277,5 +1277,20 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
 
 
+class GetSystemMemoryUsageToolTests(unittest.TestCase):
+    def test_get_system_memory_usage_returns_memory_values(self):
+        result = get_system_memory_usage()
+        self.assertRegex(result, r"^Total: \d+ bytes\\nUsed: \d+ bytes\\nAvailable: \d+ bytes$")
+        values = [int(line.split()[1]) for line in result.splitlines()]
+        self.assertGreater(values[0], 0)
+        self.assertGreaterEqual(values[2], 0)
+        self.assertGreaterEqual(values[1], 0)
+        self.assertLessEqual(values[1], values[0])
+
+    def test_get_system_memory_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_memory_usage"], get_system_memory_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_memory_usage", names)
+
 if __name__ == "__main__":
     unittest.main()
