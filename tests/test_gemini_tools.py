@@ -13,6 +13,7 @@ from gemini_agent.tools import (
     append_text_file,
     copy_file,
     calculator,
+    create_directory,
     current_datetime,
     delete_file,
     find_files,
@@ -51,6 +52,31 @@ class DateTimeToolTests(unittest.TestCase):
 
 
 class FilesystemToolTests(unittest.TestCase):
+    def test_creates_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = create_directory("archive/nested")
+            self.assertEqual(result, "Created directory archive/nested")
+            self.assertTrue((Path(directory) / "archive/nested").is_dir())
+
+    def test_create_directory_rejects_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "archive").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    create_directory("archive")
+
+    def test_create_directory_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    create_directory("../outside")
+
+    def test_create_directory_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["create_directory"], create_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("create_directory", names)
+
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -87,7 +113,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
-            "list_directory", "read_text_file", "search_text", "write_text_file",
+            "create_directory", "list_directory", "read_text_file", "search_text", "write_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
