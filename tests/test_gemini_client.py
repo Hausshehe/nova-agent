@@ -31,6 +31,20 @@ class GeminiClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY"):
                 GeminiClient()
 
+    def test_allows_cloudflare_only_provider(self):
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "cloudflare-token",
+                "CLOUDFLARE_ACCOUNT_ID": "account-id",
+            },
+            clear=True,
+        ):
+            client = GeminiClient()
+        self.assertIsNone(client.api_key)
+        self.assertEqual(client.cloudflare_api_token, "cloudflare-token")
+        self.assertEqual(client.cloudflare_account_id, "account-id")
+
     def test_extracts_response_text(self):
         payload = {"candidates": [{"content": {"parts": [{"text": "Hello"}]}}]}
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
