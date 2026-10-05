@@ -584,6 +584,14 @@ class GeminiClient:
 
             content = message.get("content")
 
+            # Explicit self-extension requests are transactional. If the model
+            # produces no proposal at all, stop here rather than burning tool rounds.
+            if requested_tool == "apply_capability_extension" and not tool_calls and not content:
+                return (
+                    "Extension not applied: Cloudflare did not return a valid "
+                    "capability-extension proposal. No code or device state was modified."
+                )
+
             # For explicit hash_file requests, derive the path from the user
             # instruction when the model emits no usable tool call.
             if requested_tool == "hash_file" and not tool_calls and not content:
