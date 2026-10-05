@@ -135,6 +135,22 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn("Extension status: source edit applied.", result)
             self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
 
+    def test_apply_capability_extension_rejects_missing_target_with_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "tools.py"
+            target.parent.mkdir()
+            target.write_text("VALUE = 1\n", encoding="utf-8")
+            with patch("gemini_agent.tools._filesystem_root", return_value=root):
+                result = apply_capability_extension(
+                    "control the phone camera shutter",
+                    "gemini_agent/capabilities/__init__.py",
+                    "VALUE = 1",
+                    "VALUE = 2",
+                )
+            self.assertIn("Extension not applied: target does not exist:", result)
+            self.assertIn("gemini_agent/tools.py", result)
+
     def test_apply_capability_extension_rejects_existing_capability(self):
         result = apply_capability_extension(
             "what is the battery level",
