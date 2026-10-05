@@ -124,6 +124,8 @@ def diagnose_command_failure(command: str, error: str) -> str:
     if not isinstance(error, str) or not error.strip():
         raise ValueError("Error output cannot be empty.")
     text = error.strip().lower()
+    if "command is not allowed" in text or "not allowed:" in text:
+        return "Diagnosis: command is blocked by Nova's normal execution policy. Next: discover the executable and use the narrowest approved privileged workflow when the command is a safe Android diagnostic."
     if any(term in text for term in ("not found", "no such file or directory", "command not found")):
         return "Diagnosis: executable or path not found. Next: use find_executable for the command name or inspect the required path."
     if any(term in text for term in ("permission denied", "operation not permitted", "access denied")):
