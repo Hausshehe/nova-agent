@@ -307,33 +307,23 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     if not target.exists() or not target.is_file() or target.is_symlink():
         return f"Extension not applied: target is not a regular source file: {relative}"
 
+    # The model supplies only a function implementation. Treat it as data:
+    # parse it, validate its shape, then canonicalize it before insertion.
+    normalized_source = function_source.replace("\r\n", "\n").replace("\r", "\n")
+    if "\\n" in normalized_source:
+        normalized_source = normalized_source.replace("\\n", "\n")
     try:
-        function_tree = ast.parse(function_source, filename="<extension>")
-    except SyntaxError:
-        # Some model tool-call serializers preserve newline escapes literally.
-        # Normalize only that transport artifact, then parse again. Do not use
-        # eval or otherwise execute model-generated source during normalization.
-        normalized_source = function_source.replace("\\n", "\n")
-        try:
-            function_tree = ast.parse(normalized_source, filename="<extension>")
-            function_source = normalized_source
-        except SyntaxError as exc:
-            return f"Extension not applied: implementation is invalid Python: {exc}"
-    functions = [node for node in function_tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        function_tree = ast.parse(normalized_source, filename="<extension>")
+    except SyntaxError as exc:
+        return f"Extension not applied: implementation is invalid Python: {exc}"
+
+    functions = [
+        node for node in function_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
     if len(functions) != 1:
         return "Extension not applied: function_source must contain exactly one top-level function."
-    function = functions[0]
-    # Re-serialize the validated AST so the source inserted into tools.py is
-    # canonical Python rather than model-preserved quoting/whitespace.
-    try:
-        function_source = ast.unparse(function_tree)
-        function_tree = ast.parse(function_source, filename="<extension>")
-        functions = [
-            node for node in function_tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-    except (SyntaxError, ValueError) as exc:
-        return f"Extension not applied: could not normalize implementation Python: {exc}"
+
     function = functions[0]
     tool_name = function.name
     if not re.fullmatch(r"[a-z_][a-z0-9_]*", tool_name):
@@ -348,6 +338,12 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     if tool_name != proposed:
         return f"Extension not applied: implementation function '{tool_name}' does not match proposed capability '{proposed}'."
 
+    try:
+        function_source = ast.unparse(function_tree)
+        function_tree = ast.parse(function_source, filename="<extension>")
+    except (SyntaxError, ValueError) as exc:
+        return f"Extension not applied: could not normalize implementation Python: {exc}"
+
     original = target.read_text(encoding="utf-8")
     try:
         tree = ast.parse(original, filename=relative)
@@ -361,13 +357,10 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     if tool_name in existing_functions:
         return f"Extension not applied: capability function '{tool_name}' already exists."
 
-    try:
-        anchor_tree = ast.parse(
-            "TOOL_DECLARATIONS = []\nTOOL_HANDLERS = {}\n",
-            filename="<anchors>",
-        )
-    except SyntaxError:
-        return "Extension not applied: internal anchor validation failed."
+    declaration_marker = "TOOL_DECLARATIONS = ["
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
+    if declaration_marker not in original or handler_marker not in original:
+        return "Extension not applied: required tool integration anchors were not found."
 
     declaration = (
         "    {\n"
@@ -376,12 +369,8 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
         '        "parameters": {"type": "OBJECT", "properties": {}},\n'
         "    },\n"
     )
-    declaration_marker = "TOOL_DECLARATIONS = ["
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
-    if declaration_marker not in original or handler_marker not in original:
-        return "Extension not applied: required tool integration anchors were not found."
-
     handler_line = f'    "{tool_name}": {tool_name},\n'
+
     updated = original.replace(
         declaration_marker,
         declaration_marker + "\n" + declaration,
@@ -397,7 +386,11 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     insertion_anchor = "\ndef self_test()"
     if insertion_anchor not in updated:
         return "Extension not applied: implementation insertion anchor was not found."
-    updated = updated.replace(insertion_anchor, "\n\n" + function_insert + "def self_test()", 1)
+    updated = updated.replace(
+        insertion_anchor,
+        "\n\n" + function_insert + "def self_test()",
+        1,
+    )
 
     try:
         ast.parse(updated, filename=relative)
