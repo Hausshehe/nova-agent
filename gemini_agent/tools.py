@@ -54,6 +54,51 @@ def calculator(expression: str) -> str:
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
 
+def self_test() -> str:
+    """Run a small deterministic health check of Nova's local execution substrate."""
+    checks = []
+    failures = []
+
+    def check(name: str, condition: bool) -> None:
+        if condition:
+            checks.append(name)
+        else:
+            failures.append(name)
+
+    try:
+        check("calculator", calculator("2 + 3 * 4") == "14")
+    except Exception:
+        failures.append("calculator")
+
+    try:
+        value = current_datetime()
+        dt.datetime.fromisoformat(value)
+        check("datetime", True)
+    except Exception:
+        failures.append("datetime")
+
+    try:
+        check("filesystem_root", path_exists(".") == "true")
+    except Exception:
+        failures.append("filesystem_root")
+
+    try:
+        discovered = find_executable(Path(os.sys.executable).name)
+        check("executable_discovery", discovered.startswith("Executable: "))
+    except Exception:
+        failures.append("executable_discovery")
+
+    try:
+        diagnosis = diagnose_command_failure("missing", "command not found")
+        check("failure_diagnosis", "find_executable" in diagnosis)
+    except Exception:
+        failures.append("failure_diagnosis")
+
+    total = len(checks) + len(failures)
+    if failures:
+        return f"Self-test: FAIL ({len(checks)}/{total} passed)\nFailed: {', '.join(failures)}"
+    return f"Self-test: PASS ({len(checks)}/{total} checks passed)"
+
 
 _RUN_COMMAND_ALLOWED = {
     "pwd": {()},
@@ -1836,6 +1881,11 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "self_test",
+        "description": "Run a small deterministic health check of Nova's local execution substrate without modifying user data.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -2602,6 +2652,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "self_test": self_test,
     "find_executable": find_executable,
     "diagnose_command_failure": diagnose_command_failure,
     "verify_command_result": verify_command_result,
