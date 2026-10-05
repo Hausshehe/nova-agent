@@ -32,6 +32,7 @@ from gemini_agent.tools import (
     get_screen_state,
     get_screen_brightness,
     get_screen_timeout,
+    get_screen_brightness_mode,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1304,6 +1305,30 @@ class GetScreenStateToolTests(unittest.TestCase):
         self.assertIn("get_screen_state", names)
 
     
+class GetScreenBrightnessModeToolTests(unittest.TestCase):
+    def test_get_screen_brightness_mode_parses_android_setting(self):
+        completed = type("Completed", (), {"stdout": "1\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_brightness_mode()
+        self.assertEqual(result, "Brightness mode: Automatic")
+        self.assertEqual(run.call_args.args[0], ["su", "-c", "/system/bin/settings get system screen_brightness_mode"])
+
+    def test_get_screen_brightness_mode_falls_back_to_dumpsys(self):
+        responses = [
+            type("Completed", (), {"stdout": "settings unavailable\n"})(),
+            type("Completed", (), {"stdout": "mScreenBrightnessModeSetting=0\n"})(),
+        ]
+        with patch("gemini_agent.tools.subprocess.run", side_effect=responses) as run:
+            result = get_screen_brightness_mode()
+        self.assertEqual(result, "Brightness mode: Manual")
+        self.assertEqual(run.call_count, 2)
+
+    def test_get_screen_brightness_mode_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_brightness_mode"], get_screen_brightness_mode)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_brightness_mode", names)
+
+
 class GetScreenTimeoutToolTests(unittest.TestCase):
     def test_get_screen_timeout_parses_android_setting(self):
         completed = type("Completed", (), {"stdout": "600000\n"})()
