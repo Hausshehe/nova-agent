@@ -19,6 +19,7 @@ from gemini_agent.tools import (
     self_test,
     capability_inventory,
     plan_capability_extension,
+    apply_capability_extension,
     count_file_lines,
     create_directory,
     current_datetime,
@@ -115,6 +116,38 @@ class CapabilityInventoryToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["capability_inventory"], capability_inventory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("capability_inventory", names)
+
+
+class CapabilityExtensionToolTests(unittest.TestCase):
+    def test_apply_capability_extension_edits_allowed_python_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "example.py"
+            target.parent.mkdir()
+            target.write_text("VALUE = 1\n", encoding="utf-8")
+            with patch("gemini_agent.tools._filesystem_root", return_value=root):
+                result = apply_capability_extension(
+                    "control the phone camera shutter",
+                    "gemini_agent/example.py",
+                    "VALUE = 1",
+                    "VALUE = 2",
+                )
+            self.assertIn("Extension status: source edit applied.", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
+
+    def test_apply_capability_extension_rejects_existing_capability(self):
+        with self.assertRaises(ValueError):
+            apply_capability_extension(
+                "what is the battery level",
+                "gemini_agent/example.py",
+                "VALUE = 1",
+                "VALUE = 2",
+            )
+
+    def test_apply_capability_extension_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["apply_capability_extension"], apply_capability_extension)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("apply_capability_extension", names)
 
 
 class SelfTestToolTests(unittest.TestCase):
