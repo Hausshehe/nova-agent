@@ -35,6 +35,7 @@ from gemini_agent.tools import (
     get_screen_brightness_mode,
     get_screen_orientation,
     get_screen_resolution,
+    get_screen_refresh_rate,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1370,6 +1371,28 @@ class GetScreenOrientationToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_screen_resolution"], get_screen_resolution)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_screen_resolution", names)
+
+
+class GetScreenRefreshRateToolTests(unittest.TestCase):
+    def test_get_screen_refresh_rate_parses_display_rate(self):
+        completed = type("Completed", (), {"stdout": "mRefreshRate=120.0\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_refresh_rate()
+        self.assertEqual(result, "Screen refresh rate: 120 Hz")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["su", "-c", "/system/bin/dumpsys display"],
+        )
+
+    def test_get_screen_refresh_rate_falls_back_to_refresh_rate(self):
+        completed = type("Completed", (), {"stdout": "refreshRate=60.0\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_screen_refresh_rate(), "Screen refresh rate: 60 Hz")
+
+    def test_get_screen_refresh_rate_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_refresh_rate"], get_screen_refresh_rate)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_refresh_rate", names)
 
 
 class GetScreenTimeoutToolTests(unittest.TestCase):
