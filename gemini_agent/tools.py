@@ -308,6 +308,8 @@ def apply_capability_extension(
         raise ValueError("Implementation args must be text.")
     if not isinstance(declaration_description, str) or not declaration_description.strip():
         raise ValueError("Declaration description cannot be empty.")
+    if any(ord(char) < 32 and char not in "\t" for char in declaration_description):
+        return "Extension not applied: declaration description contains unsupported control characters."
 
     gap = assess_capability_gap(request)
     if not gap.startswith("Capability gap:"):
