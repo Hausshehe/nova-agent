@@ -280,6 +280,36 @@ def get_process_parent_name(pid: str) -> str:
     raise RuntimeError(f"Parent process name is unavailable: {pid}")
 
 
+def get_process_start_time(pid: str) -> str:
+    """Return the local start time of a visible Linux process as ISO-8601 text."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    stat_path = Path("/proc") / pid / "stat"
+    if not stat_path.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        fields = stat_path.read_text(encoding="utf-8").split()
+        if len(fields) < 22:
+            raise RuntimeError(f"Process start time is unavailable: {pid}")
+        start_ticks = int(fields[21])
+        clock_ticks = os.sysconf("SC_CLK_TCK")
+        if clock_ticks <= 0:
+            raise RuntimeError(f"Process start time is unavailable: {pid}")
+        boot_time = None
+        for line in Path("/proc/stat").read_text(encoding="utf-8").splitlines():
+            if line.startswith("btime "):
+                value = line.split()[1]
+                if value.isdigit():
+                    boot_time = int(value)
+                break
+        if boot_time is None:
+            raise RuntimeError(f"Process start time is unavailable: {pid}")
+        start_time = boot_time + (start_ticks / clock_ticks)
+        return dt.datetime.fromtimestamp(start_time).astimezone().isoformat(timespec="seconds")
+    except (OSError, UnicodeError, ValueError, IndexError) as exc:
+        raise RuntimeError(f"Process start time is unavailable: {pid}") from exc
+
+
 def get_process_working_directory(pid: str) -> str:
     """Return the working directory of a visible local process."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -1269,6 +1299,15 @@ GET_PROCESS_PARENT_NAME_DECLARATION = {
         "required": ["pid"],
     },
 }
+GET_PROCESS_START_TIME_DECLARATION = {
+    "name": "get_process_start_time",
+    "description": "Get the local start time of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_WORKING_DIRECTORY_DECLARATION = {
     "name": "get_process_working_directory",
     "description": "Get the working directory of a visible local process.",
@@ -1312,6 +1351,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_executable": get_process_executable,
     "get_process_working_directory": get_process_working_directory,
     "get_process_parent_name": get_process_parent_name,
+    "get_process_start_time": get_process_start_time,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
