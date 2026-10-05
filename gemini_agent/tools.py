@@ -17,6 +17,7 @@ import platform
 import socket
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
 
@@ -180,6 +181,53 @@ def inspect_android_ui() -> str:
         except (RuntimeError, ValueError):
             pass
 
+
+def discover_android_ui_actions() -> str:
+    """Discover enabled clickable Android UI controls without interacting with the device."""
+    dump_path = "/data/local/tmp/nova-ui-actions.xml"
+    try:
+        dump_result = run_root_command(f"uiautomator dump {dump_path}")
+        if not dump_result.startswith("Exit code: 0"):
+            return (
+                "Android UI action discovery (read-only):\n"
+                f"{dump_result}\n"
+                "No UI interaction or device state change was performed."
+            )
+        read_result = run_root_command(f"cat {dump_path}")
+        xml_text = read_result.split("stdout:\n", 1)[1] if "stdout:\n" in read_result else ""
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError as exc:
+            return (
+                "Android UI action discovery (read-only):\n"
+                f"UI hierarchy could not be parsed: {exc}\n"
+                "No UI interaction or device state change was performed."
+            )
+        controls = []
+        for node in root.iter("node"):
+            if node.attrib.get("clickable") != "true" or node.attrib.get("enabled") != "true":
+                continue
+            controls.append({
+                "text": node.attrib.get("text", ""),
+                "content_desc": node.attrib.get("content-desc", ""),
+                "resource_id": node.attrib.get("resource-id", ""),
+                "class": node.attrib.get("class", ""),
+                "bounds": node.attrib.get("bounds", ""),
+            })
+        lines = [f"Clickable enabled controls found: {len(controls)}"]
+        for index, control in enumerate(controls[:50], 1):
+            label = control["text"] or control["content_desc"] or control["resource_id"] or "<unlabeled>"
+            lines.append(
+                f"{index}. label={label!r} resource_id={control['resource_id']!r} "
+                f"class={control['class']!r} bounds={control['bounds']!r}"
+            )
+        lines.append("UI actions were discovered only; no interaction or device state change was performed.")
+        return "Android UI action discovery (read-only):\n" + "\n".join(lines)
+    finally:
+        try:
+            run_root_command(f"rm -f {dump_path}")
+        except (RuntimeError, ValueError):
+            pass
 
 def discover_android_mechanisms(request: str) -> str:
     """Discover safe, read-only Android mechanisms that may implement a missing capability."""
@@ -2702,6 +2750,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}, "required": []},
     },
     {
+        "name": "discover_android_ui_actions",
+        "description": "Discover enabled clickable Android UI controls from the current UI hierarchy without interacting with the device.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "inspect_android_ui",
         "description": "Inspect the current foreground Android UI hierarchy using read-only diagnostics without interacting with the UI.",
         "parameters": {"type": "OBJECT", "properties": {}, "required": []},
@@ -3544,6 +3597,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
         "get_process_memory_usage": get_process_memory_usage,
     "send_android_keyevent": send_android_keyevent,
     "inspect_android_ui": inspect_android_ui,
+    "discover_android_ui_actions": discover_android_ui_actions,
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
     "calculator": calculator,
