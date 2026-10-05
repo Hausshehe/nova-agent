@@ -84,6 +84,59 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("tools", follow_up)
         self.assertNotIn("tool_choice", follow_up)
 
+    def test_tool_calls_can_compose_multiple_steps(self):
+        first_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": '{"expression":"2 + 3"}',
+                        },
+                    }],
+                }
+            }]
+        }
+        second_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-2",
+                        "type": "function",
+                        "function": {
+                            "name": "current_datetime",
+                            "arguments": "{}",
+                        },
+                    }],
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "5 and the current time."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                FakeResponse(first_response),
+                FakeResponse(second_response),
+                FakeResponse(final_response),
+            ],
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Perform the task using the available tools and report the result.")
+        self.assertEqual(answer, "5 and the current time.")
+        self.assertEqual(open_url.call_count, 3)
+        self.assertEqual([call["name"] for call in client.last_tool_calls], ["calculator", "current_datetime"])
+        second_payload = json.loads(open_url.call_args_list[1].args[0].data)
+        self.assertIn("tools", second_payload)
+        self.assertEqual(second_payload["tool_choice"], "auto")
+
     def test_tool_calls_take_precedence_over_content(self):
         tool_response = {
             "choices": [{
