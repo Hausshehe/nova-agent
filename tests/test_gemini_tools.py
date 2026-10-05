@@ -34,6 +34,7 @@ from gemini_agent.tools import (
     get_load_average,
     get_system_memory_usage,
     get_system_swap_usage,
+    get_system_boot_time,
     get_system_uptime,
     get_process_id,
     get_current_working_directory,
@@ -1314,6 +1315,19 @@ class GetSystemSwapUsageToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_system_swap_usage"], get_system_swap_usage)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_system_swap_usage", names)
+
+
+class GetSystemBootTimeToolTests(unittest.TestCase):
+    def test_get_system_boot_time_returns_local_iso_datetime(self):
+        result = get_system_boot_time()
+        parsed = __import__("datetime").datetime.fromisoformat(result)
+        self.assertIsNotNone(parsed.tzinfo)
+        self.assertLessEqual(parsed.timestamp(), __import__("time").time())
+
+    def test_get_system_boot_time_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_boot_time"], get_system_boot_time)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_boot_time", names)
 
 if __name__ == "__main__":
     unittest.main()
