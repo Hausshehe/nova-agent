@@ -220,6 +220,12 @@ class GeminiClient:
                     "content": str(tool_result),
                 })
 
+            # Tool execution is Nova's responsibility. After executing the
+            # requested tool(s), ask Cloudflare only to synthesize the result,
+            # preventing the model from repeatedly requesting the same tool.
+            payload.pop("tools", None)
+            payload.pop("tool_choice", None)
+
         raise RuntimeError("Cloudflare requested too many tool calls.")
 
     def ask(
