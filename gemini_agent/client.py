@@ -429,7 +429,13 @@ class GeminiClient:
                 except (KeyError, IndexError, TypeError) as exc:
                     raise RuntimeError(f"Cloudflare returned an unexpected response: {result}") from exc
                 if not isinstance(content, str) or not content.strip():
-                    last_failure = "model returned empty content"
+                    message = result.get("choices", [{}])[0].get("message", {})
+                    reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+                    last_failure = (
+                        "model returned empty content; "
+                        f"message keys={sorted(message.keys())}; "
+                        f"reasoning={str(reasoning)[:300]!r}"
+                    )
                     feedback = "\\nPrevious response was empty. Return the required JSON object only."
                     continue
                 try:
