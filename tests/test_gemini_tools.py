@@ -25,6 +25,7 @@ from gemini_agent.tools import (
     discover_android_mechanisms,
     resolve_android_intent,
     inspect_android_ui,
+    discover_android_ui_actions,
     get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
@@ -252,6 +253,29 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         )
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_foreground_android_component", names)
+
+    def test_discover_android_ui_actions_reports_clickable_controls_without_interaction(self):
+        xml = (
+            "Exit code: 0\nstdout:\n"
+            "<hierarchy><node text=\"Camera\"><node text=\"Capture\" "
+            "resource-id=\"com.transsion.camera:id/shutter_button\" "
+            "class=\"android.widget.ImageView\" clickable=\"true\" enabled=\"true\" "
+            "bounds=\"[294,1316][426,1448]\" /></node></hierarchy>"
+        )
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            side_effect=["Exit code: 0", xml, "Exit code: 0"],
+        ) as root:
+            result = discover_android_ui_actions()
+        self.assertIn("Clickable enabled controls found: 1", result)
+        self.assertIn("shutter_button", result)
+        self.assertIn("Capture", result)
+        self.assertIn("without interaction", result)
+        self.assertEqual(root.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-actions.xml")
+        self.assertEqual(root.call_args_list[1].args[0], "cat /data/local/tmp/nova-ui-actions.xml")
+        self.assertEqual(root.call_args_list[2].args[0], "rm -f /data/local/tmp/nova-ui-actions.xml")
+        self.assertIs(TOOL_HANDLERS["discover_android_ui_actions"], discover_android_ui_actions)
+        self.assertIn("discover_android_ui_actions", [d["name"] for d in TOOL_DECLARATIONS])
 
     def test_inspect_android_ui_captures_hierarchy_and_cleans_up(self):
         with patch(
