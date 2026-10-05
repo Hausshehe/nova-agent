@@ -1357,6 +1357,22 @@ class GetScreenOrientationToolTests(unittest.TestCase):
         self.assertIn("get_screen_orientation", names)
 
 
+    def test_get_screen_resolution_parses_wm_size(self):
+        completed = type("Completed", (), {"stdout": "Physical size: 720x1612\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_resolution()
+        self.assertEqual(result, "Screen resolution: 720x1612")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["su", "-c", "/system/bin/wm size"],
+        )
+
+    def test_get_screen_resolution_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_resolution"], get_screen_resolution)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_resolution", names)
+
+
 class GetScreenTimeoutToolTests(unittest.TestCase):
     def test_get_screen_timeout_parses_android_setting(self):
         completed = type("Completed", (), {"stdout": "600000\n"})()
