@@ -126,6 +126,27 @@ def discover_camera_control() -> str:
     """Discover camera-related Android mechanisms without launching or controlling the camera."""
     return discover_android_mechanisms("control the phone camera")
 
+def get_foreground_android_component() -> str:
+    """Inspect the current foreground Android package and activity without interacting with it."""
+    result = run_root_command("dumpsys activity activities")
+    lines = []
+    for line in result.splitlines():
+        stripped = line.strip()
+        if "mResumedActivity:" in stripped or "ResumedActivity:" in stripped:
+            lines.append(stripped)
+    if not lines:
+        return (
+            "Foreground Android component inspection (read-only):\\n"
+            f"{result}\\n"
+            "No resumed activity line was found; no interaction or device state change was performed."
+        )
+    return (
+        "Foreground Android component inspection (read-only):\\n"
+        + "\\n".join(lines[:3])
+        + "\\nNo interaction or device state change was performed."
+    )
+
+
 def inspect_android_ui() -> str:
     """Inspect the current foreground Android UI hierarchy without interacting with it."""
     dump_path = "/data/local/tmp/nova-ui-hierarchy.xml"
