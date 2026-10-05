@@ -2488,6 +2488,9 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "keycode": {"type": "STRING", "description": "HOME, BACK, CAMERA, or Android keycode 3, 4, or 27."}
             },
+            "required": ["keycode"],
+        },
+    },
     {
         "name": "send_android_intent",
         "description": "Launch one bounded Android intent action from Nova's allowlisted action set.",
@@ -2500,9 +2503,6 @@ TOOL_DECLARATIONS = [
                 }
             },
             "required": ["action"],
-        },
-    },
-            "required": ["keycode"],
         },
     },
 
