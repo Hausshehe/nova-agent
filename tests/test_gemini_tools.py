@@ -136,13 +136,14 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
 
     def test_apply_capability_extension_rejects_existing_capability(self):
-        with self.assertRaises(ValueError):
-            apply_capability_extension(
-                "what is the battery level",
-                "gemini_agent/example.py",
-                "VALUE = 1",
-                "VALUE = 2",
-            )
+        result = apply_capability_extension(
+            "what is the battery level",
+            "gemini_agent/example.py",
+            "VALUE = 1",
+            "VALUE = 2",
+        )
+        self.assertIn("Extension not applied:", result)
+        self.assertIn("Capability match:", result)
 
     def test_apply_capability_extension_is_registered(self):
         self.assertIs(TOOL_HANDLERS["apply_capability_extension"], apply_capability_extension)
