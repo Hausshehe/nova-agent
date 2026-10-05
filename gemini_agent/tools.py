@@ -178,6 +178,21 @@ def apply_capability_extension(request: str, path: str, old_text: str, new_text:
         raise ValueError("Extension edits are limited to Python source files.")
     if not (relative.startswith("gemini_agent/") or relative.startswith("tests/")):
         raise ValueError("Extension edits are limited to gemini_agent/ and tests/.")
+    if not target.exists():
+        candidates = []
+        for root_name in ("gemini_agent", "tests"):
+            root = _filesystem_root() / root_name
+            if root.is_dir():
+                for candidate in root.rglob("*.py"):
+                    if candidate.is_file() and not candidate.is_symlink():
+                        candidates.append(candidate.relative_to(_filesystem_root()).as_posix())
+        preview = ", ".join(sorted(candidates)[:12])
+        suffix = "..." if len(candidates) > 12 else ""
+        return (
+            f"Extension not applied: target does not exist: {relative}. "
+            "Inspect the repository and choose an existing Python source or test file. "
+            f"Available targets: {preview}{suffix}"
+        )
 
     result = edit_text_file(relative, old_text, new_text)
     return (
