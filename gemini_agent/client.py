@@ -78,6 +78,13 @@ class GeminiClient:
         "edit_text_file": "edit_file",
     }
 
+    @staticmethod
+    def _fill_extension_request(args: dict, request_text: str) -> dict:
+        filled = dict(args)
+        if not str(filled.get("request", "")).strip():
+            filled["request"] = request_text
+        return filled
+
     @classmethod
     def _requested_local_tool(cls, contents: list[dict]) -> str | None:
         user_text = ""
@@ -1519,8 +1526,8 @@ class GeminiClient:
 
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
-                        if local_name == "apply_capability_extension" and not str(args.get("request", "")).strip():
-                            args["request"] = request_text
+                        if local_name == "apply_capability_extension":
+                            args = self._fill_extension_request(args, request_text)
                         tool_result = handler(**args)
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
