@@ -220,6 +220,19 @@ class CloudflareClientTests(unittest.TestCase):
         )
 
 
+
+    def test_get_system_boot_time_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the get_system_boot_time tool.")
+        self.assertRegex(answer, r"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_system_swap_usage_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
