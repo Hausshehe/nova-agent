@@ -121,18 +121,18 @@ class CapabilityInventoryToolTests(unittest.TestCase):
 class CapabilityExtensionToolTests(unittest.TestCase):
     def _source(self):
         return (
-            "TOOL_DECLARATIONS = [\\n"
-            "    {\\n"
-            '        \"name\": \"old_tool\",\\n'
-            '        \"description\": \"old\",\\n'
-            '        \"parameters\": {\\"type\\": \\"OBJECT\\", \\"properties\\": {}},\\n'
-            "    },\\n"
-            "]\\n"
-            "TOOL_HANDLERS: dict[str, Callable[..., str]] = {\\n"
-            '    \"old_tool\": lambda: \"ok\",\\n'
-            "}\\n\\n"
-            "def self_test():\\n"
-            '    return \"ok\"\\n'
+            "TOOL_DECLARATIONS = [\n"
+            "    {\n"
+            '        \"name\": \"old_tool\",\n'
+            '        \"description\": \"old\",\n'
+            '        \"parameters\": {\\"type\\": \\"OBJECT\\", \\"properties\\": {}},\n'
+            "    },\n"
+            "]\n"
+            "TOOL_HANDLERS: dict[str, Callable[..., str]] = {\n"
+            '    \"old_tool\": lambda: \"ok\",\n'
+            "}\n\n"
+            "def self_test():\n"
+            '    return \"ok\"\n'
         )
 
     def test_apply_capability_extension_structured_transaction(self):
@@ -147,7 +147,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     result = apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/tools.py",
-                        'def camera_shutter():\\n    return "ok"',
+                        'def camera_shutter():\n    return "ok"',
                         "Take a photo with the phone camera.",
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
@@ -169,7 +169,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     result = apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/tools.py",
-                        'def camera_shutter():\\n    return "ok"',
+                        'def camera_shutter():\n    return "ok"',
                         "Take a photo with the phone camera.",
                     )
             self.assertIn("Extension rolled back:", result)
@@ -201,7 +201,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 result = apply_capability_extension(
                     "control the phone camera shutter",
                     "gemini_agent/tools.py",
-                    'def wrong_name():\\n    return "ok"',
+                    'def wrong_name():\n    return "ok"',
                     "Take a photo with the phone camera.",
                 )
             self.assertIn("does not match proposed capability", result)
@@ -216,7 +216,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 result = apply_capability_extension(
                     "control the phone camera shutter",
                     "gemini_agent/capabilities/camera_shutter.py",
-                    'def camera_shutter():\\n    return "ok"',
+                    'def camera_shutter():\n    return "ok"',
                     "Take a photo with the phone camera.",
                 )
             self.assertIn("target is not a regular source file", result)
@@ -225,7 +225,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         result = apply_capability_extension(
             "what is the battery level",
             "gemini_agent/tools.py",
-            'def camera_shutter():\\n    return "ok"',
+            'def camera_shutter():\n    return "ok"',
             "Take a photo with the phone camera.",
         )
         self.assertIn("Extension not applied:", result)
