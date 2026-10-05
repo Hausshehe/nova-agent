@@ -197,9 +197,9 @@ def get_cpu_count() -> str:
 
 def get_load_average() -> str:
     """Return the 1, 5, and 15 minute system load averages."""
-    load_path = Path("/proc/loadavg")
     try:
-        values = load_path.read_text(encoding="utf-8").split()
+        with open("/proc/loadavg", "rb") as stream:
+            values = stream.read(128).decode("ascii").split()
         if len(values) < 3:
             raise RuntimeError("System load average is unavailable.")
         one, five, fifteen = (float(value) for value in values[:3])
