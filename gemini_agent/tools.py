@@ -439,25 +439,8 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = '''TOOL_DECLARATIONS = [
-    {
-        "name": "calculator",
-        "description": "Calculate basic arithmetic expressions.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "expression": {
-                    "type": "STRING",
-                    "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
-                }
-            },
-            "required": ["expression"],
-        },
-    },
-'''
-    handler_marker = '"calculator": calculator,'
-    if declaration_marker not in original or handler_marker not in original:
-        return "Extension not applied: required tool integration anchors were not found."
+    declaration_marker = "TOOL_DECLARATIONS = ["
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
     try:
@@ -499,8 +482,8 @@ def apply_capability_extension(
     )
     handler_line = f'    "{proposed}": {proposed},\n'
 
-    declaration_index = original.rfind(declaration_marker)
-    handler_index = original.rfind(handler_marker)
+    declaration_index = original.find(declaration_marker)
+    handler_index = original.find(handler_marker)
     if declaration_index < 0 or handler_index < 0:
         return "Extension not applied: required top-level tool integration anchors were not found."
 
