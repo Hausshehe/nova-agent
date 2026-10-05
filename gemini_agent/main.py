@@ -1,4 +1,4 @@
-""""Command-line chat loop for the minimal Gemini agent."""
+"""Command-line chat loop for the minimal Gemini agent."""
 
 from gemini_agent.client import GeminiClient
 from gemini_agent.memory import ConversationMemory
@@ -57,4 +57,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-"
