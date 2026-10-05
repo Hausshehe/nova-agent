@@ -128,36 +128,52 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "plan_capability_extension")
         self.assertEqual(open_url.call_count, 1)
 
-    def test_natural_extension_application_uses_local_tool(self):
-        tool_response = {
+    def test_natural_extension_application_inspects_then_applies(self):
+        inspect_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-read-extension-source",
+                "type": "function",
+                "function": {
+                    "name": "read_text_file",
+                    "arguments": '{"path":"gemini_agent/tools.py"}',
+                },
+            }]}}]
+        }
+        apply_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
                 "id": "call-apply-extension",
                 "type": "function",
                 "function": {
                     "name": "apply_capability_extension",
-                    "arguments": '{"request":"control the phone camera shutter","path":"gemini_agent/example.py","old_text":"VALUE = 1","new_text":"VALUE = 2"}',
+                    "arguments": '{"request":"control the phone camera shutter","path":"gemini_agent/tools.py","old_text":"VALUE = 1","new_text":"VALUE = 2"}',
                 },
             }]}}]
         }
-        final_response = {
-            "choices": [{"message": {"content": "Extension status: source edit applied."}}]
-        }
+        success = (
+            "Edited gemini_agent/tools.py\n"
+            "Extension status: source edit applied and transaction committed."
+        )
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            return_value=FakeResponse(tool_response),
+            side_effect=[FakeResponse(inspect_response), FakeResponse(apply_response)],
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
-            {"apply_capability_extension": lambda **kwargs: "Extension status: source edit applied."},
+            {
+                "read_text_file": lambda **kwargs: "VALUE = 1",
+                "apply_capability_extension": lambda **kwargs: success,
+            },
         ):
-            open_url.side_effect = [FakeResponse(tool_response), FakeResponse(final_response)]
             client = GeminiClient()
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
-        self.assertIn("Extension status: source edit applied.", answer)
-        self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_extension")
+        self.assertIn("Extension status: source edit applied and transaction committed.", answer)
+        self.assertEqual(
+            [trace["name"] for trace in client.last_tool_calls],
+            ["read_text_file", "apply_capability_extension"],
+        )
         self.assertEqual(open_url.call_count, 2)
 
     def test_natural_capability_request_uses_capability_inventory(self):
