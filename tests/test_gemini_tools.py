@@ -18,6 +18,7 @@ from gemini_agent.tools import (
     calculator,
     self_test,
     send_android_keyevent,
+    _run_bounded_root_action,
     capability_inventory,
     discover_camera_control,
     plan_capability_extension,
@@ -174,6 +175,17 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "def self_test():\n"
             '    return \"ok\"\n'
         )
+
+    def test_still_image_camera_foreground_action_is_allowlisted(self):
+        with patch("gemini_agent.tools.subprocess.run") as run:
+            run.return_value.stdout = ""
+            run.return_value.stderr = ""
+            run.return_value.returncode = 0
+            result = _run_bounded_root_action("am start -a android.media.action.STILL_IMAGE_CAMERA")
+        self.assertIn("Exit code: 0", result)
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "am start -a android.media.action.STILL_IMAGE_CAMERA\n")
 
     def test_discover_camera_control_is_read_only_and_registered(self):
         with patch("gemini_agent.tools.find_executable", side_effect=lambda name: f"Executable: /system/bin/{name}"):
