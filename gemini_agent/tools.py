@@ -119,6 +119,17 @@ def append_text_file(path: str, content: str) -> str:
     return f"Appended {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
 
 
+def delete_file(path: str) -> str:
+    """Delete a regular file under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if not target.exists():
+        raise ValueError(f"File does not exist: {path}")
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    target.unlink()
+    return f"Deleted {target.relative_to(_filesystem_root())}"
+
+
 def find_files(pattern: str, path: str = ".") -> str:
     """Find files and directories by name pattern under the bounded root."""
     if not pattern:
@@ -287,6 +298,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "delete_file",
+        "description": "Delete a regular file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to delete."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "find_files",
         "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
         "parameters": {
@@ -309,6 +331,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
     "append_text_file": append_text_file,
+    "delete_file": delete_file,
     "find_files": find_files,
     "search_text": search_text,
 }
