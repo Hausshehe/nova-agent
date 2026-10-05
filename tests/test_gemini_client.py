@@ -162,7 +162,8 @@ class CloudflareClientTests(unittest.TestCase):
             ["apply_capability_extension"],
         )
         self.assertEqual(open_url.call_count, 1)
-        payload = json.loads(open_url.call_args.kwargs["data"].decode())
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data.decode())
         self.assertEqual(
             payload["tool_choice"],
             {"type": "function", "function": {"name": "apply_capability_extension"}},
