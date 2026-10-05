@@ -102,6 +102,32 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "assess_capability_gap")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_natural_extension_request_uses_extension_planner(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-extension",
+                "type": "function",
+                "function": {
+                    "name": "plan_capability_extension",
+                    "arguments": '{"request":"control the phone camera shutter"}',
+                },
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("How would you add this capability: control the phone camera shutter?")
+        self.assertIn("Extension plan: capability is missing.", answer)
+        self.assertIn("extend_camera_shutter", answer)
+        self.assertEqual(client.last_tool_calls[0]["name"], "plan_capability_extension")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
