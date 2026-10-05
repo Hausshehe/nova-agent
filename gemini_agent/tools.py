@@ -414,22 +414,22 @@ def apply_capability_extension(
     )
     handler_line = f'    "{proposed}": {proposed},\n'
 
-    declaration_index = original.find("\n" + declaration_marker)
-    handler_index = original.find("\n" + handler_marker)
+    declaration_index = original.rfind(declaration_marker)
+    handler_index = original.rfind(handler_marker)
     if declaration_index < 0 or handler_index < 0:
         return "Extension not applied: required top-level tool integration anchors were not found."
 
-    declaration_insert_at = declaration_index + 1 + len(declaration_marker)
+    declaration_insert_at = declaration_index + len(declaration_marker)
     updated = (
         original[:declaration_insert_at]
         + "\n"
         + declaration
         + original[declaration_insert_at:]
     )
-    handler_insert_at = updated.find("\n" + handler_marker)
+    handler_insert_at = updated.rfind(handler_marker)
     if handler_insert_at < 0:
         return "Extension not applied: top-level TOOL_HANDLERS anchor disappeared during transaction generation."
-    handler_insert_at = handler_insert_at + 1 + len(handler_marker)
+    handler_insert_at = handler_insert_at + len(handler_marker)
     updated = (
         updated[:handler_insert_at]
         + "\n"
