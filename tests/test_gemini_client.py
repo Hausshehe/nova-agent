@@ -129,13 +129,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
 
     def test_natural_extension_application_uses_local_inspection_then_applies(self):
-        proposal = {
-            "request": "control the phone camera shutter",
-            "path": "gemini_agent/tools.py",
-            "old_text": "VALUE = 1",
-            "new_text": "VALUE = 2",
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-extension",
+                "type": "function",
+                "function": {
+                    "name": "apply_capability_extension",
+                    "arguments": json.dumps({
+                        "request": "control the phone camera shutter",
+                        "path": "gemini_agent/tools.py",
+                        "old_text": "VALUE = 1",
+                        "new_text": "VALUE = 2",
+                    }),
+                },
+            }]}}]
         }
-        response = {"choices": [{"message": {"content": json.dumps(proposal)}}]}
         success = "Edited gemini_agent/tools.py\\nExtension status: source edit applied and transaction committed."
         with patch.dict(
             os.environ,
@@ -143,7 +151,7 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            return_value=FakeResponse(response),
+            return_value=FakeResponse(tool_response),
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
             {"apply_capability_extension": lambda **kwargs: success},
@@ -154,13 +162,26 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_extension")
         self.assertEqual(open_url.call_count, 1)
         payload = json.loads(open_url.call_args.args[0].data.decode())
-        self.assertNotIn("tools", payload)
+        self.assertEqual(payload["tool_choice"]["function"]["name"], "apply_capability_extension")
+        self.assertEqual(payload["tools"][0]["function"]["name"], "apply_capability_extension")
         inspection = payload["messages"][0]["content"]
         self.assertIn("Repository inspection was performed locally", inspection)
         self.assertIn("def apply_capability_extension", inspection)
         self.assertIn("gemini_agent/tools.py", inspection)
 
     def test_natural_extension_application_retries_after_failed_edit(self):
+        def response(arguments):
+            return {
+                "choices": [{"message": {"content": "", "tool_calls": [{
+                    "id": "call-extension",
+                    "type": "function",
+                    "function": {
+                        "name": "apply_capability_extension",
+                        "arguments": json.dumps(arguments),
+                    },
+                }]}}]
+            }
+
         first = {
             "request": "control the phone camera shutter",
             "path": "gemini_agent/tools.py",
@@ -181,10 +202,7 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[
-                FakeResponse({"choices": [{"message": {"content": json.dumps(first)}}]}),
-                FakeResponse({"choices": [{"message": {"content": json.dumps(second)}}]}),
-            ],
+            side_effect=[FakeResponse(response(first)), FakeResponse(response(second))],
         ) as open_url:
             calls = []
             def handler(**kwargs):
@@ -196,7 +214,14 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(len(client.last_tool_calls), 2)
         self.assertEqual(open_url.call_count, 2)
         second_payload = json.loads(open_url.call_args_list[1].args[0].data.decode())
-        self.assertIn("Previous edit attempt failed", second_payload["messages"][0]["content"])
+        self.assertTrue(any(
+            "previous extension attempt failed" in str(message.get("content", "")).lower()
+            for message in second_payload["messages"]
+        ))
+        self.assertEqual(
+            second_payload["tool_choice"]["function"]["name"],
+            "apply_capability_extension",
+        )
 
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
