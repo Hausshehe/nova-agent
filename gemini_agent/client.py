@@ -373,6 +373,7 @@ class GeminiClient:
             )
             inspection = self._extension_inspection_context(request_text)
             feedback = ""
+            last_failure = "no response received"
             for _ in range(3):
                 extension_messages = [
                     {"role": "system", "content": (
@@ -428,6 +429,7 @@ class GeminiClient:
                 except (KeyError, IndexError, TypeError) as exc:
                     raise RuntimeError(f"Cloudflare returned an unexpected response: {result}") from exc
                 if not isinstance(content, str) or not content.strip():
+                    last_failure = "model returned empty content"
                     feedback = "\\nPrevious response was empty. Return the required JSON object only."
                     continue
                 try:
@@ -439,6 +441,7 @@ class GeminiClient:
                         raise ValueError("JSON response was not an object.")
                     arguments = {key: candidate[key] for key in ("request", "path", "old_text", "new_text")}
                 except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    last_failure = f"invalid proposal: {exc}; response={content[:300]!r}"
                     feedback = f"\\nPrevious response was invalid: {exc}. Return ONLY the required JSON object."
                     continue
                 try:
@@ -457,7 +460,7 @@ class GeminiClient:
             return (
                 str(tool_result)
                 if "tool_result" in locals()
-                else "Extension not applied: no valid extension proposal was produced after 3 attempts."
+                else f"Extension not applied: no valid extension proposal was produced after 3 attempts. Last model failure: {last_failure}"
             )
         declarations = self._relevant_tool_declarations(contents)
         if requested_tool:
