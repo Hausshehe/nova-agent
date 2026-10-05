@@ -264,6 +264,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["read_file"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "read_file"}})
 
+    def test_list_directory_recursive_explicit_selection(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the list_directory_recursive tool to inspect the current directory.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["list_directory_recursive"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "list_directory_recursive"}})
+
     def test_filesystem_request_requires_tool(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
