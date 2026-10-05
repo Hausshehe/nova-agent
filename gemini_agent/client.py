@@ -1681,4 +1681,9 @@ class GeminiClient:
             return str(self.tool_handlers["resolve_android_intent"](action=action))
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
+        if requested_tool == "validate_android_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            if not mechanism:
+                return "Mechanism validation requires an explicit mechanism such as intent:IMAGE_CAPTURE."
+            return str(self.tool_handlers["validate_android_mechanism"](request=prompt, mechanism=mechanism))
         return self._generate_cloudflare(contents, system_instruction)
