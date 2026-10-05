@@ -222,29 +222,16 @@ def get_system_uptime() -> str:
     """Return total system uptime in seconds."""
     try:
         result = subprocess.run(
-            ["uptime"],
+            ["cat", "/proc/uptime"],
             capture_output=True,
             text=True,
             check=True,
         )
-        output = result.stdout.strip()
-        marker = "up "
-        if marker not in output:
-            raise RuntimeError("System uptime is unavailable.")
-        uptime_text = output.split(marker, 1)[1].split(",", 1)[0].strip()
-        days = 0
-        if " day" in uptime_text:
-            day_text, uptime_text = uptime_text.split(" day", 1)
-            days = int(day_text.strip())
-            uptime_text = uptime_text.lstrip("s").strip()
-        parts = uptime_text.split(":")
-        if len(parts) != 2:
-            raise RuntimeError("System uptime is unavailable.")
-        hours, minutes = (int(part) for part in parts)
-        seconds = days * 86400 + hours * 3600 + minutes * 60
-    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as exc:
+        value = result.stdout.strip().split()[0]
+        seconds = float(value)
+    except (OSError, UnicodeError, ValueError, IndexError, subprocess.SubprocessError) as exc:
         raise RuntimeError("System uptime is unavailable.") from exc
-    return f"{seconds:.3f} seconds"
+    return f"{max(0.0, seconds):.3f} seconds"
 
 def get_memory_usage() -> str:
     """Return the current Nova process resident memory usage in bytes."""
