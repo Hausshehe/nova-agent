@@ -82,6 +82,11 @@ def get_process_id() -> str:
     return str(os.getpid())
 
 
+def get_current_working_directory() -> str:
+    """Return Nova's current working directory."""
+    return os.getcwd()
+
+
 def _filesystem_root() -> Path:
     return Path(os.environ.get("NOVA_FILES_ROOT", os.getcwd())).expanduser().resolve()
 
@@ -551,6 +556,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
       },
       {
+        "name": "get_current_working_directory",
+        "description": "Get Nova's current working directory.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_cpu_count",
         "description": "Get the number of logical CPUs visible to the runtime.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -875,6 +885,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_hostname": get_hostname,
     "get_system_info": get_system_info,
     "get_process_id": get_process_id,
+    "get_current_working_directory": get_current_working_directory,
     "get_cpu_count": get_cpu_count,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
