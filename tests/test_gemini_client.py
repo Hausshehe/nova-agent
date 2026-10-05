@@ -151,6 +151,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(follow_up["messages"][-2]["role"], "assistant")
         self.assertEqual(follow_up["messages"][-1]["role"], "tool")
 
+    def test_list_memory_tool_is_selected(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the list_memory tool to tell me what you remember.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["list_memory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "list_memory"}})
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
