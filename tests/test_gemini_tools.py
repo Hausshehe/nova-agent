@@ -1284,17 +1284,10 @@ class FilesystemToolTests(unittest.TestCase):
 
 class GetSystemCpuUsageToolTests(unittest.TestCase):
     def test_get_system_cpu_usage_returns_percentage(self):
-        samples = [
-            "cpu  100 20 30 850 0 0 0 0 0 0",
-            "cpu  110 22 33 855 0 0 0 0 0 0",
-        ]
-        with patch.object(Path, "read_text", side_effect=samples):
-            with patch("gemini_agent.tools.time.sleep"):
-                result = get_system_cpu_usage()
-        self.assertRegex(result, r"^\d+\.\d{2}%$")
-        value = float(result[:-1])
-        self.assertGreaterEqual(value, 0.0)
-        self.assertLessEqual(value, 100.0)
+        completed = type("Completed", (), {"stdout": "CPU usage: 37.5%\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            result = get_system_cpu_usage()
+        self.assertEqual(result, "37.50%")
 
     def test_get_system_cpu_usage_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_system_cpu_usage"], get_system_cpu_usage)
