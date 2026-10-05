@@ -97,7 +97,7 @@ from gemini_agent.tools import (
 
 class RunRootCommandToolTests(unittest.TestCase):
     def test_run_root_command_uses_manual_su_shell(self):
-        completed = type("Completed", (), {"stdout": "/system/bin/dumpsys\n", "stderr": ""})()
+        completed = type("Completed", (), {"stdout": "/system/bin/dumpsys\n", "stderr": "", "returncode": 0})()
         with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
             result = run_root_command("command -v dumpsys")
         self.assertEqual(result, "Exit code: 0\\nstdout:\\n/system/bin/dumpsys")
