@@ -65,6 +65,15 @@ def _safe_path(path: str) -> Path:
     return target
 
 
+def create_directory(path: str) -> str:
+    """Create a directory within the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if target.exists():
+        raise ValueError(f"Destination already exists: {path}")
+    target.mkdir(parents=True)
+    return f"Created directory {target.relative_to(_filesystem_root())}"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -281,6 +290,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "create_directory",
+        "description": "Create a directory within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path to create."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -392,6 +412,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
+    "create_directory": create_directory,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
