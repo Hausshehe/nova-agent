@@ -63,6 +63,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(names, ["discover_android_mechanisms"])
 
 
+    def test_foreground_android_component_routes_without_cloudflare(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            client.tool_handlers["get_foreground_android_component"] = lambda: (
+                "Foreground Android component inspection (read-only): "
+                "ResumedActivity: com.termux/.app.TermuxActivity"
+            )
+            answer = client.ask("Inspect the current foreground Android component without interacting with it.")
+        self.assertIn("com.termux/.app.TermuxActivity", answer)
+        open_url.assert_not_called()
+
     def test_inspect_android_ui_routes_without_cloudflare(self):
         with patch.dict(
             os.environ,
