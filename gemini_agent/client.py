@@ -546,7 +546,7 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r"(?:get_process_status|process\s+status).*?(?:for|of|pid)\s+(\d+)(?:[.]\s*)?$",
+                    r"(?:get_process_status|process\s+status).*?(?:for|of|pid)\s+(?:pid\s+)?(\d+)(?:[.]\s*)?$",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
