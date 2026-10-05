@@ -139,6 +139,9 @@ class CloudflareClientTests(unittest.TestCase):
                 },
             }]}}]
         }
+        final_response = {
+            "choices": [{"message": {"content": "Extension status: source edit applied."}}]
+        }
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
@@ -150,6 +153,7 @@ class CloudflareClientTests(unittest.TestCase):
             "gemini_agent.client.TOOL_HANDLERS",
             {"apply_capability_extension": lambda **kwargs: "Extension status: source edit applied."},
         ):
+            open_url.side_effect = [FakeResponse(tool_response), FakeResponse(final_response)]
             client = GeminiClient()
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
         self.assertIn("Extension status: source edit applied.", answer)
