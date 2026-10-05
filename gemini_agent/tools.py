@@ -103,6 +103,22 @@ def write_text_file(path: str, content: str) -> str:
     target.write_bytes(encoded)
     return f"Wrote {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
 
+
+def append_text_file(path: str, content: str) -> str:
+    """Append UTF-8 text to a file under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if target.exists() and not target.is_file():
+        raise ValueError(f"Not a file: {path}")
+    data = str(content)
+    encoded = data.encode("utf-8")
+    if len(encoded) > _MAX_WRITE_BYTES:
+        raise ValueError(f"Content is larger than {_MAX_WRITE_BYTES} bytes.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("ab") as handle:
+        handle.write(encoded)
+    return f"Appended {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
+
+
 def find_files(pattern: str, path: str = ".") -> str:
     """Find files and directories by name pattern under the bounded root."""
     if not pattern:
@@ -125,7 +141,6 @@ def find_files(pattern: str, path: str = ".") -> str:
                 if len(results) >= _MAX_FIND_RESULTS:
                     return "\n".join(results)
     return "\n".join(results) if results else "(no matches)"
-
 
 
 def search_text(pattern: str, path: str = ".") -> str:
@@ -159,6 +174,7 @@ def search_text(pattern: str, path: str = ".") -> str:
                     if len(results) >= _MAX_SEARCH_RESULTS:
                         return "\n".join(results)
     return "\n".join(results) if results else "(no matches)"
+
 
 def remember_fact(key: str, value: str) -> str:
     """Placeholder handler overridden by the agent with persistent memory."""
@@ -257,7 +273,20 @@ TOOL_DECLARATIONS = [
             },
             "required": ["path", "content"],
         },
-    },    {
+    },
+    {
+        "name": "append_text_file",
+        "description": "Append UTF-8 text to a file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "content": {"type": "STRING", "description": "UTF-8 text to append."},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
         "name": "find_files",
         "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
         "parameters": {
@@ -279,6 +308,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
+    "append_text_file": append_text_file,
     "find_files": find_files,
     "search_text": search_text,
 }
