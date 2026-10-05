@@ -226,6 +226,17 @@ def run_root_command(command: str) -> str:
     return result
 
 
+def verify_command_result(result: str, expected: str) -> str:
+    """Verify that a command result contains the expected text."""
+    if not isinstance(result, str) or not result.strip():
+        raise ValueError("Command result cannot be empty.")
+    if not isinstance(expected, str) or not expected.strip():
+        raise ValueError("Expected text cannot be empty.")
+    if expected in result:
+        return f"Verification: passed. Expected text found: {expected}"
+    return f"Verification: failed. Expected text not found: {expected}"
+
+
 def current_datetime() -> str:
     """Return the device's current local date and time."""
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -1700,6 +1711,16 @@ DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
 }
 
 
+VERIFY_COMMAND_RESULT_DECLARATION = {
+    "name": "verify_command_result",
+    "description": "Verify that a command result contains expected text. Use this after executing a command when success must be explicitly checked.",
+    "parameters": {"type": "OBJECT", "properties": {
+        "result": {"type": "STRING", "description": "The command result to verify."},
+        "expected": {"type": "STRING", "description": "Exact text expected in the result."},
+    }, "required": ["result", "expected"]},
+}
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -1723,6 +1744,7 @@ TOOL_DECLARATIONS = [
     },
     FIND_EXECUTABLE_DECLARATION,
     DIAGNOSE_COMMAND_FAILURE_DECLARATION,
+    VERIFY_COMMAND_RESULT_DECLARATION,
     GET_BLUETOOTH_STATUS_DECLARATION,
     RUN_ROOT_COMMAND_DECLARATION,
     GET_AIRPLANE_MODE_DECLARATION,
@@ -2455,6 +2477,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "find_executable": find_executable,
     "diagnose_command_failure": diagnose_command_failure,
+    "verify_command_result": verify_command_result,
     "run_command": run_command,
     "run_root_command": run_root_command,
     "list_processes": list_processes,
