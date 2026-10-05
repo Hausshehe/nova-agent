@@ -134,6 +134,21 @@ def get_hostname() -> str:
     return socket.gethostname()
 
 
+def get_network_addresses() -> str:
+    """Return unique IP addresses resolved for the local device hostname."""
+    hostname = socket.gethostname()
+    try:
+        records = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise RuntimeError("Network addresses are unavailable.") from exc
+    addresses = []
+    for record in records:
+        address = record[4][0]
+        if address not in addresses:
+            addresses.append(address)
+    return "\n".join(addresses) if addresses else "(no network addresses)"
+
+
 def get_cpu_count() -> str:
     """Return the number of logical CPUs visible to the runtime."""
     count = os.cpu_count()
@@ -923,6 +938,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_network_addresses",
+        "description": "Get unique IP addresses resolved for the local device hostname.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_info",
         "description": "Get basic operating system, architecture, and Python runtime information.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1441,6 +1461,11 @@ GET_PROCESS_COMMAND_LINE_DECLARATION = {
     },
 }
 
+GET_NETWORK_ADDRESSES_DECLARATION = {
+    "name": "get_network_addresses",
+    "description": "Get unique IP addresses resolved for the local device hostname.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
 GET_PROCESS_STATUS_DECLARATION = {
     "name": "get_process_status",
     "description": "Get basic status information for a visible local process.",
@@ -1468,6 +1493,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
+    "get_network_addresses": get_network_addresses,
     "get_system_info": get_system_info,
     "get_process_id": get_process_id,
     "get_current_working_directory": get_current_working_directory,
