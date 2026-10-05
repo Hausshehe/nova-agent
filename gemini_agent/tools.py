@@ -65,6 +65,21 @@ _RUN_COMMAND_ALLOWED = {
 }
 _RUN_COMMAND_TIMEOUT_SECONDS = 5
 _MAX_COMMAND_OUTPUT_BYTES = 4096
+_ROOT_COMMAND_TIMEOUT_SECONDS = 5
+_ROOT_COMMAND_OUTPUT_BYTES = 4096
+
+_ROOT_DIAGNOSTIC_PATTERNS = (
+    re.compile(r"^command\s+-v\s+[^\s]+$"),
+    re.compile(r"^which\s+[^\s]+$"),
+    re.compile(r"^readlink\s+-f\s+[^\s]+$"),
+    re.compile(r"^ls(?:\s+-[A-Za-z]+)?(?:\s+[^;&|$]+)?$"),
+    re.compile(r"^find\s+[^;&|$]+$"),
+    re.compile(r"^getprop(?:\s+[^;&|$]+)?$"),
+    re.compile(r"^dumpsys\s+[A-Za-z0-9_.-]+(?:\s+[^;&|$]+)?$"),
+    re.compile(r"^settings\s+get\s+(?:global|system|secure)\s+[A-Za-z0-9_.-]+$"),
+    re.compile(r"^(?:id|whoami|pwd)$"),
+)
+
 
 
 def run_command(command: str) -> str:
@@ -104,6 +119,49 @@ def run_command(command: str) -> str:
         if len(encoded) <= _MAX_COMMAND_OUTPUT_BYTES:
             return value.rstrip()
         return encoded[:_MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="ignore").rstrip() + "\n[output truncated]"
+
+    stdout = trim_output(completed.stdout)
+    stderr = trim_output(completed.stderr)
+    result = f"Exit code: {completed.returncode}"
+    if stdout:
+        result += f"\nstdout:\n{stdout}"
+    if stderr:
+        result += f"\nstderr:\n{stderr}"
+    return result
+
+
+def run_root_command(command: str) -> str:
+    """Run one bounded read-only diagnostic command inside a root shell."""
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("Command cannot be empty.")
+    try:
+        parts = shlex.split(command)
+    except ValueError as exc:
+        raise ValueError(f"Invalid command syntax: {exc}") from exc
+    normalized = " ".join(parts)
+    if not parts or not any(pattern.fullmatch(normalized) for pattern in _ROOT_DIAGNOSTIC_PATTERNS):
+        raise ValueError("Root command is not allowed. Use a bounded read-only diagnostic command.")
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=normalized + "\n",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=_ROOT_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Root command timed out after {_ROOT_COMMAND_TIMEOUT_SECONDS} seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Root command failed to start: {exc}") from exc
+
+    def trim_output(value: str) -> str:
+        encoded = (value or "").encode("utf-8", errors="replace")
+        if len(encoded) <= _ROOT_COMMAND_OUTPUT_BYTES:
+            return (value or "").rstrip()
+        return encoded[:_ROOT_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="ignore").rstrip() + "\n[output truncated]"
 
     stdout = trim_output(completed.stdout)
     stderr = trim_output(completed.stderr)
@@ -2101,6 +2159,17 @@ TOOL_DECLARATIONS = [
     },
 ]
 
+RUN_ROOT_COMMAND_DECLARATION = {
+    "name": "run_root_command",
+    "description": "Run one bounded read-only diagnostic command inside a root shell using Nova's manual su workflow. Use it to discover paths, inspect Android services, and diagnose privileged command failures.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Bounded read-only diagnostic command, such as command -v dumpsys, readlink -f /system/bin/dumpsys, dumpsys wifi, or settings get global airplane_mode_on."}
+        },
+        "required": ["command"],
+    },
+}
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
@@ -2300,6 +2369,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
+    "run_root_command": run_root_command,
     "list_processes": list_processes,
     "get_process_status": get_process_status,
     "get_process_command_line": get_process_command_line,
