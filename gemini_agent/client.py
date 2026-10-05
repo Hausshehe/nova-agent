@@ -60,8 +60,10 @@ class GeminiClient:
             raise ValueError("Tool arguments must be a JSON object.")
         return parsed
 
-    @staticmethod
-    def _requested_local_tool(contents: list[dict]) -> str | None:
+    _TOOL_ALIASES = {"read_text_file": "read_file"}
+
+    @classmethod
+    def _requested_local_tool(cls, contents: list[dict]) -> str | None:
         user_text = ""
         for item in reversed(contents):
             if item.get("role") == "user":
@@ -74,6 +76,9 @@ class GeminiClient:
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
+                return name
+        for alias, name in cls._TOOL_ALIASES.items():
+            if alias in user_text:
                 return name
         return None
 
