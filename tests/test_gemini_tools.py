@@ -33,6 +33,7 @@ from gemini_agent.tools import (
     get_network_interfaces,
     get_load_average,
     get_system_memory_usage,
+    get_system_uptime,
     get_process_id,
     get_current_working_directory,
     get_python_executable,
