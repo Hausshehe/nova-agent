@@ -573,7 +573,7 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r"(?:pid|for\\s+pid|for|of)\\s+(\\d+)",
+                    r"(?:pid|for\s+pid|for|of)\s+(\d+)",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
