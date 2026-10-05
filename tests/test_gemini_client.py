@@ -204,6 +204,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["delete_file"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "delete_file"}})
 
+    def test_get_file_info_tool_is_selected(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the get_file_info tool to inspect notes.txt.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["get_file_info"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "get_file_info"}})
+
     def test_create_directory_alias_selects_make_directory(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
