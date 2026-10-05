@@ -268,7 +268,7 @@ def recover_command(command: str) -> str:
         raise ValueError("Command cannot be empty.")
     try:
         first_result = run_command(command)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         first_result = f"Tool error: {exc}"
 
     if first_result.startswith("Exit code: 0"):
@@ -280,24 +280,27 @@ def recover_command(command: str) -> str:
     if "timed out" in lowered:
         try:
             retry_result = run_command(command)
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             retry_result = f"Tool error: {exc}"
         return diagnosis + "\nAttempts: 2\n" + retry_result
 
-    executable = Path(shlex.split(command)[0]).name
-    if any(term in lowered for term in ("not found", "no such file or directory", "command not found")):
+    parts = shlex.split(command)
+    executable = Path(parts[0]).name
+    if any(term in lowered for term in (
+        "not found",
+        "no such file or directory",
+        "command not found",
+        "command is not allowed",
+    )):
         discovered = find_executable(executable)
         if discovered.startswith("Executable: "):
-            discovered_path = discovered.removeprefix("Executable: ")
-            parts = shlex.split(command)
-            recovered_command = " ".join([shlex.quote(discovered_path), *(shlex.quote(part) for part in parts[1:])])
-            try:
-                recovered_result = run_command(recovered_command)
-            except (RuntimeError, ValueError) as exc:
-                recovered_result = f"Recovery execution failed: {exc}"
-            if recovered_result.startswith("Exit code: 0"):
-                return diagnosis + "\nRecovery: executable path discovered and command succeeded.\n" + recovered_result
-            return diagnosis + "\nRecovery: executable path discovered but corrected command failed.\n" + recovered_result
+            root_safe = bool(_ROOT_DIAGNOSTIC_PATTERNS and any(pattern.fullmatch(command.strip()) for pattern in _ROOT_DIAGNOSTIC_PATTERNS))
+            if root_safe:
+                root_result = run_root_command(command)
+                if root_result.startswith("Exit code: 0"):
+                    return diagnosis + "\nRecovery: executable discovered; used the manual-su root workflow and command succeeded.\n" + root_result
+                return diagnosis + "\nRecovery: executable discovered; root workflow attempted but command failed.\n" + root_result
+            return diagnosis + "\nRecovery: executable path discovered.\n" + discovered
         return diagnosis + "\n" + discovered
 
     return diagnosis + "\nRecovery: no automatic retry performed."
