@@ -24,6 +24,7 @@ from gemini_agent.tools import (
     search_text,
     write_text_file,
     list_directory,
+    list_directory_recursive,
     read_text_file,
 )
 
@@ -133,6 +134,30 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_file_info"], get_file_info)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_file_info", names)
+
+    def test_lists_directory_recursively(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            nested = root / "nested"
+            nested.mkdir()
+            (nested / "todo.txt").write_text("todo", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = list_directory_recursive()
+            self.assertIn("directory: nested", result)
+            self.assertIn("file: nested/todo.txt", result)
+            self.assertIn("file: notes.txt", result)
+
+    def test_list_directory_recursive_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    list_directory_recursive("../outside")
+
+    def test_list_directory_recursive_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["list_directory_recursive"], list_directory_recursive)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("list_directory_recursive", names)
 
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
