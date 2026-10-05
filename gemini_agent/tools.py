@@ -349,6 +349,42 @@ def get_screen_brightness() -> str:
     raise RuntimeError("System screen brightness is unavailable.")
 
 
+def get_screen_brightness_mode() -> str:
+    """Return whether Android screen brightness is automatic or manual."""
+    commands = (
+        ("/system/bin/settings get system screen_brightness_mode", "settings"),
+        ("/system/bin/dumpsys power", "dumpsys"),
+    )
+    try:
+        for command, value_type in commands:
+            result = subprocess.run(
+                ["su", "-c", command],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout.strip()
+            if value_type == "settings" and output in {"0", "1"}:
+                return "Brightness mode: " + ("Automatic" if output == "1" else "Manual")
+            if value_type == "dumpsys":
+                match = re.search(
+                    r"(?im)\bmScreenBrightnessModeSetting\s*[=:]\s*(0|1)\b",
+                    output,
+                )
+                if not match:
+                    match = re.search(
+                        r"(?im)\bscreenBrightnessMode\s*[=:]\s*(0|1)\b",
+                        output,
+                    )
+                if match:
+                    return "Brightness mode: " + (
+                        "Automatic" if match.group(1) == "1" else "Manual"
+                    )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen brightness mode is unavailable.") from exc
+    raise RuntimeError("System screen brightness mode is unavailable.")
+
+
 def get_screen_timeout() -> str:
     """Return the Android screen-off timeout."""
     commands = (
@@ -1488,6 +1524,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_brightness_mode",
+        "description": "Get whether Android screen brightness is automatic or manual.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_screen_timeout",
         "description": "Get the Android screen-off timeout duration.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1959,6 +2000,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
+    "get_screen_brightness_mode": get_screen_brightness_mode,
     "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
     "get_screen_state": get_screen_state,
