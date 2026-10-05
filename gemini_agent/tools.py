@@ -309,8 +309,16 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
 
     try:
         function_tree = ast.parse(function_source, filename="<extension>")
-    except SyntaxError as exc:
-        return f"Extension not applied: implementation is invalid Python: {exc}"
+    except SyntaxError:
+        # Some model tool-call serializers preserve newline escapes literally.
+        # Normalize only that transport artifact, then parse again. Do not use
+        # eval or otherwise execute model-generated source during normalization.
+        normalized_source = function_source.replace("\\n", "\n")
+        try:
+            function_tree = ast.parse(normalized_source, filename="<extension>")
+            function_source = normalized_source
+        except SyntaxError as exc:
+            return f"Extension not applied: implementation is invalid Python: {exc}"
     functions = [node for node in function_tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     if len(functions) != 1:
         return "Extension not applied: function_source must contain exactly one top-level function."
