@@ -186,51 +186,51 @@ class GeminiClient:
                     f"Cloudflare returned an unexpected response: {result}"
                 ) from exc
 
-            content = message.get("content")
-            if content:
-                return str(content)
-
             tool_calls = message.get("tool_calls") or []
-            if not tool_calls:
+            if tool_calls:
+                payload["messages"].append(message)
+                for tool_call in tool_calls:
+                    function = tool_call.get("function") or {}
+                    name = function.get("name")
+                    local_name = next(
+                        (tool_name for tool_name, cloud_name in self._CLOUD_TOOL_NAMES.items() if cloud_name == name),
+                        name,
+                    )
+                    handler = self.tool_handlers.get(local_name)
+                    if handler is None:
+                        raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
+
+                    try:
+                        args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        tool_result = handler(**args)
+                    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                        args = {}
+                        tool_result = f"Tool error: {exc}"
+
+                    trace = {"name": local_name, "args": args, "result": tool_result}
+                    if "expression" in args:
+                        trace["expression"] = str(args["expression"])
+                    self.last_tool_calls.append(trace)
+
+                    payload["messages"].append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id", ""),
+                        "content": str(tool_result),
+                    })
+
+                # Tool execution is Nova's responsibility. After executing the
+                # requested tool(s), ask Cloudflare only to synthesize the result,
+                # preventing the model from repeatedly requesting the same tool.
+                payload.pop("tools", None)
+                payload.pop("tool_choice", None)
+                continue
+
+            content = message.get("content")
+            if not content:
                 raise RuntimeError(
                     f"Cloudflare returned an unexpected response: {result}"
                 )
-
-            payload["messages"].append(message)
-            for tool_call in tool_calls:
-                function = tool_call.get("function") or {}
-                name = function.get("name")
-                local_name = next(
-                    (tool_name for tool_name, cloud_name in self._CLOUD_TOOL_NAMES.items() if cloud_name == name),
-                    name,
-                )
-                handler = self.tool_handlers.get(local_name)
-                if handler is None:
-                    raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
-
-                try:
-                    args = self._parse_tool_arguments(function.get("arguments", "{}"))
-                    tool_result = handler(**args)
-                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                    args = {}
-                    tool_result = f"Tool error: {exc}"
-
-                trace = {"name": local_name, "args": args, "result": tool_result}
-                if "expression" in args:
-                    trace["expression"] = str(args["expression"])
-                self.last_tool_calls.append(trace)
-
-                payload["messages"].append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.get("id", ""),
-                    "content": str(tool_result),
-                })
-
-            # Tool execution is Nova's responsibility. After executing the
-            # requested tool(s), ask Cloudflare only to synthesize the result,
-            # preventing the model from repeatedly requesting the same tool.
-            payload.pop("tools", None)
-            payload.pop("tool_choice", None)
+            return str(content)
 
         raise RuntimeError("Cloudflare requested too many tool calls.")
 
