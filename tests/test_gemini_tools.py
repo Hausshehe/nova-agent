@@ -80,6 +80,7 @@ from gemini_agent.tools import (
     list_directory_recursive,
     read_text_file,
     run_command,
+    run_root_command,
     list_processes,
     get_process_status,
     get_process_command_line,
@@ -92,6 +93,25 @@ from gemini_agent.tools import (
     get_process_nice,
 )
 
+
+
+class RunRootCommandToolTests(unittest.TestCase):
+    def test_run_root_command_uses_manual_su_shell(self):
+        completed = type("Completed", (), {"stdout": "/system/bin/dumpsys\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = run_root_command("command -v dumpsys")
+        self.assertEqual(result, "Exit code: 0\\nstdout:\\n/system/bin/dumpsys")
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "command -v dumpsys\\n")
+
+    def test_run_root_command_rejects_non_diagnostic_commands(self):
+        with self.assertRaises(ValueError):
+            run_root_command("rm -rf /")
+
+    def test_run_root_command_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["run_root_command"], run_root_command)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("run_root_command", names)
 
 
 class ListProcessesToolTests(unittest.TestCase):
