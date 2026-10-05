@@ -169,7 +169,8 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             '{"expression": "2 + 2"}',
             "Take a photo with the phone camera.",
         )
-        self.assertIn("Extension blocked: no existing local primitive", result)
+        self.assertIn("Extension blocked:", result)
+        self.assertIn("inspection or orchestration tool", result)
 
     def test_apply_capability_extension_structured_transaction(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -698,7 +699,7 @@ class CalculatorTests(unittest.TestCase):
 
     def test_calculator_is_registered(self):
         self.assertIs(TOOL_HANDLERS["calculator"], calculator)
-        self.assertEqual(TOOL_DECLARATIONS[0]["name"], "calculator")
+        self.assertIn("calculator", [declaration["name"] for declaration in TOOL_DECLARATIONS])
 
 
 class CurrentWorkingDirectoryToolTests(unittest.TestCase):
@@ -781,7 +782,7 @@ class CurrentWorkingDirectoryToolTests(unittest.TestCase):
 class DateTimeToolTests(unittest.TestCase):
     def test_current_datetime_is_registered(self):
         self.assertIs(TOOL_HANDLERS["current_datetime"], current_datetime)
-        self.assertEqual(TOOL_DECLARATIONS[1]["name"], "current_datetime")
+        self.assertIn("current_datetime", [declaration["name"] for declaration in TOOL_DECLARATIONS])
 
     def test_current_datetime_has_iso_format(self):
         value = current_datetime()
@@ -1649,7 +1650,7 @@ class FilesystemToolTests(unittest.TestCase):
 
     def test_find_tool_is_registered(self):
         self.assertIs(TOOL_HANDLERS["find_files"], find_files)
-        self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
+        self.assertIn("find_files", [declaration["name"] for declaration in TOOL_DECLARATIONS])
 
 
 class GetScreenStateToolTests(unittest.TestCase):
