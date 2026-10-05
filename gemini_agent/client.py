@@ -313,7 +313,19 @@ class GeminiClient:
 
         requested_tool = self._requested_local_tool(contents)
         declarations = self._relevant_tool_declarations(contents)
-        if requested_tool:
+        if requested_tool == "apply_capability_extension":
+            # Extension requests are inherently multi-step: inspect the repository
+            # before proposing an edit, then apply the bounded transaction.
+            extension_tools = {
+                "apply_capability_extension",
+                "read_text_file",
+                "list_directory",
+                "search_text",
+            }
+            declarations = [
+                d for d in self.tool_declarations if d["name"] in extension_tools
+            ]
+        elif requested_tool:
             declarations = [
                 d for d in self.tool_declarations if d["name"] == requested_tool
             ]
@@ -333,7 +345,9 @@ class GeminiClient:
             "max_completion_tokens": 2048,
             "tools": tools,
         }
-        if requested_tool:
+        if requested_tool == "apply_capability_extension":
+            payload["tool_choice"] = "required"
+        elif requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
                 "function": {"name": self._CLOUD_TOOL_NAMES.get(requested_tool, requested_tool)},
@@ -1395,7 +1409,22 @@ class GeminiClient:
                 # For a normal task, retain the tool set so Cloudflare can compose
                 # bounded multi-step work from the observed result. The outer loop
                 # caps the number of tool rounds and therefore bounds execution.
-                if requested_tool:
+                if requested_tool == "apply_capability_extension":
+                    # Keep inspection/edit tools available until the transaction succeeds.
+                    if any(
+                        call.get("function", {}).get("name") == "apply_capability_extension"
+                        for call in tool_calls
+                    ):
+                        successful = all(
+                            trace.get("name") != "apply_capability_extension"
+                            or "Extension status: source edit applied and transaction committed."
+                            in str(trace.get("result", ""))
+                            for trace in self.last_tool_calls
+                        )
+                        if successful:
+                            return str(tool_result)
+                    payload["tool_choice"] = "required"
+                elif requested_tool:
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
                 else:
