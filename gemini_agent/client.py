@@ -106,6 +106,8 @@ class GeminiClient:
             return "inspect_android_ui"
         if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy")):
             return "inspect_android_ui"
+        if any(phrase in user_text for phrase in ("inspect foreground android component", "inspect foreground android app", "current foreground android component", "current foreground activity")):
+            return "get_foreground_android_component"
         if any(phrase in user_text for phrase in ("discover camera control", "camera control environment", "camera shutter mechanism")):
             return "discover_camera_control"
         if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
@@ -454,6 +456,8 @@ class GeminiClient:
         )
         if requested_tool == "inspect_android_ui":
             return str(self.tool_handlers["inspect_android_ui"]())
+        if requested_tool == "get_foreground_android_component":
+            return str(self.tool_handlers["get_foreground_android_component"]())
         if requested_tool == "resolve_android_intent":
             normalized = request_text.upper()
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
