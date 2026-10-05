@@ -91,6 +91,8 @@ class GeminiClient:
                 break
         if "self-test" in user_text or "self test" in user_text:
             return "self_test"
+        if any(phrase in user_text for phrase in ("discover camera control", "camera control environment", "camera shutter mechanism")):
+            return "discover_camera_control"
         if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
             return "plan_capability_extension"
         if "apply capability extension" in user_text or "apply the capability extension" in user_text or "apply the extension" in user_text:
