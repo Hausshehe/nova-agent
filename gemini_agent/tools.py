@@ -464,8 +464,8 @@ def get_media_volume() -> str:
     """Return the current Android media-stream volume as a percentage."""
     try:
         result = subprocess.run(
-            ["su", "-c", "/system/bin/dumpsys audio"],
-            capture_output=True,
+            ["su"],
+            input="/system/bin/dumpsys audio\n",\n            capture_output=True,
             text=True,
             check=False,
         )
