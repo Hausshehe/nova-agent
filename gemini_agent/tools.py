@@ -2983,11 +2983,6 @@ TOOL_DECLARATIONS = [
             "required": ["pattern"],
         },
     },
-    {
-        "name": "discover_camera_control",
-        "description": "Inspect Android for safe, read-only mechanisms that could control the phone camera, without performing a camera action.",
-        "parameters": {"type": "OBJECT", "properties": {}},
-    },
 
 ]
 
