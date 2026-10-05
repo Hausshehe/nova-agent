@@ -79,7 +79,7 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_natural_capability_gap_request_uses_gap_tool(self):
         responses = [
-            self._tool_response("assess_capability_gap", '{"request":"control the phone camera"}'),
+            {"tool_calls": [{"function": {"name": "assess_capability_gap", "arguments": '{"request":"control the phone camera"}'}}]},
         ]
         client, mock_urlopen = self._client_with_responses(responses)
         answer = client.ask("Do I have a capability to control the phone camera?")
