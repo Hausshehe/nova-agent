@@ -362,15 +362,22 @@ class GeminiClient:
                         )
                     )
 
+        plan = plan_capability_extension(request)
+        proposed_name = ""
+        if "Proposed tool: " in plan:
+            proposed_name = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
+            if proposed_name.startswith("extend_"):
+                proposed_name = proposed_name[len("extend_"):]
         context.append(
             "Use apply_capability_extension as a structured implementation transaction. "
             "Provide the existing path gemini_agent/tools.py, a complete single Python function in function_source, "
             "and a concise declaration_description. Do not provide old_text or new_text. "
-            "The function name must match the proposed capability name. The transaction itself will add the "
-            "tool declaration and TOOL_HANDLERS registration. Do not invent Android APIs, permissions, executables, "
-            "services, or device behavior. The implementation must be based only on mechanisms supported by the "
-            "inspected environment; if the environment has not been inspected enough to implement the capability "
-            "safely, do not fabricate an implementation."
+            f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
+            f"The function must be declared exactly as 'def {proposed_name}(' with no alternate or prefixed name. "
+            "The transaction itself will add the tool declaration and TOOL_HANDLERS registration. "
+            "Do not invent Android APIs, permissions, executables, services, or device behavior. "
+            "The implementation must be based only on mechanisms supported by the inspected environment; "
+            "if the environment has not been inspected enough to implement the capability safely, do not fabricate an implementation."
         )
         return "\n".join(context)
 
