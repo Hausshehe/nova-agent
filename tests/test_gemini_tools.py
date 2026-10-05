@@ -83,6 +83,7 @@ from gemini_agent.tools import (
     run_command,
     find_executable,
     diagnose_command_failure,
+    verify_command_result,
     run_root_command,
     list_processes,
     get_process_status,
@@ -1763,6 +1764,22 @@ class GetSystemBootTimeToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_system_boot_time"], get_system_boot_time)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_system_boot_time", names)
+
+
+class VerifyCommandResultToolTests(unittest.TestCase):
+    def test_verify_command_result_passes_when_expected_text_is_present(self):
+        result = verify_command_result("Exit code: 0\nstdout:\n/system/bin/dumpsys", "/system/bin/dumpsys")
+        self.assertEqual(result, "Verification: passed. Expected text found: /system/bin/dumpsys")
+
+    def test_verify_command_result_fails_when_expected_text_is_missing(self):
+        result = verify_command_result("Exit code: 1\nstderr:\nnot found", "/system/bin/dumpsys")
+        self.assertEqual(result, "Verification: failed. Expected text not found: /system/bin/dumpsys")
+
+    def test_verify_command_result_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["verify_command_result"], verify_command_result)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("verify_command_result", names)
+
 
 if __name__ == "__main__":
     unittest.main()
