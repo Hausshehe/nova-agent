@@ -273,6 +273,74 @@ def get_system_cpu_usage() -> str:
                 return f"{usage:.2f}%"
     raise RuntimeError("System CPU usage is unavailable.")
 
+def get_system_battery_status() -> str:
+    """Return the Android device battery level, status, health, temperature, and power source."""
+    try:
+        result = subprocess.run(
+            ["dumpsys", "battery"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System battery status is unavailable.") from exc
+
+    values = {}
+    for line in result.stdout.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip().lower()] = value.strip()
+
+    level = values.get("level")
+    scale = values.get("scale")
+    status = values.get("status")
+    health = values.get("health")
+    temperature = values.get("temperature")
+    voltage = values.get("voltage")
+
+    if not level or not scale or not level.isdigit() or not scale.isdigit() or int(scale) <= 0:
+        raise RuntimeError("System battery status is unavailable.")
+
+    status_names = {
+        "1": "Unknown",
+        "2": "Charging",
+        "3": "Discharging",
+        "4": "Not charging",
+        "5": "Full",
+    }
+    health_names = {
+        "1": "Unknown",
+        "2": "Good",
+        "3": "Overheat",
+        "4": "Dead",
+        "5": "Over voltage",
+        "6": "Unspecified failure",
+        "7": "Cold",
+    }
+
+    parts = [
+        f"Level: {min(100, max(0, int(level) * 100 // int(scale)))}%",
+        f"Status: {status_names.get(status, status or 'Unknown')}",
+        f"Health: {health_names.get(health, health or 'Unknown')}",
+    ]
+    if temperature and re.fullmatch(r"-?\\d+", temperature):
+        parts.append(f"Temperature: {int(temperature) / 10:.1f}°C")
+    if voltage and voltage.isdigit():
+        parts.append(f"Voltage: {int(voltage) / 1000:.3f} V")
+
+    sources = []
+    for key, label in (
+        ("ac powered", "AC"),
+        ("usb powered", "USB"),
+        ("wireless powered", "Wireless"),
+    ):
+        if values.get(key, "").lower() == "true":
+            sources.append(label)
+    parts.append(f"Power source: {', '.join(sources) if sources else 'Battery'}")
+    return "\n".join(parts)
+
+
 def get_system_swap_usage() -> str:
     """Return total, used, and free system swap in bytes."""
     try:
@@ -1664,6 +1732,12 @@ GET_NETWORK_ADDRESSES_DECLARATION = {
     "description": "Get unique IP addresses resolved for the local device hostname.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_SYSTEM_BATTERY_STATUS_DECLARATION = {
+    "name": "get_system_battery_status",
+    "description": "Get the Android device battery level, status, health, temperature, voltage, and power source.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_CPU_USAGE_DECLARATION = {
     "name": "get_system_cpu_usage",
     "description": "Get the current aggregate system CPU usage percentage.",
@@ -1725,6 +1799,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
+    "get_system_battery_status": get_system_battery_status,
     "get_system_cpu_usage": get_system_cpu_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
