@@ -273,8 +273,11 @@ def recover_command(command: str) -> str:
     lowered = first_result.lower()
 
     if "timed out" in lowered:
-        retry_result = retry_command(command)
-        return diagnosis + "\n" + retry_result
+        try:
+            retry_result = run_command(command)
+        except RuntimeError as exc:
+            retry_result = f"Tool error: {exc}"
+        return diagnosis + "\nAttempts: 2\n" + retry_result
 
     executable = Path(shlex.split(command)[0]).name
     if any(term in lowered for term in ("not found", "no such file or directory", "command not found")):
