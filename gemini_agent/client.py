@@ -316,7 +316,7 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r"copy\\s+(.+?)\\s+to\\s+(.+?)(?:[.]\\s*)?$",
+                    r"copy\s+(.+?)\s+to\s+(.+?)(?:[.]\s*)?$",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
