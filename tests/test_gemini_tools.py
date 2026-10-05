@@ -1289,6 +1289,16 @@ class GetSystemCpuUsageToolTests(unittest.TestCase):
             result = get_system_cpu_usage()
         self.assertEqual(result, "37.50%")
 
+    def test_get_system_cpu_usage_parses_android_top(self):
+        completed = type(
+            "Completed",
+            (),
+            {"stdout": "800%cpu   0%user   0%nice   0%sys 800%idle   0%iow   0%irq   0%sirq   0%host\n"},
+        )()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            result = get_system_cpu_usage()
+        self.assertEqual(result, "0.00%")
+
     def test_get_system_cpu_usage_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_system_cpu_usage"], get_system_cpu_usage)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
