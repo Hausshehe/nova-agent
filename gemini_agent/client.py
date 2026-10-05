@@ -454,6 +454,17 @@ class GeminiClient:
                 }]
                 native_tool_calls = False
 
+            if requested_tool == "get_process_uptime" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-process-uptime",
+                    "type": "function",
+                    "function": {
+                        "name": "get_process_uptime",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "get_umask" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-umask",
