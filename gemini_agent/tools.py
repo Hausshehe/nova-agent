@@ -472,7 +472,7 @@ def get_media_volume() -> str:
         )
         output = (result.stdout or "") + "\n" + (getattr(result, "stderr", "") or "")
         stream_volume = re.search(
-            r"(?ms)^\s*-\s*STREAM_MUSIC:\s*\n\s*streamVolume:\s*(\d+)\s*$",
+            r"(?ms)^\s*-\s*STREAM_MUSIC:\s*\n(?:(?!^\s*-\s*STREAM_).)*?\bstreamVolume:\s*(\d+)\b",
             output,
         )
         if stream_volume:
