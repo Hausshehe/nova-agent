@@ -1971,6 +1971,17 @@ TOOL_DECLARATIONS = [
         "description": "List the local tools Nova currently exposes and their purposes.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    {
+        "name": "assess_capability_gap",
+        "description": "Determine whether Nova has a plausible local capability for a requested task, without inventing unsupported capabilities.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability the user is asking whether Nova has."}
+            },
+            "required": ["request"],
+        },
+    },
     FIND_EXECUTABLE_DECLARATION,
     DIAGNOSE_COMMAND_FAILURE_DECLARATION,
     VERIFY_COMMAND_RESULT_DECLARATION,
