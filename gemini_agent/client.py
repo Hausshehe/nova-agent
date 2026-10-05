@@ -254,7 +254,18 @@ class GeminiClient:
 
             if tool_calls:
                 if native_tool_calls:
-                    payload["messages"].append(message)
+                    normalized_message = dict(message)
+                    normalized_tool_calls = []
+                    for tool_call in tool_calls:
+                        normalized_tool_call = dict(tool_call)
+                        function = dict(normalized_tool_call.get("function") or {})
+                        arguments = function.get("arguments", "{}")
+                        if isinstance(arguments, dict):
+                            function["arguments"] = json.dumps(arguments)
+                        normalized_tool_call["function"] = function
+                        normalized_tool_calls.append(normalized_tool_call)
+                    normalized_message["tool_calls"] = normalized_tool_calls
+                    payload["messages"].append(normalized_message)
                 else:
                     payload["messages"].append({
                         "role": "assistant",
