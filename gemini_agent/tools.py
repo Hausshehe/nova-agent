@@ -117,6 +117,19 @@ def get_process_uptime() -> str:
     return f"{max(0.0, uptime):.3f} seconds"
 
 
+def get_process_thread_count() -> str:
+    """Return the number of threads in Nova's current process."""
+    status = Path("/proc/self/status")
+    if not status.is_file():
+        raise RuntimeError("Process thread count is unavailable.")
+    for line in status.read_text(encoding="utf-8").splitlines():
+        if line.startswith("Threads:"):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) > 0:
+                return parts[1]
+    raise RuntimeError("Process thread count is unavailable.")
+
+
 def get_umask() -> str:
     """Return Nova's process file-creation mask as four-digit octal text."""
     status = Path("/proc/self/status")
@@ -652,6 +665,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_process_thread_count",
+        "description": "Get the number of threads in the running Nova process.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_umask",
         "description": "Get Nova's process file-creation mask as four-digit octal text.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -983,6 +1001,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_temp_directory": get_temp_directory,
     "get_home_directory": get_home_directory,
     "get_process_uptime": get_process_uptime,
+    "get_process_thread_count": get_process_thread_count,
     "get_umask": get_umask,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
