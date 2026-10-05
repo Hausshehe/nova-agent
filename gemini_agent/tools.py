@@ -69,6 +69,14 @@ def get_hostname() -> str:
     return socket.gethostname()
 
 
+def get_cpu_count() -> str:
+    """Return the number of logical CPUs visible to the runtime."""
+    count = os.cpu_count()
+    if count is None:
+        raise RuntimeError("CPU count is unavailable.")
+    return str(count)
+
+
 def _filesystem_root() -> Path:
     return Path(os.environ.get("NOVA_FILES_ROOT", os.getcwd())).expanduser().resolve()
 
@@ -533,6 +541,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_cpu_count",
+        "description": "Get the number of logical CPUs visible to the runtime.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -851,6 +864,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
     "get_system_info": get_system_info,
+    "get_cpu_count": get_cpu_count,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
