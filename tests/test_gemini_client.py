@@ -258,6 +258,19 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, screen)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_get_screen_brightness_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        brightness = "Brightness: 50% (128/255)"
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient(tool_handlers={"get_screen_brightness": lambda: brightness})
+            answer = client.ask("Use the get_screen_brightness tool to show the current screen brightness.")
+        self.assertEqual(answer, brightness)
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_system_battery_status_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         battery = (
