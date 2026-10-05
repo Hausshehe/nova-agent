@@ -137,6 +137,14 @@ def get_file_stem(path: str) -> str:
     return target.stem
 
 
+def get_file_permissions(path: str) -> str:
+    """Return a file or directory's Unix permission mode as four-digit octal text."""
+    target = _safe_path(path)
+    if not target.exists() or target.is_symlink():
+        raise ValueError(f"Path does not exist: {path}")
+    return f"{target.stat().st_mode & 0o7777:04o}"
+
+
 def get_file_parent(path: str) -> str:
     """Return a file or directory's parent path relative to Nova's filesystem root."""
     target = _safe_path(path)
