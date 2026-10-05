@@ -125,7 +125,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "    {\n"
             '        \"name\": \"old_tool\",\n'
             '        \"description\": \"old\",\n'
-            '        \"parameters\": {\\"type\\": \\"OBJECT\\", \\"properties\\": {}},\n'
+            '        "parameters": {"type": "OBJECT", "properties": {}},\n'
             "    },\n"
             "]\n"
             "TOOL_HANDLERS: dict[str, Callable[..., str]] = {\n"
