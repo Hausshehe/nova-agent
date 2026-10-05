@@ -69,6 +69,9 @@ class CloudflareClientTests(unittest.TestCase):
             client.last_tool_calls,
             [{"name": "calculator", "args": {"expression": "17 * 23"}, "result": "391", "expression": "17 * 23"}],
         )
+        follow_up = json.loads(open_url.call_args_list[1].args[0].data)
+        self.assertNotIn("tools", follow_up)
+        self.assertNotIn("tool_choice", follow_up)
 
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
