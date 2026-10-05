@@ -161,7 +161,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with patch("gemini_agent.tools.subprocess.run", return_value=completed):
                     result = apply_capability_extension(
-                        "camera shutter capability for a generic test",
+                        "combine two existing local operations",
                         "gemini_agent/tools.py",
                         "existing_tool",
                         "calculator",
@@ -170,9 +170,9 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
             updated = target.read_text(encoding="utf-8")
-            self.assertIn("def camera_shutter_capability_for_a_generic_test()", updated)
-            self.assertIn('"name": "camera_shutter_capability_for_a_generic_test"', updated)
-            self.assertIn('"camera_shutter_capability_for_a_generic_test": camera_shutter_capability_for_a_generic_test', updated)
+            self.assertIn("def combine_two_existing_local_operations()", updated)
+            self.assertIn('"name": "combine_two_existing_local_operations"', updated)
+            self.assertIn('"combine_two_existing_local_operations": combine_two_existing_local_operations', updated)
 
     def test_apply_capability_extension_rolls_back_when_tests_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -270,7 +270,7 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIn("Capability gap:", result)
 
     def test_capability_extension_plan_for_missing_capability(self):
-        result = plan_capability_extension("combine two existing local operations")
+        result = plan_capability_extension("control the phone's camera shutter")
         self.assertIn("Extension plan: capability is missing.", result)
         self.assertIn("Proposed tool: extend_camera_shutter", result)
         self.assertIn("Status: plan only; no code or device state was modified.", result)
