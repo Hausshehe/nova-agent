@@ -349,6 +349,52 @@ def get_screen_brightness() -> str:
     raise RuntimeError("System screen brightness is unavailable.")
 
 
+def get_screen_timeout() -> str:
+    """Return the Android screen-off timeout."""
+    commands = (
+        ("/system/bin/settings get system screen_off_timeout", "settings"),
+        ("/system/bin/dumpsys power", "dumpsys"),
+    )
+    try:
+        for command, value_type in commands:
+            result = subprocess.run(
+                ["su", "-c", command],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout.strip()
+            if value_type == "settings" and re.fullmatch(r"\d+", output):
+                timeout_ms = int(output)
+                if timeout_ms >= 0:
+                    return _format_screen_timeout(timeout_ms)
+            elif value_type == "dumpsys":
+                match = re.search(
+                    r"(?im)\bmScreenOffTimeoutSetting\s*[=:]\s*(\d+)\b",
+                    output,
+                )
+                if not match:
+                    match = re.search(
+                        r"(?im)\bscreenOffTimeout\s*[=:]\s*(\d+)\b",
+                        output,
+                    )
+                if match:
+                    return _format_screen_timeout(int(match.group(1)))
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen timeout is unavailable.") from exc
+    raise RuntimeError("System screen timeout is unavailable.")
+
+
+def _format_screen_timeout(timeout_ms: int) -> str:
+    total_seconds = max(0, timeout_ms) // 1000
+    if total_seconds < 60:
+        return f"Screen timeout: {total_seconds} seconds ({timeout_ms} ms)"
+    minutes, seconds = divmod(total_seconds, 60)
+    if seconds:
+        return f"Screen timeout: {minutes}m {seconds}s ({timeout_ms} ms)"
+    return f"Screen timeout: {minutes} minutes ({timeout_ms} ms)"
+
+
 def get_system_battery_status() -> str:
     """Return the Android device battery level, status, health, temperature, and power source."""
     try:
@@ -1835,6 +1881,12 @@ GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
+    "name": "get_screen_timeout",
+    "description": "Get the Android screen-off timeout duration.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_BATTERY_STATUS_DECLARATION = {
     "name": "get_system_battery_status",
     "description": "Get the Android device battery level, status, health, temperature, voltage, and power source.",
@@ -1902,6 +1954,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
+    "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
     "get_screen_state": get_screen_state,
     "get_screen_brightness": get_screen_brightness,
