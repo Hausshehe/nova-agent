@@ -197,6 +197,11 @@ def forget_fact(key: str) -> str:
     raise RuntimeError("Persistent memory is not configured.")
 
 
+def list_memory() -> str:
+    """Placeholder handler overridden by the agent with persistent memory."""
+    raise RuntimeError("Persistent memory is not configured.")
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -239,6 +244,11 @@ TOOL_DECLARATIONS = [
             },
             "required": ["key"],
         },
+    },
+    {
+        "name": "list_memory",
+        "description": "List the durable facts Nova currently remembers about the user.",
+        "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
         "name": "list_directory",
@@ -327,6 +337,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
+    "list_memory": list_memory,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
