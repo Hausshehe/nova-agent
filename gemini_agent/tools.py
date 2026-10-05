@@ -296,13 +296,27 @@ def recover_command(command: str) -> str:
     )):
         discovered = find_executable(executable)
         if discovered.startswith("Executable: "):
-            root_safe = bool(_ROOT_DIAGNOSTIC_PATTERNS and any(pattern.fullmatch(command.strip()) for pattern in _ROOT_DIAGNOSTIC_PATTERNS))
+            discovered_path = discovered.removeprefix("Executable: ")
+            root_safe = any(
+                pattern.fullmatch(command.strip())
+                for pattern in _ROOT_DIAGNOSTIC_PATTERNS
+            )
             if root_safe:
                 root_result = run_root_command(command)
                 if root_result.startswith("Exit code: 0"):
                     return diagnosis + "\nRecovery: executable discovered; used the manual-su root workflow and command succeeded.\n" + root_result
                 return diagnosis + "\nRecovery: executable discovered; root workflow attempted but command failed.\n" + root_result
-            return diagnosis + "\nRecovery: executable path discovered.\n" + discovered
+
+            recovered_command = " ".join(
+                [shlex.quote(discovered_path), *(shlex.quote(part) for part in parts[1:])]
+            )
+            try:
+                recovered_result = run_command(recovered_command)
+            except (RuntimeError, ValueError) as exc:
+                recovered_result = f"Recovery execution failed: {exc}"
+            if recovered_result.startswith("Exit code: 0"):
+                return diagnosis + "\nRecovery: executable path discovered and command succeeded.\n" + recovered_result
+            return diagnosis + "\nRecovery: executable path discovered but corrected command failed.\n" + recovered_result
         return diagnosis + "\n" + discovered
 
     return diagnosis + "\nRecovery: no automatic retry performed."
