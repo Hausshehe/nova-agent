@@ -37,6 +37,7 @@ from gemini_agent.tools import (
     get_home_directory,
     get_umask,
     get_process_uptime,
+    get_process_thread_count,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -106,6 +107,14 @@ class CurrentWorkingDirectoryToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_temp_directory"], get_temp_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_temp_directory", names)
+
+    def test_process_thread_count_returns_positive_integer(self):
+        self.assertGreater(int(get_process_thread_count()), 0)
+
+    def test_process_thread_count_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_thread_count"], get_process_thread_count)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_process_thread_count", names)
 
 
 class DateTimeToolTests(unittest.TestCase):
