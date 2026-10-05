@@ -1282,6 +1282,43 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertEqual(TOOL_DECLARATIONS[-1]["name"], "find_files")
 
 
+class GetSystemBatteryStatusToolTests(unittest.TestCase):
+    def test_get_system_battery_status_parses_android_dumpsys(self):
+        completed = type(
+            "Completed",
+            (),
+            {
+                "stdout": (
+                    "AC powered: false\\n"
+                    "USB powered: true\\n"
+                    "Wireless powered: false\\n"
+                    "status: 2\\n"
+                    "health: 2\\n"
+                    "level: 87\\n"
+                    "scale: 100\\n"
+                    "voltage: 4191\\n"
+                    "temperature: 253\\n"
+                )
+            },
+        )()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            result = get_system_battery_status()
+        self.assertEqual(
+            result,
+            "Level: 87%\\n"
+            "Status: Charging\\n"
+            "Health: Good\\n"
+            "Temperature: 25.3°C\\n"
+            "Voltage: 4.191 V\\n"
+            "Power source: USB",
+        )
+
+    def test_get_system_battery_status_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_battery_status"], get_system_battery_status)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_battery_status", names)
+
+
 class GetSystemCpuUsageToolTests(unittest.TestCase):
     def test_get_system_cpu_usage_returns_percentage(self):
         completed = type("Completed", (), {"stdout": "CPU usage: 37.5%\n"})()
