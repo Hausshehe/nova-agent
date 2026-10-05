@@ -47,6 +47,28 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
+    def test_natural_self_test_request_uses_self_test_tool(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-self-test",
+                "type": "function",
+                "function": {"name": "self_test", "arguments": "{}"},
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Run the self-test and report whether Nova's local execution substrate is healthy.")
+        self.assertEqual(answer, "Self-test: PASS (5/5 checks passed)")
+        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(client.last_tool_calls[0]["name"], "self_test")
+
     def test_uses_calculator_tool(self):
         tool_response = {
             "choices": [{
