@@ -119,7 +119,45 @@ class CapabilityInventoryToolTests(unittest.TestCase):
 
 
 class CapabilityExtensionToolTests(unittest.TestCase):
-    def test_apply_capability_extension_edits_allowed_python_source(self):
+    def test_apply_capability_extension_edits_and_verifies_python_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "example.py"
+            target.parent.mkdir()
+            target.write_text("VALUE = 1\n", encoding="utf-8")
+            completed = type("Completed", (), {"returncode": 0, "stdout": "OK"})()
+            with patch("gemini_agent.tools._filesystem_root", return_value=root):
+                with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+                    result = apply_capability_extension(
+                        "control the phone camera shutter",
+                        "gemini_agent/example.py",
+                        "VALUE = 1",
+                        "VALUE = 2",
+                    )
+            self.assertIn("Extension status: source edit applied and transaction committed.", result)
+            self.assertIn("deterministic test suite passed", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
+
+    def test_apply_capability_extension_rolls_back_when_tests_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "example.py"
+            target.parent.mkdir()
+            target.write_text("VALUE = 1\n", encoding="utf-8")
+            completed = type("Completed", (), {"returncode": 1, "stdout": "FAILED"})()
+            with patch("gemini_agent.tools._filesystem_root", return_value=root):
+                with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+                    result = apply_capability_extension(
+                        "control the phone camera shutter",
+                        "gemini_agent/example.py",
+                        "VALUE = 1",
+                        "VALUE = 2",
+                    )
+            self.assertIn("Extension rolled back:", result)
+            self.assertIn("deterministic test suite failed", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 1\n")
+
+    def test_apply_capability_extension_rejects_invalid_python_without_editing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / "gemini_agent" / "example.py"
@@ -130,10 +168,11 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     "control the phone camera shutter",
                     "gemini_agent/example.py",
                     "VALUE = 1",
-                    "VALUE = 2",
+                    "VALUE =",
                 )
-            self.assertIn("Extension status: source edit applied.", result)
-            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
+            self.assertIn("proposed source is invalid Python", result)
+            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 1\n")
+
 
     def test_apply_capability_extension_rejects_missing_target_with_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
