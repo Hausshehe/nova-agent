@@ -389,7 +389,8 @@ class GeminiClient:
                 payload = {
                     "model": self.cloudflare_model,
                     "messages": extension_messages,
-                    "max_completion_tokens": 512,
+                    "max_completion_tokens": 1024,
+                    "reasoning_effort": "low",
                     "response_format": {
                         "type": "json_schema",
                         "json_schema": {
