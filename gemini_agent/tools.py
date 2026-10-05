@@ -137,6 +137,37 @@ def move_directory(path: str, destination: str) -> str:
     return f"Moved directory {source.relative_to(_filesystem_root())} to {target.relative_to(_filesystem_root())}"
 
 
+def copy_directory(path: str, destination: str) -> str:
+    """Copy a real directory within the bounded Nova filesystem root."""
+    source = _safe_path(path)
+    target = _safe_path(destination)
+    if not source.exists():
+        raise ValueError(f"Directory does not exist: {path}")
+    if not source.is_dir() or source.is_symlink():
+        raise ValueError(f"Not a directory: {path}")
+    if target.exists():
+        raise ValueError(f"Destination already exists: {destination}")
+    if target == source or source in target.parents:
+        raise ValueError("Destination cannot be inside the source directory.")
+    target.mkdir(parents=True)
+    for current, dirnames, filenames in os.walk(source, followlinks=False):
+        current_path = Path(current)
+        relative = current_path.relative_to(source)
+        destination_dir = target / relative
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        for name in dirnames:
+            source_path = current_path / name
+            if source_path.is_symlink():
+                continue
+            (destination_dir / name).mkdir(exist_ok=True)
+        for name in filenames:
+            source_path = current_path / name
+            if source_path.is_symlink():
+                continue
+            (destination_dir / name).write_bytes(source_path.read_bytes())
+    return f"Copied directory {source.relative_to(_filesystem_root())} to {target.relative_to(_filesystem_root())}"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
