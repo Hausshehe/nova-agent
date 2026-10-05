@@ -229,6 +229,30 @@ def get_memory_usage() -> str:
     raise RuntimeError("Process memory usage is unavailable.")
 
 
+
+def get_system_memory_usage() -> str:
+    """Return total, available, and used system memory in bytes."""
+    try:
+        result = subprocess.run(
+            ["cat", "/proc/meminfo"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System memory usage is unavailable.") from exc
+    values = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].rstrip(":") in {"MemTotal", "MemAvailable"} and parts[1].isdigit():
+            values[parts[0].rstrip(":")] = int(parts[1]) * 1024
+    if "MemTotal" not in values or "MemAvailable" not in values:
+        raise RuntimeError("System memory usage is unavailable.")
+    total = values["MemTotal"]
+    available = values["MemAvailable"]
+    used = max(0, total - available)
+    return f"Total: {total} bytes\\nUsed: {used} bytes\\nAvailable: {available} bytes"
+
 def get_temp_directory() -> str:
     """Return the operating system temporary directory used by Nova."""
     return tempfile.gettempdir()
@@ -1008,6 +1032,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_memory_usage",
+        "description": "Get total, used, and available system memory in bytes.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_network_interfaces",
         "description": "List local network interface names and their operational state.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1536,6 +1565,12 @@ GET_NETWORK_ADDRESSES_DECLARATION = {
     "description": "Get unique IP addresses resolved for the local device hostname.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_SYSTEM_MEMORY_USAGE_DECLARATION = {
+    "name": "get_system_memory_usage",
+    "description": "Get total, used, and available system memory in bytes.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_LOAD_AVERAGE_DECLARATION = {
     "name": "get_load_average",
     "description": "Get the 1, 5, and 15 minute system load averages.",
@@ -1570,6 +1605,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
     "get_load_average": get_load_average,
+    "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
     "get_process_id": get_process_id,
