@@ -315,6 +315,17 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 )
             self.assertIn("implementation_kind must be 'existing_tool'", result)
 
+    def test_apply_capability_extension_rejects_invalid_primitive_arguments(self):
+        result = apply_capability_extension(
+            "combine two existing local operations",
+            "gemini_agent/tools.py",
+            "existing_tool",
+            "calculator",
+            "{}",
+            "Combine the existing operations.",
+        )
+        self.assertIn("arguments do not match existing primitive 'calculator'", result)
+
     def test_apply_capability_extension_rejects_wrong_function_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
