@@ -458,6 +458,17 @@ class GeminiClient:
                 }]
                 native_tool_calls = False
 
+            if requested_tool == "get_screen_brightness" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-screen-brightness",
+                    "type": "function",
+                    "function": {
+                        "name": "get_screen_brightness",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "get_system_battery_status" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-system-battery-status",
