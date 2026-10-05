@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 
-from gemini_agent.tools import plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
+from gemini_agent.tools import plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, validate_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -85,6 +85,16 @@ class GeminiClient:
             filled["request"] = request_text
         return filled
 
+    @staticmethod
+    def _extract_mechanism(request_text: str) -> str:
+        match = re.search(r"(?:mechanism|candidate)\\s*[:=]\\s*([^\\n]+)", request_text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip().strip("`")
+        match = re.search(r"\\b(intent|executable|service|ui):[^\\s,]+", request_text, re.IGNORECASE)
+        if match:
+            return match.group(0)
+        return ""
+
     @classmethod
     def _requested_local_tool(cls, contents: list[dict]) -> str | None:
         user_text = ""
@@ -100,6 +110,8 @@ class GeminiClient:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
             return "discover_android_mechanisms"
+        if any(phrase in user_text for phrase in ("validate android mechanism", "validate an android mechanism", "check android mechanism")):
+            return "validate_android_mechanism"
         if any(phrase in user_text for phrase in ("resolve android intent", "resolve an android intent", "check android intent handler", "inspect android intent handler")):
             return "resolve_android_intent"
         if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect the current android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy")):
@@ -462,6 +474,8 @@ class GeminiClient:
             return str(self.tool_handlers["get_foreground_android_component"]())
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
+        if requested_tool == "validate_android_mechanism":
+            return str(self.tool_handlers["validate_android_mechanism"](request=request_text, mechanism=self._extract_mechanism(request_text)))
         if requested_tool == "resolve_android_intent":
             normalized = request_text.upper()
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
