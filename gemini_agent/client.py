@@ -217,7 +217,7 @@ class GeminiClient:
 
                     if not tool_calls:
                         tool_call_match = re.search(
-                            r"<tool_call>\\s*([a-zA-Z_][a-zA-Z0-9_]*)"
+                            r"<tool_call>\s*([a-zA-Z_][a-zA-Z0-9_]*)"
                             r"(.*?)</tool_call>",
                             content,
                             re.DOTALL,
@@ -226,8 +226,8 @@ class GeminiClient:
                             local_name = tool_call_match.group(1)
                             body = tool_call_match.group(2)
                             pairs = re.findall(
-                                r"<arg_key>\\s*([^<]+?)\\s*</arg_key>"
-                                r"\\s*<arg_value>\\s*(.*?)\\s*</arg_value>",
+                                r"<arg_key>\s*([^<]+?)\s*</arg_key>"
+                                r"\s*<arg_value>\s*(.*?)\s*</arg_value>",
                                 body,
                                 re.DOTALL,
                             )
