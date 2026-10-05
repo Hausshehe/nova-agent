@@ -650,7 +650,7 @@ class FilesystemToolTests(unittest.TestCase):
 
     def test_get_process_uptime_returns_nonnegative_seconds(self):
         result = get_process_uptime()
-        self.assertRegex(result, r"^\\d+\\.\\d{3} seconds$")
+        self.assertRegex(result, r"^\d+\.\d{3} seconds$")
         self.assertGreaterEqual(float(result.split()[0]), 0.0)
 
     def test_get_process_uptime_is_registered(self):
