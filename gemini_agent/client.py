@@ -278,6 +278,35 @@ class GeminiClient:
                         },
                     }]
 
+            # Explicit path-existence requests must use the user's path.
+            if requested_tool == "path_exists" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"path_exists\s+tool\s+to\s+check\s+whether\s+(.+?)\s+exists(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if not match:
+                    match = re.search(
+                        r"path_exists\s+.*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                        str(user_text).strip(),
+                        re.IGNORECASE,
+                    )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-path-exists",
+                        "type": "function",
+                        "function": {
+                            "name": "path_exists",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             # For explicit get_directory_size requests, derive the path from
             # the user's instruction when the model emits no usable tool call.
             if requested_tool == "get_directory_size" and loop_index == 0 and not tool_calls:
@@ -426,7 +455,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool in {"get_directory_size", "count_file_lines"} and loop_index == 0:
+                if requested_tool in {"path_exists", "get_directory_size", "count_file_lines"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. After executing the
