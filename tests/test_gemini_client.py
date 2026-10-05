@@ -45,6 +45,47 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(client.cloudflare_api_token, "cloudflare-token")
         self.assertEqual(client.cloudflare_account_id, "account-id")
 
+    def test_cloudflare_only_provider_skips_gemini(self):
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": '{"expression":"17 * 23"}',
+                        },
+                    }],
+                }
+            }]
+        }
+        final_response = {
+            "choices": [{"message": {"content": "391"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "cloudflare-token",
+                "CLOUDFLARE_ACCOUNT_ID": "account-id",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the calculator tool to calculate 17 * 23.")
+
+        self.assertEqual(answer, "391")
+        self.assertEqual(open_url.call_count, 2)
+        for call in open_url.call_args_list:
+            self.assertIn(
+                "/accounts/account-id/ai/v1/chat/completions",
+                call.args[0].full_url,
+            )
+
     def test_extracts_response_text(self):
         payload = {"candidates": [{"content": {"parts": [{"text": "Hello"}]}}]}
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), patch(
