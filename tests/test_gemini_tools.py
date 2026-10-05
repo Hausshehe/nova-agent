@@ -258,7 +258,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "rm -f /data/local/tmp/nova-ui-hierarchy.xml",
         )
         self.assertIn('text=\"Camera\"', result)
-        self.assertIn("no interaction", result)
+        self.assertIn("without interaction", result)
         self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("inspect_android_ui", names)
