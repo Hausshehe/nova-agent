@@ -69,6 +69,19 @@ def capability_inventory() -> str:
 
 
 
+def send_android_keyevent(keycode: str) -> str:
+    """Send one bounded Android key event through the manually entered root shell."""
+    if not isinstance(keycode, str) or not keycode.strip():
+        raise ValueError("Keycode cannot be empty.")
+    allowed = {"3", "4", "27"}
+    normalized = keycode.strip().upper().replace("KEYCODE_", "")
+    aliases = {"HOME": "3", "BACK": "4", "CAMERA": "27"}
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in allowed:
+        raise ValueError("Unsupported Android keycode. Allowed actions: HOME, BACK, CAMERA.")
+    result = run_root_command(f"input keyevent {normalized}")
+    return f"Android key event {normalized} sent.\n{result}"
+
 def discover_camera_control() -> str:
     """Inspect Android for safe, read-only camera control mechanisms."""
     results = []
@@ -426,8 +439,18 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = "TOOL_DECLARATIONS = ["
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
+    declaration_marker = "TOOL_DECLARATIONS = [\n    {
+        "name": "send_android_keyevent",
+        "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, CAMERA.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"keycode": {"type": "STRING", "description": "HOME, BACK, CAMERA, or Android keycode 3, 4, or 27."}},
+            "required": ["keycode"],
+        },
+    },
+"
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {\n    "send_android_keyevent": send_android_keyevent,
+"
     if declaration_marker not in original or handler_marker not in original:
         return "Extension not applied: required tool integration anchors were not found."
 
