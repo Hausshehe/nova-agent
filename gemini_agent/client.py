@@ -432,6 +432,29 @@ class GeminiClient:
                     tool_calls = [{"id":"requested-file-stem","type":"function","function":{"name":"get_file_stem","arguments":json.dumps({"path":match.group(1).strip()})}}]
                     native_tool_calls = False
 
+            # Explicit file-parent requests must use the user's path.
+            if requested_tool == "get_file_parent" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_parent|parent\s+path|parent\s+directory).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-parent",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_parent",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             # Explicit file-extension requests must use the user's path.
             if requested_tool == "get_file_extension" and loop_index == 0:
                 user_text = ""
