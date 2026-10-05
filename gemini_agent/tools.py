@@ -147,13 +147,6 @@ def plan_capability_extension(request: str) -> str:
         suffix = "_".join(words[:5]) or "requested_capability"
         tool_name = f"extend_{suffix}"
 
-    if tool_name == "extend_camera_shutter" and "camera_shutter" not in TOOL_HANDLERS:
-        return (
-            "Extension blocked: no existing local primitive can safely implement camera shutter.\n"
-            "Environment discovery is required before Nova can extend this capability.\n"
-            "Status: no code or device state was modified."
-        )
-
     return (
         "Extension plan: capability is missing.\n"
         f"Requested capability: {request.strip()}\n"
@@ -322,6 +315,10 @@ def apply_capability_extension(
     if not gap.startswith("Capability gap:"):
         return f"Extension not applied: {gap}"
 
+    plan = plan_capability_extension(request)
+    if plan.startswith("Extension not needed:"):
+        return f"Extension not applied: {plan}"
+
     target = _safe_path(path)
     relative = target.relative_to(_filesystem_root()).as_posix()
     if relative != "gemini_agent/tools.py":
@@ -352,6 +349,13 @@ def apply_capability_extension(
         )
     if target_name == proposed:
         return "Extension not applied: extension primitive must be an existing capability, not the new capability itself."
+
+    if proposed == "camera_shutter":
+        return (
+            "Extension blocked: no existing local primitive can safely implement camera shutter.\n"
+            "Environment discovery is required before Nova can extend this capability.\n"
+            "Status: no code or device state was modified."
+        )
 
     try:
         primitive_signature = inspect.signature(TOOL_HANDLERS[target_name])
