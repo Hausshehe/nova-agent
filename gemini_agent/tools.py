@@ -9,6 +9,7 @@ import operator
 import shutil
 import os
 import platform
+import socket
 from collections.abc import Callable
 from pathlib import Path
 
@@ -61,6 +62,11 @@ def get_system_info() -> str:
         f"Architecture: {platform.machine()}\n"
         f"Python: {platform.python_version()}"
     )
+
+
+def get_hostname() -> str:
+    """Return the device hostname."""
+    return socket.gethostname()
 
 
 def _filesystem_root() -> Path:
@@ -517,6 +523,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_hostname",
+        "description": "Get the device hostname.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_info",
         "description": "Get basic operating system, architecture, and Python runtime information.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -838,6 +849,7 @@ TOOL_DECLARATIONS = [
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
     "current_datetime": current_datetime,
+    "get_hostname": get_hostname,
     "get_system_info": get_system_info,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
