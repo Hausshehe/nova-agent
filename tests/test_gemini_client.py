@@ -279,6 +279,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertTrue(answer)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_get_umask_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the get_umask tool.")
+        self.assertRegex(answer, r"^0[0-7]{3}$")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_home_directory_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
