@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 
-from gemini_agent.tools import LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
+from gemini_agent.tools import GET_PROCESS_STATUS_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -30,7 +30,7 @@ class GeminiClient:
                 "Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID before starting the agent."
             )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
-        self.tool_declarations = [*TOOL_DECLARATIONS, RUN_COMMAND_DECLARATION, LIST_PROCESSES_DECLARATION]
+        self.tool_declarations = [*TOOL_DECLARATIONS, RUN_COMMAND_DECLARATION, LIST_PROCESSES_DECLARATION, GET_PROCESS_STATUS_DECLARATION]
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
 
@@ -84,6 +84,8 @@ class GeminiClient:
             return "run_command"
         if "list_processes" in user_text:
             return "list_processes"
+        if "get_process_status" in user_text:
+            return "get_process_status"
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
@@ -535,6 +537,28 @@ class GeminiClient:
                     },
                 }]
                 native_tool_calls = False
+            if requested_tool == "get_process_status" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_process_status|process\s+status).*?(?:for|of|pid)\s+(\d+)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-status",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_status",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
 
             if requested_tool == "run_command" and loop_index == 0:
                 user_text = ""
