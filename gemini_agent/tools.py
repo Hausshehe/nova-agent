@@ -122,6 +122,21 @@ def list_directory_recursive(path: str = ".") -> str:
     return "\n".join(results) if results else "(empty directory)"
 
 
+def move_directory(path: str, destination: str) -> str:
+    """Move a real directory within the bounded Nova filesystem root."""
+    source = _safe_path(path)
+    target = _safe_path(destination)
+    if not source.exists():
+        raise ValueError(f"Directory does not exist: {path}")
+    if not source.is_dir() or source.is_symlink():
+        raise ValueError(f"Not a directory: {path}")
+    if target.exists():
+        raise ValueError(f"Destination already exists: {destination}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source.rename(target)
+    return f"Moved directory {source.relative_to(_filesystem_root())} to {target.relative_to(_filesystem_root())}"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -405,6 +420,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "move_directory",
+        "description": "Move a directory within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative source directory path."},
+                "destination": {"type": "STRING", "description": "Relative destination directory path."},
+            },
+            "required": ["path", "destination"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -533,6 +560,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "delete_directory": delete_directory,
     "get_file_info": get_file_info,
     "list_directory_recursive": list_directory_recursive,
+    "move_directory": move_directory,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
