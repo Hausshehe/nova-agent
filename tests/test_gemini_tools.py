@@ -124,19 +124,50 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             root = Path(tmp)
             target = root / "gemini_agent" / "example.py"
             target.parent.mkdir()
-            target.write_text("VALUE = 1\n", encoding="utf-8")
+            target.write_text(
+                'def camera_shutter():\n    return "ok"\n\n'
+                'TOOL_DECLARATIONS = [{"name": "old_tool"}]\n'
+                'TOOL_HANDLERS = {"old_tool": lambda: "ok"}\n',
+                encoding="utf-8",
+            )
             completed = type("Completed", (), {"returncode": 0, "stdout": "OK"})()
             with patch("gemini_agent.tools._filesystem_root", return_value=root):
                 with patch("gemini_agent.tools.subprocess.run", return_value=completed):
                     result = apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/example.py",
-                        "VALUE = 1",
-                        "VALUE = 2",
+                        '"name": "old_tool"',
+                        '"name": "old_tool"}, {"name": "camera_shutter"}]\nTOOL_HANDLERS = {"old_tool": lambda: "ok", "camera_shutter": camera_shutter}',
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
             self.assertIn("deterministic test suite passed", result)
-            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
+            self.assertIn('"camera_shutter": camera_shutter', target.read_text(encoding="utf-8"))
+
+    def test_apply_capability_extension_rejects_declaration_without_handler(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "tools.py"
+            target.parent.mkdir()
+            target.write_text(
+                'TOOL_DECLARATIONS = [{"name": "old_tool"}]\n'
+                'TOOL_HANDLERS = {"old_tool": lambda: "ok"}\n',
+                encoding="utf-8",
+            )
+            completed = type("Completed", (), {"returncode": 0, "stdout": "OK"})()
+            with patch("gemini_agent.tools._filesystem_root", return_value=root):
+                with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+                    result = apply_capability_extension(
+                        "control the phone camera shutter",
+                        "gemini_agent/tools.py",
+                        '"name": "old_tool"',
+                        '"name": "old_tool"}, {"name": "camera_shutter"}]',
+                    )
+            self.assertIn("declared but missing", result)
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                'TOOL_DECLARATIONS = [{"name": "old_tool"}]\n'
+                'TOOL_HANDLERS = {"old_tool": lambda: "ok"}\n',
+            )
 
     def test_apply_capability_extension_rolls_back_when_tests_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
