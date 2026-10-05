@@ -36,6 +36,7 @@ from gemini_agent.tools import (
     get_temp_directory,
     get_home_directory,
     get_umask,
+    get_process_uptime,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -646,6 +647,16 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_home_directory"], get_home_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_home_directory", names)
+
+    def test_get_process_uptime_returns_nonnegative_seconds(self):
+        result = get_process_uptime()
+        self.assertRegex(result, r"^\\d+\\.\\d{3} seconds$")
+        self.assertGreaterEqual(float(result.split()[0]), 0.0)
+
+    def test_get_process_uptime_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_uptime"], get_process_uptime)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_process_uptime", names)
 
     def test_get_umask_returns_octal_value(self):
         result = get_umask()
