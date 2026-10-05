@@ -246,7 +246,7 @@ def get_process_command_line(pid: str) -> str:
         raise RuntimeError(f"Process command line is unavailable: {pid}") from exc
     if not raw:
         raise RuntimeError(f"Process command line is unavailable: {pid}")
-    command = " ".join(part for part in raw.decode(errors="replace").split(String.fromCharCode(0)) if part)
+    command = " ".join(part for part in raw.decode(errors="replace").split("\\x00") if part)
     return command or f"PID: {pid}"
 
 
