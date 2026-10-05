@@ -484,7 +484,9 @@ class GeminiClient:
                         "arguments": "{}",
                     },
                 }]
-                native_tool_calls = False            if requested_tool == "get_screen_orientation" and loop_index == 0:
+                native_tool_calls = False
+
+            if requested_tool == "get_screen_orientation" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-screen-orientation",
                     "type": "function",
