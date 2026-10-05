@@ -449,9 +449,9 @@ def get_screen_density() -> str:
             check=False,
         )
         output = result.stdout
-        match = re.search(r"(?im)^Override density:\s*(\\d+)\\s*$", output)
+        match = re.search(r"(?im)^Override density:\s*(\d+)\s*$", output)
         if not match:
-            match = re.search(r"(?im)^Physical density:\s*(\\d+)\\s*$", output)
+            match = re.search(r"(?im)^Physical density:\s*(\d+)\s*$", output)
         if match:
             return f"Screen density: {int(match.group(1))} dpi"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
