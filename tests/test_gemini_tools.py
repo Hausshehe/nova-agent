@@ -84,6 +84,7 @@ from gemini_agent.tools import (
     find_executable,
     diagnose_command_failure,
     verify_command_result,
+    retry_command,
     run_root_command,
     list_processes,
     get_process_status,
@@ -1779,6 +1780,37 @@ class VerifyCommandResultToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["verify_command_result"], verify_command_result)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("verify_command_result", names)
+
+
+class RetryCommandToolTests(unittest.TestCase):
+    def test_retry_command_returns_after_successful_first_attempt(self):
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nok") as run:
+            result = retry_command("pwd")
+        self.assertEqual(result, "Attempts: 1\nExit code: 0\nstdout:\nok")
+        run.assert_called_once_with("pwd")
+
+    def test_retry_command_retries_failed_result_once(self):
+        with patch(
+            "gemini_agent.tools.run_command",
+            side_effect=["Exit code: 1\nstderr:\nfailed", "Exit code: 0\nstdout:\nrecovered"],
+        ) as run:
+            result = retry_command("pwd")
+        self.assertEqual(result, "Attempts: 2\nExit code: 0\nstdout:\nrecovered")
+        self.assertEqual(run.call_count, 2)
+
+    def test_retry_command_retries_timeout_once(self):
+        with patch(
+            "gemini_agent.tools.run_command",
+            side_effect=[RuntimeError("Command timed out after 5 seconds."), "Exit code: 0"],
+        ) as run:
+            result = retry_command("pwd")
+        self.assertEqual(result, "Attempts: 2\nExit code: 0")
+        self.assertEqual(run.call_count, 2)
+
+    def test_retry_command_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["retry_command"], retry_command)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("retry_command", names)
 
 
 if __name__ == "__main__":
