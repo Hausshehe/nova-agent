@@ -63,6 +63,27 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(names, ["discover_android_mechanisms"])
 
 
+    def test_resolve_android_intent_uses_prompt_action_deterministically(self):
+        response = {"choices": [{"message": {"content": "unused"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url, patch(
+            "gemini_agent.client.resolve_android_intent",
+            return_value="Android intent resolution (read-only): android.media.action.IMAGE_CAPTURE\\ncom.transsion.camera/.app.CaptureActivity\\nIntent was resolved only; it was not launched and no device state was modified.",
+        ) as resolve:
+            answer = GeminiClient().ask(
+                "Resolve the Android IMAGE_CAPTURE intent handler without launching the intent, and report the result."
+            )
+        self.assertIn("IMAGE_CAPTURE", answer)
+        resolve.assert_called_once_with(action="IMAGE_CAPTURE")
+        self.assertEqual(open_url.call_count, 1)
+
+
     def test_intent_routing_narrows_unambiguous_capability_set(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
