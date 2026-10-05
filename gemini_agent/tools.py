@@ -694,17 +694,6 @@ TOOL_DECLARATIONS = [
     },
 
     {
-        "name": "run_command",
-        "description": "Run one approved read-only command from Nova's bounded working root.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
-            },
-            "required": ["command"],
-        },
-    },
-    {
         "name": "current_datetime",
         "description": "Get the device's current local date and time.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1099,6 +1088,17 @@ TOOL_DECLARATIONS = [
                 "path": {"type": "STRING", "description": "Relative directory to search."},
             },
             "required": ["pattern"],
+        },
+    },,
+    {
+        "name": "run_command",
+        "description": "Run one approved read-only command from Nova's bounded working root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
+            },
+            "required": ["command"],
         },
     },
 ]
