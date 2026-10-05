@@ -28,7 +28,7 @@ class FakeResponse:
 class GeminiClientTests(unittest.TestCase):
     def test_requires_api_key(self):
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY"):
+            with self.assertRaisesRegex(RuntimeError, "at least one AI provider"):
                 GeminiClient()
 
     def test_allows_cloudflare_only_provider(self):
