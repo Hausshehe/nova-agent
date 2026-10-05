@@ -4,6 +4,8 @@ import ast
 import datetime as dt
 import fnmatch
 import hashlib
+import inspect
+import json
 import re
 import operator
 import shlex
@@ -285,14 +287,25 @@ def _normalize_extension_fragment(fragment: str) -> str:
         normalized.append(match.group(1) if match else line)
     return "\n".join(normalized)
 
-def apply_capability_extension(request: str, path: str, function_source: str, declaration_description: str) -> str:
-    """Apply one bounded structured capability implementation transaction."""
+def apply_capability_extension(
+    request: str,
+    path: str,
+    implementation_kind: str,
+    implementation_target: str,
+    implementation_args: str,
+    declaration_description: str,
+) -> str:
+    """Apply a bounded extension built only from an existing local primitive."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(path, str) or not path.strip():
         raise ValueError("Path cannot be empty.")
-    if not isinstance(function_source, str) or not function_source.strip():
-        raise ValueError("Function source cannot be empty.")
+    if not isinstance(implementation_kind, str) or not implementation_kind.strip():
+        raise ValueError("Implementation kind cannot be empty.")
+    if not isinstance(implementation_target, str) or not implementation_target.strip():
+        raise ValueError("Implementation target cannot be empty.")
+    if not isinstance(implementation_args, str):
+        raise ValueError("Implementation args must be text.")
     if not isinstance(declaration_description, str) or not declaration_description.strip():
         raise ValueError("Declaration description cannot be empty.")
 
@@ -307,42 +320,37 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     if not target.exists() or not target.is_file() or target.is_symlink():
         return f"Extension not applied: target is not a regular source file: {relative}"
 
-    # The model supplies only a function implementation. Treat it as data:
-    # parse it, validate its shape, then canonicalize it before insertion.
-    normalized_source = function_source.replace("\r\n", "\n").replace("\r", "\n")
-    if "\\n" in normalized_source:
-        normalized_source = normalized_source.replace("\\n", "\n")
-    try:
-        function_tree = ast.parse(normalized_source, filename="<extension>")
-    except SyntaxError as exc:
-        return f"Extension not applied: implementation is invalid Python: {exc}"
-
-    functions = [
-        node for node in function_tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
-    if len(functions) != 1:
-        return "Extension not applied: function_source must contain exactly one top-level function."
-
-    function = functions[0]
-    tool_name = function.name
-    if not re.fullmatch(r"[a-z_][a-z0-9_]*", tool_name):
-        return f"Extension not applied: invalid capability function name: {tool_name}"
-    if tool_name.startswith("_"):
-        return "Extension not applied: capability function must be public."
-
     plan = plan_capability_extension(request)
     proposed = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
     if proposed.startswith("extend_"):
         proposed = proposed[len("extend_"):]
-    if tool_name != proposed:
-        return f"Extension not applied: implementation function '{tool_name}' does not match proposed capability '{proposed}'."
+
+    kind = implementation_kind.strip().lower()
+    target_name = implementation_target.strip()
+    if kind != "existing_tool":
+        return (
+            "Extension not applied: implementation_kind must be 'existing_tool'. "
+            "Nova may only compose capabilities from primitives that already exist locally."
+        )
+    if target_name not in TOOL_HANDLERS:
+        return (
+            f"Extension not applied: existing local tool '{target_name}' is not available. "
+            "Inspect capability_inventory before proposing an extension."
+        )
+    if target_name == proposed:
+        return "Extension not applied: extension primitive must be an existing capability, not the new capability itself."
 
     try:
-        function_source = ast.unparse(function_tree)
-        function_tree = ast.parse(function_source, filename="<extension>")
-    except (SyntaxError, ValueError) as exc:
-        return f"Extension not applied: could not normalize implementation Python: {exc}"
+        primitive_signature = inspect.signature(TOOL_HANDLERS[target_name])
+    except (TypeError, ValueError) as exc:
+        return f"Extension not applied: could not inspect primitive '{target_name}': {exc}"
+
+    try:
+        primitive_signature.bind(*([]), **{})
+    except TypeError:
+        # A parameterized primitive is still usable only when the extension
+        # supplies a complete, statically represented argument set.
+        pass
 
     original = target.read_text(encoding="utf-8")
     try:
@@ -354,22 +362,30 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
         node.name for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    if tool_name in existing_functions:
-        return f"Extension not applied: capability function '{tool_name}' already exists."
+    if proposed in existing_functions:
+        return f"Extension not applied: capability function '{proposed}' already exists."
 
     declaration_marker = "TOOL_DECLARATIONS = ["
     handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
     if declaration_marker not in original or handler_marker not in original:
         return "Extension not applied: required tool integration anchors were not found."
 
+    # Generate the wrapper locally. The model never supplies Python source.
+    escaped_target = repr(target_name)
+    escaped_args = repr(implementation_args.strip())
+    function_source = (
+        f"def {proposed}() -> str:\n"
+        f"    return _run_extension_primitive({escaped_target}, {escaped_args})"
+    )
+
     declaration = (
         "    {\n"
-        f'        "name": "{tool_name}",\n'
+        f'        "name": "{proposed}",\n'
         f'        "description": {declaration_description.strip()!r},\n'
         '        "parameters": {"type": "OBJECT", "properties": {}},\n'
         "    },\n"
     )
-    handler_line = f'    "{tool_name}": {tool_name},\n'
+    handler_line = f'    "{proposed}": {proposed},\n'
 
     updated = original.replace(
         declaration_marker,
@@ -382,20 +398,32 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
         1,
     )
 
-    function_insert = function_source.strip() + "\n\n"
-    insertion_anchor = "\ndef self_test()"
-    if insertion_anchor not in updated:
+    helper_marker = "\ndef self_test()"
+    helper_source = (
+        "\ndef _run_extension_primitive(tool_name: str, arguments: str) -> str:\n"
+        "    handler = TOOL_HANDLERS.get(tool_name)\n"
+        "    if handler is None:\n"
+        "        raise ValueError(f\"Unknown extension primitive: {tool_name}\")\n"
+        "    parsed = json.loads(arguments) if arguments.strip() else {}\n"
+        "    if not isinstance(parsed, dict):\n"
+        "        raise ValueError(\"Extension primitive arguments must be a JSON object.\")\n"
+        "    return str(handler(**parsed))\n"
+    )
+    if helper_marker not in updated:
         return "Extension not applied: implementation insertion anchor was not found."
+    updated = updated.replace(helper_marker, helper_source + helper_marker, 1)
+
+    function_marker = helper_source + helper_marker
     updated = updated.replace(
-        insertion_anchor,
-        "\n\n" + function_insert + "def self_test()",
+        function_marker,
+        function_marker + "\n\n" + function_source + "\n",
         1,
     )
 
     try:
         ast.parse(updated, filename=relative)
     except SyntaxError as exc:
-        return f"Extension not applied: proposed source is invalid Python: {exc}"
+        return f"Extension not applied: internally generated source is invalid Python: {exc}"
 
     registration_error = _extension_registered_capability_error(original, updated, request)
     if registration_error:
