@@ -419,22 +419,25 @@ def apply_capability_extension(
     if declaration_index < 0 or handler_index < 0:
         return "Extension not applied: required top-level tool integration anchors were not found."
 
-    declaration_insert_at = declaration_index + len(declaration_marker)
+    declaration_end = original.find("\n]\n", declaration_index)
+    if declaration_end < 0:
+        return "Extension not applied: TOOL_DECLARATIONS closing anchor was not found."
     updated = (
-        original[:declaration_insert_at]
+        original[:declaration_end]
         + "\n"
-        + declaration
-        + original[declaration_insert_at:]
+        + declaration.rstrip("\n")
+        + original[declaration_end:]
     )
-    handler_insert_at = updated.rfind(handler_marker)
-    if handler_insert_at < 0:
-        return "Extension not applied: top-level TOOL_HANDLERS anchor disappeared during transaction generation."
-    handler_insert_at = handler_insert_at + len(handler_marker)
+
+    handler_index = updated.rfind(handler_marker)
+    handler_end = updated.find("\n}\n", handler_index)
+    if handler_index < 0 or handler_end < 0:
+        return "Extension not applied: TOOL_HANDLERS closing anchor was not found."
     updated = (
-        updated[:handler_insert_at]
+        updated[:handler_end]
         + "\n"
-        + handler_line
-        + updated[handler_insert_at:]
+        + handler_line.rstrip("\n")
+        + updated[handler_end:]
     )
 
     helper_marker = "\ndef self_test()"
