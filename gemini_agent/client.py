@@ -254,6 +254,30 @@ class GeminiClient:
 
             content = message.get("content")
 
+            # For explicit hash_file requests, derive the path from the user
+            # instruction when the model emits no usable tool call.
+            if requested_tool == "hash_file" and not tool_calls and not content:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"hash_file\s+.*?(?:of|for)\s+(.+?)(?:[.]\s*)?$|hash(?:\s+the)?\s+(?:SHA-?256\s+)?(?:hash\s+)?(?:of|for)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    path = (match.group(1) or match.group(2)).strip()
+                    tool_calls = [{
+                        "id": "requested-hash-file",
+                        "type": "function",
+                        "function": {
+                            "name": "hash_file",
+                            "arguments": json.dumps({"path": path}),
+                        },
+                    }]
+
             # For explicit copy_directory requests, derive source and destination
             # from the user's instruction instead of trusting model-generated arguments.
             if requested_tool == "copy_directory" and (native_tool_calls or (not tool_calls and not content)):
