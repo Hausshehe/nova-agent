@@ -57,8 +57,37 @@ from gemini_agent.tools import (
     list_directory,
     list_directory_recursive,
     read_text_file,
+    run_command,
 )
 
+
+
+class RunCommandToolTests(unittest.TestCase):
+    def test_run_command_executes_approved_command(self):
+        with patch(
+            "gemini_agent.tools.subprocess.run",
+            return_value=type("Result", (), {
+                "returncode": 0,
+                "stdout": "hello\\n",
+                "stderr": "",
+            })(),
+        ) as run:
+            result = run_command("pwd")
+        self.assertEqual(result, "Exit code: 0\\nstdout:\\nhello")
+        run.assert_called_once()
+
+    def test_run_command_rejects_unapproved_command(self):
+        with self.assertRaisesRegex(ValueError, "Command is not allowed"):
+            run_command("rm file.txt")
+
+    def test_run_command_rejects_unapproved_arguments(self):
+        with self.assertRaisesRegex(ValueError, "Arguments are not allowed"):
+            run_command("git log")
+
+    def test_run_command_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["run_command"], run_command)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("run_command", names)
 
 class CalculatorTests(unittest.TestCase):
     def test_basic_arithmetic(self):
