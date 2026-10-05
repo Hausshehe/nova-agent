@@ -187,6 +187,32 @@ def get_network_interfaces() -> str:
     return "\n".join(interfaces)
 
 
+def get_wifi_status() -> str:
+    """Return the Android Wi-Fi radio state."""
+    commands = (
+        "/system/bin/cmd wifi status",
+        "/system/bin/dumpsys wifi",
+    )
+    try:
+        for command in commands:
+            result = subprocess.run(
+                ["su"],
+                input=command + "\n",
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = (result.stdout or "") + "\n" + (getattr(result, "stderr", "") or "")
+            lowered = output.lower()
+            if re.search(r"\bwi-?fi\s+(?:is\s+)?enabled\b|\bstate\s*[:=]\s*enabled\b", lowered):
+                return "Wi-Fi: Enabled"
+            if re.search(r"\bwi-?fi\s+(?:is\s+)?disabled\b|\bstate\s*[:=]\s*disabled\b", lowered):
+                return "Wi-Fi: Disabled"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Wi-Fi status is unavailable.") from exc
+    raise RuntimeError("Wi-Fi status is unavailable.")
+
+
 def get_cpu_count() -> str:
     """Return the number of logical CPUs visible to the runtime."""
     count = os.cpu_count()
@@ -2079,6 +2105,12 @@ GET_PROCESS_COMMAND_LINE_DECLARATION = {
     },
 }
 
+GET_WIFI_STATUS_DECLARATION = {
+    "name": "get_wifi_status",
+    "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_NETWORK_ADDRESSES_DECLARATION = {
     "name": "get_network_addresses",
     "description": "Get unique IP addresses resolved for the local device hostname.",
@@ -2194,6 +2226,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
+    "get_wifi_status": get_wifi_status,
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
