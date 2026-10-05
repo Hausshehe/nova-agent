@@ -1660,4 +1660,6 @@ class GeminiClient:
         ):
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized_prompt else "IMAGE_CAPTURE"
             return str(self.tool_handlers["resolve_android_intent"](action=action))
+        if requested_tool == "discover_android_ui_actions":
+            return str(self.tool_handlers["discover_android_ui_actions"]())
         return self._generate_cloudflare(contents, system_instruction)
