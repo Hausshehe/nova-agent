@@ -198,12 +198,21 @@ def get_cpu_count() -> str:
 def get_load_average() -> str:
     """Return the 1, 5, and 15 minute system load averages."""
     try:
-        with open("/proc/loadavg", "rb") as stream:
-            values = stream.read(128).decode("ascii").split()
+        result = subprocess.run(
+            ["uptime"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        marker = "load average:"
+        if marker not in output:
+            raise RuntimeError("System load average is unavailable.")
+        values = output.split(marker, 1)[1].replace(",", " ").split()
         if len(values) < 3:
             raise RuntimeError("System load average is unavailable.")
         one, five, fifteen = (float(value) for value in values[:3])
-    except (OSError, UnicodeError, ValueError) as exc:
+    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as exc:
         raise RuntimeError("System load average is unavailable.") from exc
     return f"1m: {one:.2f}\n5m: {five:.2f}\n15m: {fifteen:.2f}"
 
