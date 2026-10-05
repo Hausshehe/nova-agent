@@ -128,12 +128,26 @@ def discover_camera_control() -> str:
 
 def inspect_android_ui() -> str:
     """Inspect the current foreground Android UI hierarchy without interacting with it."""
-    result = run_root_command("uiautomator dump /dev/tty")
-    return (
-        "Android UI inspection (read-only):\n"
-        f"{result}\n"
-        "UI was inspected only; no interaction or device state change was performed."
-    )
+    dump_path = "/data/local/tmp/nova-ui-hierarchy.xml"
+    try:
+        dump_result = run_root_command(f"uiautomator dump {dump_path}")
+        if not dump_result.startswith("Exit code: 0"):
+            return (
+                "Android UI inspection (read-only):\n"
+                f"{dump_result}\n"
+                "UI was inspected only; no interaction or device state change was performed."
+            )
+        read_result = run_root_command(f"cat {dump_path}")
+        return (
+            "Android UI inspection (read-only):\n"
+            f"{read_result}\n"
+            "UI hierarchy was captured without interaction or device state change."
+        )
+    finally:
+        try:
+            run_root_command(f"rm -f {dump_path}")
+        except (RuntimeError, ValueError):
+            pass
 
 
 def discover_android_mechanisms(request: str) -> str:
@@ -723,6 +737,9 @@ _ROOT_DIAGNOSTIC_PATTERNS = (
     re.compile(r"^cmd\s+package\s+resolve-activity\s+--brief\s+-a\s+android\.media\.action\.IMAGE_CAPTURE$"),
     re.compile(r"^cmd\s+package\s+resolve-activity\s+--brief\s+-a\s+android\.media\.action\.STILL_IMAGE_CAMERA$"),
     re.compile(r"^uiautomator\s+dump\s+/dev/tty$"),
+    re.compile(r"^uiautomator\s+dump\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
+    re.compile(r"^cat\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
+    re.compile(r"^rm\s+-f\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
     re.compile(r"^settings\s+get\s+(?:global|system|secure)\s+[A-Za-z0-9_.-]+$"),
     re.compile(r"^(?:id|whoami|pwd)$"),
 )
