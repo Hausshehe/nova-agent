@@ -204,6 +204,36 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["delete_file"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "delete_file"}})
 
+    def test_get_disk_usage_tool_is_selected(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the get_disk_usage tool to inspect the current filesystem.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["get_disk_usage"])
+        self.assertEqual(
+            sent["tool_choice"],
+            {"type": "function", "function": {"name": "get_disk_usage"}},
+        )
+
+    def test_get_disk_usage_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the get_disk_usage tool to inspect the current filesystem.")
+        self.assertRegex(
+            answer,
+            r"^Total: \d+ bytes\nUsed: \d+ bytes\nFree: \d+ bytes$",
+        )
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_file_info_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
