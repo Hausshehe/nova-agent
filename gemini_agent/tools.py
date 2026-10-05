@@ -1560,6 +1560,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_orientation",
+        "description": "Get the current Android display orientation.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_screen_timeout",
         "description": "Get the Android screen-off timeout duration.",
         "parameters": {"type": "OBJECT", "properties": {}},
