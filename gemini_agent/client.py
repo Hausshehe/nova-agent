@@ -1637,4 +1637,9 @@ class GeminiClient:
         ]
         self.last_tool_calls = []
         self.last_grounding_sources = []
+        requested_tool = self._requested_local_tool(contents)
+        if requested_tool == "resolve_android_intent":
+            normalized = str(prompt).upper()
+            action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
+            return str(self.tool_handlers["resolve_android_intent"](action=action))
         return self._generate_cloudflare(contents, system_instruction)
