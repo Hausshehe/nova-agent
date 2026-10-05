@@ -97,52 +97,8 @@ def send_android_intent(action: str) -> str:
 
 
 def discover_camera_control() -> str:
-    """Inspect Android for safe camera control mechanisms and foreground the camera for UI inspection."""
-    results = []
-
-    for executable in ("cmd", "dumpsys", "am"):
-        results.append(f"{executable}: {find_executable(executable)}")
-
-    diagnostics = (
-        (
-            "image-capture activity",
-            "cmd package resolve-activity --brief -a android.media.action.IMAGE_CAPTURE",
-        ),
-        (
-            "still-image camera activity",
-            "cmd package resolve-activity --brief -a android.media.action.STILL_IMAGE_CAMERA",
-        ),
-        ("camera service", "dumpsys media.camera"),
-    )
-    for label, command in diagnostics:
-        try:
-            result = run_root_command(command)
-        except (RuntimeError, ValueError) as exc:
-            result = f"Diagnostic unavailable: {exc}"
-        results.append(f"{label}:\n{result}")
-
-    # The UI hierarchy is only meaningful when the camera is foregrounded.
-    # Launch the still-image camera through the bounded action primitive first,
-    # then perform the read-only hierarchy dump.
-    try:
-        launch_result = _run_bounded_root_action(
-            "am start -a android.media.action.STILL_IMAGE_CAMERA"
-        )
-    except (RuntimeError, ValueError) as exc:
-        launch_result = f"Camera foregrounding unavailable: {exc}"
-    results.append(f"camera foreground launch:\n{launch_result}")
-
-    try:
-        hierarchy = _dump_camera_ui_hierarchy()
-    except (RuntimeError, ValueError) as exc:
-        hierarchy = f"Diagnostic unavailable: {exc}"
-    results.append(f"camera UI hierarchy:\n{hierarchy}")
-
-    return (
-        "Camera control environment discovery:\n"
-        + "\n".join(results)
-        + "\nCamera was foregrounded for UI inspection; no shutter action was performed."
-    )
+    """Discover camera-related Android mechanisms without launching or controlling the camera."""
+    return discover_android_mechanisms("control the phone camera")
 
 def discover_android_mechanisms(request: str) -> str:
     """Discover safe, read-only Android mechanisms that may implement a missing capability."""
