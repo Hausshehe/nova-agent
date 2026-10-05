@@ -30,6 +30,7 @@ from gemini_agent.tools import (
     get_system_info,
     get_system_battery_status,
     get_screen_state,
+    get_screen_brightness,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1300,6 +1301,23 @@ class GetScreenStateToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_screen_state"], get_screen_state)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_screen_state", names)
+
+    
+class GetScreenBrightnessToolTests(unittest.TestCase):
+    def test_get_screen_brightness_parses_android_setting(self):
+        completed = type("Completed", (), {"stdout": "128\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_brightness()
+        self.assertEqual(result, "Brightness: 50% (128/255)")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["su", "-c", "/system/bin/settings get system screen_brightness"],
+        )
+
+    def test_get_screen_brightness_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_brightness"], get_screen_brightness)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_brightness", names)
 
 
 class GetSystemBatteryStatusToolTests(unittest.TestCase):
