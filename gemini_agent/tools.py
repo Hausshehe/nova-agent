@@ -2407,3 +2407,246 @@ GET_PROCESS_NICE_DECLARATION = {
     },
 }
 GET_PROCESS_CPU_TIME_DECLARATION = {
+    "name": "get_process_cpu_time",
+    "description": "Get user, system, and total CPU time of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_START_TIME_DECLARATION = {
+    "name": "get_process_start_time",
+    "description": "Get the local start time of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_WORKING_DIRECTORY_DECLARATION = {
+    "name": "get_process_working_directory",
+    "description": "Get the working directory of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_COMMAND_LINE_DECLARATION = {
+    "name": "get_process_command_line",
+    "description": "Get the command line of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
+
+GET_WIFI_STATUS_DECLARATION = {
+    "name": "get_wifi_status",
+    "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_NETWORK_ADDRESSES_DECLARATION = {
+    "name": "get_network_addresses",
+    "description": "Get unique IP addresses resolved for the local device hostname.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+GET_SYSTEM_SCREEN_STATE_DECLARATION = {
+    "name": "get_screen_state",
+    "description": "Get whether the Android device screen is currently on or off.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION = {
+    "name": "get_screen_brightness",
+    "description": "Get the Android device screen brightness as a percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION = {
+    "name": "get_screen_orientation",
+    "description": "Get the current Android display orientation.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION = {
+    "name": "get_screen_resolution",
+    "description": "Get the Android physical display resolution.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SCREEN_DENSITY_DECLARATION = {
+    "name": "get_screen_density",
+    "description": "Get the current Android display density in dots per inch.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_MEDIA_VOLUME_DECLARATION = {
+    "name": "get_media_volume",
+    "description": "Get the current Android media-stream volume as a percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
+    "name": "get_screen_refresh_rate",
+    "description": "Get the current Android display refresh rate in Hz.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
+    "name": "get_screen_timeout",
+    "description": "Get the Android screen-off timeout duration.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_BATTERY_STATUS_DECLARATION = {
+    "name": "get_system_battery_status",
+    "description": "Get the Android device battery level, status, health, temperature, voltage, and power source.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_CPU_USAGE_DECLARATION = {
+    "name": "get_system_cpu_usage",
+    "description": "Get the current aggregate system CPU usage percentage.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_MEMORY_USAGE_DECLARATION = {
+    "name": "get_system_memory_usage",
+    "description": "Get total, used, and available system memory in bytes.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_BOOT_TIME_DECLARATION = {
+    "name": "get_system_boot_time",
+    "description": "Get the device boot time as local ISO-8601 text.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_SYSTEM_SWAP_USAGE_DECLARATION = {
+    "name": "get_system_swap_usage",
+    "description": "Get total, used, and free system swap in bytes.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+GET_LOAD_AVERAGE_DECLARATION = {
+    "name": "get_load_average",
+    "description": "Get the 1, 5, and 15 minute system load averages.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+GET_PROCESS_STATUS_DECLARATION = {
+    "name": "get_process_status",
+    "description": "Get basic status information for a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
+
+TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "find_executable": find_executable,
+    "diagnose_command_failure": diagnose_command_failure,
+    "verify_command_result": verify_command_result,
+    "retry_command": retry_command,
+    "recover_command": recover_command,
+    "run_command": run_command,
+    "run_root_command": run_root_command,
+    "list_processes": list_processes,
+    "get_process_status": get_process_status,
+    "get_process_command_line": get_process_command_line,
+    "get_process_executable": get_process_executable,
+    "get_process_working_directory": get_process_working_directory,
+    "get_process_parent_name": get_process_parent_name,
+    "get_process_start_time": get_process_start_time,
+    "get_process_cpu_time": get_process_cpu_time,
+    "get_process_nice": get_process_nice,
+        "get_process_memory_usage": get_process_memory_usage,
+    "calculator": calculator,
+    "current_datetime": current_datetime,
+    "get_hostname": get_hostname,
+    "get_network_addresses": get_network_addresses,
+    "get_wifi_status": get_wifi_status,
+    "get_bluetooth_status": get_bluetooth_status,
+    "get_airplane_mode": get_airplane_mode,
+    "get_load_average": get_load_average,
+    "get_system_uptime": get_system_uptime,
+    "get_system_boot_time": get_system_boot_time,
+    "get_system_swap_usage": get_system_swap_usage,
+    "get_screen_brightness_mode": get_screen_brightness_mode,
+    "get_screen_orientation": get_screen_orientation,
+    "get_screen_resolution": get_screen_resolution,
+    "get_screen_density": get_screen_density,
+    "get_media_volume": get_media_volume,
+    "get_screen_refresh_rate": get_screen_refresh_rate,
+    "get_screen_timeout": get_screen_timeout,
+    "get_system_battery_status": get_system_battery_status,
+    "get_screen_state": get_screen_state,
+    "get_screen_brightness": get_screen_brightness,
+    "get_system_cpu_usage": get_system_cpu_usage,
+    "get_system_memory_usage": get_system_memory_usage,
+    "get_network_interfaces": get_network_interfaces,
+    "get_system_info": get_system_info,
+    "get_process_id": get_process_id,
+    "get_current_working_directory": get_current_working_directory,
+    "get_python_executable": get_python_executable,
+    "get_cpu_count": get_cpu_count,
+    "get_memory_usage": get_memory_usage,
+    "get_temp_directory": get_temp_directory,
+    "get_home_directory": get_home_directory,
+    "get_process_uptime": get_process_uptime,
+    "get_process_thread_count": get_process_thread_count,
+    "get_parent_process_id": get_parent_process_id,
+    "get_process_group_id": get_process_group_id,
+    "get_session_id": get_session_id,
+    "get_user_id": get_user_id,
+    "get_umask": get_umask,
+    "remember_fact": remember_fact,
+    "forget_fact": forget_fact,
+    "list_memory": list_memory,
+    "path_exists": path_exists,
+    "create_directory": create_directory,
+    "delete_directory": delete_directory,
+    "get_file_info": get_file_info,
+    "get_file_access_time": get_file_access_time,
+    "get_file_modified_time": get_file_modified_time,
+    "get_file_extension": get_file_extension,
+    "get_file_name": get_file_name,
+    "get_file_stem": get_file_stem,
+    "get_file_parent": get_file_parent,
+    "get_file_permissions": get_file_permissions,
+    "list_directory_recursive": list_directory_recursive,
+    "move_directory": move_directory,
+    "copy_directory": copy_directory,
+    "hash_file": hash_file,
+    "get_directory_entry_count": get_directory_entry_count,
+    "get_disk_usage": get_disk_usage,
+    "get_directory_size": get_directory_size,
+    "count_file_lines": count_file_lines,
+    "list_directory": list_directory,
+    "read_text_file": read_text_file,
+    "write_text_file": write_text_file,
+    "edit_text_file": edit_text_file,
+    "append_text_file": append_text_file,
+    "copy_file": copy_file,
+    "move_file": move_file,
+    "delete_file": delete_file,
+    "find_files": find_files,
+    "search_text": search_text,
+}
+
+
+GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
+    "name": "get_screen_timeout",
+    "description": "Get the Android screen-off timeout duration.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
