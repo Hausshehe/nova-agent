@@ -280,6 +280,24 @@ def get_process_parent_name(pid: str) -> str:
     raise RuntimeError(f"Parent process name is unavailable: {pid}")
 
 
+def get_process_memory_usage(pid: str) -> str:
+    """Return resident memory usage of a visible Linux process in bytes."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    status_path = Path("/proc") / pid / "status"
+    if not status_path.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        for line in status_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmRSS:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    return str(int(parts[1]) * 1024)
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"Process memory usage is unavailable: {pid}") from exc
+    raise RuntimeError(f"Process memory usage is unavailable: {pid}")
+
+
 def get_process_cpu_time(pid: str) -> str:
     """Return user, system, and total CPU time of a visible Linux process."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -1329,6 +1347,11 @@ GET_PROCESS_PARENT_NAME_DECLARATION = {
         "required": ["pid"],
     },
 }
+GET_PROCESS_MEMORY_USAGE_DECLARATION = {
+    "name": "get_process_memory_usage",
+    "description": "Get resident memory usage in bytes for a visible local process.",
+    "parameters": {"type": "OBJECT", "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}}, "required": ["pid"]},
+}
 GET_PROCESS_CPU_TIME_DECLARATION = {
     "name": "get_process_cpu_time",
     "description": "Get user, system, and total CPU time of a visible local process.",
@@ -1392,6 +1415,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_parent_name": get_process_parent_name,
     "get_process_start_time": get_process_start_time,
     "get_process_cpu_time": get_process_cpu_time,
+    "get_process_memory_usage": get_process_memory_usage,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
