@@ -18,8 +18,6 @@ class GeminiClient:
         tool_handlers: dict[str, Callable[..., str]] | None = None,
     ) -> None:
         self.api_key = os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise RuntimeError("Set GEMINI_API_KEY before starting the agent.")
         self.model = model
         self.fallback_model = fallback_model
         self.groq_api_key = os.environ.get("GROQ_API_KEY")
@@ -31,6 +29,15 @@ class GeminiClient:
         self.cloudflare_model = os.environ.get(
             "CLOUDFLARE_MODEL", "@cf/zai-org/glm-4.7-flash"
         )
+        if not any((
+            self.api_key,
+            self.groq_api_key,
+            self.openrouter_api_key,
+            self.cloudflare_api_token and self.cloudflare_account_id,
+        )):
+            raise RuntimeError(
+                "Configure at least one AI provider before starting the agent."
+            )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
