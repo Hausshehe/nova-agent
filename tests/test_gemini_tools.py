@@ -18,6 +18,7 @@ from gemini_agent.tools import (
     current_datetime,
     edit_text_file,
     get_file_info,
+    hash_file,
     delete_directory,
     delete_file,
     find_files,
@@ -239,6 +240,34 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["copy_directory"], copy_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("copy_directory", names)
+
+    def test_hashes_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = hash_file("notes.txt")
+            self.assertEqual(
+                result,
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            )
+
+    def test_hash_file_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "Not a regular file"):
+                    hash_file("missing.txt")
+
+    def test_hash_file_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    hash_file("../outside.txt")
+
+    def test_hash_file_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["hash_file"], hash_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("hash_file", names)
 
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
