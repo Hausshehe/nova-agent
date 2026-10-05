@@ -438,6 +438,29 @@ def get_screen_resolution() -> str:
         raise RuntimeError("System screen resolution is unavailable.") from exc
     raise RuntimeError("System screen resolution is unavailable.")
 
+def get_screen_refresh_rate() -> str:
+    """Return the Android display refresh rate in Hz."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/dumpsys display"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = result.stdout
+        patterns = (
+            r"(?im)\bmRefreshRate\s*[=:]\s*(\d+(?:\.\d+)?)",
+            r"(?im)\brefreshRate\s*[=:]\s*(\d+(?:\.\d+)?)",
+            r"(?im)\bRefreshRate\s*[=:]\s*(\d+(?:\.\d+)?)",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, output)
+            if match:
+                return f"Screen refresh rate: {float(match.group(1)):g} Hz"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen refresh rate is unavailable.") from exc
+    raise RuntimeError("System screen refresh rate is unavailable.")
+
 
 def get_screen_timeout() -> str:
     """Return the Android screen-off timeout."""
@@ -2003,6 +2026,12 @@ GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
+    "name": "get_screen_refresh_rate",
+    "description": "Get the current Android display refresh rate in Hz.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "name": "get_screen_timeout",
     "description": "Get the Android screen-off timeout duration.",
@@ -2079,6 +2108,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_screen_brightness_mode": get_screen_brightness_mode,
     "get_screen_orientation": get_screen_orientation,
     "get_screen_resolution": get_screen_resolution,
+    "get_screen_refresh_rate": get_screen_refresh_rate,
     "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
     "get_screen_state": get_screen_state,
