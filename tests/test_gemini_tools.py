@@ -117,6 +117,17 @@ class CapabilityInventoryToolTests(unittest.TestCase):
 
 
 class SelfTestToolTests(unittest.TestCase):
+    def test_capability_gap_reports_match(self):
+        from gemini_agent.tools import assess_capability_gap
+        result = assess_capability_gap("what is the battery level")
+        self.assertIn("get_system_battery_status", result)
+        self.assertIn("Capability match:", result)
+
+    def test_capability_gap_reports_missing_capability(self):
+        from gemini_agent.tools import assess_capability_gap
+        result = assess_capability_gap("control the phone's camera shutter")
+        self.assertIn("Capability gap:", result)
+
     def test_self_test_passes(self):
         result = self_test()
         self.assertRegex(result, r"^Self-test: PASS \(5/5 checks passed\)$")
