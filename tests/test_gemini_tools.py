@@ -30,6 +30,7 @@ from gemini_agent.tools import (
     get_hostname,
     get_process_id,
     get_current_working_directory,
+    get_python_executable,
     get_cpu_count,
     path_exists,
     hash_file,
@@ -75,6 +76,15 @@ class CurrentWorkingDirectoryToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_current_working_directory"], get_current_working_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_current_working_directory", names)
+
+    def test_python_executable(self):
+        with patch("os.sys.executable", "/data/data/com.termux/files/usr/bin/python"):
+            self.assertEqual(get_python_executable(), "/data/data/com.termux/files/usr/bin/python")
+
+    def test_python_executable_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_python_executable"], get_python_executable)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_python_executable", names)
 
 
 class DateTimeToolTests(unittest.TestCase):
