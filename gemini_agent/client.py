@@ -129,10 +129,10 @@ class GeminiClient:
                 })
 
         requested_tool = self._requested_local_tool(contents)
-        declarations = TOOL_DECLARATIONS
+        declarations = self.tool_declarations
         if requested_tool:
             declarations = [
-                d for d in TOOL_DECLARATIONS if d["name"] == requested_tool
+                d for d in self.tool_declarations if d["name"] == requested_tool
             ]
 
         tools = [{
