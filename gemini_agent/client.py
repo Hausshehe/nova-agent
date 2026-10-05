@@ -895,20 +895,17 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r'verify_command_result.*?result\s+"([^"]+)"\s+with\s+expected\s+"([^"]+)"\.?
-                user_text = ""
-                for item in reversed(payload["messages"]):
-                    if item.get("role") == "user":
-                        user_text = item.get("content", "")
-                        break
-                match = re.search(r"`([^\`]+)`", str(user_text))
+                    r'verify_command_result.*?result\s+"([^"]+)"\s+with\s+expected\s+"([^"]+)"\.?$',
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
                 if match:
                     tool_calls = [{
-                        "id": "requested-run-command",
+                        "id": "requested-verify-command-result",
                         "type": "function",
                         "function": {
-                            "name": "run_command",
-                            "arguments": json.dumps({"command": match.group(1).strip()}),
+                            "name": "verify_command_result",
+                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
                         },
                     }]
                     native_tool_calls = False
