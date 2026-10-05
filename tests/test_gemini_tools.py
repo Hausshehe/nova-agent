@@ -16,6 +16,7 @@ from gemini_agent.tools import (
     create_directory,
     current_datetime,
     edit_text_file,
+    get_file_info,
     delete_directory,
     delete_file,
     find_files,
@@ -114,6 +115,25 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("delete_directory", names)
 
+    def test_gets_file_info(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = get_file_info("notes.txt")
+            self.assertEqual(result, "Path: notes.txt\\nType: file\\nSize: 5 bytes")
+
+    def test_get_file_info_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "does not exist"):
+                    get_file_info("missing.txt")
+
+    def test_get_file_info_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_file_info"], get_file_info)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_file_info", names)
+
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -150,7 +170,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("create_directory"):names.index("find_files") + 1], [
-            "create_directory", "delete_directory", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "create_directory", "delete_directory", "get_file_info", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
