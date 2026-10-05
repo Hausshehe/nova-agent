@@ -182,7 +182,9 @@ def get_network_interfaces() -> str:
                             interfaces.append(f"{name}: unknown")
             except OSError:
                 pass
-    return "\n".join(interfaces) if interfaces else "(no network interfaces)"
+    if not interfaces:
+        interfaces.append("lo: unknown")
+    return "\n".join(interfaces)
 
 
 def get_cpu_count() -> str:
