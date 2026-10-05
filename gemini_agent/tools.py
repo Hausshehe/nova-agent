@@ -119,6 +119,21 @@ def append_text_file(path: str, content: str) -> str:
     return f"Appended {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
 
 
+def move_file(path: str, destination: str) -> str:
+    """Move a regular file within the bounded Nova filesystem root."""
+    source = _safe_path(path)
+    target = _safe_path(destination)
+    if not source.exists():
+        raise ValueError(f"File does not exist: {path}")
+    if not source.is_file() or source.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    if target.exists():
+        raise ValueError(f"Destination already exists: {destination}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source.rename(target)
+    return f"Moved {source.relative_to(_filesystem_root())} to {target.relative_to(_filesystem_root())}"
+
+
 def delete_file(path: str) -> str:
     """Delete a regular file under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -308,6 +323,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "move_file",
+        "description": "Move a regular file within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to move."},
+                "destination": {"type": "STRING", "description": "Relative destination path for the file."},
+            },
+            "required": ["path", "destination"],
+        },
+    },
+    {
         "name": "delete_file",
         "description": "Delete a regular file under Nova's allowed local filesystem root.",
         "parameters": {
@@ -342,6 +369,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
     "append_text_file": append_text_file,
+    "move_file": move_file,
     "delete_file": delete_file,
     "find_files": find_files,
     "search_text": search_text,
