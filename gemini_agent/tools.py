@@ -409,6 +409,11 @@ def get_screen_orientation() -> str:
             match = re.search(r"(?im)\bSurfaceOrientation\s*[:=]\s*(0|1|2|3)\b", output)
             if not match:
                 match = re.search(r"(?im)\bmDisplayRotation\s*[=:]\s*(0|1|2|3)\b", output)
+            if not match:
+                match = re.search(
+                    r"(?im)\bViewport\s+INTERNAL:.*?\borientation=(0|1|2|3)\b",
+                    output,
+                )
             if match:
                 return f"Screen orientation: {names[int(match.group(1))]}"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
