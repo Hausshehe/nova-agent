@@ -82,6 +82,32 @@ def send_android_keyevent(keycode: str) -> str:
     result = _run_bounded_root_action(f"input keyevent {normalized}")
     return f"Android key event {normalized} sent.\n{result}"
 
+def resolve_android_intent(action: str) -> str:
+    """Resolve one allowlisted Android intent without launching it."""
+    if not isinstance(action, str) or not action.strip():
+        raise ValueError("Intent action cannot be empty.")
+    normalized = action.strip()
+    aliases = {
+        "IMAGE_CAPTURE": "android.media.action.IMAGE_CAPTURE",
+        "STILL_IMAGE_CAMERA": "android.media.action.STILL_IMAGE_CAMERA",
+    }
+    normalized = aliases.get(normalized, normalized)
+    allowed_actions = {
+        "android.media.action.IMAGE_CAPTURE",
+        "android.media.action.STILL_IMAGE_CAMERA",
+    }
+    if normalized not in allowed_actions:
+        raise ValueError("Unsupported Android intent action.")
+    result = run_root_command(
+        f"cmd package resolve-activity --brief -a {normalized}"
+    )
+    return (
+        f"Android intent resolution (read-only): {normalized}\n"
+        f"{result}\n"
+        "Intent was resolved only; it was not launched and no device state was modified."
+    )
+
+
 def send_android_intent(action: str) -> str:
     """Launch one explicitly allowlisted Android intent action."""
     if not isinstance(action, str) or not action.strip():
@@ -2583,6 +2609,20 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "resolve_android_intent",
+        "description": "Resolve an allowlisted Android intent without launching it. Use this to discover which activity would handle a mechanism before any action is performed.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Android intent action, currently IMAGE_CAPTURE or STILL_IMAGE_CAMERA.",
+                }
+            },
+            "required": ["action"],
+        },
+    },
+    {
         "name": "discover_camera_control",
         "description": "Inspect Android for safe, read-only mechanisms that could control the phone camera, without performing a camera action.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -3410,6 +3450,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "discover_android_mechanisms": discover_android_mechanisms,
+    "resolve_android_intent": resolve_android_intent,
     "discover_camera_control": discover_camera_control,
     "plan_capability_extension": plan_capability_extension,
     "apply_capability_extension": apply_capability_extension,
