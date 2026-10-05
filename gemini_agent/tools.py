@@ -161,12 +161,42 @@ def plan_capability_extension(request: str) -> str:
     )
 
 
+def _run_extension_test_suite() -> tuple[bool, str]:
+    """Run Nova's deterministic test suite as part of an extension transaction."""
+    try:
+        completed = subprocess.run(
+            [os.sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_gemini_*.py", "-q"],
+            cwd=_filesystem_root(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "Extension verification failed: deterministic test suite timed out after 30 seconds."
+    except OSError as exc:
+        return False, f"Extension verification failed: could not start deterministic test suite: {exc}"
+
+    output = (completed.stdout or "").strip()
+    if completed.returncode != 0:
+        if len(output) > 4096:
+            output = output[-4096:]
+        return False, f"Extension verification failed: deterministic test suite failed.\n{output}"
+    return True, "Extension verification: deterministic test suite passed."
+
+
 def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
-    """Apply one bounded source edit for a genuinely missing capability."""
+    """Apply one bounded, syntax-checked, test-verified source edit transaction."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(path, str) or not path.strip():
         raise ValueError("Path cannot be empty.")
+    if not isinstance(old_text, str) or not old_text:
+        raise ValueError("Existing source fragment cannot be empty.")
+    if not isinstance(new_text, str):
+        raise ValueError("Replacement source must be text.")
 
     gap = assess_capability_gap(request)
     if not gap.startswith("Capability gap:"):
@@ -193,14 +223,59 @@ def apply_capability_extension(request: str, path: str, old_text: str, new_text:
             "Inspect the repository and choose an existing Python source or test file. "
             f"Available targets: {preview}{suffix}"
         )
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Extension target is not a regular file: {relative}")
 
-    result = edit_text_file(relative, old_text, new_text)
+    original = target.read_text(encoding="utf-8")
+    count = original.count(old_text)
+    if count == 0:
+        return f"Extension not applied: source fragment was not found in {relative}."
+    if count > 1:
+        return f"Extension not applied: source fragment occurs {count} times in {relative}; edit must identify exactly one location."
+
+    updated = original.replace(old_text, new_text, 1)
+    try:
+        ast.parse(updated, filename=relative)
+    except SyntaxError as exc:
+        return f"Extension not applied: proposed source is invalid Python: {exc}"
+
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.extension-",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(updated)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, target)
+    except OSError as exc:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return f"Extension not applied: source write failed: {exc}"
+
+    passed, verification = _run_extension_test_suite()
+    if not passed:
+        try:
+            target.write_text(original, encoding="utf-8")
+        except OSError as exc:
+            return f"Extension transaction failed and rollback failed for {relative}: {exc}\n{verification}"
+        return f"Extension rolled back: {verification}"
+
     return (
-        f"{result}\n"
-        "Extension status: source edit applied.\n"
-        "Verification status: not yet verified; run the deterministic test suite and the real-device test before exposing the capability."
+        f"Edited {relative}\n"
+        "Extension status: source edit applied and transaction committed.\n"
+        f"{verification}\n"
+        "Real-device verification status: not yet verified; do not expose the new capability until the device test passes."
     )
-
 
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
@@ -2095,7 +2170,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "apply_capability_extension",
-        "description": "Apply one bounded source edit for a genuinely missing capability; it never edits outside Nova Python source and test files.",
+        "description": "Apply one bounded transactional source edit for a genuinely missing capability; syntax-check it, run Nova's deterministic tests, and roll back on verification failure.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
