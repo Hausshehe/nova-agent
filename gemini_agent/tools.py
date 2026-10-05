@@ -217,6 +217,23 @@ def get_load_average() -> str:
     return f"1m: {one:.2f}\n5m: {five:.2f}\n15m: {fifteen:.2f}"
 
 
+
+def get_system_uptime() -> str:
+    """Return total system uptime in seconds."""
+    try:
+        result = subprocess.run(
+            ["uptime", "-s"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        boot_time = dt.datetime.fromisoformat(result.stdout.strip()).astimezone()
+        now = dt.datetime.now().astimezone()
+        seconds = max(0.0, (now - boot_time).total_seconds())
+    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System uptime is unavailable.") from exc
+    return f"{seconds:.3f} seconds"
+
 def get_memory_usage() -> str:
     """Return the current Nova process resident memory usage in bytes."""
     status = Path("/proc/self/status")
