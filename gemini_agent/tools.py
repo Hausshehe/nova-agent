@@ -1092,7 +1092,7 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-TOOL_DECLARATIONS.append({
+RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
     "parameters": {
@@ -1102,7 +1102,7 @@ TOOL_DECLARATIONS.append({
         },
         "required": ["command"],
     },
-})
+}
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
