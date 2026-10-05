@@ -155,7 +155,7 @@ class GetProcessParentNameToolTests(unittest.TestCase):
 class GetProcessStartTimeToolTests(unittest.TestCase):
     def test_get_process_start_time_returns_iso_time(self):
         result = get_process_start_time(str(os.getpid()))
-        self.assertRegex(result, r"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$")
+        self.assertRegex(result, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$")
 
     def test_get_process_start_time_rejects_invalid_pid(self):
         with self.assertRaisesRegex(ValueError, "PID"):
