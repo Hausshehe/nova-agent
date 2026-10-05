@@ -477,15 +477,15 @@ class GeminiClient:
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
         if requested_tool == "validate_android_mechanism":
-            mechanism = self._extract_mechanism(prompt)
+            mechanism = self._extract_mechanism(request_text)
             if not mechanism:
                 return "Mechanism validation requires an explicit mechanism such as intent:IMAGE_CAPTURE."
-            return str(self.tool_handlers["validate_android_mechanism"](request=prompt, mechanism=mechanism))
+            return str(self.tool_handlers["validate_android_mechanism"](request=request_text, mechanism=mechanism))
         if requested_tool == "execute_validated_android_mechanism":
-            mechanism = self._extract_mechanism(prompt)
+            mechanism = self._extract_mechanism(request_text)
             if not mechanism:
                 return "Mechanism execution requires an explicit mechanism such as intent:IMAGE_CAPTURE."
-            return str(self.tool_handlers["execute_validated_android_mechanism"](request=prompt, mechanism=mechanism))
+            return str(self.tool_handlers["execute_validated_android_mechanism"](request=request_text, mechanism=mechanism))
         if requested_tool == "validate_android_mechanism":
             return str(self.tool_handlers["validate_android_mechanism"](request=request_text, mechanism=self._extract_mechanism(request_text)))
         if requested_tool == "resolve_android_intent":
@@ -1693,4 +1693,9 @@ class GeminiClient:
             if not mechanism:
                 return "Mechanism validation requires an explicit mechanism such as intent:IMAGE_CAPTURE."
             return str(self.tool_handlers["validate_android_mechanism"](request=prompt, mechanism=mechanism))
+        if requested_tool == "execute_validated_android_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            if not mechanism:
+                return "Mechanism execution requires an explicit mechanism such as intent:IMAGE_CAPTURE."
+            return str(self.tool_handlers["execute_validated_android_mechanism"](request=prompt, mechanism=mechanism))
         return self._generate_cloudflare(contents, system_instruction)
