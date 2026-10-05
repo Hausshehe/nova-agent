@@ -181,14 +181,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 "gemini_agent.tools.run_root_command",
                 side_effect=[
                     "Exit code: 0\nstdout:\npriority=ResolverActivity",
+                    "Exit code: 0\nstdout:\npriority=StillImageResolver",
                     "Exit code: 0\nstdout:\nCamera service available",
+                    "Exit code: 0\nstdout:\n<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>"
                 ],
             ):
                 result = discover_camera_control()
         self.assertIn("Camera control environment discovery (read-only):", result)
         self.assertIn("cmd: Executable: /system/bin/cmd", result)
         self.assertIn("image-capture activity:", result)
+        self.assertIn("still-image camera activity:", result)
         self.assertIn("camera service:", result)
+        self.assertIn("camera UI hierarchy:", result)
+        self.assertIn("Shutter", result)
         self.assertIn("No camera action was performed.", result)
         self.assertIs(TOOL_HANDLERS["discover_camera_control"], discover_camera_control)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
