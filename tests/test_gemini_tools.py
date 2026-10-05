@@ -33,6 +33,7 @@ from gemini_agent.tools import (
     get_network_interfaces,
     get_load_average,
     get_system_memory_usage,
+    get_system_swap_usage,
     get_system_uptime,
     get_process_id,
     get_current_working_directory,
@@ -1295,6 +1296,24 @@ class GetSystemMemoryUsageToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_system_memory_usage"], get_system_memory_usage)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_system_memory_usage", names)
+
+
+class GetSystemSwapUsageToolTests(unittest.TestCase):
+    def test_get_system_swap_usage_returns_swap_values(self):
+        result = get_system_swap_usage()
+        self.assertRegex(result, r"^Total: \\d+ bytes\\nUsed: \\d+ bytes\\nFree: \\d+ bytes$")
+        values = [int(line.split()[1]) for line in result.splitlines()]
+        self.assertEqual(len(values), 3)
+        self.assertGreaterEqual(values[0], 0)
+        self.assertGreaterEqual(values[1], 0)
+        self.assertGreaterEqual(values[2], 0)
+        self.assertLessEqual(values[1], values[0])
+        self.assertLessEqual(values[2], values[0])
+
+    def test_get_system_swap_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_system_swap_usage"], get_system_swap_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_system_swap_usage", names)
 
 if __name__ == "__main__":
     unittest.main()
