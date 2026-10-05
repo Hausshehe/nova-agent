@@ -39,6 +39,7 @@ from gemini_agent.tools import (
     get_process_uptime,
     get_process_thread_count,
     get_parent_process_id,
+    get_process_group_id,
     path_exists,
     hash_file,
     get_directory_entry_count,
