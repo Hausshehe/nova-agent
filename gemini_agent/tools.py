@@ -256,6 +256,33 @@ def retry_command(command: str) -> str:
     return "Attempts: 2\n" + second_result
 
 
+
+def recover_command(command: str) -> str:
+    """Execute an approved command and apply one safe, diagnostic recovery step."""
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("Command cannot be empty.")
+    try:
+        first_result = run_command(command)
+    except RuntimeError as exc:
+        first_result = f"Tool error: {exc}"
+
+    if first_result.startswith("Exit code: 0"):
+        return "Recovery: none needed.\nAttempts: 1\n" + first_result
+
+    diagnosis = diagnose_command_failure(command, first_result)
+    lowered = first_result.lower()
+
+    if "timed out" in lowered:
+        retry_result = retry_command(command)
+        return diagnosis + "\n" + retry_result
+
+    executable = Path(shlex.split(command)[0]).name
+    if any(term in lowered for term in ("not found", "no such file or directory", "command not found")):
+        discovered = find_executable(executable)
+        return diagnosis + "\n" + discovered
+
+    return diagnosis + "\nRecovery: no automatic retry performed."
+
 def current_datetime() -> str:
     """Return the device's current local date and time."""
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -1774,6 +1801,7 @@ TOOL_DECLARATIONS = [
     DIAGNOSE_COMMAND_FAILURE_DECLARATION,
     VERIFY_COMMAND_RESULT_DECLARATION,
     RETRY_COMMAND_DECLARATION,
+    RECOVER_COMMAND_DECLARATION,
     GET_BLUETOOTH_STATUS_DECLARATION,
     RUN_ROOT_COMMAND_DECLARATION,
     GET_AIRPLANE_MODE_DECLARATION,
@@ -2306,6 +2334,18 @@ TOOL_DECLARATIONS = [
 ]
 
 
+RECOVER_COMMAND_DECLARATION = {
+    "name": "recover_command",
+    "description": "Execute one approved command and apply one safe diagnostic recovery step when it fails. Use this for adaptive command recovery instead of blindly retrying.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Approved command and arguments to execute."}
+        },
+        "required": ["command"],
+    },
+}
+
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
@@ -2508,6 +2548,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "diagnose_command_failure": diagnose_command_failure,
     "verify_command_result": verify_command_result,
     "retry_command": retry_command,
+    "recover_command": recover_command,
     "run_command": run_command,
     "run_root_command": run_root_command,
     "list_processes": list_processes,
@@ -2599,5 +2640,4 @@ GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "description": "Get the Android screen-off timeout duration.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
-
 
