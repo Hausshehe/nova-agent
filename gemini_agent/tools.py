@@ -228,14 +228,14 @@ def get_bluetooth_status() -> str:
                 check=False,
             )
             output = (result.stdout or "") + "\\n" + (getattr(result, "stderr", "") or "")
-            if re.fullmatch(r"\\s*1\\s*", result.stdout or ""):
+            if re.fullmatch(r"\s*1\s*", result.stdout or ""):
                 return "Bluetooth: Enabled"
-            if re.fullmatch(r"\\s*0\\s*", result.stdout or ""):
+            if re.fullmatch(r"\s*0\s*", result.stdout or ""):
                 return "Bluetooth: Disabled"
             lowered = output.lower()
-            if re.search(r"\\b(?:enabled|on)\\b", lowered) and "bluetooth" in lowered:
+            if re.search(r"\b(?:enabled|on)\b", lowered) and "bluetooth" in lowered:
                 return "Bluetooth: Enabled"
-            if re.search(r"\\b(?:disabled|off)\\b", lowered) and "bluetooth" in lowered:
+            if re.search(r"\b(?:disabled|off)\b", lowered) and "bluetooth" in lowered:
                 return "Bluetooth: Disabled"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Bluetooth status is unavailable.") from exc
@@ -1505,7 +1505,6 @@ GET_BLUETOOTH_STATUS_DECLARATION = {
 }
 
 TOOL_DECLARATIONS = [
-    GET_BLUETOOTH_STATUS_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
