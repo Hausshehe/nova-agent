@@ -77,6 +77,18 @@ def get_cpu_count() -> str:
     return str(count)
 
 
+def get_memory_usage() -> str:
+    """Return the current Nova process resident memory usage in bytes."""
+    status = Path("/proc/self/status")
+    if status.is_file():
+        for line in status.read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmRSS:"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    return str(int(parts[1]) * 1024)
+    raise RuntimeError("Process memory usage is unavailable.")
+
+
 def get_process_id() -> str:
     """Return the current Nova process ID."""
     return str(os.getpid())
@@ -576,6 +588,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_memory_usage",
+        "description": "Get the current resident memory usage of the running Nova process in bytes.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -898,6 +915,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_current_working_directory": get_current_working_directory,
     "get_python_executable": get_python_executable,
     "get_cpu_count": get_cpu_count,
+    "get_memory_usage": get_memory_usage,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
