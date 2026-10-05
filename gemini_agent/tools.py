@@ -251,7 +251,7 @@ def get_system_cpu_usage() -> str:
         raise RuntimeError("System CPU usage is unavailable.") from exc
 
     for line in result.stdout.splitlines():
-        match = re.search(r"(?:CPU usage|CPU):\\s*([0-9]+(?:\\.[0-9]+)?)%?", line, re.IGNORECASE)
+        match = re.search(r"(?:CPU usage|CPU):\s*([0-9]+(?:\.[0-9]+)?)%?", line, re.IGNORECASE)
         if match:
             usage = float(match.group(1))
             if 0.0 <= usage <= 100.0:
