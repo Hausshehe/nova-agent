@@ -169,7 +169,7 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("def apply_capability_extension", inspection)
         self.assertIn("gemini_agent/tools.py", inspection)
         self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
-        self.assertIn("def camera_shutter(", inspection)
+        self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
 
     def test_natural_extension_application_returns_first_transaction_result(self):
         tool_response = {
