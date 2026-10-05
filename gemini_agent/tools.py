@@ -259,6 +259,14 @@ def count_file_lines(path: str) -> str:
     return str(len(content.splitlines()))
 
 
+def get_directory_entry_count(path: str = ".") -> str:
+    """Return the number of immediate non-symlink entries in a directory."""
+    target = _safe_path(path)
+    if not target.is_dir() or target.is_symlink():
+        raise ValueError(f"Not a directory: {path}")
+    return str(sum(1 for entry in target.iterdir() if not entry.is_symlink()))
+
+
 def get_directory_size(path: str = ".") -> str:
     """Return the total size of regular files in a directory tree under the bounded root."""
     target = _safe_path(path)
@@ -664,6 +672,11 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_directory_entry_count",
+        "description": "Count immediate non-symlink files and directories under Nova's allowed local filesystem root.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative directory path to inspect."}}, "required": ["path"]},
+    },
+    {
         "name": "get_directory_size",
         "description": "Calculate the total size of regular files in a directory tree under Nova's allowed local filesystem root.",
         "parameters": {
@@ -813,6 +826,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "move_directory": move_directory,
     "copy_directory": copy_directory,
     "hash_file": hash_file,
+    "get_directory_entry_count": get_directory_entry_count,
     "get_directory_size": get_directory_size,
     "count_file_lines": count_file_lines,
     "list_directory": list_directory,
