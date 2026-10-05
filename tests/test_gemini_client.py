@@ -128,6 +128,34 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "plan_capability_extension")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_natural_extension_application_uses_local_tool(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-apply-extension",
+                "type": "function",
+                "function": {
+                    "name": "apply_capability_extension",
+                    "arguments": '{"request":"control the phone camera shutter","path":"gemini_agent/example.py","old_text":"VALUE = 1","new_text":"VALUE = 2"}',
+                },
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url, patch(
+            "gemini_agent.tools.apply_capability_extension",
+            return_value="Extension status: source edit applied.",
+        ):
+            client = GeminiClient()
+            answer = client.ask("Apply the capability extension for the phone camera shutter.")
+        self.assertIn("Extension status: source edit applied.", answer)
+        self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_extension")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
