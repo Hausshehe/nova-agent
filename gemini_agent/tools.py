@@ -380,11 +380,25 @@ def apply_capability_extension(
     if target_name == proposed:
         return "Extension not applied: extension primitive must be an existing capability, not the new capability itself."
 
-    if proposed == "camera_shutter":
+    # Discovery, planning, validation, and health-check tools are observations,
+    # not implementation primitives. Keep this generic so new capabilities do
+    # not require a hard-coded exception in the extension engine.
+    extension_only_tools = {
+        "assess_capability_gap",
+        "plan_capability_extension",
+        "apply_capability_extension",
+        "capability_inventory",
+        "self_test",
+        "discover_camera_control",
+        "find_executable",
+        "diagnose_command_failure",
+        "verify_command_result",
+    }
+    if target_name in extension_only_tools:
         return (
-            "Extension blocked: no existing local primitive can safely implement camera shutter.\n"
-            "Environment discovery is required before Nova can extend this capability.\n"
-            "Status: no code or device state was modified."
+            f"Extension blocked: '{target_name}' is an inspection or orchestration tool, "
+            "not an implementation primitive. Nova must choose an action-capable local "
+            "primitive discovered in the environment."
         )
 
     try:
