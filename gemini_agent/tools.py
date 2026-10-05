@@ -3,6 +3,7 @@
 import ast
 import datetime as dt
 import fnmatch
+import hashlib
 import re
 import operator
 import os
@@ -166,6 +167,18 @@ def copy_directory(path: str, destination: str) -> str:
                 continue
             (destination_dir / name).write_bytes(source_path.read_bytes())
     return f"Copied directory {source.relative_to(_filesystem_root())} to {target.relative_to(_filesystem_root())}"
+
+
+def hash_file(path: str) -> str:
+    """Return the SHA-256 hash of a regular file under the bounded root."""
+    target = _safe_path(path)
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    digest = hashlib.sha256()
+    with target.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(64 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def list_directory(path: str = ".") -> str:
@@ -475,6 +488,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "hash_file",
+        "description": "Calculate the SHA-256 hash of a regular file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to hash."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -605,6 +629,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_directory_recursive": list_directory_recursive,
     "move_directory": move_directory,
     "copy_directory": copy_directory,
+    "hash_file": hash_file,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
