@@ -1283,10 +1283,12 @@ class GetSystemMemoryUsageToolTests(unittest.TestCase):
         result = get_system_memory_usage()
         self.assertRegex(result, r"^Total: \d+ bytes\\nUsed: \d+ bytes\\nAvailable: \d+ bytes$")
         values = [int(line.split()[1]) for line in result.splitlines()]
+        self.assertEqual(len(values), 3)
         self.assertGreater(values[0], 0)
-        self.assertGreaterEqual(values[2], 0)
         self.assertGreaterEqual(values[1], 0)
+        self.assertGreaterEqual(values[2], 0)
         self.assertLessEqual(values[1], values[0])
+        self.assertLessEqual(values[2], values[0])
 
     def test_get_system_memory_usage_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_system_memory_usage"], get_system_memory_usage)
