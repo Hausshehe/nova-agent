@@ -1232,23 +1232,33 @@ class GeminiClient:
                     native_tool_calls = False
 
             if tool_calls:
+                # Cloudflare's OpenAI-compatible endpoint requires function
+                # arguments to be a JSON string. Normalize every tool-call
+                # source, including XML/content-emitted calls, before sending
+                # the conversation back for another tool round.
+                normalized_tool_calls = []
+                for tool_call in tool_calls:
+                    normalized_tool_call = dict(tool_call)
+                    function = dict(normalized_tool_call.get("function") or {})
+                    arguments = function.get("arguments", "{}")
+                    if isinstance(arguments, dict):
+                        function["arguments"] = json.dumps(arguments)
+                    elif arguments is None:
+                        function["arguments"] = "{}"
+                    elif not isinstance(arguments, str):
+                        function["arguments"] = json.dumps(arguments)
+                    normalized_tool_call["type"] = "function"
+                    normalized_tool_call["function"] = function
+                    normalized_tool_calls.append(normalized_tool_call)
+
                 if native_tool_calls:
                     normalized_message = dict(message)
-                    normalized_tool_calls = []
-                    for tool_call in tool_calls:
-                        normalized_tool_call = dict(tool_call)
-                        function = dict(normalized_tool_call.get("function") or {})
-                        arguments = function.get("arguments", "{}")
-                        if isinstance(arguments, dict):
-                            function["arguments"] = json.dumps(arguments)
-                        normalized_tool_call["function"] = function
-                        normalized_tool_calls.append(normalized_tool_call)
                     normalized_message["tool_calls"] = normalized_tool_calls
                     payload["messages"].append(normalized_message)
                 else:
                     payload["messages"].append({
                         "role": "assistant",
-                        "tool_calls": tool_calls,
+                        "tool_calls": normalized_tool_calls,
                     })
 
                 for tool_call in tool_calls:
