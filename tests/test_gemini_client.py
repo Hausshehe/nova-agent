@@ -366,7 +366,10 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(answer, "Searched fallback")
         sent = json.loads(open_url.call_args.args[0].data)
         self.assertEqual(sent["tools"], [{"type": "browser_search"}])
-        self.assertEqual(sent["tool_choice"], "required")
+        self.assertEqual(
+            sent["tool_choice"],
+            {"type": "function", "function": {"name": "append_text_file"}},
+        )
 
     def test_openrouter_requires_tool_for_filesystem_action(self):
         response = {
