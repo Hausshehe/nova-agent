@@ -369,20 +369,16 @@ class GeminiClient:
             if proposed_name.startswith("extend_"):
                 proposed_name = proposed_name[len("extend_"):]
         context.append(
-            "Use apply_capability_extension as a structured implementation transaction. "
-            "Provide the existing path gemini_agent/tools.py, a complete single Python function in function_source, "
-            "and a concise declaration_description. Do not provide old_text or new_text. "
-            f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
-            f"The function must be declared exactly as 'def {proposed_name}(' with no alternate or prefixed name. "
-            "The transaction itself will add the tool declaration and TOOL_HANDLERS registration. "
-            "Do not invent Android APIs, permissions, executables, services, or device behavior. "
-            "The implementation must be based only on mechanisms supported by the inspected environment. "
-            "Return syntactically valid standalone Python. Avoid multiline string literals entirely; use ordinary "
-            "quoted strings with explicit escape sequences such as \\n when needed. Do not include markdown fences, "
-            "explanations, imports outside the function, or code before/after the single function. "
-            "If the environment has not been inspected enough to implement the capability safely, do not fabricate an implementation."
-        )
-        return "\n".join(context)
+        "Use apply_capability_extension as a structured existing-tool composition transaction. "
+        "Provide path gemini_agent/tools.py, implementation_kind='existing_tool', an exact existing "
+        "implementation_target from TOOL_HANDLERS, JSON object text in implementation_args, and a concise "
+        "declaration_description. Do not provide function_source, old_text, or new_text. "
+        f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
+        "Do not invent Android APIs, permissions, executables, services, or device behavior. "
+        "The local transaction generates the new Python wrapper itself. Only choose an implementation_target "
+        "that already exists in the inspected repository. If no existing local primitive can safely implement "
+        "the capability, do not fabricate one."
+    )        return "\n".join(context)
 
     def _generate_cloudflare(
         self,
