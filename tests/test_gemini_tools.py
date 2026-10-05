@@ -21,6 +21,7 @@ from gemini_agent.tools import (
     delete_file,
     find_files,
     move_file,
+    move_directory,
     search_text,
     write_text_file,
     list_directory,
@@ -159,6 +160,42 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("list_directory_recursive", names)
 
+    def test_moves_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "archive"
+            source.mkdir()
+            (source / "note.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = move_directory("archive", "moved/archive")
+            self.assertEqual(result, "Moved directory archive to moved/archive")
+            self.assertFalse(source.exists())
+            self.assertEqual(
+                (root / "moved/archive/note.txt").read_text(encoding="utf-8"),
+                "hello",
+            )
+
+    def test_move_directory_rejects_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "archive").mkdir()
+            (root / "other").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    move_directory("archive", "other")
+
+    def test_move_directory_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "archive").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    move_directory("archive", "../outside")
+
+    def test_move_directory_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["move_directory"], move_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("move_directory", names)
+
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -195,7 +232,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("create_directory"):names.index("find_files") + 1], [
-            "create_directory", "delete_directory", "get_file_info", "list_directory_recursive", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "create_directory", "delete_directory", "get_file_info", "list_directory_recursive", "move_directory", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
