@@ -82,6 +82,7 @@ from gemini_agent.tools import (
     read_text_file,
     run_command,
     find_executable,
+    diagnose_command_failure,
     run_root_command,
     list_processes,
     get_process_status,
@@ -115,6 +116,27 @@ class FindExecutableToolTests(unittest.TestCase):
         self.assertIn("find_executable", names)
         self.assertEqual(FIND_EXECUTABLE_DECLARATION["name"], "find_executable")
 
+
+class DiagnoseCommandFailureToolTests(unittest.TestCase):
+    def test_diagnoses_missing_executable(self):
+        result = diagnose_command_failure("dumpsys", "dumpsys: command not found")
+        self.assertIn("executable or path not found", result)
+        self.assertIn("find_executable", result)
+
+    def test_diagnoses_permission_failure(self):
+        result = diagnose_command_failure("dumpsys", "Permission denied")
+        self.assertIn("permission denied", result)
+        self.assertIn("manual su workflow", result)
+
+    def test_diagnoses_android_service_failure(self):
+        result = diagnose_command_failure("settings get global airplane_mode_on", "Failed transaction")
+        self.assertIn("Android service or IPC failure", result)
+        self.assertIn("run_root_command", result)
+
+    def test_diagnose_command_failure_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["diagnose_command_failure"], diagnose_command_failure)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("diagnose_command_failure", names)
 
 class RunRootCommandToolTests(unittest.TestCase):
     def test_run_root_command_uses_manual_su_shell(self):
