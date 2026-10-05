@@ -73,12 +73,12 @@ def send_android_keyevent(keycode: str) -> str:
     """Send one bounded Android key event through the manually entered root shell."""
     if not isinstance(keycode, str) or not keycode.strip():
         raise ValueError("Keycode cannot be empty.")
-    allowed = {"3", "4", "27"}
+    allowed = {"3", "4", "25", "27"}
     normalized = keycode.strip().upper().replace("KEYCODE_", "")
-    aliases = {"HOME": "3", "BACK": "4", "CAMERA": "27"}
+    aliases = {"HOME": "3", "BACK": "4", "VOLUME_DOWN": "25", "CAMERA": "27"}
     normalized = aliases.get(normalized, normalized)
     if normalized not in allowed:
-        raise ValueError("Unsupported Android keycode. Allowed actions: HOME, BACK, CAMERA.")
+        raise ValueError("Unsupported Android keycode. Allowed actions: HOME, BACK, VOLUME_DOWN, CAMERA.")
     result = _run_bounded_root_action(f"input keyevent {normalized}")
     return f"Android key event {normalized} sent.\n{result}"
 
