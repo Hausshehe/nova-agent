@@ -439,7 +439,8 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = "TOOL_DECLARATIONS = [\n    {
+    declaration_marker = '''TOOL_DECLARATIONS = [
+    {
         "name": "send_android_keyevent",
         "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, CAMERA.",
         "parameters": {
@@ -448,9 +449,10 @@ def apply_capability_extension(
             "required": ["keycode"],
         },
     },
-"
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {\n    "send_android_keyevent": send_android_keyevent,
-"
+'''
+    handler_marker = '''TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "send_android_keyevent": send_android_keyevent,
+'''
     if declaration_marker not in original or handler_marker not in original:
         return "Extension not applied: required tool integration anchors were not found."
 
