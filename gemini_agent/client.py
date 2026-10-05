@@ -376,8 +376,11 @@ class GeminiClient:
             f"The function must be declared exactly as 'def {proposed_name}(' with no alternate or prefixed name. "
             "The transaction itself will add the tool declaration and TOOL_HANDLERS registration. "
             "Do not invent Android APIs, permissions, executables, services, or device behavior. "
-            "The implementation must be based only on mechanisms supported by the inspected environment; "
-            "if the environment has not been inspected enough to implement the capability safely, do not fabricate an implementation."
+            "The implementation must be based only on mechanisms supported by the inspected environment. "
+            "Return syntactically valid standalone Python. Avoid multiline string literals entirely; use ordinary "
+            "quoted strings with explicit escape sequences such as \\n when needed. Do not include markdown fences, "
+            "explanations, imports outside the function, or code before/after the single function. "
+            "If the environment has not been inspected enough to implement the capability safely, do not fabricate an implementation."
         )
         return "\n".join(context)
 
