@@ -143,6 +143,12 @@ class AndroidActionToolTests(unittest.TestCase):
         self.assertIn("Android key event 27 sent.", result)
         root.assert_called_once_with("input keyevent 27")
 
+    def test_send_android_keyevent_supports_volume_down(self):
+        with patch("gemini_agent.tools._run_bounded_root_action", return_value="Exit code: 0\\nstdout:") as root:
+            result = send_android_keyevent("VOLUME_DOWN")
+        self.assertIn("Android key event 25 sent.", result)
+        root.assert_called_once_with("input keyevent 25")
+
     def test_send_android_keyevent_rejects_unsupported_key(self):
         with self.assertRaisesRegex(ValueError, "Unsupported Android keycode"):
             send_android_keyevent("POWER")
