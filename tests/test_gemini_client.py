@@ -228,6 +228,32 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(client.last_tool_calls[0]["name"], "capability_inventory")
 
+    def test_natural_camera_discovery_request_uses_discovery_tool(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-camera-discovery",
+                "type": "function",
+                "function": {"name": "discover_camera_control", "arguments": "{}"},
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient(
+                tool_handlers={
+                    "discover_camera_control": lambda: "Camera control environment discovery (read-only): test"
+                }
+            )
+            answer = client.ask("Discover the phone camera control environment.")
+        self.assertIn("Camera control environment discovery (read-only): test", answer)
+        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(client.last_tool_calls[0]["name"], "discover_camera_control")
+
     def test_natural_self_test_request_uses_self_test_tool(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
