@@ -28,6 +28,7 @@ from gemini_agent.tools import (
     get_file_parent,
     get_file_permissions,
     get_system_info,
+    get_system_battery_status,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
