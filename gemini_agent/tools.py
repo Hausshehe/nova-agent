@@ -425,7 +425,8 @@ def get_screen_resolution() -> str:
     """Return the Android physical display resolution."""
     try:
         result = subprocess.run(
-            ["su", "-c", "/system/bin/wm size"],
+            ["su"],
+            input="/system/bin/wm size\n",
             capture_output=True,
             text=True,
             check=False,
