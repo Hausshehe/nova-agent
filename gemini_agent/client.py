@@ -64,6 +64,7 @@ class GeminiClient:
     _CLOUD_TOOL_NAMES = {
         "read_text_file": "read_file",
         "create_directory": "make_directory",
+        "delete_directory": "remove_directory",
     }
 
     @classmethod
