@@ -219,6 +219,19 @@ class CloudflareClientTests(unittest.TestCase):
             {"type": "function", "function": {"name": "get_disk_usage"}},
         )
 
+
+    def test_get_system_swap_usage_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Use the get_system_swap_usage tool.")
+        self.assertRegex(answer, r"^Total: \\d+ bytes\\nUsed: \\d+ bytes\\nFree: \\d+ bytes$")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_get_system_info_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
