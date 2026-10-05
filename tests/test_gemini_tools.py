@@ -13,6 +13,7 @@ from gemini_agent.tools import (
     append_text_file,
     calculator,
     current_datetime,
+    delete_file,
     find_files,
     search_text,
     write_text_file,
@@ -87,6 +88,31 @@ class FilesystemToolTests(unittest.TestCase):
             "list_directory", "read_text_file", "search_text", "write_text_file",
             "append_text_file", "find_files"
         ])
+
+    def test_deletes_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(delete_file("notes.txt"), "Deleted notes.txt")
+            self.assertFalse((root / "notes.txt").exists())
+
+    def test_delete_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    delete_file("../outside.txt")
+
+    def test_delete_rejects_missing_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "does not exist"):
+                    delete_file("missing.txt")
+
+    def test_delete_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["delete_file"], delete_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("delete_file", names)
 
     def test_finds_files_by_name(self):
         with tempfile.TemporaryDirectory() as directory:
