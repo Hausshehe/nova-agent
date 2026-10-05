@@ -288,7 +288,7 @@ class CloudflareClientTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
             client = GeminiClient()
             answer = client.ask("Use the get_process_uptime tool.")
-        self.assertRegex(answer, r"^\\d+\\.\\d{3} seconds$")
+        self.assertRegex(answer, r"^\d+\.\d{3} seconds$")
         self.assertEqual(open_url.call_count, 1)
 
     def test_get_umask_explicit_request_returns_local_result(self):
