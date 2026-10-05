@@ -87,7 +87,11 @@ class CloudflareClientTests(unittest.TestCase):
             "urllib.request.urlopen",
             side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
         ):
-            client = GeminiClient()
+            client = GeminiClient(
+                tool_handlers={
+                    "remember_fact": lambda key, value: f"Remembered {key} = {value}",
+                }
+            )
             answer = client.ask("Remember that my favorite color is blue.")
         self.assertEqual(answer, "Remembered favorite color.")
         self.assertEqual(client.last_tool_calls[0]["name"], "remember_fact")
