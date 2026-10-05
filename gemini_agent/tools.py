@@ -232,15 +232,22 @@ def _extension_registered_capability_error(original: str, updated: str, request:
         keys = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
-                if not any(
-                    isinstance(target, ast.Name) and target.id == "TOOL_HANDLERS"
-                    for target in node.targets
-                ):
-                    continue
-                if isinstance(node.value, ast.Dict):
-                    for key in node.value.keys:
-                        if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                            keys.add(key.value)
+                targets = node.targets
+                value = node.value
+            elif isinstance(node, ast.AnnAssign):
+                targets = [node.target]
+                value = node.value
+            else:
+                continue
+            if not any(
+                isinstance(target, ast.Name) and target.id == "TOOL_HANDLERS"
+                for target in targets
+            ):
+                continue
+            if isinstance(value, ast.Dict):
+                for key in value.keys:
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        keys.add(key.value)
         return keys
 
     before_names = literal_tool_names(original)
