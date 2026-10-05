@@ -1655,6 +1655,19 @@ RUN_ROOT_COMMAND_DECLARATION = {
     },
 }
 
+FIND_EXECUTABLE_DECLARATION = {
+    "name": "find_executable",
+    "description": "Find an executable by name in Nova's PATH and common Android executable directories. Use this when a command may have failed because its executable path is unknown.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "Executable name such as dumpsys, python, or settings."}
+        },
+        "required": ["name"],
+    },
+}
+
+
 TOOL_DECLARATIONS = [
     FIND_EXECUTABLE_DECLARATION,
     {
@@ -2208,17 +2221,6 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-FIND_EXECUTABLE_DECLARATION = {
-    "name": "find_executable",
-    "description": "Find an executable by name in Nova's PATH and common Android executable directories. Use this when a command may have failed because its executable path is unknown.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "name": {"type": "STRING", "description": "Executable name such as dumpsys, python, or settings."}
-        },
-        "required": ["name"],
-    },
-}
 
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
@@ -2418,6 +2420,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "find_executable": find_executable,
     "run_command": run_command,
     "run_root_command": run_root_command,
     "list_processes": list_processes,
