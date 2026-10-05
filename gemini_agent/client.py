@@ -303,7 +303,7 @@ class GeminiClient:
                     }]
 
             # Explicit directory-size requests must use the user's path.
-            if requested_tool == "get_directory_size":
+            if requested_tool == "get_directory_size" and not self.last_tool_calls:
                 user_text = ""
                 for item in reversed(payload["messages"]):
                     if item.get("role") == "user":
