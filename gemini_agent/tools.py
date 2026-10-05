@@ -315,6 +315,18 @@ def apply_capability_extension(request: str, path: str, function_source: str, de
     if len(functions) != 1:
         return "Extension not applied: function_source must contain exactly one top-level function."
     function = functions[0]
+    # Re-serialize the validated AST so the source inserted into tools.py is
+    # canonical Python rather than model-preserved quoting/whitespace.
+    try:
+        function_source = ast.unparse(function_tree)
+        function_tree = ast.parse(function_source, filename="<extension>")
+        functions = [
+            node for node in function_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+    except (SyntaxError, ValueError) as exc:
+        return f"Extension not applied: could not normalize implementation Python: {exc}"
+    function = functions[0]
     tool_name = function.name
     if not re.fullmatch(r"[a-z_][a-z0-9_]*", tool_name):
         return f"Extension not applied: invalid capability function name: {tool_name}"
