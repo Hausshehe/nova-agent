@@ -1498,6 +1498,12 @@ def list_memory() -> str:
     raise RuntimeError("Persistent memory is not configured.")
 
 
+GET_BLUETOOTH_STATUS_DECLARATION = {
+    "name": "get_bluetooth_status",
+    "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 TOOL_DECLARATIONS = [
     GET_BLUETOOTH_STATUS_DECLARATION,
     {
@@ -2143,12 +2149,6 @@ GET_PROCESS_COMMAND_LINE_DECLARATION = {
 GET_WIFI_STATUS_DECLARATION = {
     "name": "get_wifi_status",
     "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
-    "parameters": {"type": "OBJECT", "properties": {}},
-}
-
-GET_BLUETOOTH_STATUS_DECLARATION = {
-    "name": "get_bluetooth_status",
-    "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
