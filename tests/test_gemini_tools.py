@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from gemini_agent.tools import (
+    RUN_COMMAND_DECLARATION,
     TOOL_DECLARATIONS,
     TOOL_HANDLERS,
     append_text_file,
@@ -86,8 +87,7 @@ class RunCommandToolTests(unittest.TestCase):
 
     def test_run_command_is_registered(self):
         self.assertIs(TOOL_HANDLERS["run_command"], run_command)
-        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
-        self.assertIn("run_command", names)
+        self.assertEqual(RUN_COMMAND_DECLARATION["name"], "run_command")
 
 class CalculatorTests(unittest.TestCase):
     def test_basic_arithmetic(self):
