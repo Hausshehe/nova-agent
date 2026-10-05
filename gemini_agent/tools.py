@@ -100,6 +100,22 @@ def get_home_directory() -> str:
     return str(Path.home())
 
 
+def get_umask() -> str:
+    """Return Nova's process file-creation mask as four-digit octal text."""
+    status = Path("/proc/self/status")
+    if status.is_file():
+        for line in status.read_text(encoding="utf-8").splitlines():
+            if line.startswith("Umask:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    value = parts[1]
+                    if all(character in "01234567" for character in value):
+                        return f"{int(value, 8):04o}"
+    current = os.umask(0)
+    os.umask(current)
+    return f"{current:04o}"
+
+
 def get_process_id() -> str:
     """Return the current Nova process ID."""
     return str(os.getpid())
@@ -614,6 +630,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_umask",
+        "description": "Get Nova's process file-creation mask as four-digit octal text.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -939,6 +960,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_memory_usage": get_memory_usage,
     "get_temp_directory": get_temp_directory,
     "get_home_directory": get_home_directory,
+    "get_umask": get_umask,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
