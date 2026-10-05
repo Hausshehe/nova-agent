@@ -183,6 +183,78 @@ class GeminiClient:
         return None
 
     @classmethod
+    def _relevant_tool_declarations(cls, contents: list[dict]) -> list[dict]:
+        """Narrow the model's tool set when the user's intent is unambiguous."""
+        user_text = ""
+        for item in reversed(contents):
+            if item.get("role") == "user":
+                user_text = " ".join(
+                    part.get("text", "")
+                    for part in item.get("parts", [])
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                ).lower()
+                break
+
+        groups = {
+            "calculator": ("calculate", "arithmetic", "multiply", "divide", "addition", "subtract"),
+            "current_datetime": ("current date", "current time", "date and time", "what time is it"),
+            "battery": ("battery", "power level", "charging", "battery health"),
+            "network": ("network", "wifi", "wi-fi", "bluetooth", "airplane", "ip address", "network interface"),
+            "screen": ("screen", "display", "brightness", "orientation", "resolution", "refresh rate", "screen timeout"),
+            "process": ("process", "pid", "cpu time", "memory usage of process", "nice value"),
+            "filesystem": ("file", "directory", "folder", "filesystem", "path", "read", "write", "append", "copy", "move", "delete"),
+            "system": ("system information", "system info", "uptime", "boot time", "cpu usage", "memory usage", "swap", "hostname", "load average"),
+            "recovery": ("recover", "retry", "diagnose", "failure", "failed command", "find executable", "executable"),
+            "root": ("root", "su", "privileged", "dumpsys"),
+        }
+
+        selected_groups = {
+            group for group, terms in groups.items()
+            if any(term in user_text for term in terms)
+        }
+        if not selected_groups:
+            return cls.tool_declarations
+
+        selected_names: set[str] = set()
+        for declaration in cls.tool_declarations:
+            name = declaration["name"]
+            if (
+                (selected_groups & {"filesystem"} and name in {
+                    "path_exists", "create_directory", "delete_directory", "get_file_info",
+                    "get_file_access_time", "get_file_modified_time", "get_file_extension",
+                    "get_file_name", "get_file_stem", "get_file_permissions", "get_file_parent",
+                    "list_directory_recursive", "move_directory", "copy_directory", "hash_file",
+                    "count_file_lines", "get_directory_entry_count", "get_disk_usage",
+                    "get_directory_size", "list_directory", "read_text_file", "search_text",
+                    "write_text_file", "edit_text_file", "append_text_file", "copy_file",
+                    "move_file", "delete_file", "find_files",
+                })
+                or (selected_groups & {"process"} and name.startswith("get_process_"))
+                or (selected_groups & {"network"} and name in {
+                    "get_network_interfaces", "get_network_addresses", "get_wifi_status",
+                    "get_bluetooth_status", "get_airplane_mode", "get_hostname",
+                })
+                or (selected_groups & {"screen"} and (
+                    name.startswith("get_screen_") or name in {"get_media_volume", "get_system_screen_state"}
+                ))
+                or (selected_groups & {"battery"} and name == "get_system_battery_status")
+                or (selected_groups & {"system"} and (
+                    name.startswith("get_system_") or name in {"get_cpu_count", "get_load_average", "get_hostname"}
+                ))
+                or (selected_groups & {"recovery"} and name in {
+                    "find_executable", "diagnose_command_failure", "verify_command_result",
+                    "retry_command", "recover_command",
+                })
+                or (selected_groups & {"root"} and name in {"run_root_command", "run_command"})
+                or (selected_groups & {"calculator"} and name == "calculator")
+                or (selected_groups & {"current_datetime"} and name == "current_datetime")
+            ):
+                selected_names.add(name)
+
+        selected = [d for d in cls.tool_declarations if d["name"] in selected_names]
+        return selected or cls.tool_declarations
+
+    @classmethod
     def _requires_local_tool(cls, contents: list[dict]) -> bool:
         if cls._requested_local_tool(contents):
             return True
@@ -225,7 +297,7 @@ class GeminiClient:
                 })
 
         requested_tool = self._requested_local_tool(contents)
-        declarations = self.tool_declarations
+        declarations = self._relevant_tool_declarations(contents)
         if requested_tool:
             declarations = [
                 d for d in self.tool_declarations if d["name"] == requested_tool
