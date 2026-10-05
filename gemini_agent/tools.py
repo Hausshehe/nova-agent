@@ -295,17 +295,13 @@ def get_process_start_time(pid: str) -> str:
         clock_ticks = os.sysconf("SC_CLK_TCK")
         if clock_ticks <= 0:
             raise RuntimeError(f"Process start time is unavailable: {pid}")
-        boot_time = None
-        for line in Path("/proc/uptime").read_text(encoding="utf-8").splitlines():
-            uptime_text = line.split()[0] if line.split() else ""
-            uptime_seconds = float(uptime_text)
-            break
-        else:
+        boottime_clock = getattr(time, "CLOCK_BOOTTIME", None)
+        if boottime_clock is None:
             raise RuntimeError(f"Process start time is unavailable: {pid}")
+        uptime_seconds = time.clock_gettime(boottime_clock)
         now = dt.datetime.now().astimezone()
         process_age = uptime_seconds - (start_ticks / clock_ticks)
-        start_time = now - dt.timedelta(seconds=process_age)
-        return start_time.isoformat(timespec="seconds")
+        return (now - dt.timedelta(seconds=process_age)).isoformat(timespec="seconds")
     except (OSError, UnicodeError, ValueError, IndexError) as exc:
         raise RuntimeError(f"Process start time is unavailable: {pid}") from exc
 
