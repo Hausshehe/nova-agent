@@ -80,8 +80,10 @@ class FilesystemToolTests(unittest.TestCase):
     def test_filesystem_tools_are_registered(self):
         self.assertIs(TOOL_HANDLERS["list_directory"], list_directory)
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
-        self.assertEqual(TOOL_DECLARATIONS[-3]["name"], "list_directory")
-        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "read_text_file")
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
+            "list_directory", "read_text_file", "search_text", "find_files"
+        ])
 
     def test_finds_files_by_name(self):
         with tempfile.TemporaryDirectory() as directory:
