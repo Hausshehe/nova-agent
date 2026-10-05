@@ -1689,6 +1689,7 @@ TOOL_DECLARATIONS = [
         "description": "Get the device's current local date and time.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    FIND_EXECUTABLE_DECLARATION,
     GET_BLUETOOTH_STATUS_DECLARATION,
     RUN_ROOT_COMMAND_DECLARATION,
     GET_AIRPLANE_MODE_DECLARATION,
