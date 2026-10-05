@@ -141,7 +141,7 @@ class CloudflareClientTests(unittest.TestCase):
         first_response = {
             "choices": [{
                 "message": {
-                    "content": "<tool_call>\\ncurrent_datetime\\n</tool_call>",
+                    "content": "<tool_call>\ncurrent_datetime\n</tool_call>",
                 }
             }]
         }
