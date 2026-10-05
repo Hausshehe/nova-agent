@@ -200,6 +200,39 @@ def list_processes() -> str:
     return "\n".join(f"{pid} {name}" for pid, name in rows[:100]) or "(no visible processes)"
 
 
+def get_process_status(pid: str) -> str:
+    """Return basic status information for a visible Linux process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    status = Path("/proc") / pid / "status"
+    if not status.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    values = {}
+    try:
+        for line in status.read_text(encoding="utf-8").splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            values[key] = value.strip()
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"Process status is unavailable: {pid}") from exc
+    name = values.get("Name")
+    state = values.get("State")
+    parent = values.get("PPid")
+    threads = values.get("Threads")
+    memory = values.get("VmRSS")
+    if not name or not state:
+        raise RuntimeError(f"Process status is unavailable: {pid}")
+    result = [f"PID: {pid}", f"Name: {name}", f"State: {state}"]
+    if parent:
+        result.append(f"Parent PID: {parent}")
+    if threads:
+        result.append(f"Threads: {threads}")
+    if memory:
+        result.append(f"Memory: {memory}")
+    return "\n".join(result)
+
+
 def get_process_thread_count() -> str:
     """Return the number of threads in Nova's current process."""
     status = Path("/proc/self/status")
@@ -1128,10 +1161,22 @@ LIST_PROCESSES_DECLARATION = {
     "description": "List visible local processes by PID and command name.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_PROCESS_STATUS_DECLARATION = {
+    "name": "get_process_status",
+    "description": "Get basic status information for a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
     "list_processes": list_processes,
+    "get_process_status": get_process_status,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
