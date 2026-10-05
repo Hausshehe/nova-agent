@@ -29,6 +29,7 @@ from gemini_agent.tools import (
     get_system_info,
     get_hostname,
     get_process_id,
+    get_current_working_directory,
     get_cpu_count,
     path_exists,
     hash_file,
@@ -62,6 +63,18 @@ class CalculatorTests(unittest.TestCase):
     def test_calculator_is_registered(self):
         self.assertIs(TOOL_HANDLERS["calculator"], calculator)
         self.assertEqual(TOOL_DECLARATIONS[0]["name"], "calculator")
+
+
+class CurrentWorkingDirectoryToolTests(unittest.TestCase):
+    def test_current_working_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False), patch("os.getcwd", return_value=directory):
+                self.assertEqual(get_current_working_directory(), directory)
+
+    def test_current_working_directory_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_current_working_directory"], get_current_working_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_current_working_directory", names)
 
 
 class DateTimeToolTests(unittest.TestCase):
