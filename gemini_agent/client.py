@@ -229,8 +229,28 @@ class GeminiClient:
         raise RuntimeError("Groq requested too many browser-search tool calls.")
 
     @staticmethod
-    def _requires_local_tool(contents: list[dict]) -> bool:
+    def _requested_local_tool(contents: list[dict]) -> str | None:
+        """Return an explicitly named local tool requested by the user."""
+        user_text = ""
+        for item in reversed(contents):
+            if item.get("role") == "user":
+                user_text = " ".join(
+                    part.get("text", "")
+                    for part in item.get("parts", [])
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                ).lower()
+                break
+        for declaration in TOOL_DECLARATIONS:
+            name = declaration["name"]
+            if name.lower() in user_text:
+                return name
+        return None
+
+    @classmethod
+    def _requires_local_tool(cls, contents: list[dict]) -> bool:
         """Require a local tool when the user explicitly asks for a filesystem action."""
+        if cls._requested_local_tool(contents):
+            return True
         user_text = ""
         for item in reversed(contents):
             if item.get("role") == "user":
@@ -243,12 +263,6 @@ class GeminiClient:
         return any(
             term in user_text
             for term in (
-                "append_text_file",
-                "write_text_file",
-                "read_text_file",
-                "list_directory",
-                "find_files",
-                "search_text",
                 "append ",
                 "write ",
                 "read ",
@@ -317,7 +331,13 @@ class GeminiClient:
             "max_tokens": 1024,
             "tools": tools,
         }
-        if self._requires_local_tool(contents):
+        requested_tool = self._requested_local_tool(contents)
+        if requested_tool:
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": requested_tool},
+            }
+        elif self._requires_local_tool(contents):
             payload["tool_choice"] = "required"
 
         for _ in range(3):
