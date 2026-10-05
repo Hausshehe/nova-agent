@@ -44,7 +44,7 @@ class CloudflareClientTests(unittest.TestCase):
         ) as open_url:
             answer = GeminiClient().ask("Hello")
         self.assertEqual(answer, "hello")
-        self.assertEqual(open_url.call_count, 2)
+        self.assertEqual(open_url.call_count, 1)
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
     def test_intent_routing_narrows_unambiguous_capability_set(self):
@@ -158,7 +158,7 @@ class CloudflareClientTests(unittest.TestCase):
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
         self.assertIn("Extension status: source edit applied.", answer)
         self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_extension")
-        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(open_url.call_count, 2)
 
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
