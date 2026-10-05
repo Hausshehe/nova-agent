@@ -331,6 +331,39 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
     )
 
 
+def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
+    """Execute one previously validated Android mechanism through a bounded action primitive."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(mechanism, str) or not mechanism.strip():
+        raise ValueError("Mechanism cannot be empty.")
+    candidate = mechanism.strip()
+    if ":" not in candidate:
+        raise ValueError("Mechanism must use a bounded form: intent:<action>.")
+    kind, value = candidate.split(":", 1)
+    kind = kind.strip().lower()
+    value = value.strip()
+    if kind != "intent":
+        raise ValueError(
+            "This execution layer currently supports only validated intent mechanisms. "
+            "Other mechanism types must remain blocked until they have a bounded action primitive."
+        )
+    validation = validate_android_mechanism(request, candidate)
+    if "Status: VIABLE" not in validation:
+        return (
+            "Android mechanism execution blocked: the mechanism did not validate as viable.\\n"
+            + validation
+        )
+    result = send_android_intent(value)
+    return (
+        "Android mechanism execution:\\n"
+        f"Requested capability: {request.strip()}\\n"
+        f"Mechanism: {candidate}\\n"
+        "Validation: VIABLE\\n"
+        f"Result:\\n{result}"
+    )
+
+
 def assess_capability_gap(request: str) -> str:
     """Determine whether Nova has a plausible local capability for a request."""
     if not isinstance(request, str) or not request.strip():
@@ -2804,6 +2837,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "execute_validated_android_mechanism",
+        "description": "Execute a previously validated Android intent mechanism through a bounded action primitive. Unsupported mechanism types are blocked.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability the validated mechanism implements."},
+                "mechanism": {"type": "STRING", "description": "Previously validated mechanism in intent:<action> form."},
+            },
+            "required": ["request", "mechanism"],
+        },
+    },
+    {
         "name": "validate_android_mechanism",
         "description": "Validate a discovered Android mechanism without executing the requested capability or changing device state.",
         "parameters": {
@@ -3671,6 +3716,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "execute_validated_android_mechanism": execute_validated_android_mechanism,
     "discover_android_mechanisms": discover_android_mechanisms,
     "validate_android_mechanism": validate_android_mechanism,
     "resolve_android_intent": resolve_android_intent,
