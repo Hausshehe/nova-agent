@@ -438,6 +438,46 @@ class GeminiClientTests(unittest.TestCase):
         second = json.loads(open_url.call_args_list[7].args[0].data)
         self.assertEqual(second["messages"][-1]["content"], "84")
 
+    def test_cloudflare_local_tool_fallback_works_with_web_search_enabled(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {},
+            io.BytesIO(b'{\"error\":{\"message\":\"quota exceeded\"}}'),
+        )
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "calculator", "arguments": '{\"expression\":\"17 * 23\"}'},
+            }]}}]
+        }
+        final_response = {"choices": [{"message": {"content": "391"}}]}
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "CLOUDFLARE_API_TOKEN": "cloudflare-token",
+                "CLOUDFLARE_ACCOUNT_ID": "account-id",
+                "GEMINI_WEB_SEARCH": "1",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                quota, quota, quota, quota, quota, quota,
+                FakeResponse(tool_response),
+                FakeResponse(final_response),
+            ],
+        ) as open_url, patch("time.sleep"):
+            answer = GeminiClient().ask("Use the calculator tool to calculate 17 * 23.")
+
+        self.assertEqual(answer, "391")
+        self.assertEqual(open_url.call_count, 8)
+        self.assertIn(
+            "/accounts/account-id/ai/v1/chat/completions",
+            open_url.call_args_list[6].args[0].full_url,
+        )
+
+
     def test_openrouter_requires_tool_for_filesystem_action(self):
         response = {
             "choices": [{"message": {"content": "Tool required"}}]
