@@ -29,6 +29,7 @@ from gemini_agent.tools import (
     path_exists,
     hash_file,
     get_directory_entry_count,
+    get_disk_usage,
     get_directory_size,
     delete_directory,
     delete_file,
@@ -323,6 +324,29 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["hash_file"], hash_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("hash_file", names)
+
+    def test_get_disk_usage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = get_disk_usage(".")
+            lines = result.splitlines()
+            self.assertEqual(len(lines), 3)
+            self.assertRegex(lines[0], r"^Total: \d+ bytes$")
+            self.assertRegex(lines[1], r"^Used: \d+ bytes$")
+            self.assertRegex(lines[2], r"^Free: \d+ bytes$")
+
+    def test_get_disk_usage_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "does not exist"):
+                    get_disk_usage("missing")
+
+    def test_get_disk_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_disk_usage"], get_disk_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_disk_usage", names)
 
     def test_get_directory_entry_count(self):
         with tempfile.TemporaryDirectory() as directory:
