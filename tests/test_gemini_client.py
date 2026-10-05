@@ -77,6 +77,16 @@ class CloudflareClientTests(unittest.TestCase):
         names = [tool["function"]["name"] for tool in sent["tools"]]
         self.assertEqual(names, ["calculator", "current_datetime"])
 
+    def test_natural_capability_gap_request_uses_gap_tool(self):
+        responses = [
+            self._tool_response("assess_capability_gap", '{"request":"control the phone camera"}'),
+        ]
+        client, mock_urlopen = self._client_with_responses(responses)
+        answer = client.ask("Do I have a capability to control the phone camera?")
+        self.assertIn("Capability gap:", answer)
+        self.assertEqual(client.last_tool_calls[0]["name"], "assess_capability_gap")
+        self.assertEqual(mock_urlopen.call_count, 1)
+
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
