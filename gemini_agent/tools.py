@@ -1490,7 +1490,11 @@ TOOL_DECLARATIONS = [
         "description": "Get the device's current local date and time.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
-    GET_WIFI_STATUS_DECLARATION,
+    {
+        "name": "get_wifi_status",
+        "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
     {
         "name": "get_hostname",
         "description": "Get the device hostname.",
