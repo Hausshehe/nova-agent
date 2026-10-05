@@ -11,6 +11,7 @@ from gemini_agent.tools import (
     TOOL_DECLARATIONS,
     TOOL_HANDLERS,
     append_text_file,
+    copy_file,
     calculator,
     current_datetime,
     delete_file,
@@ -87,8 +88,40 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
             "list_directory", "read_text_file", "search_text", "write_text_file",
-            "append_text_file", "move_file", "delete_file", "find_files"
+            "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
+
+    def test_copies_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = copy_file("notes.txt", "archive/notes.txt")
+            self.assertEqual(result, "Copied notes.txt to archive/notes.txt")
+            self.assertEqual((root / "notes.txt").read_text(encoding="utf-8"), "hello")
+            self.assertEqual((root / "archive/notes.txt").read_text(encoding="utf-8"), "hello")
+
+    def test_copy_rejects_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            (root / "other.txt").write_text("keep", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    copy_file("notes.txt", "other.txt")
+
+    def test_copy_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    copy_file("notes.txt", "../outside.txt")
+
+    def test_copy_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["copy_file"], copy_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("copy_file", names)
 
     def test_moves_file(self):
         with tempfile.TemporaryDirectory() as directory:
