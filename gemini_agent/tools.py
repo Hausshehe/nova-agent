@@ -781,6 +781,7 @@ def _run_bounded_root_action(command: str) -> str:
     allowed_commands = {
         "input keyevent 3",
         "input keyevent 4",
+        "input keyevent 25",
         "input keyevent 27",
         "am start -a android.media.action.IMAGE_CAPTURE",
     }
