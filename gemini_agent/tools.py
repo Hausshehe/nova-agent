@@ -133,7 +133,7 @@ def discover_camera_control() -> str:
     results.append(f"camera foreground launch:\n{launch_result}")
 
     try:
-        hierarchy = run_root_command("uiautomator dump /dev/tty")
+        hierarchy = _dump_camera_ui_hierarchy()
     except (RuntimeError, ValueError) as exc:
         hierarchy = f"Diagnostic unavailable: {exc}"
     results.append(f"camera UI hierarchy:\n{hierarchy}")
@@ -834,6 +834,75 @@ def _run_bounded_root_action(command: str) -> str:
     if stderr:
         result += f"\nstderr:\n{stderr}"
     return result
+
+
+def _dump_camera_ui_hierarchy() -> str:
+    """Dump the foreground Android UI hierarchy through a bounded temporary file."""
+    path = "/data/local/tmp/nova_camera_ui.xml"
+    dump_command = f"uiautomator dump {path}"
+    read_command = f"cat {path}"
+    cleanup_command = f"rm -f {path}"
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=dump_command + "\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Camera UI hierarchy dump timed out after 8 seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Camera UI hierarchy dump failed to start: {exc}") from exc
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(
+            "Camera UI hierarchy dump failed"
+            + (f": {detail}" if detail else ".")
+        )
+
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=read_command + "\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Camera UI hierarchy read timed out after 5 seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Camera UI hierarchy read failed to start: {exc}") from exc
+    finally:
+        try:
+            subprocess.run(
+                ["su"],
+                input=cleanup_command + "\n",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(
+            "Camera UI hierarchy read failed"
+            + (f": {detail}" if detail else ".")
+        )
+
+    output = (completed.stdout or "").encode("utf-8", errors="replace")
+    if len(output) > _ROOT_COMMAND_OUTPUT_BYTES:
+        output = output[:_ROOT_COMMAND_OUTPUT_BYTES] + b"\n[output truncated]"
+    return output.decode("utf-8", errors="ignore").rstrip()
 
 
 def run_root_command(command: str) -> str:
