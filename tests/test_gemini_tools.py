@@ -83,7 +83,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
-            "list_directory", "read_text_file", "search_text", "find_files"
+            "list_directory", "read_text_file", "search_text", "write_text_file", "find_files"
         ])
 
     def test_finds_files_by_name(self):
@@ -153,7 +153,8 @@ class FilesystemToolTests(unittest.TestCase):
 
     def test_search_tool_is_registered(self):
         self.assertIs(TOOL_HANDLERS["search_text"], search_text)
-        self.assertEqual(TOOL_DECLARATIONS[-2]["name"], "search_text")
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertEqual(names[names.index("search_text")], "search_text")
 
     def test_find_rejects_empty_pattern(self):
         with tempfile.TemporaryDirectory() as directory:
