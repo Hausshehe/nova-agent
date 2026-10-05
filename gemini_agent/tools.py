@@ -278,7 +278,7 @@ def get_system_battery_status() -> str:
     try:
         dumpsys = shutil.which("dumpsys") or "/system/bin/dumpsys"
         result = subprocess.run(
-            [dumpsys, "battery"],
+            ["su", "-c", f"{dumpsys} battery"],
             capture_output=True,
             text=True,
             check=True,
