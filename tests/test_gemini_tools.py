@@ -1828,14 +1828,15 @@ class RecoverCommandToolTests(unittest.TestCase):
     def test_recover_command_discovers_missing_executable(self):
         with patch("gemini_agent.tools.run_command", return_value="Exit code: 127\nstderr:\ncommand not found") as run:
             with patch("gemini_agent.tools.find_executable", return_value="Executable: /system/bin/dumpsys") as find:
-                with patch("gemini_agent.tools.run_root_command", return_value="Exit code: 0\nstdout:\n/system/bin/dumpsys") as root:
+                with patch("gemini_agent.tools.run_root_command", side_effect=[RuntimeError("Root command timed out after 5 seconds."), "Exit code: 0\nstdout:\nsvc1\nsvc2"]) as root:
                     result = recover_command("dumpsys")
         self.assertIn("executable or path not found", result)
-        self.assertIn("Recovery: executable discovered; used the manual-su root workflow and command succeeded.", result)
-        self.assertIn("/system/bin/dumpsys", result)
+        self.assertIn("Recovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic and command succeeded.", result)
+        self.assertIn("svc1", result)
         run.assert_called_once_with("dumpsys")
         find.assert_called_once_with("dumpsys")
-        root.assert_called_once_with("dumpsys")
+        self.assertEqual(root.call_args_list[0].args, ("dumpsys",))
+        self.assertEqual(root.call_args_list[1].args, ("dumpsys -l",))
 
 
     def test_recover_command_retries_timeout(self):
