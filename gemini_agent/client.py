@@ -401,6 +401,11 @@ class GeminiClient:
                         "content": str(tool_result),
                     })
 
+                # Deterministic explicit filesystem requests do not need a second
+                # Cloudflare round-trip. Return the local tool result directly.
+                if requested_tool == "get_directory_size" and loop_index == 0:
+                    return str(tool_result)
+
                 # Tool execution is Nova's responsibility. After executing the
                 # requested tool(s), ask Cloudflare only to synthesize the result,
                 # preventing the model from repeatedly requesting the same tool.
