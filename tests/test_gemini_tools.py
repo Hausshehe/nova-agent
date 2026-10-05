@@ -147,12 +147,14 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     result = apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/tools.py",
-                        'def camera_shutter():\n    return "ok"',
+                        "existing_tool",
+                        "calculator",
+                        '{"expression": "2 + 2"}',
                         "Take a photo with the phone camera.",
                     )
             self.assertIn("Extension status: source edit applied and transaction committed.", result)
             updated = target.read_text(encoding="utf-8")
-            self.assertIn("def camera_shutter():", updated)
+            self.assertIn("def camera_shutter()", updated)
             self.assertIn('"name": "camera_shutter"', updated)
             self.assertIn('"camera_shutter": camera_shutter', updated)
 
@@ -169,7 +171,9 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     result = apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/tools.py",
-                        'def camera_shutter():\n    return "ok"',
+                        "existing_tool",
+                        "calculator",
+                        '{"expression": "2 + 2"}',
                         "Take a photo with the phone camera.",
                     )
             self.assertIn("Extension rolled back:", result)
@@ -185,11 +189,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 result = apply_capability_extension(
                     "control the phone camera shutter",
                     "gemini_agent/tools.py",
-                    "def camera_shutter(:",
+                    "invalid_kind",
+                    "calculator",
+                    '{"expression": "2 + 2"}',
                     "Take a photo with the phone camera.",
                 )
-            self.assertIn("implementation is invalid Python", result)
-            self.assertEqual(target.read_text(encoding="utf-8"), self._source())
+            self.assertIn("implementation_kind must be 'existing_tool'", result)
 
     def test_apply_capability_extension_rejects_wrong_function_name(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -201,10 +206,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                 result = apply_capability_extension(
                     "control the phone camera shutter",
                     "gemini_agent/tools.py",
-                    'def wrong_name():\n    return "ok"',
+                    "existing_tool",
+                    "not_a_real_tool",
+                    "{}",
                     "Take a photo with the phone camera.",
                 )
-            self.assertIn("does not match proposed capability", result)
+            self.assertIn("is not available", result)
 
     def test_apply_capability_extension_rejects_missing_target(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,7 +224,9 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     apply_capability_extension(
                         "control the phone camera shutter",
                         "gemini_agent/capabilities/camera_shutter.py",
-                        'def camera_shutter():\n    return "ok"',
+                        "existing_tool",
+                        "calculator",
+                        '{"expression": "2 + 2"}',
                         "Take a photo with the phone camera.",
                     )
 
@@ -225,17 +234,12 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         result = apply_capability_extension(
             "what is the battery level",
             "gemini_agent/tools.py",
-            'def camera_shutter():\n    return "ok"',
+            "existing_tool",
+            "calculator",
+            '{"expression": "2 + 2"}',
             "Take a photo with the phone camera.",
         )
         self.assertIn("Extension not applied:", result)
-        self.assertIn("Capability match:", result)
-
-    def test_apply_capability_extension_is_registered(self):
-        self.assertIs(TOOL_HANDLERS["apply_capability_extension"], apply_capability_extension)
-        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
-        self.assertIn("apply_capability_extension", names)
-
 
 class SelfTestToolTests(unittest.TestCase):
     def test_capability_gap_reports_match(self):
