@@ -62,6 +62,7 @@ from gemini_agent.tools import (
     list_processes,
     get_process_status,
     get_process_command_line,
+    get_process_executable,
 )
 
 
@@ -94,6 +95,24 @@ class GetProcessStatusToolTests(unittest.TestCase):
 
     def test_get_process_status_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_process_status"], get_process_status)
+
+class GetProcessExecutableToolTests(unittest.TestCase):
+    def test_get_process_executable_returns_path(self):
+        result = get_process_executable(str(os.getpid()))
+        self.assertTrue(result)
+        self.assertIn("python", result.lower())
+
+    def test_get_process_executable_rejects_invalid_pid(self):
+        with self.assertRaisesRegex(ValueError, "PID"):
+            get_process_executable("not-a-pid")
+
+    def test_get_process_executable_rejects_missing_process(self):
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            get_process_executable("999999999")
+
+    def test_get_process_executable_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_executable"], get_process_executable)
+
 
 class GetProcessCommandLineToolTests(unittest.TestCase):
     def test_get_process_command_line_returns_command(self):
