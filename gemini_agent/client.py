@@ -355,6 +355,17 @@ class GeminiClient:
                     native_tool_calls = False
 
             # Explicit disk-usage requests must use the user's path.
+            if requested_tool == "get_system_info" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-system-info",
+                    "type": "function",
+                    "function": {
+                        "name": "get_system_info",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "get_disk_usage" and loop_index == 0:
                 user_text = ""
                 for item in reversed(payload["messages"]):
@@ -646,7 +657,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool in {"path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage"} and loop_index == 0:
+                if requested_tool in {"path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_system_info"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. After executing the
