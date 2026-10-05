@@ -73,6 +73,25 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("tools", follow_up)
         self.assertNotIn("tool_choice", follow_up)
 
+    def test_tool_calls_take_precedence_over_content(self):
+        tool_response = {"choices": [{"message": {"content": "remembered_fact", "tool_calls": [{
+            "id": "call-1", "type": "function",
+            "function": {"name": "remember_fact", "arguments": '{"key":"favorite_color","value":"blue"}'},
+        }]}}]}
+        final_response = {"choices": [{"message": {"content": "Remembered favorite color."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ):
+            client = GeminiClient()
+            answer = client.ask("Remember that my favorite color is blue.")
+        self.assertEqual(answer, "Remembered favorite color.")
+        self.assertEqual(client.last_tool_calls[0]["name"], "remember_fact")
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
