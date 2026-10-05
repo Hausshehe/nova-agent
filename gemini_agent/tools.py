@@ -1760,6 +1760,11 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_screen_timeout",
+        "description": "Get the Android screen-off timeout duration.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "find_files",
         "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
         "parameters": {
