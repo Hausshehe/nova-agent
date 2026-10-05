@@ -372,36 +372,15 @@ class GeminiClient:
                 if item.get("role") == "user"
             )
             inspection = self._extension_inspection_context(request_text)
-            extension_system = (
-                inspection
-                + "\nCall apply_capability_extension directly using only an exact "
-                "existing source fragment from the inspected repository. Do not emit prose or XML."
-            )
-            declarations = [
-                d for d in self.tool_declarations
-                if d["name"] == "apply_capability_extension"
+            messages = [
+                {"role": "system", "content": (
+                    inspection
+                    + "\nCall apply_capability_extension directly using only an exact "
+                    "existing source fragment from the inspected repository. Do not emit prose or XML."
+                )},
+                {"role": "user", "content": request_text},
             ]
-            tools = [{
-                "type": "function",
-                "function": {
-                    "name": "apply_capability_extension",
-                    "description": d["description"],
-                    "parameters": self._schema(d["parameters"]),
-                },
-            } for d in declarations]
-            payload = {
-                "model": self.cloudflare_model,
-                "messages": [
-                    {"role": "system", "content": extension_system},
-                    {"role": "user", "content": request_text},
-                ],
-                "max_completion_tokens": 2048,
-                "tools": tools,
-                "tool_choice": {
-                    "type": "function",
-                    "function": {"name": "apply_capability_extension"},
-                },
-            }
+
         declarations = self._relevant_tool_declarations(contents)
         if requested_tool:
             declarations = [
@@ -1479,6 +1458,18 @@ class GeminiClient:
                         "tool_call_id": tool_call.get("id", ""),
                         "content": str(tool_result),
                     })
+
+                    if requested_tool == "apply_capability_extension" and not str(tool_result).startswith("Extension status: source edit applied and transaction committed."):
+                        payload["messages"].append({
+                            "role": "user",
+                            "content": (
+                                "Previous extension attempt failed: "
+                                + str(tool_result)
+                                + ". Inspect the supplied repository context and call "
+                                "apply_capability_extension again with a corrected existing "
+                                "path and exact old_text."
+                            ),
+                        })
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
