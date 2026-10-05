@@ -124,6 +124,7 @@ class CloudflareClientTests(unittest.TestCase):
             client = GeminiClient()
             answer = client.ask("How would you add this capability: control the phone camera shutter?")
         self.assertIn("Extension plan: capability is missing.", answer)
+        self.assertIn("Proposed tool: extend_camera_shutter", answer)
         self.assertIn("extend_camera_shutter", answer)
         self.assertEqual(client.last_tool_calls[0]["name"], "plan_capability_extension")
         self.assertEqual(open_url.call_count, 1)
