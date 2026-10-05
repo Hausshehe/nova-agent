@@ -368,6 +368,76 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(sent["tools"], [{"type": "browser_search"}])
         self.assertEqual(sent["tool_choice"], "required")
 
+    def test_cloudflare_fallback_uses_local_tool(self):
+        quota = urllib.error.HTTPError(
+            "https://example.test", 429, "quota", {}, 
+            io.BytesIO(b'{"error":{"message":"quota exceeded"}}'),
+        )
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": '{"expression":"12 * 7"}',
+                        },
+                    }],
+                }
+            }]
+        }
+        final_response = {
+            "choices": [{"message": {"content": "84"}}]
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "CLOUDFLARE_API_TOKEN": "cloudflare-token",
+                "CLOUDFLARE_ACCOUNT_ID": "account-id",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                quota, quota, quota, quota, quota, quota,
+                FakeResponse(tool_response),
+                FakeResponse(final_response),
+            ],
+        ) as open_url, patch("time.sleep"):
+            client = GeminiClient()
+            answer = client.ask("What is 12 times 7?")
+
+        self.assertEqual(answer, "84")
+        self.assertEqual(
+            client.last_tool_calls,
+            [{
+                "name": "calculator",
+                "args": {"expression": "12 * 7"},
+                "result": "84",
+                "expression": "12 * 7",
+            }],
+        )
+        cloudflare_request = open_url.call_args_list[6].args[0]
+        self.assertEqual(
+            cloudflare_request.full_url,
+            "https://api.cloudflare.com/client/v4/accounts/account-id/ai/v1/chat/completions",
+        )
+        self.assertEqual(
+            cloudflare_request.headers["Authorization"],
+            "Bearer cloudflare-token",
+        )
+        sent = json.loads(cloudflare_request.data)
+        self.assertEqual(sent["model"], "@cf/zai-org/glm-4.7-flash")
+        self.assertEqual(
+            sent["tool_choice"],
+            {"type": "function", "function": {"name": "calculator"}},
+        )
+        second = json.loads(open_url.call_args_list[7].args[0].data)
+        self.assertEqual(second["messages"][-1]["content"], "84")
+
     def test_openrouter_requires_tool_for_filesystem_action(self):
         response = {
             "choices": [{"message": {"content": "Tool required"}}]
