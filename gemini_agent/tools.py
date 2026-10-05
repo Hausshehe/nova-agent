@@ -445,7 +445,12 @@ def apply_capability_extension(
     try:
         ast.parse(updated, filename=relative)
     except SyntaxError as exc:
-        return f"Extension not applied: internally generated source is invalid Python: {exc}"
+        generated_lines = updated.splitlines()
+        line = generated_lines[exc.lineno - 1] if exc.lineno and 0 < exc.lineno <= len(generated_lines) else "<unavailable>"
+        return (
+            "Extension not applied: internally generated source is invalid Python: "
+            f"{exc}. Offending line: {line!r}"
+        )
 
     registration_error = _extension_registered_capability_error(original, updated, request)
     if registration_error:
