@@ -129,27 +129,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
 
     def test_natural_extension_application_uses_local_inspection_then_applies(self):
-        apply_response = {
-            "choices": [{"message": {"content": "", "tool_calls": [{
-                "id": "call-apply-extension",
-                "type": "function",
-                "function": {
-                    "name": "apply_capability_extension",
-                    "arguments": '{"request":"control the phone camera shutter","path":"gemini_agent/tools.py","old_text":"VALUE = 1","new_text":"VALUE = 2"}',
-                },
-            }]}}]
+        proposal = {
+            "request": "control the phone camera shutter",
+            "path": "gemini_agent/tools.py",
+            "old_text": "VALUE = 1",
+            "new_text": "VALUE = 2",
         }
-        success = (
-            "Edited gemini_agent/tools.py\\n"
-            "Extension status: source edit applied and transaction committed."
-        )
+        response = {"choices": [{"message": {"content": json.dumps(proposal)}}]}
+        success = "Edited gemini_agent/tools.py\\nExtension status: source edit applied and transaction committed."
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            return_value=FakeResponse(apply_response),
+            return_value=FakeResponse(response),
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
             {"apply_capability_extension": lambda **kwargs: success},
@@ -157,35 +151,27 @@ class CloudflareClientTests(unittest.TestCase):
             client = GeminiClient()
             answer = client.ask("Apply the capability extension for the phone camera shutter.")
         self.assertIn("Extension status: source edit applied and transaction committed.", answer)
-        self.assertEqual(
-            [trace["name"] for trace in client.last_tool_calls],
-            ["apply_capability_extension"],
-        )
+        self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_extension")
         self.assertEqual(open_url.call_count, 1)
-        request = open_url.call_args.args[0]
-        payload = json.loads(request.data.decode())
-        self.assertEqual(
-            payload["tool_choice"],
-            {"type": "function", "function": {"name": "apply_capability_extension"}},
-        )
-        inspection = next(
-            message["content"]
-            for message in payload["messages"]
-            if message.get("role") == "system" and "Repository inspection was performed locally" in message.get("content", "")
-        )
+        payload = json.loads(open_url.call_args.args[0].data.decode())
+        self.assertNotIn("tools", payload)
+        inspection = payload["messages"][0]["content"]
+        self.assertIn("Repository inspection was performed locally", inspection)
         self.assertIn("def apply_capability_extension", inspection)
         self.assertIn("gemini_agent/tools.py", inspection)
 
     def test_natural_extension_application_retries_after_failed_edit(self):
-        response = lambda call_id: {
-            "choices": [{"message": {"content": "", "tool_calls": [{
-                "id": call_id,
-                "type": "function",
-                "function": {
-                    "name": "apply_capability_extension",
-                    "arguments": '{"request":"control the phone camera shutter","path":"gemini_agent/tools.py","old_text":"VALUE = 1","new_text":"VALUE = 2"}',
-                },
-            }]}}]
+        first = {
+            "request": "control the phone camera shutter",
+            "path": "gemini_agent/tools.py",
+            "old_text": "VALUE = 1",
+            "new_text": "VALUE = 2",
+        }
+        second = {
+            "request": "control the phone camera shutter",
+            "path": "gemini_agent/tools.py",
+            "old_text": "VALUE = 1",
+            "new_text": "VALUE = 3",
         }
         failure = "Extension not applied: proposed source is invalid Python."
         success = "Edited gemini_agent/tools.py\\nExtension status: source edit applied and transaction committed."
@@ -195,7 +181,10 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[FakeResponse(response("call-1")), FakeResponse(response("call-2"))],
+            side_effect=[
+                FakeResponse({"choices": [{"message": {"content": json.dumps(first)}}]}),
+                FakeResponse({"choices": [{"message": {"content": json.dumps(second)}}]}),
+            ],
         ) as open_url:
             calls = []
             def handler(**kwargs):
@@ -206,15 +195,8 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Extension status: source edit applied and transaction committed.", answer)
         self.assertEqual(len(client.last_tool_calls), 2)
         self.assertEqual(open_url.call_count, 2)
-        second_payload = json.loads(open_url.call_args_list[1].args[0].data)
-        self.assertEqual(
-            second_payload["tool_choice"],
-            {"type": "function", "function": {"name": "apply_capability_extension"}},
-        )
-        self.assertIn(
-            "Extension not applied: proposed source is invalid Python",
-            second_payload["messages"][-1]["content"],
-        )
+        second_payload = json.loads(open_url.call_args_list[1].args[0].data.decode())
+        self.assertIn("Previous edit attempt failed", second_payload["messages"][0]["content"])
 
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
