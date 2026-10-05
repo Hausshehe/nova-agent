@@ -1328,6 +1328,21 @@ class GetScreenBrightnessToolTests(unittest.TestCase):
             ["su", "-c", "/system/bin/settings get system screen_brightness_float"],
         )
 
+    def test_get_screen_brightness_parses_display_brightness(self):
+        responses = [
+            type("Completed", (), {"stdout": "settings unavailable\n"})(),
+            type("Completed", (), {"stdout": "null\n"})(),
+            type("Completed", (), {"stdout": "Display Brightness=0.09498911\n"})(),
+        ]
+        with patch("gemini_agent.tools.subprocess.run", side_effect=responses) as run:
+            result = get_screen_brightness()
+        self.assertEqual(result, "Brightness: 9% (0.09)")
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(
+            run.call_args_list[2].args[0],
+            ["su", "-c", "/system/bin/dumpsys power"],
+        )
+
     def test_get_screen_brightness_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_screen_brightness"], get_screen_brightness)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
