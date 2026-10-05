@@ -419,6 +419,17 @@ class GeminiClient:
                 }]
                 native_tool_calls = False
 
+            if requested_tool == "get_system_boot_time" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-system-boot-time",
+                    "type": "function",
+                    "function": {
+                        "name": "get_system_boot_time",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "get_system_swap_usage" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-system-swap-usage",
