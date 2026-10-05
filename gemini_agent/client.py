@@ -1468,7 +1468,12 @@ class GeminiClient:
                 # bounded multi-step work from the observed result. The outer loop
                 # caps the number of tool rounds and therefore bounds execution.
                 if requested_tool == "apply_capability_extension":
-                    return str(tool_result)
+                    if "Extension status: source edit applied and transaction committed." in str(tool_result):
+                        return str(tool_result)
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": "apply_capability_extension"},
+                    }
                 elif requested_tool:
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
