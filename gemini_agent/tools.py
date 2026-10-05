@@ -323,6 +323,13 @@ def get_screen_brightness() -> str:
                 return f"Brightness: {brightness * 100:.0f}% ({brightness:.2f})"
             elif value_type == "dumpsys":
                 match = re.search(
+                    r"(?im)\b(?:Display Brightness|mBrightnessState|mCachedBrightnessInfo\.brightness)\s*[=:]\s*(0(?:\.\d+)?|1(?:\.0+)?)\b",
+                    output,
+                )
+                if match:
+                    brightness = float(match.group(1))
+                    return f"Brightness: {brightness * 100:.0f}% ({brightness:.2f})"
+                match = re.search(
                     r"(?im)\bmScreenBrightnessFloat\s*[=:]\s*(0(?:\.\d+)?|1(?:\.0+)?)\b",
                     output,
                 )
