@@ -161,6 +161,32 @@ def plan_capability_extension(request: str) -> str:
     )
 
 
+def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
+    """Apply one bounded source edit for a genuinely missing capability."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("Path cannot be empty.")
+
+    gap = assess_capability_gap(request)
+    if not gap.startswith("Capability gap:"):
+        return f"Extension not applied: {gap}"
+
+    target = _safe_path(path)
+    relative = target.relative_to(_filesystem_root()).as_posix()
+    if not relative.endswith(".py"):
+        raise ValueError("Extension edits are limited to Python source files.")
+    if not (relative.startswith("gemini_agent/") or relative.startswith("tests/")):
+        raise ValueError("Extension edits are limited to gemini_agent/ and tests/.")
+
+    result = edit_text_file(relative, old_text, new_text)
+    return (
+        f"{result}\n"
+        "Extension status: source edit applied.\n"
+        "Verification status: not yet verified; run the deterministic test suite and the real-device test before exposing the capability."
+    )
+
+
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
     checks = []
@@ -2053,6 +2079,20 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "apply_capability_extension",
+        "description": "Apply one bounded source edit for a genuinely missing capability; it never edits outside Nova Python source and test files.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The missing capability being extended."},
+                "path": {"type": "STRING", "description": "Python source or test path under gemini_agent/ or tests/."},
+                "old_text": {"type": "STRING", "description": "Exactly one existing source fragment to replace."},
+                "new_text": {"type": "STRING", "description": "Replacement source fragment."}
+            },
+            "required": ["request", "path", "old_text", "new_text"],
+        },
+    },
+    {
         "name": "get_hostname",
         "description": "Get the device hostname.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -2787,6 +2827,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "plan_capability_extension": plan_capability_extension,
+    "apply_capability_extension": apply_capability_extension,
     "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
     "self_test": self_test,
