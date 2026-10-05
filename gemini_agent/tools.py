@@ -74,6 +74,19 @@ def create_directory(path: str) -> str:
     return f"Created directory {target.relative_to(_filesystem_root())}"
 
 
+def delete_directory(path: str) -> str:
+    """Delete an empty directory within the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if not target.exists():
+        raise ValueError(f"Directory does not exist: {path}")
+    if not target.is_dir() or target.is_symlink():
+        raise ValueError(f"Not a directory: {path}")
+    if any(target.iterdir()):
+        raise ValueError(f"Directory is not empty: {path}")
+    target.rmdir()
+    return f"Deleted directory {target.relative_to(_filesystem_root())}"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -301,6 +314,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "delete_directory",
+        "description": "Delete an empty directory under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path to delete."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -413,6 +437,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "forget_fact": forget_fact,
     "list_memory": list_memory,
     "create_directory": create_directory,
+    "delete_directory": delete_directory,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
