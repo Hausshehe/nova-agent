@@ -229,7 +229,7 @@ class CloudflareClientTests(unittest.TestCase):
         ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
             client = GeminiClient()
             answer = client.ask("Use the get_system_swap_usage tool.")
-        self.assertRegex(answer, r"^Total: \\d+ bytes\\nUsed: \\d+ bytes\\nFree: \\d+ bytes$")
+        self.assertRegex(answer, r"^Total: \d+ bytes\nUsed: \d+ bytes\nFree: \d+ bytes$")
         self.assertEqual(open_url.call_count, 1)
 
     def test_get_system_info_explicit_request_returns_local_result(self):
