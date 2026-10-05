@@ -26,6 +26,11 @@ class GeminiClient:
         self.groq_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
         self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
         self.openrouter_model = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
+        self.cloudflare_api_token = os.environ.get("CLOUDFLARE_API_TOKEN")
+        self.cloudflare_account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+        self.cloudflare_model = os.environ.get(
+            "CLOUDFLARE_MODEL", "@cf/zai-org/glm-4.7-flash"
+        )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         self.web_search = os.environ.get("GEMINI_WEB_SEARCH", "").lower() in {"1", "true", "yes"}
         self.last_tool_calls: list[dict] = []
@@ -228,6 +233,132 @@ class GeminiClient:
                 })
 
         raise RuntimeError("Groq requested too many browser-search tool calls.")
+
+    def _generate_cloudflare(
+        self,
+        contents: list[dict],
+        system_instruction: str | None,
+    ) -> str:
+        if not self.cloudflare_api_token or not self.cloudflare_account_id:
+            raise RuntimeError(
+                "Cloudflare credentials are not configured."
+            )
+
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        for item in contents:
+            role = item.get("role")
+            text_parts = [
+                part["text"]
+                for part in item.get("parts", [])
+                if isinstance(part, dict) and "text" in part
+            ]
+            if role in {"user", "model"} and text_parts:
+                messages.append({
+                    "role": "assistant" if role == "model" else "user",
+                    "content": "".join(text_parts),
+                })
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": declaration["name"],
+                    "description": declaration["description"],
+                    "parameters": self._groq_parameters(declaration["parameters"]),
+                },
+            }
+            for declaration in TOOL_DECLARATIONS
+        ]
+        payload = {
+            "model": self.cloudflare_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "tools": tools,
+        }
+        requested_tool = self._requested_local_tool(contents)
+        if requested_tool:
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": requested_tool},
+            }
+        elif self._requires_local_tool(contents):
+            payload["tool_choice"] = "required"
+
+        url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{self.cloudflare_account_id}/ai/v1/chat/completions"
+        )
+        for _ in range(3):
+            request = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode(),
+                headers={
+                    "Authorization": f"Bearer {self.cloudflare_api_token}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    result = json.loads(response.read().decode())
+            except urllib.error.HTTPError as exc:
+                details = exc.read().decode(errors="replace")
+                raise RuntimeError(
+                    f"Cloudflare API error ({exc.code}): {details}"
+                ) from exc
+            except urllib.error.URLError as exc:
+                raise RuntimeError(
+                    f"Could not reach Cloudflare: {exc.reason}"
+                ) from exc
+
+            try:
+                message = result["choices"][0]["message"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise RuntimeError(
+                    f"Cloudflare returned an unexpected response: {result}"
+                ) from exc
+
+            content = message.get("content")
+            if content:
+                return str(content)
+
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                raise RuntimeError(
+                    f"Cloudflare returned an unexpected response: {result}"
+                )
+
+            payload["messages"].append(message)
+            for tool_call in tool_calls:
+                function = tool_call.get("function") or {}
+                name = function.get("name")
+                handler = self.tool_handlers.get(name)
+                if handler is None:
+                    raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
+
+                try:
+                    args = self._parse_tool_arguments(
+                        function.get("arguments", "{}")
+                    )
+                    tool_result = handler(**args)
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    args = {}
+                    tool_result = f"Tool error: {exc}"
+
+                call_trace = {"name": name, "args": args, "result": tool_result}
+                if "expression" in args:
+                    call_trace["expression"] = str(args["expression"])
+                self.last_tool_calls.append(call_trace)
+
+                payload["messages"].append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id", ""),
+                    "content": str(tool_result),
+                })
+
+        raise RuntimeError("Cloudflare requested too many tool calls.")
 
     @staticmethod
     def _requested_local_tool(contents: list[dict]) -> str | None:
@@ -502,7 +633,27 @@ class GeminiClient:
                 except RuntimeError as groq_error:
                     self._disable_provider("groq", str(groq_error))
                     if self.openrouter_api_key and self._provider_enabled("openrouter"):
-                        return self._generate_openrouter(contents, system_instruction)
+                        try:
+                            return self._generate_openrouter(contents, system_instruction)
+                        except RuntimeError as openrouter_error:
+                            self._disable_provider("openrouter", str(openrouter_error))
+                            if (
+                                not self.web_search
+                                and self.cloudflare_api_token
+                                and self.cloudflare_account_id
+                                and self._provider_enabled("cloudflare")
+                            ):
+                                return self._generate_cloudflare(
+                                    contents, system_instruction
+                                )
+                            raise openrouter_error
+                    if (
+                        not self.web_search
+                        and self.cloudflare_api_token
+                        and self.cloudflare_account_id
+                        and self._provider_enabled("cloudflare")
+                    ):
+                        return self._generate_cloudflare(contents, system_instruction)
                     raise groq_error
 
             if self.openrouter_api_key and self._provider_enabled("openrouter"):
@@ -510,9 +661,28 @@ class GeminiClient:
                     return self._generate_openrouter(contents, system_instruction)
                 except RuntimeError as openrouter_error:
                     self._disable_provider("openrouter", str(openrouter_error))
+                    if (
+                        not self.web_search
+                        and self.cloudflare_api_token
+                        and self.cloudflare_account_id
+                        and self._provider_enabled("cloudflare")
+                    ):
+                        return self._generate_cloudflare(contents, system_instruction)
                     raise openrouter_error
-            raise
 
+            if (
+                not self.web_search
+                and self.cloudflare_api_token
+                and self.cloudflare_account_id
+                and self._provider_enabled("cloudflare")
+            ):
+                try:
+                    return self._generate_cloudflare(contents, system_instruction)
+                except RuntimeError as cloudflare_error:
+                    self._disable_provider("cloudflare", str(cloudflare_error))
+                    raise cloudflare_error
+
+            raise
     def ask(
         self,
         prompt: str,
