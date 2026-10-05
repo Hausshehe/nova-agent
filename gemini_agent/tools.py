@@ -6,6 +6,8 @@ import fnmatch
 import hashlib
 import re
 import operator
+import shlex
+import subprocess
 import shutil
 import os
 import platform
@@ -50,6 +52,67 @@ def calculator(expression: str) -> str:
         return str(_evaluate(tree.body))
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
+
+
+_RUN_COMMAND_ALLOWED = {
+    "pwd": {()},
+    "python": {("--version",), ("-V",)},
+    "python3": {("--version",), ("-V",)},
+    "git": {("--version",), ("status",)},
+    "uname": {("-a",)},
+    "whoami": {()},
+    "id": {()},
+}
+_RUN_COMMAND_TIMEOUT_SECONDS = 5
+_MAX_COMMAND_OUTPUT_BYTES = 4096
+
+
+def run_command(command: str) -> str:
+    """Run one approved read-only command from Nova's bounded working root."""
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("Command cannot be empty.")
+    try:
+        parts = shlex.split(command)
+    except ValueError as exc:
+        raise ValueError(f"Invalid command syntax: {exc}") from exc
+    if not parts:
+        raise ValueError("Command cannot be empty.")
+    executable = Path(parts[0]).name
+    if parts[0] != executable or executable not in _RUN_COMMAND_ALLOWED:
+        raise ValueError(f"Command is not allowed: {executable}")
+    arguments = tuple(parts[1:])
+    if arguments not in _RUN_COMMAND_ALLOWED[executable]:
+        raise ValueError(f"Arguments are not allowed for {executable}.")
+    try:
+        completed = subprocess.run(
+            parts,
+            cwd=_filesystem_root(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=_RUN_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Command timed out after {_RUN_COMMAND_TIMEOUT_SECONDS} seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Command failed to start: {exc}") from exc
+
+    def trim_output(value: str) -> str:
+        encoded = value.encode("utf-8", errors="replace")
+        if len(encoded) <= _MAX_COMMAND_OUTPUT_BYTES:
+            return value.rstrip()
+        return encoded[:_MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="ignore").rstrip() + "\n[output truncated]"
+
+    stdout = trim_output(completed.stdout)
+    stderr = trim_output(completed.stderr)
+    result = f"Exit code: {completed.returncode}"
+    if stdout:
+        result += f"\nstdout:\n{stdout}"
+    if stderr:
+        result += f"\nstderr:\n{stderr}"
+    return result
 
 
 def current_datetime() -> str:
@@ -616,6 +679,17 @@ def list_memory() -> str:
 
 TOOL_DECLARATIONS = [
     {
+        "name": "run_command",
+        "description": "Run one approved read-only command from Nova's bounded working root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "command": {"type": "STRING", "description": "Approved command and arguments to run."}
+            },
+            "required": ["command"],
+        },
+    },
+    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -1029,6 +1103,7 @@ TOOL_DECLARATIONS = [
 ]
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "run_command": run_command,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
