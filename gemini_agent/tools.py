@@ -132,9 +132,12 @@ def search_text(pattern: str, path: str = ".") -> str:
             if candidate.is_symlink() or candidate.stat().st_size > _MAX_READ_BYTES:
                 continue
             try:
-                lines = candidate.read_text(encoding="utf-8").splitlines()
+                content = candidate.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
+            if "\\x00" in content:
+                continue
+            lines = content.splitlines()
             relative = candidate.relative_to(_filesystem_root())
             for line_number, line in enumerate(lines, start=1):
                 if needle.search(line):
