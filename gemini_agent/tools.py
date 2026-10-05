@@ -251,7 +251,7 @@ TOOL_DECLARATIONS = [
         },
     },
     {
-        "name": "read_text_file",
+        "name": "read_file",
         "description": "Read a UTF-8 text file under Nova's allowed local filesystem root.",
         "parameters": {
             "type": "OBJECT",
