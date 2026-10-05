@@ -78,14 +78,29 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(names, ["calculator", "current_datetime"])
 
     def test_natural_capability_gap_request_uses_gap_tool(self):
-        responses = [
-            {"tool_calls": [{"function": {"name": "assess_capability_gap", "arguments": '{"request":"control the phone camera"}'}}]},
-        ]
-        client, mock_urlopen = self._client_with_responses(responses)
-        answer = client.ask("Do I have a capability to control the phone camera?")
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-gap",
+                "type": "function",
+                "function": {
+                    "name": "assess_capability_gap",
+                    "arguments": '{"request":"control the phone camera"}',
+                },
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Do I have a capability to control the phone camera?")
         self.assertIn("Capability gap:", answer)
         self.assertEqual(client.last_tool_calls[0]["name"], "assess_capability_gap")
-        self.assertEqual(mock_urlopen.call_count, 1)
+        self.assertEqual(open_url.call_count, 1)
 
     def test_natural_capability_request_uses_capability_inventory(self):
         tool_response = {
