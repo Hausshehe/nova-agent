@@ -92,7 +92,7 @@ class GeminiClient:
             return "self_test"
         if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
             return "plan_capability_extension"
-        if "apply capability extension" in user_text or "apply the extension" in user_text:
+        if "apply capability extension" in user_text or "apply the capability extension" in user_text or "apply the extension" in user_text:
             return "apply_capability_extension"
         if any(phrase in user_text for phrase in ("do i have a capability", "do you have a capability", "is there a tool", "can you do this", "can you do that", "do you support this")):
             return "assess_capability_gap"
