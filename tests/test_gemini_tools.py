@@ -29,6 +29,7 @@ from gemini_agent.tools import (
     get_file_permissions,
     get_system_info,
     get_hostname,
+    get_network_addresses,
     get_process_id,
     get_current_working_directory,
     get_python_executable,
@@ -208,6 +209,17 @@ class GetProcessMemoryUsageToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_process_memory_usage"], get_process_memory_usage)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_process_memory_usage", names)
+
+
+class GetNetworkAddressesToolTests(unittest.TestCase):
+    def test_get_network_addresses_returns_nonempty_value(self):
+        result = get_network_addresses()
+        self.assertTrue(result)
+
+    def test_get_network_addresses_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_network_addresses"], get_network_addresses)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_network_addresses", names)
 
 
 class GetProcessNiceToolTests(unittest.TestCase):
