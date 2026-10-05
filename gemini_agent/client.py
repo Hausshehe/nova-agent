@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 
-from gemini_agent.tools import TOOL_DECLARATIONS, TOOL_HANDLERS
+from gemini_agent.tools import RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -30,6 +30,7 @@ class GeminiClient:
                 "Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID before starting the agent."
             )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
+        self.tool_declarations = [*TOOL_DECLARATIONS, RUN_COMMAND_DECLARATION]
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
 
