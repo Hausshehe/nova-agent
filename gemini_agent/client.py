@@ -146,7 +146,7 @@ class GeminiClient:
         payload = {
             "model": self.cloudflare_model,
             "messages": messages,
-            "max_tokens": 1024,
+            "max_completion_tokens": 2048,
             "tools": tools,
         }
         if requested_tool:
