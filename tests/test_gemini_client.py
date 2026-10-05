@@ -389,7 +389,10 @@ class GeminiClientTests(unittest.TestCase):
             client._generate_openrouter(contents, "Use filesystem tools for filesystem actions.")
 
         sent = json.loads(open_url.call_args.args[0].data)
-        self.assertEqual(sent["tool_choice"], "required")
+        self.assertEqual(
+            sent["tool_choice"],
+            {"type": "function", "function": {"name": "append_text_file"}},
+        )
 
     def test_openrouter_selects_explicit_filesystem_tool(self):
         response = {
