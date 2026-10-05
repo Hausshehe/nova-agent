@@ -592,6 +592,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_file_info": get_file_info,
     "list_directory_recursive": list_directory_recursive,
     "move_directory": move_directory,
+    "copy_directory": copy_directory,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
