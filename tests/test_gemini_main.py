@@ -32,6 +32,9 @@ class MainContextTests(unittest.TestCase):
             def forget_fact(self, key):
                 return f"Forgot {key}."
 
+            def list_memory(self):
+                return "(no remembered facts)"
+
         class FakeClient:
             web_search = False
             last_grounding_sources = []
