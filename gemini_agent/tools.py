@@ -126,6 +126,16 @@ def discover_camera_control() -> str:
     """Discover camera-related Android mechanisms without launching or controlling the camera."""
     return discover_android_mechanisms("control the phone camera")
 
+def inspect_android_ui() -> str:
+    """Inspect the current foreground Android UI hierarchy without interacting with it."""
+    result = run_root_command("uiautomator dump /dev/tty")
+    return (
+        "Android UI inspection (read-only):\n"
+        f"{result}\n"
+        "UI was inspected only; no interaction or device state change was performed."
+    )
+
+
 def discover_android_mechanisms(request: str) -> str:
     """Discover safe, read-only Android mechanisms that may implement a missing capability."""
     if not isinstance(request, str) or not request.strip():
