@@ -302,7 +302,30 @@ class GeminiClient:
                         },
                     }]
 
-            # Explicit directory-size requests must use the user's path.
+            # Explicit line-count requests must use the user's path.
+        if requested_tool == "count_file_lines" and loop_index == 0:
+            user_text = ""
+            for item in reversed(payload["messages"]):
+                if item.get("role") == "user":
+                    user_text = item.get("content", "")
+                    break
+            match = re.search(
+                r"(?:count_file_lines|count(?:\s+the)?\s+lines).*?(?:of|in|for)\s+(.+?)(?:[.]\s*)?$",
+                str(user_text).strip(),
+                re.IGNORECASE,
+            )
+            if match:
+                tool_calls = [{
+                    "id": "requested-count-file-lines",
+                    "type": "function",
+                    "function": {
+                        "name": "count_file_lines",
+                        "arguments": json.dumps({"path": match.group(1).strip()}),
+                    },
+                }]
+                native_tool_calls = False
+
+        # Explicit directory-size requests must use the user's path.
             if requested_tool == "get_directory_size" and loop_index == 0:
                 user_text = ""
                 for item in reversed(payload["messages"]):
@@ -403,7 +426,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool == "get_directory_size" and loop_index == 0:
+                if requested_tool in {"get_directory_size", "count_file_lines"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. After executing the
