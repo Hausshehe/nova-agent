@@ -357,12 +357,16 @@ class GeminiClient:
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(request, timeout=60) as response:
+                with urllib.request.urlopen(request, timeout=180) as response:
                     result = json.loads(response.read().decode())
             except urllib.error.HTTPError as exc:
                 details = exc.read().decode(errors="replace")
                 raise RuntimeError(
                     f"Cloudflare API error ({exc.code}): {details}"
+                ) from exc
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    "Cloudflare request timed out while waiting for the model response."
                 ) from exc
             except urllib.error.URLError as exc:
                 raise RuntimeError(
