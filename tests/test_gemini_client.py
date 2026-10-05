@@ -209,8 +209,8 @@ class CloudflareClientTests(unittest.TestCase):
                     "name": "apply_capability_extension",
                     "arguments": json.dumps({
                         "path": "gemini_agent/tools.py",
-                        "function_source": "def camera_shutter():\\n    return \\\"ok\\\"",
-                        "declaration_description": "Take a photo with the phone camera.",
+                        "old_text": "VALUE = 1",
+                        "new_text": "VALUE = 2",
                     }),
                 },
             }]}}]
