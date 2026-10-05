@@ -221,13 +221,13 @@ def get_airplane_mode() -> str:
         "/system/bin/settings get global airplane_mode_on",
         "/system/bin/settings get system airplane_mode_on",
         "/system/bin/settings get secure airplane_mode_on",
-        "/system/bin/dumpsys connectivity",
         "/system/bin/dumpsys wifi",
     )
     try:
         for command in commands:
             result = subprocess.run(
-                ["su", "-c", command],
+                ["su"],
+                input=command + "\n",
                 capture_output=True,
                 text=True,
                 check=False,
@@ -238,8 +238,11 @@ def get_airplane_mode() -> str:
                 return "Airplane mode: Enabled"
             if stripped == "0":
                 return "Airplane mode: Disabled"
+            match = re.search(r"(?im)\\bAirplaneModeOn\\s+(true|false)\\b", output)
+            if match:
+                return "Airplane mode: " + ("Enabled" if match.group(1).lower() == "true" else "Disabled")
             match = re.search(
-                r"(?im)\b(?:mAirplaneModeOn|airplaneMode|airplane_mode_on)\s*[:=]\s*(true|false|1|0)\b",
+                r"(?im)\\b(?:mAirplaneModeOn|airplaneMode|airplane_mode_on)\\s*[:=]\\s*(true|false|1|0)\\b",
                 output,
             )
             if match:
@@ -248,7 +251,6 @@ def get_airplane_mode() -> str:
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Airplane mode status is unavailable.") from exc
     raise RuntimeError("Airplane mode status is unavailable.")
-
 
 def get_bluetooth_status() -> str:
     """Return the Android Bluetooth radio state."""
