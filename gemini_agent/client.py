@@ -65,6 +65,7 @@ class GeminiClient:
         "read_text_file": "read_file",
         "create_directory": "make_directory",
         "delete_directory": "remove_directory",
+        "edit_text_file": "edit_file",
     }
 
     @classmethod
