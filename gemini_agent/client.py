@@ -429,12 +429,15 @@ class GeminiClient:
                 })
 
         requested_tool = self._requested_local_tool(contents)
-        if requested_tool == "apply_capability_extension":
-            request_text = next(
+        request_text = next(
+            (
                 item.get("content", "")
                 for item in reversed(messages)
                 if item.get("role") == "user"
-            )
+            ),
+            "",
+        )
+        if requested_tool == "apply_capability_extension":
             inspection = self._extension_inspection_context(request_text)
             messages = [
                 {"role": "system", "content": (
