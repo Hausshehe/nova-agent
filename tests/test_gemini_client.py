@@ -109,6 +109,24 @@ class CloudflareClientTests(unittest.TestCase):
         open_url.assert_not_called()
 
 
+    def test_validate_android_mechanism_routes_without_cloudflare(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            client.tool_handlers["validate_android_mechanism"] = (
+                lambda request, mechanism: f"validated {request} via {mechanism}"
+            )
+            answer = client.ask(
+                "Validate the Android mechanism: intent:android.media.action.IMAGE_CAPTURE "
+                "for the capability capture a photo."
+            )
+        self.assertIn("validated", answer)
+        self.assertIn("intent:android.media.action.IMAGE_CAPTURE", answer)
+        open_url.assert_not_called()
+
     def test_resolve_android_intent_uses_prompt_action_deterministically(self):
         with patch.dict(
             os.environ,
