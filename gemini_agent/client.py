@@ -187,8 +187,42 @@ class GeminiClient:
                 ) from exc
 
             tool_calls = message.get("tool_calls") or []
+            native_tool_calls = bool(tool_calls)
+
+            if not tool_calls:
+                content = message.get("content")
+                if isinstance(content, str):
+                    lines = content.strip().splitlines()
+                    if len(lines) >= 2 and lines[0].strip() in {
+                        d["name"] for d in TOOL_DECLARATIONS
+                    }:
+                        try:
+                            parsed_args = json.loads("\n".join(lines[1:]))
+                            if isinstance(parsed_args, dict):
+                                local_name = lines[0].strip()
+                                cloud_name = self._CLOUD_TOOL_NAMES.get(
+                                    local_name, local_name
+                                )
+                                tool_calls = [{
+                                    "id": "content-tool-call",
+                                    "type": "function",
+                                    "function": {
+                                        "name": cloud_name,
+                                        "arguments": parsed_args,
+                                    },
+                                }]
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
             if tool_calls:
-                payload["messages"].append(message)
+                if native_tool_calls:
+                    payload["messages"].append(message)
+                else:
+                    payload["messages"].append({
+                        "role": "assistant",
+                        "tool_calls": tool_calls,
+                    })
+
                 for tool_call in tool_calls:
                     function = tool_call.get("function") or {}
                     name = function.get("name")
