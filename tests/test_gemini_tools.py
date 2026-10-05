@@ -213,7 +213,7 @@ class GetProcessMemoryUsageToolTests(unittest.TestCase):
 class GetProcessNiceToolTests(unittest.TestCase):
     def test_get_process_nice_returns_integer(self):
         result = get_process_nice(str(os.getpid()))
-        self.assertRegex(result, r"^-?\\d+$")
+        self.assertRegex(result, r"^-?\d+$")
 
     def test_get_process_nice_rejects_invalid_pid(self):
         with self.assertRaisesRegex(ValueError, "PID"):
