@@ -23,6 +23,7 @@ from gemini_agent.tools import (
     get_file_extension,
     get_file_name,
     get_file_stem,
+    get_file_parent,
     path_exists,
     hash_file,
     get_directory_size,
@@ -383,6 +384,32 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_file_stem", names)
 
+    def test_get_file_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "nested").mkdir()
+            (root / "nested" / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(get_file_parent("nested/notes.txt"), "nested")
+                self.assertEqual(get_file_parent("nested"), ".")
+
+    def test_get_file_parent_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "does not exist"):
+                    get_file_parent("missing.txt")
+
+    def test_get_file_parent_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    get_file_parent("../outside.txt")
+
+    def test_get_file_parent_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_file_parent"], get_file_parent)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_file_parent", names)
+
     def test_get_file_extension(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -493,7 +520,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("path_exists"):names.index("find_files") + 1], [
-            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_parent", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
