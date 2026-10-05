@@ -37,6 +37,7 @@ from gemini_agent.tools import (
     get_screen_resolution,
     get_screen_density,
     get_screen_refresh_rate,
+    get_media_volume,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1492,6 +1493,40 @@ class GetScreenBrightnessToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_screen_brightness"], get_screen_brightness)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_screen_brightness", names)
+
+
+class GetMediaVolumeToolTests(unittest.TestCase):
+    def test_get_media_volume_parses_stream_volume(self):
+        completed = type(
+            "Completed",
+            (),
+            {
+                "stdout": (
+                    "Stream volumes (device: index)\n"
+                    "    - STREAM_MUSIC:\n"
+                    "        streamVolume:15\n"
+                )
+            },
+        )()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_media_volume()
+        self.assertEqual(result, "Media volume: 100% (15/15)")
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "/system/bin/dumpsys audio\n")
+
+    def test_get_media_volume_falls_back_to_index_format(self):
+        completed = type(
+            "Completed",
+            (),
+            {"stdout": "STREAM_MUSIC: Min: 0 Max: 15 Current: 6\n"},
+        )()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_media_volume(), "Media volume: 40% (6/15)")
+
+    def test_get_media_volume_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_media_volume"], get_media_volume)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_media_volume", names)
 
 
 class GetSystemBatteryStatusToolTests(unittest.TestCase):
