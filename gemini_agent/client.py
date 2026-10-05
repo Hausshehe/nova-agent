@@ -380,8 +380,14 @@ class GeminiClient:
         except Exception:
             handler_names = []
         if handler_names:
-            context.append("Exact existing TOOL_HANDLERS names (implementation_target must be one of these):")
+            context.append("Exact existing TOOL_HANDLERS names:")
             context.append(", ".join(handler_names))
+            context.append(
+                "Implementation targets must be action-capable primitives. "
+                "Do not select inspection, planning, orchestration, inventory, "
+                "self-test, or diagnostic tools as implementation_target. "
+                "The local transaction rejects those categories automatically."
+            )
 
         context.append(
             "Use apply_capability_extension as a structured existing-tool composition transaction. "
