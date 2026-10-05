@@ -181,6 +181,24 @@ def hash_file(path: str) -> str:
     return digest.hexdigest()
 
 
+def get_directory_size(path: str = ".") -> str:
+    """Return the total size of regular files in a directory tree under the bounded root."""
+    target = _safe_path(path)
+    if not target.is_dir() or target.is_symlink():
+        raise ValueError(f"Not a directory: {path}")
+    total = 0
+    for directory, dirnames, filenames in os.walk(target, followlinks=False):
+        current = _safe_path(directory)
+        dirnames[:] = [name for name in dirnames if not (current / name).is_symlink()]
+        for name in filenames:
+            candidate = current / name
+            if candidate.is_symlink():
+                continue
+            if candidate.is_file():
+                total += candidate.stat().st_size
+    return f"{total} bytes"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -499,6 +517,16 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_directory_size",
+        "description": "Calculate the total size of regular files in a directory tree under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path to measure."}
+            },
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -630,6 +658,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "move_directory": move_directory,
     "copy_directory": copy_directory,
     "hash_file": hash_file,
+    "get_directory_size": get_directory_size,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
