@@ -246,6 +246,40 @@ def get_process_executable(pid: str) -> str:
         raise RuntimeError(f"Process executable is unavailable: {pid}") from exc
 
 
+def get_process_parent_name(pid: str) -> str:
+    """Return the parent process name of a visible local process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    status = Path("/proc") / pid / "status"
+    if not status.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    parent_pid = None
+    try:
+        for line in status.read_text(encoding="utf-8").splitlines():
+            if line.startswith("PPid:"):
+                value = line.split(":", 1)[1].strip()
+                if value.isdigit() and int(value) > 0:
+                    parent_pid = value
+                break
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"Parent process is unavailable: {pid}") from exc
+    if parent_pid is None:
+        raise RuntimeError(f"Parent process is unavailable: {pid}")
+    parent_status = Path("/proc") / parent_pid / "status"
+    if not parent_status.is_file():
+        raise RuntimeError(f"Parent process is unavailable: {pid}")
+    try:
+        for line in parent_status.read_text(encoding="utf-8").splitlines():
+            if line.startswith("Name:"):
+                name = line.split(":", 1)[1].strip()
+                if name:
+                    return name
+                break
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"Parent process name is unavailable: {pid}") from exc
+    raise RuntimeError(f"Parent process name is unavailable: {pid}")
+
+
 def get_process_working_directory(pid: str) -> str:
     """Return the working directory of a visible local process."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -1226,6 +1260,15 @@ GET_PROCESS_EXECUTABLE_DECLARATION = {
         "required": ["pid"],
     },
 }
+GET_PROCESS_PARENT_NAME_DECLARATION = {
+    "name": "get_process_parent_name",
+    "description": "Get the parent process name of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_WORKING_DIRECTORY_DECLARATION = {
     "name": "get_process_working_directory",
     "description": "Get the working directory of a visible local process.",
@@ -1268,6 +1311,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_command_line": get_process_command_line,
     "get_process_executable": get_process_executable,
     "get_process_working_directory": get_process_working_directory,
+    "get_process_parent_name": get_process_parent_name,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
