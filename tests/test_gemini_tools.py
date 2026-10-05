@@ -243,7 +243,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             result = inspect_android_ui()
         root.assert_called_once_with("uiautomator dump /dev/tty")
         self.assertIn("Android UI inspection (read-only):", result)
-        self.assertIn("not interaction", result)
+        self.assertIn("no interaction", result)
         self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("inspect_android_ui", names)
