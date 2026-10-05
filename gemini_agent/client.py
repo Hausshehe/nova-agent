@@ -638,7 +638,7 @@ class GeminiClient:
                         except RuntimeError as openrouter_error:
                             self._disable_provider("openrouter", str(openrouter_error))
                             if (
-                                not self.web_search
+                                (not self.web_search or self._requires_local_tool(contents))
                                 and self.cloudflare_api_token
                                 and self.cloudflare_account_id
                                 and self._provider_enabled("cloudflare")
@@ -648,7 +648,7 @@ class GeminiClient:
                                 )
                             raise openrouter_error
                     if (
-                        not self.web_search
+                        (not self.web_search or self._requires_local_tool(contents))
                         and self.cloudflare_api_token
                         and self.cloudflare_account_id
                         and self._provider_enabled("cloudflare")
@@ -671,7 +671,7 @@ class GeminiClient:
                     raise openrouter_error
 
             if (
-                not self.web_search
+                (not self.web_search or self._requires_local_tool(contents))
                 and self.cloudflare_api_token
                 and self.cloudflare_account_id
                 and self._provider_enabled("cloudflare")
