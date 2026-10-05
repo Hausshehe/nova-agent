@@ -47,6 +47,22 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(open_url.call_count, 1)
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
+    def test_intent_routing_selects_android_mechanism_discovery(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url:
+            GeminiClient().ask("Discover Android mechanisms for controlling the camera.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        names = [tool["function"]["name"] for tool in sent["tools"]]
+        self.assertEqual(names, ["discover_android_mechanisms"])
+
+
     def test_intent_routing_narrows_unambiguous_capability_set(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
