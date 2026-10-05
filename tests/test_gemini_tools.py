@@ -27,6 +27,7 @@ from gemini_agent.tools import (
     inspect_android_ui,
     discover_android_ui_actions,
     validate_android_mechanism,
+    execute_validated_android_mechanism,
     get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
@@ -2205,6 +2206,45 @@ class GetSystemBootTimeToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_system_boot_time"], get_system_boot_time)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_system_boot_time", names)
+
+
+
+class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
+    def test_executes_only_after_viable_validation(self):
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\\nStatus: VIABLE",
+        ) as validate, patch(
+            "gemini_agent.tools.send_android_intent",
+            return_value="Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
+        ) as send:
+            result = execute_validated_android_mechanism(
+                "capture a photo", "intent:android.media.action.IMAGE_CAPTURE"
+            )
+        self.assertIn("Validation: VIABLE", result)
+        self.assertIn("Exit code: 0", result)
+        validate.assert_called_once_with("capture a photo", "intent:android.media.action.IMAGE_CAPTURE")
+        send.assert_called_once_with("android.media.action.IMAGE_CAPTURE")
+
+    def test_blocks_non_intent_mechanisms(self):
+        with self.assertRaisesRegex(ValueError, "only validated intent mechanisms"):
+            execute_validated_android_mechanism("tap", "ui:com.example:id/button")
+
+    def test_blocks_non_viable_mechanism_without_action(self):
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\\nStatus: NOT VIABLE",
+        ), patch("gemini_agent.tools.send_android_intent") as send:
+            result = execute_validated_android_mechanism(
+                "capture a photo", "intent:android.media.action.IMAGE_CAPTURE"
+            )
+        self.assertIn("execution blocked", result)
+        send.assert_not_called()
+
+    def test_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["execute_validated_android_mechanism"], execute_validated_android_mechanism)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("execute_validated_android_mechanism", names)
 
 
 class VerifyCommandResultToolTests(unittest.TestCase):
