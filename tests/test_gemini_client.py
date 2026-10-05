@@ -368,6 +368,29 @@ class GeminiClientTests(unittest.TestCase):
         self.assertEqual(sent["tools"], [{"type": "browser_search"}])
         self.assertEqual(sent["tool_choice"], "required")
 
+    def test_openrouter_requires_tool_for_filesystem_action(self):
+        response = {
+            "choices": [{"message": {"content": "Tool required"}}]
+        }
+        contents = [{"role": "user", "parts": [{"text": "Use the append_text_file tool to append exactly \" second entry\" to test-write.txt"}]}]
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+                "GEMINI_WEB_SEARCH": "1",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url:
+            client = GeminiClient()
+            client._generate_openrouter(contents, "Use filesystem tools for filesystem actions.")
+
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(sent["tool_choice"], "required")
+
     def test_openrouter_fallback_accepts_decoded_tool_arguments(self):
         tool_response = {
             "choices": [{
