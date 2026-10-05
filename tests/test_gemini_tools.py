@@ -10,6 +10,7 @@ from unittest.mock import patch
 from gemini_agent.tools import (
     TOOL_DECLARATIONS,
     TOOL_HANDLERS,
+    append_text_file,
     calculator,
     current_datetime,
     find_files,
@@ -83,7 +84,8 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
-            "list_directory", "read_text_file", "search_text", "write_text_file", "find_files"
+            "list_directory", "read_text_file", "search_text", "write_text_file",
+            "append_text_file", "find_files"
         ])
 
     def test_finds_files_by_name(self):
@@ -99,7 +101,6 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIn("notes.txt", result)
         self.assertIn("nested/todo.txt", result)
         self.assertNotIn("image.png", result)
-
 
     def test_writes_text_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -124,6 +125,42 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["write_text_file"], write_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("write_text_file", names)
+
+    def test_appends_text_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = append_text_file("notes.txt", " Nova")
+                self.assertEqual(result, "Appended 5 bytes to notes.txt")
+                self.assertEqual((root / "notes.txt").read_text(encoding="utf-8"), "hello Nova")
+
+    def test_append_creates_missing_file_and_parents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                append_text_file("notes/new.txt", "first")
+                append_text_file("notes/new.txt", " second")
+                self.assertEqual(
+                    (Path(directory) / "notes/new.txt").read_text(encoding="utf-8"),
+                    "first second",
+                )
+
+    def test_append_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    append_text_file("../outside.txt", "hello")
+
+    def test_append_rejects_oversized_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "larger"):
+                    append_text_file("large.txt", "x" * (64 * 1024 + 1))
+
+    def test_append_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["append_text_file"], append_text_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("append_text_file", names)
 
     def test_searches_text_in_files(self):
         with tempfile.TemporaryDirectory() as directory:
