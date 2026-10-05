@@ -366,16 +366,16 @@ class GeminiClient:
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
-                if match:
-                    tool_calls = [{
-                        "id": "requested-disk-usage",
-                        "type": "function",
-                        "function": {
-                            "name": "get_disk_usage",
-                            "arguments": json.dumps({"path": match.group(1).strip()}),
-                        },
-                    }]
-                    native_tool_calls = False
+                path = match.group(1).strip() if match else "."
+                tool_calls = [{
+                    "id": "requested-disk-usage",
+                    "type": "function",
+                    "function": {
+                        "name": "get_disk_usage",
+                        "arguments": json.dumps({"path": path}),
+                    },
+                }]
+                native_tool_calls = False
 
             # Explicit directory-size requests must use the user's path.
             if requested_tool == "get_directory_entry_count" and loop_index == 0:
