@@ -1363,10 +1363,8 @@ class GetScreenOrientationToolTests(unittest.TestCase):
         with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
             result = get_screen_resolution()
         self.assertEqual(result, "Screen resolution: 720x1612")
-        self.assertEqual(
-            run.call_args.args[0],
-            ["su", "-c", "/system/bin/wm size"],
-        )
+        self.assertEqual(run.call_args.args[0], ["su"])
+        self.assertEqual(run.call_args.kwargs["input"], "/system/bin/wm size\n")
 
     def test_get_screen_resolution_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_screen_resolution"], get_screen_resolution)
