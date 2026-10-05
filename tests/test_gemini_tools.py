@@ -34,6 +34,7 @@ from gemini_agent.tools import (
     get_cpu_count,
     get_memory_usage,
     get_temp_directory,
+    get_home_directory,
     path_exists,
     hash_file,
     get_directory_entry_count,
@@ -635,6 +636,15 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_file_modified_time"], get_file_modified_time)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_file_modified_time", names)
+
+    def test_get_home_directory_returns_nonempty_value(self):
+        self.assertTrue(get_home_directory())
+        self.assertEqual(get_home_directory(), str(Path.home()))
+
+    def test_get_home_directory_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_home_directory"], get_home_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_home_directory", names)
 
     def test_get_hostname_returns_nonempty_value(self):
         self.assertTrue(get_hostname())
