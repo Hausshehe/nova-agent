@@ -87,6 +87,17 @@ def delete_directory(path: str) -> str:
     return f"Deleted directory {target.relative_to(_filesystem_root())}"
 
 
+def get_file_info(path: str) -> str:
+    """Return basic metadata for a file or directory under the bounded root."""
+    target = _safe_path(path)
+    if not target.exists() or target.is_symlink():
+        raise ValueError(f"Path does not exist: {path}")
+    kind = "directory" if target.is_dir() else "file" if target.is_file() else "other"
+    size = target.stat().st_size
+    relative = target.relative_to(_filesystem_root())
+    return f"Path: {relative}\\nType: {kind}\\nSize: {size} bytes"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -349,6 +360,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_file_info",
+        "description": "Get basic type and size information for a file or directory under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to inspect."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -475,6 +497,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_memory": list_memory,
     "create_directory": create_directory,
     "delete_directory": delete_directory,
+    "get_file_info": get_file_info,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
