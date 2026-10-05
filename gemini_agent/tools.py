@@ -2804,6 +2804,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "validate_android_mechanism",
+        "description": "Validate a discovered Android mechanism without executing the requested capability or changing device state.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability the mechanism is intended to implement."},
+                "mechanism": {"type": "STRING", "description": "Bounded mechanism in intent:<action>, executable:<name>, service:<name>, or ui:<resource-id> form."},
+            },
+            "required": ["request", "mechanism"],
+        },
+    },
+    {
         "name": "resolve_android_intent",
         "description": "Resolve an allowlisted Android intent without launching it. Use this to discover which activity would handle a mechanism before any action is performed.",
         "parameters": {
@@ -3660,6 +3672,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "discover_android_mechanisms": discover_android_mechanisms,
+    "validate_android_mechanism": validate_android_mechanism,
     "resolve_android_intent": resolve_android_intent,
     "discover_camera_control": discover_camera_control,
     "plan_capability_extension": plan_capability_extension,
