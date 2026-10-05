@@ -87,7 +87,7 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("list_directory"):names.index("find_files") + 1], [
             "list_directory", "read_text_file", "search_text", "write_text_file",
-            "append_text_file", "delete_file", "find_files"
+            "append_text_file", "move_file", "delete_file", "find_files"
         ])
 
     def test_moves_file(self):
