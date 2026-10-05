@@ -24,6 +24,7 @@ _OPERATORS = {
 _MAX_READ_BYTES = 64 * 1024
 _MAX_FIND_RESULTS = 100
 _MAX_SEARCH_RESULTS = 100
+_MAX_WRITE_BYTES = 64 * 1024
 
 
 def _evaluate(node: ast.AST) -> float | int:
@@ -88,6 +89,19 @@ def read_text_file(path: str) -> str:
     except UnicodeDecodeError as exc:
         raise ValueError("File is not valid UTF-8 text.") from exc
 
+
+def write_text_file(path: str, content: str) -> str:
+    """Write UTF-8 text under the bounded Nova filesystem root."""
+    target = _safe_path(path)
+    if target.exists() and not target.is_file():
+        raise ValueError(f"Not a file: {path}")
+    data = str(content)
+    encoded = data.encode("utf-8")
+    if len(encoded) > _MAX_WRITE_BYTES:
+        raise ValueError(f"Content is larger than {_MAX_WRITE_BYTES} bytes.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(encoded)
+    return f"Wrote {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
 
 def find_files(pattern: str, path: str = ".") -> str:
     """Find files and directories by name pattern under the bounded root."""
@@ -233,6 +247,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "write_text_file",
+        "description": "Write UTF-8 text to a file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "content": {"type": "STRING", "description": "UTF-8 text to write."},
+            },
+            "required": ["path", "content"],
+        },
+    },    {
         "name": "find_files",
         "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
         "parameters": {
@@ -253,6 +278,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "forget_fact": forget_fact,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
+    "write_text_file": write_text_file,
     "find_files": find_files,
     "search_text": search_text,
 }
