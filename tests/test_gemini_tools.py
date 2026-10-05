@@ -15,6 +15,7 @@ from gemini_agent.tools import (
     calculator,
     create_directory,
     current_datetime,
+    edit_text_file,
     delete_directory,
     delete_file,
     find_files,
@@ -282,6 +283,34 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["write_text_file"], write_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("write_text_file", names)
+
+    def test_edits_text_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("hello Nova", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = edit_text_file("notes.txt", "Nova", "world")
+            self.assertEqual(result, "Edited notes.txt")
+            self.assertEqual((root / "notes.txt").read_text(encoding="utf-8"), "hello world")
+
+    def test_edit_rejects_missing_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "notes.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "not found"):
+                    edit_text_file("notes.txt", "missing", "world")
+
+    def test_edit_rejects_ambiguous_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "notes.txt").write_text("hello hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "more than once"):
+                    edit_text_file("notes.txt", "hello", "world")
+
+    def test_edit_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["edit_text_file"], edit_text_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("edit_text_file", names)
 
     def test_appends_text_file(self):
         with tempfile.TemporaryDirectory() as directory:
