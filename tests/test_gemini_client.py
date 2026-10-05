@@ -48,10 +48,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("/accounts/account/ai/v1/chat/completions", open_url.call_args.args[0].full_url)
 
     def test_uses_calculator_tool(self):
-        tool_response = {"choices": [{"message": {"content": "", "tool_calls": [{
-            "id": "call-1", "type": "function",
-            "function": {"name": "calculator", "arguments": '{"expression":"17 * 23"}'},
-        ]}}]}
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": '{"expression":"17 * 23"}',
+                        },
+                    }],
+                }
+            }]
+        }
         final_response = {"choices": [{"message": {"content": "391"}}]}
         with patch.dict(
             os.environ,
@@ -74,10 +85,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("tool_choice", follow_up)
 
     def test_tool_calls_take_precedence_over_content(self):
-        tool_response = {"choices": [{"message": {"content": "remembered_fact", "tool_calls": [{
-            "id": "call-1", "type": "function",
-            "function": {"name": "remember_fact", "arguments": '{"key":"favorite_color","value":"blue"}'},
-        }]}}]}
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "remembered_fact",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "remember_fact",
+                            "arguments": '{"key":"favorite_color","value":"blue"}',
+                        },
+                    }],
+                }
+            }]
+        }
         final_response = {"choices": [{"message": {"content": "Remembered favorite color."}}]}
         with patch.dict(
             os.environ,
@@ -97,9 +119,13 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "remember_fact")
 
     def test_content_form_tool_call_is_executed(self):
-        tool_response = {"choices": [{"message": {
-            "content": 'remember_fact\n{"key":"favorite_color","value":"blue"}'
-        }}]}
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": 'remember_fact\n{"key":"favorite_color","value":"blue"}'
+                }
+            }]
+        }
         final_response = {"choices": [{"message": {"content": "Remembered favorite color."}}]}
         with patch.dict(
             os.environ,
@@ -117,7 +143,10 @@ class CloudflareClientTests(unittest.TestCase):
             answer = client.ask("Remember that my favorite color is blue.")
         self.assertEqual(answer, "Remembered favorite color.")
         self.assertEqual(client.last_tool_calls[0]["name"], "remember_fact")
-        self.assertEqual(client.last_tool_calls[0]["args"], {"key": "favorite_color", "value": "blue"})
+        self.assertEqual(
+            client.last_tool_calls[0]["args"],
+            {"key": "favorite_color", "value": "blue"},
+        )
         follow_up = json.loads(open_url.call_args_list[1].args[0].data)
         self.assertEqual(follow_up["messages"][-2]["role"], "assistant")
         self.assertEqual(follow_up["messages"][-1]["role"], "tool")
@@ -158,10 +187,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(sent["tool_choice"], "required")
 
     def test_accepts_decoded_tool_arguments(self):
-        tool_response = {"choices": [{"message": {"content": "", "tool_calls": [{
-            "id": "call-1", "type": "function",
-            "function": {"name": "calculator", "arguments": {"expression": "12 * 7"}},
-        }]}}]}
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": {"expression": "12 * 7"},
+                        },
+                    }],
+                }
+            }]
+        }
         final_response = {"choices": [{"message": {"content": "84"}}]}
         with patch.dict(
             os.environ,
