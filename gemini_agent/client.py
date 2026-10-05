@@ -337,9 +337,37 @@ class GeminiClient:
             if excerpts:
                 context.append("Relevant gemini_agent/tools.py excerpts:")
                 context.extend(excerpts)
+
+            # Give the model exact, copyable integration anchors. The model must
+            # not have to reconstruct whitespace or guess where a declaration or
+            # handler belongs.
+            anchor_patterns = (
+                "TOOL_DECLARATIONS = [",
+                "TOOL_HANDLERS: dict[str, Callable[..., str]] = {",
+            )
+            for pattern in anchor_patterns:
+                index = source.find(pattern)
+                if index >= 0:
+                    lines = source.splitlines()
+                    line_index = source[:index].count("\\n")
+                    start = max(0, line_index)
+                    end = min(len(lines), start + 18)
+                    context.append(
+                        f"Exact integration anchor: {pattern}"
+                    )
+                    context.append(
+                        "\\n".join(
+                            f"{number + 1}: {lines[number]}"
+                            for number in range(start, end)
+                        )
+                    )
+
         context.append(
             "Use only an exact existing source fragment in apply_capability_extension. "
-            "Do not invent a path or claim an implementation exists unless the inspected source supports it."
+            "Copy old_text verbatim from the inspected source, including punctuation and whitespace. "
+            "Do not invent a path or claim an implementation exists unless the inspected source supports it. "
+            "Do not make a declaration-only extension: the same transaction must add the implementation "
+            "function and TOOL_HANDLERS registration, or the transaction will be rejected."
         )
         return "\\n".join(context)
 
