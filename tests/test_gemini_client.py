@@ -200,6 +200,39 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
         self.assertIn("HARD CONSTRAINT: the proposed capability name is exactly 'camera_shutter'.", inspection)
 
+    def test_natural_extension_application_fills_missing_request_from_user_prompt(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-extension",
+                "type": "function",
+                "function": {
+                    "name": "apply_capability_extension",
+                    "arguments": json.dumps({
+                        "path": "gemini_agent/tools.py",
+                        "function_source": "def camera_shutter():\\n    return \\\"ok\\\"",
+                        "declaration_description": "Take a photo with the phone camera.",
+                    }),
+                },
+            }]}}]
+        }
+        captured = {}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            def handler(**kwargs):
+                captured.update(kwargs)
+                return "Extension not applied: test rejection."
+            client = GeminiClient(tool_handlers={"apply_capability_extension": handler})
+            answer = client.ask("Apply a capability extension for the phone camera shutter.")
+        self.assertEqual(answer, "Extension not applied: test rejection.")
+        self.assertEqual(captured["request"], "Apply a capability extension for the phone camera shutter.")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_natural_extension_application_returns_first_transaction_result(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
