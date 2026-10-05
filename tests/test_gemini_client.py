@@ -239,7 +239,10 @@ class CloudflareClientTests(unittest.TestCase):
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
-        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url, patch(
+            "gemini_agent.client.TOOL_HANDLERS"
+        ) as handlers:
+            handlers.__getitem__.return_value = lambda: "37.50%"
             client = GeminiClient()
             answer = client.ask("Use the get_system_cpu_usage tool.")
         self.assertRegex(answer, r"^\d+\.\d{2}%$")
