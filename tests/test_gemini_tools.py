@@ -14,6 +14,7 @@ from gemini_agent.tools import (
     current_datetime,
     find_files,
     search_text,
+    write_text_file,
     list_directory,
     read_text_file,
 )
@@ -99,6 +100,30 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIn("nested/todo.txt", result)
         self.assertNotIn("image.png", result)
 
+
+    def test_writes_text_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = write_text_file("notes/new.txt", "hello Nova")
+                self.assertEqual(result, "Wrote 10 bytes to notes/new.txt")
+                self.assertEqual((Path(directory) / "notes/new.txt").read_text(encoding="utf-8"), "hello Nova")
+
+    def test_write_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    write_text_file("../outside.txt", "hello")
+
+    def test_write_rejects_oversized_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "larger"):
+                    write_text_file("large.txt", "x" * (64 * 1024 + 1))
+
+    def test_write_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["write_text_file"], write_text_file)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("write_text_file", names)
 
     def test_searches_text_in_files(self):
         with tempfile.TemporaryDirectory() as directory:
