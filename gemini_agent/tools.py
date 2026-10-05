@@ -2687,6 +2687,11 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "get_foreground_android_component",
+        "description": "Inspect the current foreground Android package and activity using read-only diagnostics without interacting with the device.",
+        "parameters": {"type": "OBJECT", "properties": {}, "required": []},
+    },
+    {
         "name": "inspect_android_ui",
         "description": "Inspect the current foreground Android UI hierarchy using read-only diagnostics without interacting with the UI.",
         "parameters": {"type": "OBJECT", "properties": {}, "required": []},
@@ -3529,6 +3534,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
         "get_process_memory_usage": get_process_memory_usage,
     "send_android_keyevent": send_android_keyevent,
     "inspect_android_ui": inspect_android_ui,
+    "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
     "calculator": calculator,
     "current_datetime": current_datetime,
