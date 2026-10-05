@@ -18,6 +18,7 @@ from gemini_agent.tools import (
     calculator,
     self_test,
     capability_inventory,
+    plan_capability_extension,
     count_file_lines,
     create_directory,
     current_datetime,
@@ -127,6 +128,17 @@ class SelfTestToolTests(unittest.TestCase):
         from gemini_agent.tools import assess_capability_gap
         result = assess_capability_gap("control the phone's camera shutter")
         self.assertIn("Capability gap:", result)
+
+    def test_capability_extension_plan_for_missing_capability(self):
+        result = plan_capability_extension("control the phone camera shutter")
+        self.assertIn("Extension plan: capability is missing.", result)
+        self.assertIn("Proposed tool: extend_camera_shutter", result)
+        self.assertIn("Status: plan only; no code or device state was modified.", result)
+
+    def test_capability_extension_plan_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["plan_capability_extension"], plan_capability_extension)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("plan_capability_extension", names)
 
     def test_self_test_passes(self):
         result = self_test()
