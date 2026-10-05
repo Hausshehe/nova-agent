@@ -60,6 +60,7 @@ from gemini_agent.tools import (
     read_text_file,
     run_command,
     list_processes,
+    get_process_status,
 )
 
 
@@ -74,6 +75,24 @@ class ListProcessesToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["list_processes"], list_processes)
         self.assertNotEqual(TOOL_DECLARATIONS[-1]["name"], "list_processes")
 
+
+class GetProcessStatusToolTests(unittest.TestCase):
+    def test_get_process_status_returns_basic_status(self):
+        result = get_process_status(str(os.getpid()))
+        self.assertIn(f"PID: {os.getpid()}", result)
+        self.assertIn("Name:", result)
+        self.assertIn("State:", result)
+
+    def test_get_process_status_rejects_invalid_pid(self):
+        with self.assertRaisesRegex(ValueError, "PID"):
+            get_process_status("not-a-pid")
+
+    def test_get_process_status_rejects_missing_process(self):
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            get_process_status("999999999")
+
+    def test_get_process_status_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_status"], get_process_status)
 
 class RunCommandToolTests(unittest.TestCase):
     def test_run_command_executes_approved_command(self):
