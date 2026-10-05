@@ -130,6 +130,11 @@ def get_process_thread_count() -> str:
     raise RuntimeError("Process thread count is unavailable.")
 
 
+def get_parent_process_id() -> str:
+    """Return the parent process ID of the running Nova process."""
+    return str(os.getppid())
+
+
 def get_umask() -> str:
     """Return Nova's process file-creation mask as four-digit octal text."""
     status = Path("/proc/self/status")
@@ -670,6 +675,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_parent_process_id",
+        "description": "Get the parent process ID of the running Nova process.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_umask",
         "description": "Get Nova's process file-creation mask as four-digit octal text.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1002,6 +1012,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_home_directory": get_home_directory,
     "get_process_uptime": get_process_uptime,
     "get_process_thread_count": get_process_thread_count,
+    "get_parent_process_id": get_parent_process_id,
     "get_umask": get_umask,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
