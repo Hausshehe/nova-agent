@@ -125,12 +125,25 @@ def plan_capability_extension(request: str) -> str:
         return f"Extension not needed: {gap}"
 
     normalized = re.sub(r"[^a-z0-9]+", " ", request.lower()).strip()
-    words = [word for word in normalized.split() if word not in {
-        "the", "a", "an", "to", "of", "do", "i", "have", "can", "you",
-        "capability", "capabilities", "control", "phone",
-    }]
-    suffix = "_".join(words[:5]) or "requested_capability"
-    tool_name = f"extend_{suffix}"
+
+    # Prefer stable semantic names for common requests instead of deriving a
+    # tool name from model-generated filler such as "add a capability to".
+    canonical_capabilities = (
+        (("camera shutter", "capture a photo", "take a photo", "open the device camera", "open device camera"),
+         "camera_shutter"),
+    )
+    for phrases, suffix in canonical_capabilities:
+        if any(phrase in normalized for phrase in phrases):
+            tool_name = f"extend_{suffix}"
+            break
+    else:
+        words = [word for word in normalized.split() if word not in {
+            "the", "a", "an", "to", "of", "do", "i", "have", "can", "you",
+            "capability", "capabilities", "control", "phone", "add",
+            "device", "open", "this",
+        }]
+        suffix = "_".join(words[:5]) or "requested_capability"
+        tool_name = f"extend_{suffix}"
 
     return (
         "Extension plan: capability is missing.\n"
