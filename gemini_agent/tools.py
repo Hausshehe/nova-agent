@@ -1505,6 +1505,7 @@ GET_BLUETOOTH_STATUS_DECLARATION = {
 }
 
 TOOL_DECLARATIONS = [
+    GET_BLUETOOTH_STATUS_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
