@@ -86,6 +86,8 @@ class GeminiClient:
             return "list_processes"
         if "get_network_addresses" in user_text:
             return "get_network_addresses"
+        if "get_system_swap_usage" in user_text:
+            return "get_system_swap_usage"
         if "get_network_interfaces" in user_text:
             return "get_network_interfaces"
         if "network interfaces" in user_text or "network interface" in user_text:
