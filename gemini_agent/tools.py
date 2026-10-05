@@ -276,8 +276,9 @@ def get_system_cpu_usage() -> str:
 def get_system_battery_status() -> str:
     """Return the Android device battery level, status, health, temperature, and power source."""
     try:
+        dumpsys = shutil.which("dumpsys") or "/system/bin/dumpsys"
         result = subprocess.run(
-            ["dumpsys", "battery"],
+            [dumpsys, "battery"],
             capture_output=True,
             text=True,
             check=True,
