@@ -1,4 +1,4 @@
-import re\n"""Cloudflare Workers AI client for the minimal Nova agent."""
+"""Cloudflare Workers AI client for the minimal Nova agent."""
 
 import json
 import re
