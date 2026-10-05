@@ -239,7 +239,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
     def test_get_foreground_android_component_is_read_only_and_registered(self):
         with patch(
             "gemini_agent.tools.run_root_command",
-            return_value="Exit code: 0\nstdout:\nResumedActivity: com.termux/.app.TermuxActivity",
+            return_value="Exit code: 0\nstdout:\n  topResumedActivity=ActivityRecord{u0 com.termux/.app.TermuxActivity}",
         ) as root:
             result = get_foreground_android_component()
         root.assert_called_once_with("dumpsys activity activities")
