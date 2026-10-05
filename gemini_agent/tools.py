@@ -471,6 +471,16 @@ def get_media_volume() -> str:
             check=False,
         )
         output = (result.stdout or "") + "\n" + (result.stderr or "")
+        stream_volume = re.search(
+            r"(?ms)^\s*-\s*STREAM_MUSIC:\s*\n\s*streamVolume:\s*(\d+)\s*$",
+            output,
+        )
+        if stream_volume:
+            current = int(stream_volume.group(1))
+            maximum = 15
+            if 0 <= current <= maximum:
+                percentage = current * 100 / maximum
+                return f"Media volume: {percentage:.0f}% ({current}/{maximum})"
         stream_match = re.search(
             r"(?ms)^\s*-?\s*STREAM_MUSIC(?:\(\d+\))?\s*:.*?(?=^\s*-?\s*STREAM_[A-Z_]+(?:\(\d+\))?\s*:|\Z)",
             output,
