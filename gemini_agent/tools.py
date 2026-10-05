@@ -438,6 +438,27 @@ def get_screen_resolution() -> str:
         raise RuntimeError("System screen resolution is unavailable.") from exc
     raise RuntimeError("System screen resolution is unavailable.")
 
+def get_screen_density() -> str:
+    """Return the Android display density in dots per inch."""
+    try:
+        result = subprocess.run(
+            ["su"],
+            input="/system/bin/wm density\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = result.stdout
+        match = re.search(r"(?im)^Override density:\s*(\\d+)\\s*$", output)
+        if not match:
+            match = re.search(r"(?im)^Physical density:\s*(\\d+)\\s*$", output)
+        if match:
+            return f"Screen density: {int(match.group(1))} dpi"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen density is unavailable.") from exc
+    raise RuntimeError("System screen density is unavailable.")
+
+
 def get_screen_refresh_rate() -> str:
     """Return the Android display refresh rate in Hz."""
     try:
@@ -1616,6 +1637,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_density",
+        "description": "Get the current Android display density in dots per inch.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_screen_refresh_rate",
         "description": "Get the current Android display refresh rate in Hz.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -2032,6 +2058,12 @@ GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_SCREEN_DENSITY_DECLARATION = {
+    "name": "get_screen_density",
+    "description": "Get the current Android display density in dots per inch.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
     "name": "get_screen_refresh_rate",
     "description": "Get the current Android display refresh rate in Hz.",
@@ -2114,6 +2146,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_screen_brightness_mode": get_screen_brightness_mode,
     "get_screen_orientation": get_screen_orientation,
     "get_screen_resolution": get_screen_resolution,
+    "get_screen_density": get_screen_density,
     "get_screen_refresh_rate": get_screen_refresh_rate,
     "get_screen_timeout": get_screen_timeout,
     "get_system_battery_status": get_system_battery_status,
