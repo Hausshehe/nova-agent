@@ -228,6 +228,32 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["move_directory"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "move_directory"}})
 
+    def test_copy_directory_fallback_executes_when_cloudflare_returns_no_tool_call(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        final_response = {"choices": [{"message": {"content": "Copied successfully."}}]}
+        calls = []
+
+        def copy_directory(path, destination):
+            calls.append((path, destination))
+            return f"Copied directory {path} to {destination}"
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(first_response), FakeResponse(final_response)],
+        ):
+            client = GeminiClient(tool_handlers={"copy_directory": copy_directory})
+            answer = client.ask(
+                "Use the copy_directory tool to copy copy-dir-test to copy-dir-test-copied."
+            )
+
+        self.assertEqual(answer, "Copied successfully.")
+        self.assertEqual(calls, [("copy-dir-test", "copy-dir-test-copied")])
+        self.assertEqual(client.last_tool_calls[0]["name"], "copy_directory")
+
     def test_copy_directory_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
