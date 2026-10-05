@@ -233,6 +233,19 @@ def get_process_status(pid: str) -> str:
     return "\n".join(result)
 
 
+def get_process_executable(pid: str) -> str:
+    """Return the executable path of a visible local process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    executable = Path("/proc") / pid / "exe"
+    if not executable.exists():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        return os.readlink(executable)
+    except OSError as exc:
+        raise RuntimeError(f"Process executable is unavailable: {pid}") from exc
+
+
 def get_process_command_line(pid: str) -> str:
     """Return the command line of a visible local process."""
     if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
@@ -783,6 +796,17 @@ TOOL_DECLARATIONS = [
         "description": "Get the process ID of the running Nova process.",
         "parameters": {"type": "OBJECT", "properties": {}},
       },
+    {
+        "name": "get_process_executable",
+        "description": "Get the executable path of a visible local process.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+            },
+            "required": ["pid"],
+        },
+    },
       {
         "name": "get_current_working_directory",
         "description": "Get Nova's current working directory.",
@@ -1178,6 +1202,17 @@ LIST_PROCESSES_DECLARATION = {
     "description": "List visible local processes by PID and command name.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_PROCESS_EXECUTABLE_DECLARATION = {
+    "name": "get_process_executable",
+    "description": "Get the executable path of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_COMMAND_LINE_DECLARATION = {
     "name": "get_process_command_line",
     "description": "Get the command line of a visible local process.",
@@ -1207,6 +1242,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_processes": list_processes,
     "get_process_status": get_process_status,
     "get_process_command_line": get_process_command_line,
+    "get_process_executable": get_process_executable,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
