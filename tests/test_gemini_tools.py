@@ -26,6 +26,7 @@ from gemini_agent.tools import (
     get_file_stem,
     get_file_parent,
     get_file_permissions,
+    get_system_info,
     path_exists,
     hash_file,
     get_directory_entry_count,
