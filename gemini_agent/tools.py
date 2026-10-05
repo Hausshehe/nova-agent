@@ -465,7 +465,8 @@ def get_media_volume() -> str:
     try:
         result = subprocess.run(
             ["su"],
-            input="/system/bin/dumpsys audio\n",\n            capture_output=True,
+            input="/system/bin/dumpsys audio\n",
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -487,6 +488,7 @@ def get_media_volume() -> str:
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Android media volume is unavailable.") from exc
     raise RuntimeError("Android media volume is unavailable.")
+
 
 def get_screen_refresh_rate() -> str:
     """Return the Android display refresh rate in Hz."""
