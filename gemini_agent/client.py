@@ -368,17 +368,31 @@ class GeminiClient:
             proposed_name = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
             if proposed_name.startswith("extend_"):
                 proposed_name = proposed_name[len("extend_"):]
+        handler_names = []
+        try:
+            namespace = {}
+            exec(compile(source_path.read_text(encoding="utf-8"), str(source_path), "exec"), namespace)
+            handlers = namespace.get("TOOL_HANDLERS", {})
+            if isinstance(handlers, dict):
+                handler_names = sorted(str(name) for name in handlers)
+        except Exception:
+            handler_names = []
+        if handler_names:
+            context.append("Exact existing TOOL_HANDLERS names (implementation_target must be one of these):")
+            context.append(", ".join(handler_names))
+
         context.append(
-        "Use apply_capability_extension as a structured existing-tool composition transaction. "
-        "Provide path gemini_agent/tools.py, implementation_kind='existing_tool', an exact existing "
-        "implementation_target from TOOL_HANDLERS, JSON object text in implementation_args, and a concise "
-        "declaration_description. Do not provide function_source, old_text, or new_text. "
-        f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
-        "Do not invent Android APIs, permissions, executables, services, or device behavior. "
-        "The local transaction generates the new Python wrapper itself. Only choose an implementation_target "
-        "that already exists in the inspected repository. If no existing local primitive can safely implement "
-        "the capability, do not fabricate one."
-    )
+            "Use apply_capability_extension as a structured existing-tool composition transaction. "
+            "Provide path gemini_agent/tools.py, implementation_kind='existing_tool', an exact existing "
+            "implementation_target from the exact TOOL_HANDLERS list above, JSON object text in "
+            "implementation_args, and a concise declaration_description. Do not provide function_source, "
+            "old_text, or new_text. "
+            f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
+            "The implementation_target must match an existing TOOL_HANDLERS key character-for-character. "
+            "Do not invent Android APIs, permissions, executables, services, or device behavior. "
+            "The local transaction generates the new Python wrapper itself. If no existing local primitive "
+            "can safely implement the capability, do not fabricate one."
+        )
         return "\n".join(context)
 
     def _generate_cloudflare(
