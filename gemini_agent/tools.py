@@ -132,20 +132,30 @@ def get_foreground_android_component() -> str:
     lines = []
     for line in result.splitlines():
         stripped = line.strip()
-        if "mResumedActivity:" in stripped or "ResumedActivity:" in stripped:
+        if (
+            "topResumedActivity=" in stripped
+            or "mResumedActivity:" in stripped
+            or "ResumedActivity:" in stripped
+        ):
             lines.append(stripped)
     if not lines:
+        for line in result.splitlines():
+            stripped = line.strip()
+            if "mActivityComponent=" in stripped or "packageName=" in stripped:
+                lines.append(stripped)
+                if len(lines) >= 2:
+                    break
+    if not lines:
         return (
-            "Foreground Android component inspection (read-only):\\n"
-            f"{result}\\n"
-            "No resumed activity line was found; no interaction or device state change was performed."
+            "Foreground Android component inspection (read-only):\n"
+            "No foreground component could be identified from the activity manager output.\n"
+            "No interaction or device state change was performed."
         )
     return (
-        "Foreground Android component inspection (read-only):\\n"
-        + "\\n".join(lines[:3])
-        + "\\nNo interaction or device state change was performed."
+        "Foreground Android component inspection (read-only):\n"
+        + "\n".join(lines[:3])
+        + "\nNo interaction or device state change was performed."
     )
-
 
 def inspect_android_ui() -> str:
     """Inspect the current foreground Android UI hierarchy without interacting with it."""
