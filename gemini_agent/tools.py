@@ -165,6 +165,13 @@ def get_network_interfaces() -> str:
                 state = "unknown"
             interfaces.append(f"{entry.name}: {state}")
     if not interfaces:
+        try:
+            for _, name in socket.if_nameindex():
+                if name:
+                    interfaces.append(f"{name}: unknown")
+        except OSError:
+            pass
+    if not interfaces:
         proc_net = Path("/proc/net/dev")
         if proc_net.is_file():
             try:
