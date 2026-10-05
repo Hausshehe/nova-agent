@@ -17,6 +17,7 @@ from gemini_agent.tools import (
     copy_directory,
     calculator,
     self_test,
+    capability_inventory,
     count_file_lines,
     create_directory,
     current_datetime,
@@ -100,6 +101,19 @@ from gemini_agent.tools import (
     get_process_nice,
 )
 
+
+
+class CapabilityInventoryToolTests(unittest.TestCase):
+    def test_capability_inventory_lists_registered_tools(self):
+        result = capability_inventory()
+        self.assertRegex(result, r"^Capabilities \(\d+\):")
+        self.assertIn("- calculator: Calculate basic arithmetic expressions.", result)
+        self.assertIn("- self_test: Run a small deterministic health check", result)
+
+    def test_capability_inventory_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["capability_inventory"], capability_inventory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("capability_inventory", names)
 
 
 class SelfTestToolTests(unittest.TestCase):
