@@ -280,7 +280,7 @@ class GeminiClient:
 
             # For explicit get_directory_size requests, derive the path from
             # the user's instruction when the model emits no usable tool call.
-            if requested_tool == "get_directory_size" and not tool_calls:
+            if requested_tool == "get_directory_size" and loop_index == 0 and not tool_calls:
                 user_text = ""
                 for item in reversed(payload["messages"]):
                     if item.get("role") == "user":
