@@ -12,6 +12,7 @@ from gemini_agent.tools import (
     TOOL_HANDLERS,
     append_text_file,
     copy_file,
+    copy_directory,
     calculator,
     create_directory,
     current_datetime,
@@ -196,6 +197,49 @@ class FilesystemToolTests(unittest.TestCase):
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("move_directory", names)
 
+    def test_copies_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "archive"
+            source.mkdir()
+            (source / "note.txt").write_text("hello", encoding="utf-8")
+            nested = source / "nested"
+            nested.mkdir()
+            (nested / "todo.txt").write_text("todo", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = copy_directory("archive", "copied/archive")
+            self.assertEqual(result, "Copied directory archive to copied/archive")
+            self.assertEqual((root / "archive/note.txt").read_text(encoding="utf-8"), "hello")
+            self.assertEqual((root / "copied/archive/nested/todo.txt").read_text(encoding="utf-8"), "todo")
+
+    def test_copy_directory_rejects_existing_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "archive").mkdir()
+            (root / "other").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    copy_directory("archive", "other")
+
+    def test_copy_directory_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "archive").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    copy_directory("archive", "../outside")
+
+    def test_copy_directory_rejects_destination_inside_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "archive").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "inside"):
+                    copy_directory("archive", "archive/nested")
+
+    def test_copy_directory_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["copy_directory"], copy_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("copy_directory", names)
+
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -232,7 +276,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("create_directory"):names.index("find_files") + 1], [
-            "create_directory", "delete_directory", "get_file_info", "list_directory_recursive", "move_directory", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "create_directory", "delete_directory", "get_file_info", "list_directory_recursive", "move_directory", "copy_directory", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
