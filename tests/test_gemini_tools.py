@@ -230,35 +230,21 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         with patch("gemini_agent.tools.find_executable", side_effect=lambda name: f"Executable: /system/bin/{name}"):
             with patch(
                 "gemini_agent.tools.run_root_command",
-                side_effect=[
-                    "Exit code: 0\nstdout:\npriority=ResolverActivity",
-                    "Exit code: 0\nstdout:\npriority=StillImageResolver",
-                    "Exit code: 0\nstdout:\nCamera service available",
-                ],
+                return_value="Currently running services:\ncamera\naudio\nwindow",
             ):
-                with patch(
-                    "gemini_agent.tools._run_bounded_root_action",
-                    return_value="Exit code: 0\nstdout:\nStarting: Intent { act=android.media.action.STILL_IMAGE_CAMERA }",
-                ) as action:
-                    with patch(
-                        "gemini_agent.tools._dump_camera_ui_hierarchy",
-                        return_value="<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>",
-                    ):
+                with patch("gemini_agent.tools._run_bounded_root_action") as action:
+                    with patch("gemini_agent.tools._dump_camera_ui_hierarchy") as hierarchy:
                         result = discover_camera_control()
-        self.assertIn("Camera control environment discovery:", result)
-        self.assertIn("camera foreground launch:", result)
-        self.assertIn("Camera was foregrounded for UI inspection; no shutter action was performed.", result)
-        action.assert_called_once_with("am start -a android.media.action.STILL_IMAGE_CAMERA")
-        self.assertIn("cmd: Executable: /system/bin/cmd", result)
-        self.assertIn("image-capture activity:", result)
-        self.assertIn("still-image camera activity:", result)
-        self.assertIn("camera service:", result)
-        self.assertIn("camera UI hierarchy:", result)
-        self.assertIn("Shutter", result)
-        self.assertNotIn("No camera action was performed.", result)
+        self.assertIn("Android mechanism discovery (read-only):", result)
+        self.assertIn("Candidate Android services:", result)
+        self.assertIn("camera", result)
+        self.assertIn("No action was performed", result)
+        action.assert_not_called()
+        hierarchy.assert_not_called()
         self.assertIs(TOOL_HANDLERS["discover_camera_control"], discover_camera_control)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("discover_camera_control", names)
+
 
     def test_plan_capability_extension_for_camera_is_plan_only(self):
         result = plan_capability_extension("control the phone's camera shutter")
