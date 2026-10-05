@@ -470,7 +470,7 @@ def get_media_volume() -> str:
             text=True,
             check=False,
         )
-        output = (result.stdout or "") + "\n" + (result.stderr or "")
+        output = (result.stdout or "") + "\n" + (getattr(result, "stderr", "") or "")
         stream_volume = re.search(
             r"(?ms)^\s*-\s*STREAM_MUSIC:\s*\n\s*streamVolume:\s*(\d+)\s*$",
             output,
@@ -1683,6 +1683,11 @@ TOOL_DECLARATIONS = [
     {
         "name": "get_screen_density",
         "description": "Get the current Android display density in dots per inch.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "get_media_volume",
+        "description": "Get the current Android media-stream volume as a percentage.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
