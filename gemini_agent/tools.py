@@ -324,7 +324,7 @@ def get_system_battery_status() -> str:
         f"Status: {status_names.get(status, status or 'Unknown')}",
         f"Health: {health_names.get(health, health or 'Unknown')}",
     ]
-    if temperature and re.fullmatch(r"-?\\d+", temperature):
+    if temperature and re.fullmatch(r"-?\d+", temperature):
         parts.append(f"Temperature: {int(temperature) / 10:.1f}°C")
     if voltage and voltage.isdigit():
         parts.append(f"Voltage: {int(voltage) / 1000:.3f} V")
@@ -1186,6 +1186,11 @@ TOOL_DECLARATIONS = [
     {
         "name": "get_system_uptime",
         "description": "Get total system uptime in seconds.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "get_system_battery_status",
+        "description": "Get the Android device battery level, status, health, temperature, voltage, and power source.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
