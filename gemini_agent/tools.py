@@ -1490,6 +1490,7 @@ TOOL_DECLARATIONS = [
         "description": "Get the device's current local date and time.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    GET_WIFI_STATUS_DECLARATION,
     {
         "name": "get_hostname",
         "description": "Get the device hostname.",
