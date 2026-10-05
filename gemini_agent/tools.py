@@ -1941,9 +1941,6 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
-            "required": ["request"],
-        },
-    },
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
