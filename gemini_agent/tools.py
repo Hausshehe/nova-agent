@@ -65,6 +65,42 @@ def capability_inventory() -> str:
     return f"Capabilities ({len(entries)}):\n" + "\n".join(entries)
 
 
+
+def assess_capability_gap(request: str) -> str:
+    """Determine whether Nova has a plausible local capability for a request."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+
+    request_tokens = {
+        token for token in re.findall(r"[a-z0-9_]+", request.lower())
+        if len(token) > 2
+    }
+    candidates = []
+    for declaration in TOOL_DECLARATIONS:
+        name = declaration.get("name", "")
+        description = declaration.get("description", "")
+        tokens = {
+            token for token in re.findall(r"[a-z0-9_]+", f"{name} {description}".lower())
+            if len(token) > 2
+        }
+        overlap = request_tokens & tokens
+        if overlap:
+            candidates.append((len(overlap), name))
+
+    candidates.sort(reverse=True)
+    if candidates:
+        top_score = candidates[0][0]
+        names = [name for score, name in candidates if score == top_score][:5]
+        return (
+            f"Capability match: {', '.join(names)} "
+            f"(confidence: {top_score} matching terms)."
+        )
+
+    return (
+        "Capability gap: no plausible local capability matches this request. "
+        "Nova must not invent a tool or pretend the capability exists."
+    )
+
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
     checks = []
@@ -1892,6 +1928,17 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "assess_capability_gap",
+        "description": "Determine whether Nova has a plausible local capability for a natural-language request, and explicitly report a capability gap when none matches.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "Natural-language request to assess."}
+            },
+            "required": ["request"],
+        },
+    },
+    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -2668,6 +2715,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
     "self_test": self_test,
     "find_executable": find_executable,
