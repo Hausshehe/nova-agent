@@ -71,35 +71,49 @@ def assess_capability_gap(request: str) -> str:
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
 
-    request_tokens = {
-        token for token in re.findall(r"[a-z0-9_]+", request.lower())
-        if len(token) > 2
+    text = request.lower()
+    capability_phrases = {
+        "battery": {"battery": ["get_system_battery_status"]},
+        "date and time": {"date and time": ["current_datetime"]},
+        "current time": {"current time": ["current_datetime"]},
+        "wifi": {"wifi": ["get_wifi_status"]},
+        "wi-fi": {"wi-fi": ["get_wifi_status"]},
+        "bluetooth": {"bluetooth": ["get_bluetooth_status"]},
+        "airplane mode": {"airplane mode": ["get_airplane_mode"]},
+        "screen brightness": {"screen brightness": ["get_screen_brightness"]},
+        "screen orientation": {"screen orientation": ["get_screen_orientation"]},
+        "screen resolution": {"screen resolution": ["get_screen_resolution"]},
+        "screen refresh rate": {"screen refresh rate": ["get_screen_refresh_rate"]},
+        "screen timeout": {"screen timeout": ["get_screen_timeout"]},
+        "memory usage": {"memory usage": ["get_system_memory_usage"]},
+        "cpu usage": {"cpu usage": ["get_system_cpu_usage"]},
+        "system information": {"system information": ["get_system_info"]},
+        "system info": {"system info": ["get_system_info"]},
+        "hostname": {"hostname": ["get_hostname"]},
+        "network interfaces": {"network interfaces": ["get_network_interfaces"]},
+        "calculator": {"calculator": ["calculator"]},
+        "calculate": {"calculate": ["calculator"]},
+        "arithmetic": {"arithmetic": ["calculator"]},
+        "capabilities": {"capabilities": ["capability_inventory"]},
+        "self-test": {"self-test": ["self_test"]},
+        "self test": {"self test": ["self_test"]},
     }
-    candidates = []
-    for declaration in TOOL_DECLARATIONS:
-        name = declaration.get("name", "")
-        description = declaration.get("description", "")
-        tokens = {
-            token for token in re.findall(r"[a-z0-9_]+", f"{name} {description}".lower())
-            if len(token) > 2
-        }
-        overlap = request_tokens & tokens
-        if overlap:
-            candidates.append((len(overlap), name))
 
-    candidates.sort(reverse=True)
-    if candidates:
-        top_score = candidates[0][0]
-        names = [name for score, name in candidates if score == top_score][:5]
-        return (
-            f"Capability match: {', '.join(names)} "
-            f"(confidence: {top_score} matching terms)."
-        )
+    matches = []
+    for phrase, mapping in capability_phrases.items():
+        if phrase in text:
+            for names in mapping.values():
+                matches.extend(names)
+
+    if matches:
+        unique = list(dict.fromkeys(matches))
+        return f"Capability match: {', '.join(unique)}."
 
     return (
         "Capability gap: no plausible local capability matches this request. "
         "Nova must not invent a tool or pretend the capability exists."
     )
+
 
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
@@ -1927,14 +1941,6 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
-    {
-        "name": "assess_capability_gap",
-        "description": "Determine whether Nova has a plausible local capability for a natural-language request, and explicitly report a capability gap when none matches.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "request": {"type": "STRING", "description": "Natural-language request to assess."}
-            },
             "required": ["request"],
         },
     },
