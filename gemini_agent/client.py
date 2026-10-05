@@ -374,10 +374,8 @@ class GeminiClient:
             inspection = self._extension_inspection_context(request_text)
             extension_system = (
                 inspection
-                + "\nThe only permitted action is to call apply_capability_extension. "
-                + "Use the inspected repository facts to choose an existing Python file and "
-                + "copy old_text exactly from the inspected source. Never invent a path or "
-                + "source fragment. Call the function directly; do not emit prose or XML."
+                + "\nCall apply_capability_extension directly using only an exact "
+                "existing source fragment from the inspected repository. Do not emit prose or XML."
             )
             declarations = [
                 d for d in self.tool_declarations
@@ -391,7 +389,7 @@ class GeminiClient:
                     "parameters": self._schema(d["parameters"]),
                 },
             } for d in declarations]
-            extension_payload = {
+            payload = {
                 "model": self.cloudflare_model,
                 "messages": [
                     {"role": "system", "content": extension_system},
@@ -404,119 +402,6 @@ class GeminiClient:
                     "function": {"name": "apply_capability_extension"},
                 },
             }
-            url = (
-                "https://api.cloudflare.com/client/v4/accounts/"
-                f"{self.cloudflare_account_id}/ai/v1/chat/completions"
-            )
-            last_failure = "no response received"
-            for loop_index in range(3):
-                request = urllib.request.Request(
-                    url,
-                    data=json.dumps(extension_payload).encode(),
-                    headers={
-                        "Authorization": f"Bearer {self.cloudflare_api_token}",
-                        "Content-Type": "application/json",
-                    },
-                    method="POST",
-                )
-                try:
-                    with urllib.request.urlopen(request, timeout=180) as response:
-                        result = json.loads(response.read().decode())
-                except urllib.error.HTTPError as exc:
-                    details = exc.read().decode(errors="replace")
-                    raise RuntimeError(
-                        f"Cloudflare API error ({exc.code}): {details}"
-                    ) from exc
-                except (TimeoutError, ConnectionAbortedError) as exc:
-                    raise RuntimeError(
-                        "Cloudflare request aborted or timed out while waiting for the model response."
-                    ) from exc
-                except urllib.error.URLError as exc:
-                    raise RuntimeError(
-                        f"Could not reach Cloudflare: {exc.reason}"
-                    ) from exc
-
-                try:
-                    message = result["choices"][0]["message"]
-                except (KeyError, IndexError, TypeError) as exc:
-                    raise RuntimeError(
-                        f"Cloudflare returned an unexpected response: {result}"
-                    ) from exc
-
-                tool_calls = message.get("tool_calls") or []
-                if not tool_calls:
-                    last_failure = (
-                        "model returned no native tool call; "
-                        f"message keys={sorted(message.keys())}; "
-                        f"content={str(message.get('content') or '')[:200]!r}"
-                    )
-                    extension_payload["messages"].append({
-                        "role": "assistant",
-                        "content": message.get("content") or "",
-                    })
-                    extension_payload["messages"].append({
-                        "role": "user",
-                        "content": "Call apply_capability_extension directly. Do not return prose or XML.",
-                    })
-                    continue
-
-                tool_call = tool_calls[0]
-                function = tool_call.get("function") or {}
-                if function.get("name") != "apply_capability_extension":
-                    last_failure = f"model called unexpected tool: {function.get('name')!r}"
-                    extension_payload["messages"].append({
-                        "role": "assistant",
-                        "tool_calls": tool_calls,
-                    })
-                    extension_payload["messages"].append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.get("id", ""),
-                        "content": last_failure,
-                    })
-                    continue
-
-                try:
-                    args = self._parse_tool_arguments(function.get("arguments", "{}"))
-                    tool_result = self.tool_handlers["apply_capability_extension"](**args)
-                except Exception as exc:
-                    args = {}
-                    tool_result = f"Tool error: {exc}"
-
-                self.last_tool_calls.append({
-                    "name": "apply_capability_extension",
-                    "arguments": args,
-                    "result": str(tool_result),
-                })
-
-                if (
-                    str(tool_result).startswith("Extension not applied:")
-                    or str(tool_result).startswith("Tool error:")
-                ):
-                    last_failure = str(tool_result)
-                    extension_payload["messages"].append({
-                        "role": "assistant",
-                        "tool_calls": tool_calls,
-                    })
-                    extension_payload["messages"].append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.get("id", ""),
-                        "content": str(tool_result),
-                    })
-                    extension_payload["messages"].append({
-                        "role": "user",
-                        "content": (
-                            "The previous extension attempt failed. Inspect the supplied repository "
-                            "context again and call apply_capability_extension with a corrected "
-                            "existing path and exact old_text."
-                        ),
-                    })
-                    continue
-                return str(tool_result)
-
-            return (
-                "Extension not applied: no valid extension proposal was produced after 3 attempts. "
-                f"Last model failure: {last_failure}"
-            )
         declarations = self._relevant_tool_declarations(contents)
         if requested_tool:
             declarations = [
@@ -946,3 +831,696 @@ class GeminiClient:
                         "arguments": "{}",
                     },
                 }]
+                native_tool_calls = False
+
+            if requested_tool == "get_cpu_count" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-cpu-count",
+                    "type": "function",
+                    "function": {
+                        "name": "get_cpu_count",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_memory_usage" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-memory-usage",
+                    "type": "function",
+                    "function": {
+                        "name": "get_memory_usage",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_temp_directory" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-temp-directory",
+                    "type": "function",
+                    "function": {
+                        "name": "get_temp_directory",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_home_directory" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-home-directory",
+                    "type": "function",
+                    "function": {
+                        "name": "get_home_directory",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_process_uptime" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-process-uptime",
+                    "type": "function",
+                    "function": {
+                        "name": "get_process_uptime",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_process_thread_count" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-process-thread-count",
+                    "type": "function",
+                    "function": {
+                        "name": "get_process_thread_count",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_user_id" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-user-id",
+                    "type": "function",
+                    "function": {
+                        "name": "get_user_id",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_session_id" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-session-id",
+                    "type": "function",
+                    "function": {
+                        "name": "get_session_id",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_process_group_id" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-process-group-id",
+                    "type": "function",
+                    "function": {
+                        "name": "get_process_group_id",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_parent_process_id" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-parent-process-id",
+                    "type": "function",
+                    "function": {
+                        "name": "get_parent_process_id",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "list_processes" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-list-processes",
+                    "type": "function",
+                    "function": {
+                        "name": "list_processes",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+            if requested_tool == "get_process_status" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:pid|for\s+pid|for|of)\s+(\d+)",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-status",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_status",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+
+            if requested_tool == "get_process_executable" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:pid|for\s+pid|for|of)\s+(\d+)",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-executable",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_executable",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_process_parent_name" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(r"(?:pid|for\\s+pid|for|of)\\s+(\\d+)", str(user_text).strip(), re.IGNORECASE)
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-parent-name",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_parent_name",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_process_working_directory" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:pid|for\s+pid|for|of)\s+(\d+)",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-working-directory",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_working_directory",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_process_command_line" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:pid|for\s+pid|for|of)\s+(\d+)",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-process-command-line",
+                        "type": "function",
+                        "function": {
+                            "name": "get_process_command_line",
+                            "arguments": json.dumps({"pid": match.group(1)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "run_command" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"run_command.*?run\s+[`\"]([^`\"]+)[`\"]",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-run-command",
+                        "type": "function",
+                        "function": {
+                            "name": "run_command",
+                            "arguments": json.dumps({"command": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "diagnose_command_failure" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"diagnose_command_failure.*?command\\s+[\\\"']?(.+?)[\\\"']?\\s+with\\s+error\\s+[\\\"']?(.+?)[\\\"']?\\.?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-diagnose-command-failure",
+                        "type": "function",
+                        "function": {
+                            "name": "diagnose_command_failure",
+                            "arguments": json.dumps({"command": match.group(1).strip(), "error": match.group(2).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "retry_command" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"retry_command.*?run\s+[`\"]([^`\"]+)[`\"]",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-retry-command",
+                        "type": "function",
+                        "function": {
+                            "name": "retry_command",
+                            "arguments": json.dumps({"command": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "recover_command" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"recover_command.*?run\s+[`\"]([^`\"]+)[`\"]",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-recover-command",
+                        "type": "function",
+                        "function": {
+                            "name": "recover_command",
+                            "arguments": json.dumps({"command": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "verify_command_result" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r'verify_command_result.*?result\s+"([^"]+)"\s+with\s+expected\s+"([^"]+)"\.?$',
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-verify-command-result",
+                        "type": "function",
+                        "function": {
+                            "name": "verify_command_result",
+                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_umask" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-umask",
+                    "type": "function",
+                    "function": {
+                        "name": "get_umask",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
+            if requested_tool == "get_disk_usage" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_disk_usage|disk\s+usage|disk\s+space).*?(?:of|for|path|on)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                path = match.group(1).strip() if match else "."
+                tool_calls = [{
+                    "id": "requested-disk-usage",
+                    "type": "function",
+                    "function": {
+                        "name": "get_disk_usage",
+                        "arguments": json.dumps({"path": path}),
+                    },
+                }]
+                native_tool_calls = False
+
+            # Explicit directory-size requests must use the user's path.
+            if requested_tool == "get_directory_entry_count" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_directory_entry_count|directorys+entrys+count|counts+entries).*?(?:of|for|directory)s+(.+?)(?:[.]s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-directory-entry-count",
+                        "type": "function",
+                        "function": {
+                            "name": "get_directory_entry_count",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_directory_size" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"get_directory_size\s+.*?(?:of|for|directory)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-directory-size",
+                        "type": "function",
+                        "function": {
+                            "name": "get_directory_size",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            # Explicit modification-time requests must use the user's path.
+            if requested_tool == "get_file_access_time" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_access_time|accesss+time).*?(?:of|for|path)s+(.+?)(?:[.]s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-access-time",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_access_time",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if requested_tool == "get_file_modified_time" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_modified_time|modified\s+time|modification\s+time).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-modified-time",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_modified_time",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            # Explicit file-name requests must use the user's path.
+            if requested_tool == "get_file_name" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_name|file\s+name|base\s+name).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{"id":"requested-file-name","type":"function","function":{"name":"get_file_name","arguments":json.dumps({"path":match.group(1).strip()})}}]
+                    native_tool_calls = False
+
+            # Explicit file-stem requests must use the user's path.
+            if requested_tool == "get_file_stem" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_stem|file\s+stem|name\s+without\s+(?:the\s+)?extension).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{"id":"requested-file-stem","type":"function","function":{"name":"get_file_stem","arguments":json.dumps({"path":match.group(1).strip()})}}]
+                    native_tool_calls = False
+
+            # Explicit file-parent requests must use the user's path.
+            if requested_tool == "get_file_parent" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_parent|parent\s+path|parent\s+directory).*?(?:\bof\b|\bfor\b|\bpath\b)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-parent",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_parent",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            # Explicit permission requests must use the user's path.
+            if requested_tool == "get_file_permissions" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_permissions|file\s+permissions|permissions|permission\s+mode).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-permissions",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_permissions",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            # Explicit file-extension requests must use the user's path.
+            if requested_tool == "get_file_extension" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_extension|file\s+extension|extension).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-extension",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_extension",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            # For explicit copy_directory requests, derive source and destination
+            # from the user's instruction instead of trusting model-generated arguments.
+            if requested_tool == "copy_directory" and (native_tool_calls or (not tool_calls and not content)):
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"copy\s+(.+?)\s+to\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-copy-directory",
+                        "type": "function",
+                        "function": {
+                            "name": "copy_directory",
+                            "arguments": json.dumps({
+                                "path": match.group(1).strip(),
+                                "destination": match.group(2).strip(),
+                            }),
+                        },
+                    }]
+                    native_tool_calls = False
+
+            if tool_calls:
+                # Cloudflare's OpenAI-compatible endpoint requires function
+                # arguments to be a JSON string. Normalize every tool-call
+                # source, including XML/content-emitted calls, before sending
+                # the conversation back for another tool round.
+                normalized_tool_calls = []
+                for tool_call in tool_calls:
+                    normalized_tool_call = dict(tool_call)
+                    function = dict(normalized_tool_call.get("function") or {})
+                    arguments = function.get("arguments", "{}")
+                    if isinstance(arguments, dict):
+                        function["arguments"] = json.dumps(arguments)
+                    elif arguments is None:
+                        function["arguments"] = "{}"
+                    elif not isinstance(arguments, str):
+                        function["arguments"] = json.dumps(arguments)
+                    normalized_tool_call["type"] = "function"
+                    normalized_tool_call["function"] = function
+                    normalized_tool_calls.append(normalized_tool_call)
+
+                if native_tool_calls:
+                    normalized_message = dict(message)
+                    normalized_message["tool_calls"] = normalized_tool_calls
+                    payload["messages"].append(normalized_message)
+                else:
+                    payload["messages"].append({
+                        "role": "assistant",
+                        "tool_calls": normalized_tool_calls,
+                    })
+
+                for tool_call in tool_calls:
+                    function = tool_call.get("function") or {}
+                    name = function.get("name")
+                    local_name = next(
+                        (tool_name for tool_name, cloud_name in self._CLOUD_TOOL_NAMES.items() if cloud_name == name),
+                        name,
+                    )
+                    handler = self.tool_handlers.get(local_name)
+                    if handler is None:
+                        raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
+
+                    try:
+                        args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        tool_result = handler(**args)
+                    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                        args = {}
+                        tool_result = f"Tool error: {exc}"
+
+                    trace = {"name": local_name, "args": args, "result": tool_result}
+                    if "expression" in args:
+                        trace["expression"] = str(args["expression"])
+                    self.last_tool_calls.append(trace)
+
+                    payload["messages"].append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id", ""),
+                        "content": str(tool_result),
+                    })
+
+                # Deterministic explicit filesystem requests do not need a second
+                # Cloudflare round-trip. Return the local tool result directly.
+                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "self_test", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0:
+                    return str(tool_result)
+
+                # Tool execution is Nova's responsibility. For an explicit
+                # single-tool request, synthesize locally after one execution.
+                # For a normal task, retain the tool set so Cloudflare can compose
+                # bounded multi-step work from the observed result. The outer loop
+                # caps the number of tool rounds and therefore bounds execution.
+                if requested_tool == "apply_capability_extension":
+                    if "Extension status: source edit applied and transaction committed." in str(tool_result):
+                        return str(tool_result)
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": "apply_capability_extension"},
+                    }
+                elif requested_tool:
+                    payload.pop("tools", None)
+                    payload.pop("tool_choice", None)
+                else:
+                    payload["tool_choice"] = "auto"
+                continue
+
+            elif not content:
+                raise RuntimeError(
+                    f"Cloudflare returned an unexpected response: {result}"
+                )
+            return str(content)
+
+        raise RuntimeError("Cloudflare requested too many tool calls.")
+
+    def ask(
+        self,
+        prompt: str,
+        history: list[dict] | None = None,
+        system_instruction: str | None = None,
+    ) -> str:
+        contents = list(history or []) + [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ]
+        self.last_tool_calls = []
+        self.last_grounding_sources = []
+        return self._generate_cloudflare(contents, system_instruction)
