@@ -92,6 +92,23 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Android UI inspection", answer)
         open_url.assert_not_called()
 
+    def test_discover_android_ui_actions_routes_without_cloudflare(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            client.tool_handlers["discover_android_ui_actions"] = lambda: (
+                "Android UI action discovery (read-only): Clickable enabled controls found: 0"
+            )
+            answer = client.ask(
+                "Discover the clickable Android UI controls currently available without interacting with the device, and report them."
+            )
+        self.assertIn("Clickable enabled controls found: 0", answer)
+        open_url.assert_not_called()
+
+
     def test_resolve_android_intent_uses_prompt_action_deterministically(self):
         with patch.dict(
             os.environ,
