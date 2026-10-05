@@ -327,7 +327,7 @@ class GeminiClient:
                     if pattern in line:
                         start = max(0, index - 4)
                         end = min(len(lines), index + 9)
-                        excerpt = "\\n".join(
+                        excerpt = "\n".join(
                             f"{number + 1}: {lines[number]}"
                             for number in range(start, end)
                         )
@@ -349,14 +349,14 @@ class GeminiClient:
                 index = source.find(pattern)
                 if index >= 0:
                     lines = source.splitlines()
-                    line_index = source[:index].count("\\n")
+                    line_index = source[:index].count("\n")
                     start = max(0, line_index)
                     end = min(len(lines), start + 18)
                     context.append(
                         f"Exact integration anchor: {pattern}"
                     )
                     context.append(
-                        "\\n".join(
+                        "\n".join(
                             f"{number + 1}: {lines[number]}"
                             for number in range(start, end)
                         )
@@ -369,7 +369,7 @@ class GeminiClient:
             "Do not make a declaration-only extension: the same transaction must add the implementation "
             "function and TOOL_HANDLERS registration, or the transaction will be rejected."
         )
-        return "\\n".join(context)
+        return "\n".join(context)
 
     def _generate_cloudflare(
         self,
