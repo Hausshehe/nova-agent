@@ -3,6 +3,7 @@
 import json
 import re
 import os
+from pathlib import Path
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -290,6 +291,58 @@ class GeminiClient:
             )
         )
 
+    def _extension_inspection_context(self, request: str) -> str:
+        """Inspect the local repository before a self-extension model call."""
+        root = Path(os.environ.get("NOVA_FILES_ROOT", os.getcwd())).expanduser().resolve()
+        python_files = []
+        for base in (root / "gemini_agent", root / "tests"):
+            if base.is_dir():
+                python_files.extend(
+                    path.relative_to(root).as_posix()
+                    for path in base.rglob("*.py")
+                    if path.is_file() and not path.is_symlink()
+                )
+        context = [
+            f"Requested missing capability: {request}",
+            "Repository inspection was performed locally before this model call.",
+            "Existing Python targets under gemini_agent/ and tests/:",
+            ", ".join(sorted(python_files)),
+        ]
+        source_path = root / "gemini_agent" / "tools.py"
+        if source_path.is_file() and not source_path.is_symlink():
+            source = source_path.read_text(encoding="utf-8")
+            patterns = (
+                "def assess_capability_gap",
+                "def plan_capability_extension",
+                "def apply_capability_extension",
+                '"name": "assess_capability_gap"',
+                '"name": "plan_capability_extension"',
+                '"name": "apply_capability_extension"',
+                '"apply_capability_extension": apply_capability_extension',
+            )
+            excerpts = []
+            lines = source.splitlines()
+            for pattern in patterns:
+                for index, line in enumerate(lines):
+                    if pattern in line:
+                        start = max(0, index - 4)
+                        end = min(len(lines), index + 9)
+                        excerpt = "\\n".join(
+                            f"{number + 1}: {lines[number]}"
+                            for number in range(start, end)
+                        )
+                        if excerpt not in excerpts:
+                            excerpts.append(excerpt)
+                        break
+            if excerpts:
+                context.append("Relevant gemini_agent/tools.py excerpts:")
+                context.extend(excerpts)
+        context.append(
+            "Use only an exact existing source fragment in apply_capability_extension. "
+            "Do not invent a path or claim an implementation exists unless the inspected source supports it."
+        )
+        return "\\n".join(context)
+
     def _generate_cloudflare(
         self,
         contents: list[dict],
@@ -314,17 +367,19 @@ class GeminiClient:
         requested_tool = self._requested_local_tool(contents)
         declarations = self._relevant_tool_declarations(contents)
         if requested_tool == "apply_capability_extension":
-            # Extension requests are inherently multi-step: inspect the repository
-            # before proposing an edit, then apply the bounded transaction.
-            extension_tools = {
-                "apply_capability_extension",
-                "read_text_file",
-                "list_directory",
-                "search_text",
-            }
             declarations = [
-                d for d in self.tool_declarations if d["name"] in extension_tools
+                d for d in self.tool_declarations if d["name"] == "apply_capability_extension"
             ]
+            messages.append({
+                "role": "system",
+                "content": self._extension_inspection_context(
+                    next(
+                        item.get("content", "")
+                        for item in reversed(messages)
+                        if item.get("role") == "user"
+                    )
+                ),
+            })
         elif requested_tool:
             declarations = [
                 d for d in self.tool_declarations if d["name"] == requested_tool
@@ -346,7 +401,10 @@ class GeminiClient:
             "tools": tools,
         }
         if requested_tool == "apply_capability_extension":
-            payload["tool_choice"] = "required"
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": "apply_capability_extension"},
+            }
         elif requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
@@ -1401,7 +1459,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "self_test", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0:
+                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "apply_capability_extension", "self_test", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. For an explicit
@@ -1410,20 +1468,7 @@ class GeminiClient:
                 # bounded multi-step work from the observed result. The outer loop
                 # caps the number of tool rounds and therefore bounds execution.
                 if requested_tool == "apply_capability_extension":
-                    # Keep inspection/edit tools available until the transaction succeeds.
-                    if any(
-                        call.get("function", {}).get("name") == "apply_capability_extension"
-                        for call in tool_calls
-                    ):
-                        successful = all(
-                            trace.get("name") != "apply_capability_extension"
-                            or "Extension status: source edit applied and transaction committed."
-                            in str(trace.get("result", ""))
-                            for trace in self.last_tool_calls
-                        )
-                        if successful:
-                            return str(tool_result)
-                    payload["tool_choice"] = "required"
+                    return str(tool_result)
                 elif requested_tool:
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
