@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from gemini_agent.tools import (
     RUN_COMMAND_DECLARATION,
+    FIND_EXECUTABLE_DECLARATION,
     TOOL_DECLARATIONS,
     TOOL_HANDLERS,
     append_text_file,
@@ -80,6 +81,7 @@ from gemini_agent.tools import (
     list_directory_recursive,
     read_text_file,
     run_command,
+    find_executable,
     run_root_command,
     list_processes,
     get_process_status,
@@ -93,6 +95,25 @@ from gemini_agent.tools import (
     get_process_nice,
 )
 
+
+
+class FindExecutableToolTests(unittest.TestCase):
+    def test_find_executable_uses_path(self):
+        with patch("gemini_agent.tools.shutil.which", return_value="/system/bin/dumpsys"):
+            result = find_executable("dumpsys")
+        self.assertEqual(result, "Executable: /system/bin/dumpsys")
+
+    def test_find_executable_reports_missing(self):
+        with patch("gemini_agent.tools.shutil.which", return_value=None):
+            with patch("gemini_agent.tools.os.path.isfile", return_value=False):
+                result = find_executable("definitely_missing")
+        self.assertEqual(result, "Executable not found: definitely_missing")
+
+    def test_find_executable_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["find_executable"], find_executable)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("find_executable", names)
+        self.assertEqual(FIND_EXECUTABLE_DECLARATION["name"], "find_executable")
 
 
 class RunRootCommandToolTests(unittest.TestCase):
