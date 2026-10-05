@@ -216,6 +216,18 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["get_file_info"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "get_file_info"}})
 
+    def test_move_directory_tool_is_selected(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the move_directory tool to move archive to moved/archive.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["move_directory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "move_directory"}})
+
     def test_create_directory_alias_selects_make_directory(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
