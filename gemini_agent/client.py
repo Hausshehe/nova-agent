@@ -440,7 +440,7 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r"(?:get_file_parent|parent\s+path|parent\s+directory).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    r"(?:get_file_parent|parent\s+path|parent\s+directory).*?(?:\bof\b|\bfor\b|\bpath\b)\s+(.+?)(?:[.]\s*)?$",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
