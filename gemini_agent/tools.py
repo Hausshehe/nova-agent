@@ -270,14 +270,13 @@ def _extension_registered_capability_error(original: str, updated: str, request:
 
 def _normalize_extension_fragment(fragment: str) -> str:
     """Normalize model-copied source excerpts without changing source semantics."""
-    value = fragment.replace("\\r\\n", "\\n").replace("\\r", "\\n")
-    lines = value.split("\\n")
+    value = fragment.replace("\r\n", "\n").replace("\r", "\n")
+    lines = value.split("\n")
     normalized = []
     for line in lines:
-        match = re.match(r"^\\s*\\d+: ?(.*)$", line)
+        match = re.match(r"^\s*\d+: ?(.*)$", line)
         normalized.append(match.group(1) if match else line)
-    return "\\n".join(normalized)
-
+    return "\n".join(normalized)
 
 def apply_capability_extension(request: str, path: str, old_text: str, new_text: str) -> str:
     """Apply one bounded, syntax-checked, test-verified source edit transaction."""
