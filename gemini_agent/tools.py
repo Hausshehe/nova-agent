@@ -273,6 +273,64 @@ def discover_android_mechanisms(request: str) -> str:
     )
 
 
+def validate_android_mechanism(request: str, mechanism: str) -> str:
+    """Validate one discovered Android mechanism without executing the requested capability."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(mechanism, str) or not mechanism.strip():
+        raise ValueError("Mechanism cannot be empty.")
+
+    requested = request.strip()
+    candidate = mechanism.strip()
+    if ":" not in candidate:
+        raise ValueError(
+            "Mechanism must use a bounded form: intent:<action>, executable:<name>, "
+            "service:<name>, or ui:<resource-id>."
+        )
+
+    kind, value = candidate.split(":", 1)
+    kind = kind.strip().lower()
+    value = value.strip()
+    if not value:
+        raise ValueError("Mechanism value cannot be empty.")
+
+    evidence = ""
+    if kind == "intent":
+        evidence = resolve_android_intent(value)
+    elif kind == "executable":
+        evidence = find_executable(value)
+    elif kind == "service":
+        services = run_root_command("dumpsys -l")
+        matches = [
+            line.strip()
+            for line in services.splitlines()
+            if line.strip() == value
+        ]
+        evidence = "\n".join(matches) if matches else "Service was not found."
+    elif kind == "ui":
+        actions = discover_android_ui_actions()
+        evidence = (
+            "UI control was found."
+            if value in actions
+            else "UI control was not found in the current hierarchy."
+        )
+    else:
+        raise ValueError(
+            "Unsupported mechanism type. Allowed types: intent, executable, service, ui."
+        )
+
+    viable = "not found" not in evidence.lower() and "unsupported" not in evidence.lower()
+    status = "VIABLE" if viable else "NOT VIABLE"
+    return (
+        "Android mechanism validation (read-only):\n"
+        f"Requested capability: {requested}\n"
+        f"Mechanism: {candidate}\n"
+        f"Status: {status}\n"
+        f"Evidence:\n{evidence}\n"
+        "No capability action was executed and no device state was modified."
+    )
+
+
 def assess_capability_gap(request: str) -> str:
     """Determine whether Nova has a plausible local capability for a request."""
     if not isinstance(request, str) or not request.strip():
