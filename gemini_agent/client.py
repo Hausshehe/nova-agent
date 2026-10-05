@@ -871,7 +871,10 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r'diagnose_command_failure.*?command\\s+["\\']?(.+?)["\\']?\\s+with\\s+error\\s+["\\']?(.+?)["\\']?\\.?
+                    r"diagnose_command_failure.*?command\\s+[\\\"']?(.+?)[\\\"']?\\s+with\\s+error\\s+[\\\"']?(.+?)[\\\"']?\\.?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
                 if match:
                     tool_calls = [{
                         "id": "requested-diagnose-command-failure",
