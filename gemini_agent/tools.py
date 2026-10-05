@@ -2360,15 +2360,20 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "apply_capability_extension",
-        "description": "Apply one bounded structured implementation for a genuinely missing capability. The transaction adds the implementation function, tool declaration, and TOOL_HANDLERS registration, syntax-checks it, runs Nova's deterministic tests, and rolls back on verification failure.",
+        "description": "Apply one bounded extension by composing an existing local tool. Nova generates the wrapper locally and never accepts model-generated Python source.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "request": {"type": "STRING", "description": "The missing capability being extended."},
-                "path": {"type": "STRING", "description": "Existing Python source path under gemini_agent/."},
-                "function_source": {"type": "STRING", "description": "Complete Python function definition implementing the capability. It must be bounded and use only mechanisms supported by the inspected environment."},
+                "path": {"type": "STRING", "description": "Use exactly gemini_agent/tools.py."},
+                "implementation_kind": {"type": "STRING", "description": "Must be existing_tool."},
+                "implementation_target": {"type": "STRING", "description": "Name of an existing tool in Nova's local TOOL_HANDLERS."},
+                "implementation_args": {"type": "STRING", "description": "JSON object of arguments passed to the existing primitive."},
                 "declaration_description": {"type": "STRING", "description": "Description for the new tool declaration."}
             },
+            "required": ["request", "path", "implementation_kind", "implementation_target", "implementation_args", "declaration_description"],
+        },
+    },
             "required": ["request", "path", "function_source", "declaration_description"],
         },
     },
