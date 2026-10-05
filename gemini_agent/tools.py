@@ -1630,6 +1630,12 @@ GET_SYSTEM_MEMORY_USAGE_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+GET_SYSTEM_BOOT_TIME_DECLARATION = {
+    "name": "get_system_boot_time",
+    "description": "Get the device boot time as local ISO-8601 text.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_SWAP_USAGE_DECLARATION = {
     "name": "get_system_swap_usage",
     "description": "Get total, used, and free system swap in bytes.",
