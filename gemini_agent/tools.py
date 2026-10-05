@@ -622,6 +622,7 @@ _ROOT_DIAGNOSTIC_PATTERNS = (
     re.compile(r"^find\s+[^;&|$]+$"),
     re.compile(r"^getprop(?:\s+[^;&|$]+)?$"),
     re.compile(r"^dumpsys(?:\s+[A-Za-z0-9_.-]+(?:\s+[^;&|$]+)?)?$"),
+    re.compile(r"^cmd\s+package\s+resolve-activity\s+--brief\s+-a\s+android\.media\.action\.IMAGE_CAPTURE$"),
     re.compile(r"^settings\s+get\s+(?:global|system|secure)\s+[A-Za-z0-9_.-]+$"),
     re.compile(r"^(?:id|whoami|pwd)$"),
 )
