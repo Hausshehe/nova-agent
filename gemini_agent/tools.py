@@ -240,31 +240,23 @@ def get_system_boot_time() -> str:
 
 def get_system_cpu_usage() -> str:
     """Return the current aggregate system CPU usage percentage."""
-    def read_cpu_times() -> tuple[int, int]:
-        try:
-            line = Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0]
-        except (OSError, UnicodeError, IndexError) as exc:
-            raise RuntimeError("System CPU usage is unavailable.") from exc
-        parts = line.split()
-        if len(parts) < 5 or parts[0] != "cpu":
-            raise RuntimeError("System CPU usage is unavailable.")
-        try:
-            values = [int(value) for value in parts[1:]]
-        except ValueError as exc:
-            raise RuntimeError("System CPU usage is unavailable.") from exc
-        total = sum(values)
-        idle = values[3] + (values[4] if len(values) > 4 else 0)
-        return total, idle
+    try:
+        result = subprocess.run(
+            ["top", "-b", "-n", "1"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System CPU usage is unavailable.") from exc
 
-    first_total, first_idle = read_cpu_times()
-    time.sleep(0.1)
-    second_total, second_idle = read_cpu_times()
-    total_delta = second_total - first_total
-    idle_delta = second_idle - first_idle
-    if total_delta <= 0:
-        raise RuntimeError("System CPU usage is unavailable.")
-    usage = max(0.0, min(100.0, 100.0 * (total_delta - idle_delta) / total_delta))
-    return f"{usage:.2f}%"
+    for line in result.stdout.splitlines():
+        match = re.search(r"(?:CPU usage|CPU):\\s*([0-9]+(?:\\.[0-9]+)?)%?", line, re.IGNORECASE)
+        if match:
+            usage = float(match.group(1))
+            if 0.0 <= usage <= 100.0:
+                return f"{usage:.2f}%"
+    raise RuntimeError("System CPU usage is unavailable.")
 
 def get_system_swap_usage() -> str:
     """Return total, used, and free system swap in bytes."""
