@@ -110,10 +110,10 @@ class GeminiClient:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
             return "discover_android_mechanisms"
-        if ("validate" in user_text and "android mechanism" in user_text) or "check android mechanism" in user_text:
-            return "validate_android_mechanism"
-        if any(phrase in user_text for phrase in ("execute validated android mechanism", "execute the validated android mechanism", "run the validated android mechanism")):
+                if any(phrase in user_text for phrase in ("execute validated android mechanism", "execute the validated android mechanism", "run the validated android mechanism")):
             return "execute_validated_android_mechanism"
+if ("validate" in user_text and "android mechanism" in user_text) or "check android mechanism" in user_text:
+            return "validate_android_mechanism"
         if any(phrase in user_text for phrase in ("resolve android intent", "resolve an android intent", "check android intent handler", "inspect android intent handler")):
             return "resolve_android_intent"
         if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect the current android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy")):
