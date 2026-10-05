@@ -1009,6 +1009,24 @@ class GeminiClient:
                 }]
                 native_tool_calls = False
 
+            if requested_tool == "resolve_android_intent" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                normalized = str(user_text).upper()
+                action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
+                tool_calls = [{
+                    "id": "requested-resolve-android-intent",
+                    "type": "function",
+                    "function": {
+                        "name": "resolve_android_intent",
+                        "arguments": json.dumps({"action": action}),
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "list_processes" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-list-processes",
