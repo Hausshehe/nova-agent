@@ -1290,15 +1290,15 @@ class GetSystemBatteryStatusToolTests(unittest.TestCase):
             (),
             {
                 "stdout": (
-                    "AC powered: false\\n"
-                    "USB powered: true\\n"
-                    "Wireless powered: false\\n"
-                    "status: 2\\n"
-                    "health: 2\\n"
-                    "level: 87\\n"
-                    "scale: 100\\n"
-                    "voltage: 4191\\n"
-                    "temperature: 253\\n"
+                    "AC powered: false\n"
+                    "USB powered: true\n"
+                    "Wireless powered: false\n"
+                    "status: 2\n"
+                    "health: 2\n"
+                    "level: 87\n"
+                    "scale: 100\n"
+                    "voltage: 4191\n"
+                    "temperature: 253\n"
                 )
             },
         )()
@@ -1306,11 +1306,11 @@ class GetSystemBatteryStatusToolTests(unittest.TestCase):
             result = get_system_battery_status()
         self.assertEqual(
             result,
-            "Level: 87%\\n"
-            "Status: Charging\\n"
-            "Health: Good\\n"
-            "Temperature: 25.3°C\\n"
-            "Voltage: 4.191 V\\n"
+            "Level: 87%\n"
+            "Status: Charging\n"
+            "Health: Good\n"
+            "Temperature: 25.3°C\n"
+            "Voltage: 4.191 V\n"
             "Power source: USB",
         )
 
