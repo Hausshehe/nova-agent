@@ -175,7 +175,7 @@ class GetProcessStartTimeToolTests(unittest.TestCase):
 class GetProcessCpuTimeToolTests(unittest.TestCase):
     def test_get_process_cpu_time_returns_components(self):
         result = get_process_cpu_time(str(os.getpid()))
-        self.assertRegex(result, r"^User: \d+\.\d{3} seconds\\nSystem: \d+\.\d{3} seconds\\nTotal: \d+\.\d{3} seconds$")
+        self.assertRegex(result, r"^User: \d+\.\d{3} seconds\nSystem: \d+\.\d{3} seconds\\nTotal: \d+\.\d{3} seconds$")
 
     def test_get_process_cpu_time_rejects_invalid_pid(self):
         with self.assertRaisesRegex(ValueError, "PID"):
