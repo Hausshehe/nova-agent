@@ -1329,6 +1329,15 @@ GET_PROCESS_PARENT_NAME_DECLARATION = {
         "required": ["pid"],
     },
 }
+GET_PROCESS_CPU_TIME_DECLARATION = {
+    "name": "get_process_cpu_time",
+    "description": "Get user, system, and total CPU time of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
 GET_PROCESS_START_TIME_DECLARATION = {
     "name": "get_process_start_time",
     "description": "Get the local start time of a visible local process.",
