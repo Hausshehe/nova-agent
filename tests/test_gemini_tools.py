@@ -24,6 +24,7 @@ from gemini_agent.tools import (
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
+    inspect_android_ui,
     plan_capability_extension,
     apply_capability_extension,
     count_file_lines,
@@ -233,6 +234,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("android.media.action.IMAGE_CAPTURE", result)
         self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
         self.assertIn("not launched", result)
+
+    def test_inspect_android_ui_is_read_only_and_registered(self):
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            return_value="Exit code: 0\nstdout:\n<hierarchy rotation=\"0\"></hierarchy>",
+        ) as root:
+            result = inspect_android_ui()
+        root.assert_called_once_with("uiautomator dump /dev/tty")
+        self.assertIn("Android UI inspection (read-only):", result)
+        self.assertIn("not interaction", result)
+        self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("inspect_android_ui", names)
 
     def test_resolve_android_intent_rejects_unknown_action(self):
         with self.assertRaises(ValueError):
