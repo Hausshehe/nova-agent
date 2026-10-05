@@ -1630,6 +1630,7 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     GET_BLUETOOTH_STATUS_DECLARATION,
+    RUN_ROOT_COMMAND_DECLARATION,
     GET_AIRPLANE_MODE_DECLARATION,
     {
         "name": "get_wifi_status",
