@@ -237,6 +237,25 @@ def verify_command_result(result: str, expected: str) -> str:
     return f"Verification: failed. Expected text not found: {expected}"
 
 
+def retry_command(command: str) -> str:
+    """Run one approved command and retry it at most once after a failed result."""
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("Command cannot be empty.")
+    try:
+        first_result = run_command(command)
+    except RuntimeError as exc:
+        if "timed out" not in str(exc).lower():
+            raise
+        first_result = f"Tool error: {exc}"
+    if first_result.startswith("Exit code: 0"):
+        return "Attempts: 1\n" + first_result
+    try:
+        second_result = run_command(command)
+    except RuntimeError as exc:
+        second_result = f"Tool error: {exc}"
+    return "Attempts: 2\n" + second_result
+
+
 def current_datetime() -> str:
     """Return the device's current local date and time."""
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
@@ -1711,6 +1730,15 @@ DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
 }
 
 
+RETRY_COMMAND_DECLARATION = {
+    "name": "retry_command",
+    "description": "Run one approved command and retry it at most once after a failed result. Use this for bounded recovery instead of blindly repeating commands.",
+    "parameters": {"type": "OBJECT", "properties": {
+        "command": {"type": "STRING", "description": "Approved command and arguments to run."},
+    }, "required": ["command"]},
+}
+
+
 VERIFY_COMMAND_RESULT_DECLARATION = {
     "name": "verify_command_result",
     "description": "Verify that a command result contains expected text. Use this after executing a command when success must be explicitly checked.",
@@ -2478,6 +2506,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "find_executable": find_executable,
     "diagnose_command_failure": diagnose_command_failure,
     "verify_command_result": verify_command_result,
+    "retry_command": retry_command,
     "run_command": run_command,
     "run_root_command": run_root_command,
     "list_processes": list_processes,
