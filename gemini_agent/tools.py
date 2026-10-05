@@ -1686,6 +1686,20 @@ FIND_EXECUTABLE_DECLARATION = {
 }
 
 
+DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
+    "name": "diagnose_command_failure",
+    "description": "Classify a failed command and recommend the safest next diagnostic step. Use this before blindly retrying a failed operation.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "The command that failed."},
+            "error": {"type": "STRING", "description": "The error or stderr returned by the failed command."},
+        },
+        "required": ["command", "error"],
+    },
+}
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -2241,18 +2255,6 @@ TOOL_DECLARATIONS = [
 ]
 
 
-DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
-    "name": "diagnose_command_failure",
-    "description": "Classify a failed command and recommend the safest next diagnostic step. Use this before blindly retrying a failed operation.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "command": {"type": "STRING", "description": "The command that failed."},
-            "error": {"type": "STRING", "description": "The error or stderr returned by the failed command."},
-        },
-        "required": ["command", "error"],
-    },
-}
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
