@@ -448,6 +448,8 @@ class GeminiClient:
             ),
             "",
         )
+        if requested_tool == "inspect_android_ui":
+            return str(self.tool_handlers["inspect_android_ui"]())
         if requested_tool == "resolve_android_intent":
             normalized = request_text.upper()
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
