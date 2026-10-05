@@ -278,6 +278,30 @@ class GeminiClient:
                         },
                     }]
 
+            # For explicit get_directory_size requests, derive the path from
+            # the user's instruction when the model emits no usable tool call.
+            if requested_tool == "get_directory_size" and not tool_calls:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_directory_size|directory\s+size).*?(?:of|for|directory)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    path = match.group(1).strip()
+                    tool_calls = [{
+                        "id": "requested-directory-size",
+                        "type": "function",
+                        "function": {
+                            "name": "get_directory_size",
+                            "arguments": json.dumps({"path": path}),
+                        },
+                    }]
+
             # For explicit copy_directory requests, derive source and destination
             # from the user's instruction instead of trusting model-generated arguments.
             if requested_tool == "copy_directory" and (native_tool_calls or (not tool_calls and not content)):
