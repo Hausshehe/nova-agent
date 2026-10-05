@@ -213,6 +213,27 @@ def get_wifi_status() -> str:
     raise RuntimeError("Wi-Fi status is unavailable.")
 
 
+
+
+def get_airplane_mode() -> str:
+    """Return whether Android airplane mode is currently enabled or disabled."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/settings get global airplane_mode_on"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = (result.stdout or "").strip()
+        if output == "1":
+            return "Airplane mode: Enabled"
+        if output == "0":
+            return "Airplane mode: Disabled"
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Airplane mode status is unavailable.") from exc
+    raise RuntimeError("Airplane mode status is unavailable.")
+
+
 def get_bluetooth_status() -> str:
     """Return the Android Bluetooth radio state."""
     commands = (
@@ -1527,6 +1548,7 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     GET_BLUETOOTH_STATUS_DECLARATION,
+    GET_AIRPLANE_MODE_DECLARATION,
     {
         "name": "get_wifi_status",
         "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
@@ -2147,6 +2169,12 @@ GET_PROCESS_COMMAND_LINE_DECLARATION = {
     },
 }
 
+GET_AIRPLANE_MODE_DECLARATION = {
+    "name": "get_airplane_mode",
+    "description": "Get whether Android airplane mode is currently enabled or disabled.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_WIFI_STATUS_DECLARATION = {
     "name": "get_wifi_status",
     "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
@@ -2270,6 +2298,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_network_addresses": get_network_addresses,
     "get_wifi_status": get_wifi_status,
     "get_bluetooth_status": get_bluetooth_status,
+    "get_airplane_mode": get_airplane_mode,
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
