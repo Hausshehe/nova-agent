@@ -90,10 +90,10 @@ class GeminiClient:
             return "get_system_battery_status"
         if "get_screen_state" in user_text:
             return "get_screen_state"
-        if "get_screen_brightness" in user_text:
-            return "get_screen_brightness"
         if "get_screen_brightness_mode" in user_text:
             return "get_screen_brightness_mode"
+        if "get_screen_brightness" in user_text:
+            return "get_screen_brightness"
         if "get_screen_timeout" in user_text:
             return "get_screen_timeout"
         if "get_system_swap_usage" in user_text:
