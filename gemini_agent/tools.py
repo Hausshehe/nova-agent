@@ -2207,3 +2207,203 @@ TOOL_DECLARATIONS = [
         "name": "get_directory_entry_count",
         "description": "Count immediate non-symlink files and directories under Nova's allowed local filesystem root.",
         "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative directory path to inspect."}}, "required": ["path"]},
+    },
+    {
+        "name": "get_disk_usage",
+        "description": "Get total, used, and free disk space for the filesystem containing a path.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path whose filesystem should be inspected."}}, "required": ["path"]},
+    },
+    {
+        "name": "get_directory_size",
+        "description": "Calculate the total size of regular files in a directory tree under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path to measure."}
+            },
+        },
+    },
+    {
+        "name": "list_directory",
+        "description": "List files and directories under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path."}
+            },
+        },
+    },
+    {
+        "name": "read_text_file",
+        "description": "Read a UTF-8 text file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "search_text",
+        "description": "Find literal text in UTF-8 files under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Text to find, matched case-insensitively."},
+                "path": {"type": "STRING", "description": "Relative directory to search."},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "write_text_file",
+        "description": "Write UTF-8 text to a file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "content": {"type": "STRING", "description": "UTF-8 text to write."},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_text_file",
+        "description": "Replace exactly one occurrence of text in a UTF-8 file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "old_text": {"type": "STRING", "description": "Exact text to replace."},
+                "new_text": {"type": "STRING", "description": "Replacement text."},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "append_text_file",
+        "description": "Append UTF-8 text to a file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "content": {"type": "STRING", "description": "UTF-8 text to append."},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "copy_file",
+        "description": "Copy a regular file within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to copy."},
+                "destination": {"type": "STRING", "description": "Relative destination path for the copy."},
+            },
+            "required": ["path", "destination"],
+        },
+    },
+    {
+        "name": "move_file",
+        "description": "Move a regular file within Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to move."},
+                "destination": {"type": "STRING", "description": "Relative destination path for the file."},
+            },
+            "required": ["path", "destination"],
+        },
+    },
+    {
+        "name": "delete_file",
+        "description": "Delete a regular file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the file to delete."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "find_files",
+        "description": "Find files and directories by name pattern under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "pattern": {"type": "STRING", "description": "Filename pattern such as *.txt."},
+                "path": {"type": "STRING", "description": "Relative directory to search."},
+            },
+            "required": ["pattern"],
+        },
+    },
+]
+
+
+RECOVER_COMMAND_DECLARATION = {
+    "name": "recover_command",
+    "description": "Execute one approved command and apply one safe diagnostic recovery step when it fails. Use this for adaptive command recovery instead of blindly retrying.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Approved command and arguments to execute."}
+        },
+        "required": ["command"],
+    },
+}
+
+RUN_COMMAND_DECLARATION = {
+    "name": "run_command",
+    "description": "Run one approved read-only command from Nova's bounded working root.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Approved command and arguments to run."}
+        },
+        "required": ["command"],
+    },
+}
+LIST_PROCESSES_DECLARATION = {
+    "name": "list_processes",
+    "description": "List visible local processes by PID and command name.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+GET_PROCESS_EXECUTABLE_DECLARATION = {
+    "name": "get_process_executable",
+    "description": "Get the executable path of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_PARENT_NAME_DECLARATION = {
+    "name": "get_process_parent_name",
+    "description": "Get the parent process name of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_MEMORY_USAGE_DECLARATION = {
+    "name": "get_process_memory_usage",
+    "description": "Get resident memory usage in bytes for a visible local process.",
+    "parameters": {"type": "OBJECT", "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}}, "required": ["pid"]},
+}
+
+GET_PROCESS_NICE_DECLARATION = {
+    "name": "get_process_nice",
+    "description": "Get the Unix nice value of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+        "required": ["pid"],
+    },
+}
+GET_PROCESS_CPU_TIME_DECLARATION = {
