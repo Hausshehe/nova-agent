@@ -144,6 +144,51 @@ def discover_camera_control() -> str:
         + "\nCamera was foregrounded for UI inspection; no shutter action was performed."
     )
 
+def discover_android_mechanisms(request: str) -> str:
+    """Discover safe, read-only Android mechanisms that may implement a missing capability."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+
+    requested = request.strip()
+    words = [
+        word for word in re.findall(r"[a-z0-9_]+", requested.lower())
+        if len(word) >= 4
+        and word not in {
+            "control", "phone", "device", "android", "using", "with",
+            "from", "that", "this", "have", "need", "capability",
+        }
+    ]
+
+    results = [f"Requested capability: {requested}"]
+    for executable in ("am", "cmd", "dumpsys", "pm", "uiautomator"):
+        results.append(f"{executable}: {find_executable(executable)}")
+
+    try:
+        services = run_root_command("dumpsys -l")
+    except (RuntimeError, ValueError) as exc:
+        results.append(f"Android service discovery unavailable: {exc}")
+    else:
+        lines = services.splitlines()
+        candidates = [
+            line.strip()
+            for line in lines
+            if line.strip() and any(word in line.lower() for word in words)
+        ]
+        if candidates:
+            results.append("Candidate Android services:\n" + "\n".join(candidates[:20]))
+        else:
+            results.append(
+                "Candidate Android services: none matched the request terms. "
+                "The capability may require an intent, UI, executable, or another IPC mechanism."
+            )
+
+    return (
+        "Android mechanism discovery (read-only):\n"
+        + "\n".join(results)
+        + "\nNo action was performed and no device state was modified."
+    )
+
+
 def assess_capability_gap(request: str) -> str:
     """Determine whether Nova has a plausible local capability for a request."""
     if not isinstance(request, str) or not request.strip():
@@ -2571,6 +2616,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "discover_android_mechanisms",
+        "description": "Discover safe, read-only Android executables and service candidates that may implement a missing capability. No action is performed.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability whose Android implementation mechanisms should be discovered."}
+            },
+            "required": ["request"],
+        },
+    },
+    {
         "name": "discover_camera_control",
         "description": "Inspect Android for safe, read-only mechanisms that could control the phone camera, without performing a camera action.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -3397,6 +3453,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "discover_android_mechanisms": discover_android_mechanisms,
     "discover_camera_control": discover_camera_control,
     "plan_capability_extension": plan_capability_extension,
     "apply_capability_extension": apply_capability_extension,
