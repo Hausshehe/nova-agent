@@ -388,7 +388,7 @@ class GeminiClient:
                 payload = {
                     "model": self.cloudflare_model,
                     "messages": extension_messages,
-                    "max_completion_tokens": 2048,
+                    "max_completion_tokens": 512,
                 }
                 request = urllib.request.Request(
                     "https://api.cloudflare.com/client/v4/accounts/"
@@ -406,8 +406,8 @@ class GeminiClient:
                 except urllib.error.HTTPError as exc:
                     details = exc.read().decode(errors="replace")
                     raise RuntimeError(f"Cloudflare API error ({exc.code}): {details}") from exc
-                except TimeoutError as exc:
-                    raise RuntimeError("Cloudflare request timed out while waiting for the model response.") from exc
+                except (TimeoutError, ConnectionAbortedError) as exc:
+                    raise RuntimeError("Cloudflare request aborted or timed out while waiting for the model response.") from exc
                 except urllib.error.URLError as exc:
                     raise RuntimeError(f"Could not reach Cloudflare: {exc.reason}") from exc
                 try:
