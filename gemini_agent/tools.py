@@ -195,6 +195,15 @@ def get_cpu_count() -> str:
     return str(count)
 
 
+def get_load_average() -> str:
+    """Return the 1, 5, and 15 minute system load averages."""
+    try:
+        one, five, fifteen = os.getloadavg()
+    except (AttributeError, OSError) as exc:
+        raise RuntimeError("System load average is unavailable.") from exc
+    return f"1m: {one:.2f}\n5m: {five:.2f}\n15m: {fifteen:.2f}"
+
+
 def get_memory_usage() -> str:
     """Return the current Nova process resident memory usage in bytes."""
     status = Path("/proc/self/status")
@@ -1509,6 +1518,11 @@ GET_NETWORK_ADDRESSES_DECLARATION = {
     "description": "Get unique IP addresses resolved for the local device hostname.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_LOAD_AVERAGE_DECLARATION = {
+    "name": "get_load_average",
+    "description": "Get the 1, 5, and 15 minute system load averages.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
 GET_PROCESS_STATUS_DECLARATION = {
     "name": "get_process_status",
     "description": "Get basic status information for a visible local process.",
@@ -1537,6 +1551,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
+    "get_load_average": get_load_average,
     "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
     "get_process_id": get_process_id,
