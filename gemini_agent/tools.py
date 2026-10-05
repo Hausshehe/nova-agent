@@ -1669,7 +1669,6 @@ FIND_EXECUTABLE_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
-    FIND_EXECUTABLE_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
@@ -2420,6 +2419,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "find_executable": find_executable,
     "find_executable": find_executable,
     "run_command": run_command,
     "run_root_command": run_root_command,
