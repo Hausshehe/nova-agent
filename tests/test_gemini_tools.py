@@ -42,6 +42,7 @@ from gemini_agent.tools import (
     get_network_addresses,
     get_network_interfaces,
     get_wifi_status,
+    get_bluetooth_status,
     get_load_average,
     get_system_memory_usage,
     get_system_cpu_usage,
@@ -258,6 +259,25 @@ class GetWifiStatusToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_wifi_status"], get_wifi_status)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_wifi_status", names)
+
+
+class GetBluetoothStatusToolTests(unittest.TestCase):
+    def test_get_bluetooth_status_parses_enabled_state(self):
+        completed = type("Completed", (), {"stdout": "1\\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_bluetooth_status()
+        self.assertEqual(result, "Bluetooth: Enabled")
+        self.assertEqual(run.call_args.args[0], ["su", "-c", "/system/bin/settings get global bluetooth_on"])
+
+    def test_get_bluetooth_status_parses_disabled_state(self):
+        completed = type("Completed", (), {"stdout": "0\\n", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed):
+            self.assertEqual(get_bluetooth_status(), "Bluetooth: Disabled")
+
+    def test_get_bluetooth_status_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_bluetooth_status"], get_bluetooth_status)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_bluetooth_status", names)
 
 
 class GetNetworkInterfacesToolTests(unittest.TestCase):
