@@ -288,6 +288,35 @@ class GeminiClient:
             and (annotation.get("url") or isinstance(annotation.get("url_citation"), dict) and annotation["url_citation"].get("url"))
         ]
 
+    @staticmethod
+    def _parse_textual_tool_call(content) -> tuple[str, dict] | None:
+        """Parse a model's exact list-shaped textual tool call fallback."""
+        if not isinstance(content, str):
+            return None
+        text = content.strip()
+        if not text.startswith("["):
+            return None
+        try:
+            import ast
+            parsed = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            return None
+
+        calls = parsed
+        if isinstance(calls, list) and len(calls) == 1 and isinstance(calls[0], list):
+            calls = calls[0]
+        if not isinstance(calls, list) or len(calls) != 1 or not isinstance(calls[0], dict):
+            return None
+
+        call = calls[0]
+        name = call.get("name")
+        args = call.get("parameters")
+        if not isinstance(name, str) or not isinstance(args, dict):
+            return None
+        if name not in {declaration["name"] for declaration in TOOL_DECLARATIONS}:
+            return None
+        return name, args
+
     def _generate_openrouter(
         self,
         contents: list[dict],
@@ -366,6 +395,21 @@ class GeminiClient:
 
             content = message.get("content")
             if content:
+                textual_tool = self._parse_textual_tool_call(content)
+                if textual_tool is not None:
+                    name, args = textual_tool
+                    handler = self.tool_handlers.get(name)
+                    if handler is None:
+                        raise RuntimeError(f"OpenRouter requested an unknown tool: {name}")
+                    try:
+                        tool_result = handler(**args)
+                    except (KeyError, TypeError, ValueError) as exc:
+                        tool_result = f"Tool error: {exc}"
+                    call_trace = {"name": name, "args": args, "result": tool_result}
+                    if "expression" in args:
+                        call_trace["expression"] = str(args["expression"])
+                    self.last_tool_calls.append(call_trace)
+                    return str(tool_result)
                 self.last_grounding_sources = self._extract_openrouter_sources(message)
                 return str(content)
 
