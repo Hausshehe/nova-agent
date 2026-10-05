@@ -82,6 +82,20 @@ def send_android_keyevent(keycode: str) -> str:
     result = _run_bounded_root_action(f"input keyevent {normalized}")
     return f"Android key event {normalized} sent.\n{result}"
 
+def send_android_intent(action: str) -> str:
+    """Launch one explicitly allowlisted Android intent action."""
+    if not isinstance(action, str) or not action.strip():
+        raise ValueError("Intent action cannot be empty.")
+    normalized = action.strip()
+    aliases = {"IMAGE_CAPTURE": "android.media.action.IMAGE_CAPTURE"}
+    normalized = aliases.get(normalized, normalized)
+    allowed_actions = {"android.media.action.IMAGE_CAPTURE"}
+    if normalized not in allowed_actions:
+        raise ValueError("Unsupported Android intent action.")
+    result = _run_bounded_root_action(f"am start -a {normalized}")
+    return f"Android intent {normalized} started.\n{result}"
+
+
 def discover_camera_control() -> str:
     """Inspect Android for safe, read-only camera control mechanisms."""
     results = []
@@ -764,7 +778,13 @@ def run_command(command: str) -> str:
 
 def _run_bounded_root_action(command: str) -> str:
     """Run one explicitly allowlisted Android action inside a root shell."""
-    if command not in {"input keyevent 3", "input keyevent 4", "input keyevent 27"}:
+    allowed_commands = {
+        "input keyevent 3",
+        "input keyevent 4",
+        "input keyevent 27",
+        "am start -a android.media.action.IMAGE_CAPTURE",
+    }
+    if command not in allowed_commands:
         raise ValueError("Root action is not allowed.")
     try:
         completed = subprocess.run(
@@ -2468,6 +2488,20 @@ TOOL_DECLARATIONS = [
             "properties": {
                 "keycode": {"type": "STRING", "description": "HOME, BACK, CAMERA, or Android keycode 3, 4, or 27."}
             },
+    {
+        "name": "send_android_intent",
+        "description": "Launch one bounded Android intent action from Nova's allowlisted action set.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "Android intent action, currently IMAGE_CAPTURE or android.media.action.IMAGE_CAPTURE.",
+                }
+            },
+            "required": ["action"],
+        },
+    },
             "required": ["keycode"],
         },
     },
@@ -3292,6 +3326,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_nice": get_process_nice,
         "get_process_memory_usage": get_process_memory_usage,
     "send_android_keyevent": send_android_keyevent,
+    "send_android_intent": send_android_intent,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
