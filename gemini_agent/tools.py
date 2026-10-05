@@ -1506,7 +1506,6 @@ GET_BLUETOOTH_STATUS_DECLARATION = {
 }
 
 TOOL_DECLARATIONS = [
-    GET_BLUETOOTH_STATUS_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
@@ -1527,6 +1526,7 @@ TOOL_DECLARATIONS = [
         "description": "Get the device's current local date and time.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    GET_BLUETOOTH_STATUS_DECLARATION,
     {
         "name": "get_wifi_status",
         "description": "Get whether the Android Wi-Fi radio is currently enabled or disabled.",
