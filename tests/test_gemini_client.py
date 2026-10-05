@@ -391,6 +391,31 @@ class GeminiClientTests(unittest.TestCase):
         sent = json.loads(open_url.call_args.args[0].data)
         self.assertEqual(sent["tool_choice"], "required")
 
+    def test_openrouter_selects_explicit_filesystem_tool(self):
+        response = {
+            "choices": [{"message": {"content": "Tool required"}}]
+        }
+        contents = [{"role": "user", "parts": [{"text": "Use the delete_file tool to delete test-write.txt"}]}]
+        with patch.dict(
+            os.environ,
+            {
+                "GEMINI_API_KEY": "test-key",
+                "OPENROUTER_API_KEY": "openrouter-key",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url:
+            client = GeminiClient()
+            client._generate_openrouter(contents, "Use filesystem tools for filesystem actions.")
+
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(
+            sent["tool_choice"],
+            {"type": "function", "function": {"name": "delete_file"}},
+        )
+
     def test_openrouter_fallback_accepts_decoded_tool_arguments(self):
         tool_response = {
             "choices": [{
