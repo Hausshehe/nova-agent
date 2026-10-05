@@ -23,6 +23,7 @@ from gemini_agent.tools import (
     capability_inventory,
     discover_camera_control,
     discover_android_mechanisms,
+    resolve_android_intent,
     plan_capability_extension,
     apply_capability_extension,
     count_file_lines,
@@ -225,6 +226,17 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertEqual(run.call_args_list[0].kwargs["input"], "uiautomator dump /data/local/tmp/nova_camera_ui.xml\n")
         self.assertEqual(run.call_args_list[1].kwargs["input"], "cat /data/local/tmp/nova_camera_ui.xml\n")
         self.assertEqual(run.call_args_list[2].kwargs["input"], "rm -f /data/local/tmp/nova_camera_ui.xml\n")
+
+    def test_resolve_android_intent_is_read_only_and_allowlisted(self):
+        with patch("gemini_agent.tools.run_root_command", return_value="Exit code: 0\nstdout:\ncom.transsion.camera/.app.CaptureActivity"):
+            result = resolve_android_intent("IMAGE_CAPTURE")
+        self.assertIn("android.media.action.IMAGE_CAPTURE", result)
+        self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
+        self.assertIn("not launched", result)
+
+    def test_resolve_android_intent_rejects_unknown_action(self):
+        with self.assertRaises(ValueError):
+            resolve_android_intent("android.intent.action.UNKNOWN")
 
     def test_discover_camera_control_is_read_only_and_registered(self):
         with patch("gemini_agent.tools.find_executable", side_effect=lambda name: f"Executable: /system/bin/{name}"):
