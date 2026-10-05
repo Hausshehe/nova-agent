@@ -181,6 +181,20 @@ def hash_file(path: str) -> str:
     return digest.hexdigest()
 
 
+def count_file_lines(path: str) -> str:
+    """Return the number of text lines in a UTF-8 file under the bounded root."""
+    target = _safe_path(path)
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    if target.stat().st_size > _MAX_READ_BYTES:
+        raise ValueError(f"File is larger than {_MAX_READ_BYTES} bytes.")
+    try:
+        content = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("File is not valid UTF-8 text.") from exc
+    return str(len(content.splitlines()))
+
+
 def get_directory_size(path: str = ".") -> str:
     """Return the total size of regular files in a directory tree under the bounded root."""
     target = _safe_path(path)
@@ -517,6 +531,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "count_file_lines",
+        "description": "Count the lines in a UTF-8 text file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file to count."}
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "get_directory_size",
         "description": "Calculate the total size of regular files in a directory tree under Nova's allowed local filesystem root.",
         "parameters": {
@@ -659,6 +684,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "copy_directory": copy_directory,
     "hash_file": hash_file,
     "get_directory_size": get_directory_size,
+    "count_file_lines": count_file_lines,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
