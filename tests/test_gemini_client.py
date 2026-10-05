@@ -137,6 +137,32 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("tools", second_payload)
         self.assertEqual(second_payload["tool_choice"], "auto")
 
+    def test_content_tool_call_arguments_are_normalized_for_composition(self):
+        first_response = {
+            "choices": [{
+                "message": {
+                    "content": "<tool_call>\\ncurrent_datetime\\n</tool_call>",
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "done"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(first_response), FakeResponse(final_response)],
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Perform the task using the available tools and report the result.")
+        self.assertEqual(answer, "done")
+        self.assertEqual(open_url.call_count, 2)
+        follow_up = json.loads(open_url.call_args_list[1].args[0].data)
+        tool_call = follow_up["messages"][-2]["tool_calls"][0]
+        self.assertEqual(tool_call["type"], "function")
+        self.assertEqual(tool_call["function"]["arguments"], "{}")
+
     def test_tool_calls_take_precedence_over_content(self):
         tool_response = {
             "choices": [{
