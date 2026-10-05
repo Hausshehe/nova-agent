@@ -1881,11 +1881,6 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
-        "name": "self_test",
-        "description": "Run a small deterministic health check of Nova's local execution substrate without modifying user data.",
-        "parameters": {"type": "OBJECT", "properties": {}},
-    },
-    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -1903,6 +1898,11 @@ TOOL_DECLARATIONS = [
     {
         "name": "current_datetime",
         "description": "Get the device's current local date and time.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "self_test",
+        "description": "Run a small deterministic health check of Nova's local execution substrate without modifying user data.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     FIND_EXECUTABLE_DECLARATION,
