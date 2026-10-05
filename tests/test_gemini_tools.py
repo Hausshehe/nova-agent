@@ -31,6 +31,7 @@ from gemini_agent.tools import (
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
+    get_load_average,
     get_process_id,
     get_current_working_directory,
     get_python_executable,
@@ -233,6 +234,17 @@ class GetNetworkInterfacesToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_network_interfaces"], get_network_interfaces)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_network_interfaces", names)
+
+
+class GetLoadAverageToolTests(unittest.TestCase):
+    def test_get_load_average_returns_three_values(self):
+        result = get_load_average()
+        self.assertRegex(result, r"^1m: -?\d+\.\d{2}\n5m: -?\d+\.\d{2}\n15m: -?\d+\.\d{2}$")
+
+    def test_get_load_average_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_load_average"], get_load_average)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_load_average", names)
 
 
 class GetProcessNiceToolTests(unittest.TestCase):
