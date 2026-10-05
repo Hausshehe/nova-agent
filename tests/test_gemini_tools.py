@@ -85,6 +85,7 @@ from gemini_agent.tools import (
     diagnose_command_failure,
     verify_command_result,
     retry_command,
+    recover_command,
     run_root_command,
     list_processes,
     get_process_status,
@@ -1811,6 +1812,37 @@ class RetryCommandToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["retry_command"], retry_command)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("retry_command", names)
+
+
+
+class RecoverCommandToolTests(unittest.TestCase):
+    def test_recover_command_returns_success_without_recovery(self):
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nok") as run:
+            result = recover_command("pwd")
+        self.assertIn("Recovery: none needed.", result)
+        self.assertIn("Attempts: 1", result)
+        run.assert_called_once_with("pwd")
+
+    def test_recover_command_discovers_missing_executable(self):
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 127\nstderr:\ncommand not found") as run:
+            with patch("gemini_agent.tools.find_executable", return_value="Executable: /system/bin/dumpsys") as find:
+                result = recover_command("dumpsys")
+        self.assertIn("executable or path not found", result)
+        self.assertIn("Executable: /system/bin/dumpsys", result)
+        run.assert_called_once_with("dumpsys")
+        find.assert_called_once_with("dumpsys")
+
+    def test_recover_command_retries_timeout(self):
+        with patch("gemini_agent.tools.run_command", side_effect=[RuntimeError("Command timed out after 5 seconds."), "Exit code: 0"]) as run:
+            result = recover_command("pwd")
+        self.assertIn("Diagnosis: command timed out", result)
+        self.assertIn("Attempts: 2", result)
+        self.assertEqual(run.call_count, 2)
+
+    def test_recover_command_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["recover_command"], recover_command)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("recover_command", names)
 
 
 if __name__ == "__main__":
