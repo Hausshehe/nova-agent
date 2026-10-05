@@ -8,6 +8,7 @@ import re
 import operator
 import shutil
 import os
+import platform
 from collections.abc import Callable
 from pathlib import Path
 
@@ -51,6 +52,15 @@ def calculator(expression: str) -> str:
 def current_datetime() -> str:
     """Return the device's current local date and time."""
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def get_system_info() -> str:
+    """Return basic runtime and platform information for the device."""
+    return (
+        f"OS: {platform.system()} {platform.release()}\n"
+        f"Architecture: {platform.machine()}\n"
+        f"Python: {platform.python_version()}"
+    )
 
 
 def _filesystem_root() -> Path:
@@ -507,6 +517,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_info",
+        "description": "Get basic operating system, architecture, and Python runtime information.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "remember_fact",
         "description": "Store a durable fact about the user for future conversations.",
         "parameters": {
@@ -823,6 +838,7 @@ TOOL_DECLARATIONS = [
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "calculator": calculator,
     "current_datetime": current_datetime,
+    "get_system_info": get_system_info,
     "remember_fact": remember_fact,
     "forget_fact": forget_fact,
     "list_memory": list_memory,
