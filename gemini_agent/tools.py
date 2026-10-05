@@ -227,6 +227,17 @@ def get_system_uptime() -> str:
     return f"{max(0.0, seconds):.3f} seconds"
 
 
+
+def get_system_boot_time() -> str:
+    """Return the device boot time as local ISO-8601 text."""
+    try:
+        uptime = time.clock_gettime(time.CLOCK_BOOTTIME)
+        boot_timestamp = time.time() - max(0.0, uptime)
+        boot_time = dt.datetime.fromtimestamp(boot_timestamp).astimezone()
+    except (AttributeError, OSError, OverflowError, ValueError) as exc:
+        raise RuntimeError("System boot time is unavailable.") from exc
+    return boot_time.isoformat(timespec="seconds")
+
 def get_system_swap_usage() -> str:
     """Return total, used, and free system swap in bytes."""
     try:
@@ -1065,6 +1076,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_system_boot_time",
+        "description": "Get the device boot time as local ISO-8601 text.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_uptime",
         "description": "Get total system uptime in seconds.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1655,6 +1671,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_network_addresses": get_network_addresses,
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
+    "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
