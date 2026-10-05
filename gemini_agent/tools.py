@@ -6,6 +6,7 @@ import fnmatch
 import hashlib
 import re
 import operator
+import shutil
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -265,6 +266,15 @@ def get_directory_entry_count(path: str = ".") -> str:
     if not target.is_dir() or target.is_symlink():
         raise ValueError(f"Not a directory: {path}")
     return str(sum(1 for entry in target.iterdir() if not entry.is_symlink()))
+
+
+def get_disk_usage(path: str = ".") -> str:
+    """Return total, used, and free bytes for the filesystem containing a path."""
+    target = _safe_path(path)
+    if not target.exists() or target.is_symlink():
+        raise ValueError(f"Path does not exist: {path}")
+    usage = shutil.disk_usage(target)
+    return f"Total: {usage.total} bytes\nUsed: {usage.used} bytes\nFree: {usage.free} bytes"
 
 
 def get_directory_size(path: str = ".") -> str:
@@ -677,6 +687,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative directory path to inspect."}}, "required": ["path"]},
     },
     {
+        "name": "get_disk_usage",
+        "description": "Get total, used, and free disk space for the filesystem containing a path.",
+        "parameters": {"type": "OBJECT", "properties": {"path": {"type": "STRING", "description": "Relative path whose filesystem should be inspected."}}, "required": ["path"]},
+    },
+    {
         "name": "get_directory_size",
         "description": "Calculate the total size of regular files in a directory tree under Nova's allowed local filesystem root.",
         "parameters": {
@@ -827,6 +842,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "copy_directory": copy_directory,
     "hash_file": hash_file,
     "get_directory_entry_count": get_directory_entry_count,
+    "get_disk_usage": get_disk_usage,
     "get_directory_size": get_directory_size,
     "count_file_lines": count_file_lines,
     "list_directory": list_directory,
