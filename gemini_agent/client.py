@@ -870,7 +870,7 @@ class GeminiClient:
                     if item.get("role") == "user":
                         user_text = item.get("content", "")
                         break
-                match = re.search(
+                    r"diagnose_command_failure.*?command\s+['"]?(.+?)['"]?\s+with\s+error\s+['"]?(.+?)['"]?\.?$",
                     r'diagnose_command_failure.*?command\\s+["\\']?(.+?)["\\']?\\s+with\\s+error\\s+["\\']?(.+?)["\\']?\\.?$',
                     str(user_text).strip(),
                     re.IGNORECASE,
