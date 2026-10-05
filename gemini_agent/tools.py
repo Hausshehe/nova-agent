@@ -411,12 +411,9 @@ def apply_capability_extension(
     )
     if helper_marker not in updated:
         return "Extension not applied: implementation insertion anchor was not found."
-    updated = updated.replace(helper_marker, helper_source + helper_marker, 1)
-
-    function_marker = helper_source + helper_marker
     updated = updated.replace(
-        function_marker,
-        function_marker + "\n\n" + function_source + "\n",
+        helper_marker,
+        "\n" + function_source + helper_source + helper_marker,
         1,
     )
 
