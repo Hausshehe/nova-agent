@@ -19,6 +19,7 @@ from gemini_agent.tools import (
     self_test,
     send_android_keyevent,
     _run_bounded_root_action,
+    _dump_camera_ui_hierarchy,
     capability_inventory,
     discover_camera_control,
     plan_capability_extension,
@@ -187,6 +188,21 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ["su"])
         self.assertEqual(run.call_args.kwargs["input"], "am start -a android.media.action.STILL_IMAGE_CAMERA\n")
 
+    def test_dump_camera_ui_hierarchy_uses_bounded_temp_file(self):
+        completed_dump = type("Completed", (), {"stdout": "", "stderr": "", "returncode": 0})()
+        completed_read = type(
+            "Completed",
+            (),
+            {"stdout": "<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>", "stderr": "", "returncode": 0},
+        )()
+        with patch("gemini_agent.tools.subprocess.run", side_effect=[completed_dump, completed_read, completed_dump]) as run:
+            result = _dump_camera_ui_hierarchy()
+        self.assertIn("Shutter", result)
+        self.assertEqual(run.call_count, 3)
+        self.assertEqual(run.call_args_list[0].kwargs["input"], "uiautomator dump /data/local/tmp/nova_camera_ui.xml\n")
+        self.assertEqual(run.call_args_list[1].kwargs["input"], "cat /data/local/tmp/nova_camera_ui.xml\n")
+        self.assertEqual(run.call_args_list[2].kwargs["input"], "rm -f /data/local/tmp/nova_camera_ui.xml\n")
+
     def test_discover_camera_control_is_read_only_and_registered(self):
         with patch("gemini_agent.tools.find_executable", side_effect=lambda name: f"Executable: /system/bin/{name}"):
             with patch(
@@ -195,14 +211,17 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     "Exit code: 0\nstdout:\npriority=ResolverActivity",
                     "Exit code: 0\nstdout:\npriority=StillImageResolver",
                     "Exit code: 0\nstdout:\nCamera service available",
-                    "Exit code: 0\nstdout:\n<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>"
                 ],
             ):
                 with patch(
                     "gemini_agent.tools._run_bounded_root_action",
                     return_value="Exit code: 0\nstdout:\nStarting: Intent { act=android.media.action.STILL_IMAGE_CAMERA }",
                 ) as action:
-                    result = discover_camera_control()
+                    with patch(
+                        "gemini_agent.tools._dump_camera_ui_hierarchy",
+                        return_value="<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>",
+                    ):
+                        result = discover_camera_control()
         self.assertIn("Camera control environment discovery:", result)
         self.assertIn("camera foreground launch:", result)
         self.assertIn("Camera was foregrounded for UI inspection; no shutter action was performed.", result)
