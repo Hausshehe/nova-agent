@@ -296,19 +296,18 @@ def get_process_start_time(pid: str) -> str:
         if clock_ticks <= 0:
             raise RuntimeError(f"Process start time is unavailable: {pid}")
         boot_time = None
-        for line in Path("/proc/stat").read_text(encoding="utf-8").splitlines():
-            if line.startswith("btime "):
-                value = line.split()[1]
-                if value.isdigit():
-                    boot_time = int(value)
-                break
-        if boot_time is None:
+        for line in Path("/proc/uptime").read_text(encoding="utf-8").splitlines():
+            uptime_text = line.split()[0] if line.split() else ""
+            uptime_seconds = float(uptime_text)
+            break
+        else:
             raise RuntimeError(f"Process start time is unavailable: {pid}")
-        start_time = boot_time + (start_ticks / clock_ticks)
-        return dt.datetime.fromtimestamp(start_time).astimezone().isoformat(timespec="seconds")
+        now = dt.datetime.now().astimezone()
+        process_age = uptime_seconds - (start_ticks / clock_ticks)
+        start_time = now - dt.timedelta(seconds=process_age)
+        return start_time.isoformat(timespec="seconds")
     except (OSError, UnicodeError, ValueError, IndexError) as exc:
         raise RuntimeError(f"Process start time is unavailable: {pid}") from exc
-
 
 def get_process_working_directory(pid: str) -> str:
     """Return the working directory of a visible local process."""
