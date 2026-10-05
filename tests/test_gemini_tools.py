@@ -34,6 +34,7 @@ from gemini_agent.tools import (
     get_screen_timeout,
     get_screen_brightness_mode,
     get_screen_orientation,
+    get_screen_resolution,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
