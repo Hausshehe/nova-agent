@@ -260,6 +260,14 @@ class GeminiClient:
                     "content": "".join(text_parts),
                 })
 
+        requested_tool = self._requested_local_tool(contents)
+        declarations = TOOL_DECLARATIONS
+        if requested_tool:
+            declarations = [
+                declaration
+                for declaration in TOOL_DECLARATIONS
+                if declaration["name"] == requested_tool
+            ]
         tools = [
             {
                 "type": "function",
@@ -269,15 +277,8 @@ class GeminiClient:
                     "parameters": self._groq_parameters(declaration["parameters"]),
                 },
             }
-            for declaration in TOOL_DECLARATIONS
+            for declaration in declarations
         ]
-        payload = {
-            "model": self.cloudflare_model,
-            "messages": messages,
-            "max_tokens": 1024,
-            "tools": tools,
-        }
-        requested_tool = self._requested_local_tool(contents)
         if requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
