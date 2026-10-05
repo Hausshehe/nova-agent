@@ -1459,6 +1459,12 @@ class GeminiClient:
                         "content": str(tool_result),
                     })
 
+                    # Self-extension is transactional and must not enter an
+                    # unbounded repair conversation with the model. One model
+                    # proposal, one local transaction, then return the result.
+                    if requested_tool == "apply_capability_extension":
+                        return str(tool_result)
+
                     if requested_tool == "apply_capability_extension" and not str(tool_result).startswith("Extension status: source edit applied and transaction committed."):
                         payload["messages"].append({
                             "role": "user",
