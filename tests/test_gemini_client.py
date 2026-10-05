@@ -351,6 +351,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertGreater(int(answer), 0)
         self.assertEqual(open_url.call_count, 1)
 
+    def test_list_processes_explicit_request_returns_local_result(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(first_response),
+        ) as open_url:
+            answer = GeminiClient().ask("Use the list_processes tool.")
+        self.assertTrue(answer)
+        self.assertTrue(answer.splitlines()[0].split(maxsplit=1)[0].isdigit())
+        self.assertEqual(open_url.call_count, 1)
+
     def test_run_command_explicit_request_returns_local_result(self):
         first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
         with patch.dict(
