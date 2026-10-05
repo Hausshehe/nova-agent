@@ -71,6 +71,14 @@ class ConversationMemory:
         self._save()
         return f"Forgot {key}."
 
+    def list_memory(self) -> str:
+        """Return durable facts in a compact, deterministic form."""
+        if not self.facts:
+            return "(no remembered facts)"
+        return "\n".join(
+            f"{key}: {value}" for key, value in sorted(self.facts.items())
+        )
+
     def _history_without_fact(self, key: str) -> list[dict]:
         """Remove history entries that explicitly expose the forgotten fact.
 
