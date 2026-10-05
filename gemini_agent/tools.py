@@ -145,7 +145,6 @@ def run_root_command(command: str) -> str:
         completed = subprocess.run(
             ["su"],
             input=normalized + "\n",
-            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
