@@ -432,6 +432,10 @@ class GeminiClientTests(unittest.TestCase):
         sent = json.loads(cloudflare_request.data)
         self.assertEqual(sent["model"], "@cf/zai-org/glm-4.7-flash")
         self.assertEqual(
+            [tool["function"]["name"] for tool in sent["tools"]],
+            ["calculator"],
+        )
+        self.assertEqual(
             sent["tool_choice"],
             {"type": "function", "function": {"name": "calculator"}},
         )
