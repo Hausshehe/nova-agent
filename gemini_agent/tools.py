@@ -370,13 +370,36 @@ def apply_capability_extension(
     if declaration_marker not in original or handler_marker not in original:
         return "Extension not applied: required tool integration anchors were not found."
 
-    # Generate the wrapper locally. The model never supplies Python source.
-    escaped_target = repr(target_name)
-    escaped_args = repr(implementation_args.strip())
-    function_source = (
-        f"def {proposed}() -> str:\n"
-        f"    return _run_extension_primitive({escaped_target}, {escaped_args})"
+    # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
+    try:
+        parsed_arguments = json.loads(implementation_args.strip()) if implementation_args.strip() else {}
+    except json.JSONDecodeError as exc:
+        return f"Extension not applied: implementation_args is not valid JSON: {exc}"
+    if not isinstance(parsed_arguments, dict):
+        return "Extension not applied: implementation_args must decode to a JSON object."
+
+    function_node = ast.FunctionDef(
+        name=proposed,
+        args=ast.arguments(
+            posonlyargs=[],
+            args=[],
+            kwonlyargs=[],
+            kw_defaults=[],
+            defaults=[],
+        ),
+        body=[
+            ast.Return(
+                value=ast.Call(
+                    func=ast.Name(id="_run_extension_primitive", ctx=ast.Load()),
+                    args=[ast.Constant(value=target_name), ast.Constant(value=implementation_args.strip())],
+                    keywords=[],
+                )
+            )
+        ],
+        decorator_list=[],
+        returns=ast.Name(id="str", ctx=ast.Load()),
     )
+    function_source = ast.unparse(ast.fix_missing_locations(function_node))
 
     declaration = (
         "    {\n"
