@@ -67,6 +67,7 @@ from gemini_agent.tools import (
     get_process_parent_name,
     get_process_start_time,
     get_process_cpu_time,
+    get_process_memory_usage,
 )
 
 
@@ -187,6 +188,25 @@ class GetProcessCpuTimeToolTests(unittest.TestCase):
 
     def test_get_process_cpu_time_is_registered(self):
         self.assertIs(TOOL_HANDLERS["get_process_cpu_time"], get_process_cpu_time)
+
+
+class GetProcessMemoryUsageToolTests(unittest.TestCase):
+    def test_get_process_memory_usage_returns_positive_bytes(self):
+        result = get_process_memory_usage(str(os.getpid()))
+        self.assertGreater(int(result), 0)
+
+    def test_get_process_memory_usage_rejects_invalid_pid(self):
+        with self.assertRaisesRegex(ValueError, "PID"):
+            get_process_memory_usage("not-a-pid")
+
+    def test_get_process_memory_usage_rejects_missing_process(self):
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            get_process_memory_usage("999999999")
+
+    def test_get_process_memory_usage_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_process_memory_usage"], get_process_memory_usage)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_process_memory_usage", names)
 
 
 class GetProcessCommandLineToolTests(unittest.TestCase):
