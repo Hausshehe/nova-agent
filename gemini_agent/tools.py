@@ -197,9 +197,13 @@ def get_cpu_count() -> str:
 
 def get_load_average() -> str:
     """Return the 1, 5, and 15 minute system load averages."""
+    load_path = Path("/proc/loadavg")
     try:
-        one, five, fifteen = os.getloadavg()
-    except (AttributeError, OSError) as exc:
+        values = load_path.read_text(encoding="utf-8").split()
+        if len(values) < 3:
+            raise RuntimeError("System load average is unavailable.")
+        one, five, fifteen = (float(value) for value in values[:3])
+    except (OSError, UnicodeError, ValueError) as exc:
         raise RuntimeError("System load average is unavailable.") from exc
     return f"1m: {one:.2f}\n5m: {five:.2f}\n15m: {fifteen:.2f}"
 
@@ -987,6 +991,11 @@ TOOL_DECLARATIONS = [
     {
         "name": "get_network_addresses",
         "description": "Get unique IP addresses resolved for the local device hostname.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
+        "name": "get_load_average",
+        "description": "Get the 1, 5, and 15 minute system load averages.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
