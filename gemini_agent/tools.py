@@ -2374,9 +2374,6 @@ TOOL_DECLARATIONS = [
             "required": ["request", "path", "implementation_kind", "implementation_target", "implementation_args", "declaration_description"],
         },
     },
-            "required": ["request", "path", "function_source", "declaration_description"],
-        },
-    },
     {
         "name": "get_hostname",
         "description": "Get the device hostname.",
