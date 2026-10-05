@@ -400,6 +400,29 @@ class GeminiClient:
                     }]
                     native_tool_calls = False
 
+            # Explicit file-extension requests must use the user's path.
+            if requested_tool == "get_file_extension" and loop_index == 0:
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"(?:get_file_extension|file\s+extension|extension).*?(?:of|for|path)\s+(.+?)(?:[.]\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-file-extension",
+                        "type": "function",
+                        "function": {
+                            "name": "get_file_extension",
+                            "arguments": json.dumps({"path": match.group(1).strip()}),
+                        },
+                    }]
+                    native_tool_calls = False
+
             # For explicit copy_directory requests, derive source and destination
             # from the user's instruction instead of trusting model-generated arguments.
             if requested_tool == "copy_directory" and (native_tool_calls or (not tool_calls and not content)):
@@ -478,7 +501,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool in {"path_exists", "get_file_modified_time", "get_directory_size", "count_file_lines"} and loop_index == 0:
+                if requested_tool in {"path_exists", "get_file_modified_time", "get_file_extension", "get_directory_size", "count_file_lines"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. After executing the
