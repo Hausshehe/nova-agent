@@ -416,8 +416,9 @@ class GeminiClient:
             messages = [
                 {"role": "system", "content": (
                     inspection
-                    + "\nCall apply_capability_extension directly using only an exact "
-                    "existing source fragment from the inspected repository. Do not emit prose or XML."
+                    + "\nCall apply_capability_extension directly with the four structured arguments. "
+                    + "Use function_source for the complete function body, not an old_text/new_text patch. "
+                    + "Do not emit prose or XML."
                 )},
                 {"role": "user", "content": request_text},
             ]
