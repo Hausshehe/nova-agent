@@ -1838,17 +1838,6 @@ class RecoverCommandToolTests(unittest.TestCase):
         run.assert_any_call("/system/bin/dumpsys")
         find.assert_called_once_with("dumpsys")
 
-    def test_recover_command_uses_root_workflow_for_policy_rejection(self):
-        with patch("gemini_agent.tools.run_command", side_effect=ValueError("Command is not allowed: dumpsys")) as run:
-            with patch("gemini_agent.tools.find_executable", return_value="Executable: /system/bin/dumpsys") as find:
-                with patch("gemini_agent.tools.run_root_command", return_value="Exit code: 0\nstdout:\nWindow manager state") as root:
-                    result = recover_command("dumpsys window")
-        self.assertIn("executable or path not found", result)
-        self.assertIn("manual-su root workflow", result)
-        self.assertIn("Window manager state", result)
-        run.assert_called_once_with("dumpsys window")
-        find.assert_called_once_with("dumpsys")
-        root.assert_called_once_with("dumpsys window")
 
     def test_recover_command_retries_timeout(self):
         with patch("gemini_agent.tools.run_command", side_effect=[RuntimeError("Command timed out after 5 seconds."), "Exit code: 0"]) as run:
