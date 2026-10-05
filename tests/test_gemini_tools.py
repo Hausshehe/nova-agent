@@ -33,6 +33,7 @@ from gemini_agent.tools import (
     get_screen_brightness,
     get_screen_timeout,
     get_screen_brightness_mode,
+    get_screen_orientation,
     get_hostname,
     get_network_addresses,
     get_network_interfaces,
@@ -1327,6 +1328,33 @@ class GetScreenBrightnessModeToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_screen_brightness_mode"], get_screen_brightness_mode)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_screen_brightness_mode", names)
+
+
+class GetScreenOrientationToolTests(unittest.TestCase):
+    def test_get_screen_orientation_parses_surface_orientation(self):
+        completed = type("Completed", (), {"stdout": "SurfaceOrientation: 1\n"})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = get_screen_orientation()
+        self.assertEqual(result, "Screen orientation: Landscape")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["su", "-c", "/system/bin/dumpsys input"],
+        )
+
+    def test_get_screen_orientation_falls_back_to_display(self):
+        responses = [
+            type("Completed", (), {"stdout": "no orientation here\n"})(),
+            type("Completed", (), {"stdout": "mDisplayRotation=0\n"})(),
+        ]
+        with patch("gemini_agent.tools.subprocess.run", side_effect=responses) as run:
+            result = get_screen_orientation()
+        self.assertEqual(result, "Screen orientation: Portrait")
+        self.assertEqual(run.call_count, 2)
+
+    def test_get_screen_orientation_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_screen_orientation"], get_screen_orientation)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_screen_orientation", names)
 
 
 class GetScreenTimeoutToolTests(unittest.TestCase):
