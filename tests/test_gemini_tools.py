@@ -15,6 +15,7 @@ from gemini_agent.tools import (
     calculator,
     create_directory,
     current_datetime,
+    delete_directory,
     delete_file,
     find_files,
     move_file,
@@ -76,6 +77,41 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["create_directory"], create_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("create_directory", names)
+
+    def test_deletes_empty_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "archive").mkdir()
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = delete_directory("archive")
+            self.assertEqual(result, "Deleted directory archive")
+            self.assertFalse((root / "archive").exists())
+
+    def test_delete_directory_rejects_non_empty_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "archive").mkdir()
+            (root / "archive" / "note.txt").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "not empty"):
+                    delete_directory("archive")
+
+    def test_delete_directory_rejects_missing_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "does not exist"):
+                    delete_directory("missing")
+
+    def test_delete_directory_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    delete_directory("../outside")
+
+    def test_delete_directory_tool_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["delete_directory"], delete_directory)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("delete_directory", names)
 
     def test_lists_directory(self):
         with tempfile.TemporaryDirectory() as directory:
