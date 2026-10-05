@@ -365,22 +365,84 @@ class GeminiClient:
                 })
 
         requested_tool = self._requested_local_tool(contents)
-        declarations = self._relevant_tool_declarations(contents)
         if requested_tool == "apply_capability_extension":
-            declarations = [
-                d for d in self.tool_declarations if d["name"] == "apply_capability_extension"
-            ]
-            messages.append({
-                "role": "system",
-                "content": self._extension_inspection_context(
-                    next(
-                        item.get("content", "")
-                        for item in reversed(messages)
-                        if item.get("role") == "user"
-                    )
-                ),
-            })
-        elif requested_tool:
+            request_text = next(
+                item.get("content", "")
+                for item in reversed(messages)
+                if item.get("role") == "user"
+            )
+            inspection = self._extension_inspection_context(request_text)
+            feedback = ""
+            for _ in range(3):
+                extension_messages = [
+                    {"role": "system", "content": (
+                        inspection
+                        + "\\nReturn ONLY one JSON object with exactly these string fields: "
+                        + "request, path, old_text, new_text. "
+                        + "The old_text must be copied exactly from the inspected source. "
+                        + "Do not use markdown, prose, or a tool call."
+                        + feedback
+                    )},
+                    {"role": "user", "content": request_text},
+                ]
+                payload = {
+                    "model": self.cloudflare_model,
+                    "messages": extension_messages,
+                    "max_completion_tokens": 2048,
+                }
+                request = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode(),
+                    headers={
+                        "Authorization": f"Bearer {self.cloudflare_api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    method="POST",
+                )
+                try:
+                    with urllib.request.urlopen(request, timeout=180) as response:
+                        result = json.loads(response.read().decode())
+                except urllib.error.HTTPError as exc:
+                    details = exc.read().decode(errors="replace")
+                    raise RuntimeError(f"Cloudflare API error ({exc.code}): {details}") from exc
+                except TimeoutError as exc:
+                    raise RuntimeError("Cloudflare request timed out while waiting for the model response.") from exc
+                except urllib.error.URLError as exc:
+                    raise RuntimeError(f"Could not reach Cloudflare: {exc.reason}") from exc
+                try:
+                    content = result["choices"][0]["message"].get("content")
+                except (KeyError, IndexError, TypeError) as exc:
+                    raise RuntimeError(f"Cloudflare returned an unexpected response: {result}") from exc
+                if not isinstance(content, str) or not content.strip():
+                    feedback = "\\nPrevious response was empty. Return the required JSON object only."
+                    continue
+                try:
+                    start = content.find("{")
+                    if start < 0:
+                        raise ValueError("No JSON object found.")
+                    candidate, _ = json.JSONDecoder().raw_decode(content[start:])
+                    if not isinstance(candidate, dict):
+                        raise ValueError("JSON response was not an object.")
+                    arguments = {key: candidate[key] for key in ("request", "path", "old_text", "new_text")}
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    feedback = f"\\nPrevious response was invalid: {exc}. Return ONLY the required JSON object."
+                    continue
+                try:
+                    tool_result = self.tool_handlers["apply_capability_extension"](**arguments)
+                except Exception as exc:
+                    tool_result = f"Tool error: {exc}"
+                self.last_tool_calls.append({
+                    "name": "apply_capability_extension",
+                    "arguments": arguments,
+                    "result": str(tool_result),
+                })
+                if str(tool_result).startswith("Extension not applied:") or str(tool_result).startswith("Tool error:"):
+                    feedback = "\\nPrevious edit attempt failed with this result: " + str(tool_result) + "\\nChoose a corrected exact source fragment and return ONLY the JSON object."
+                    continue
+                return str(tool_result)
+            return str(tool_result)
+        declarations = self._relevant_tool_declarations(contents)
+        if requested_tool:
             declarations = [
                 d for d in self.tool_declarations if d["name"] == requested_tool
             ]
