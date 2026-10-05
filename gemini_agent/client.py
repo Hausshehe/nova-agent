@@ -378,7 +378,8 @@ class GeminiClient:
         "The local transaction generates the new Python wrapper itself. Only choose an implementation_target "
         "that already exists in the inspected repository. If no existing local primitive can safely implement "
         "the capability, do not fabricate one."
-    )        return "\n".join(context)
+    )
+        return "\n".join(context)
 
     def _generate_cloudflare(
         self,
