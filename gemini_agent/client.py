@@ -873,7 +873,7 @@ class GeminiClient:
                         user_text = item.get("content", "")
                         break
                 match = re.search(
-                    r'run_command.*?run\\s+[\`"]([^\`"]+)[\`"]',
+                    r"run_command.*?run\s+[`\"]([^`\"]+)[`\"]",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
