@@ -251,7 +251,7 @@ def get_system_memory_usage() -> str:
     total = values["MemTotal"]
     available = values["MemAvailable"]
     used = max(0, total - available)
-    return f"Total: {total} bytes\\nUsed: {used} bytes\\nAvailable: {available} bytes"
+    return f"Total: {total} bytes\nUsed: {used} bytes\nAvailable: {available} bytes"
 
 def get_temp_directory() -> str:
     """Return the operating system temporary directory used by Nova."""
