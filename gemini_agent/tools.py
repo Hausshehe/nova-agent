@@ -126,6 +126,30 @@ def write_text_file(path: str, content: str) -> str:
     return f"Wrote {len(encoded)} bytes to {target.relative_to(_filesystem_root())}"
 
 
+def edit_text_file(path: str, old_text: str, new_text: str) -> str:
+    """Replace exactly one occurrence of text in a UTF-8 file under the bounded root."""
+    target = _safe_path(path)
+    if not target.is_file() or target.is_symlink():
+        raise ValueError(f"Not a regular file: {path}")
+    try:
+        content = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("File is not valid UTF-8 text.") from exc
+    if not old_text:
+        raise ValueError("Text to replace cannot be empty.")
+    count = content.count(old_text)
+    if count == 0:
+        raise ValueError("Text to replace was not found.")
+    if count > 1:
+        raise ValueError("Text to replace occurs more than once.")
+    updated = content.replace(old_text, new_text, 1)
+    encoded = updated.encode("utf-8")
+    if len(encoded) > _MAX_WRITE_BYTES:
+        raise ValueError(f"Content is larger than {_MAX_WRITE_BYTES} bytes.")
+    target.write_bytes(encoded)
+    return f"Edited {target.relative_to(_filesystem_root())}"
+
+
 def append_text_file(path: str, content: str) -> str:
     """Append UTF-8 text to a file under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -370,6 +394,19 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "edit_text_file",
+        "description": "Replace exactly one occurrence of text in a UTF-8 file under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative path to the text file."},
+                "old_text": {"type": "STRING", "description": "Exact text to replace."},
+                "new_text": {"type": "STRING", "description": "Replacement text."},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
         "name": "append_text_file",
         "description": "Append UTF-8 text to a file under Nova's allowed local filesystem root.",
         "parameters": {
@@ -441,6 +478,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
+    "edit_text_file": edit_text_file,
     "append_text_file": append_text_file,
     "copy_file": copy_file,
     "move_file": move_file,
