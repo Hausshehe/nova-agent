@@ -614,17 +614,22 @@ class GeminiClient:
         contents: list[dict],
         system_instruction: str | None,
     ) -> dict | str:
-        try:
-            return self._generate_gemini(contents, system_instruction)
-        except RuntimeError as gemini_error:
-            error_text = str(gemini_error)
-            gemini_retryable = (
-                any(
-                    f"API error ({code})" in error_text
-                    for code in (429, 500, 502, 503, 504)
+        if self.api_key:
+            try:
+                return self._generate_gemini(contents, system_instruction)
+            except RuntimeError as gemini_error:
+                error_text = str(gemini_error)
+                gemini_retryable = (
+                    any(
+                        f"API error ({code})" in error_text
+                        for code in (429, 500, 502, 503, 504)
+                    )
+                    or error_text.startswith("Could not reach Gemini:")
                 )
-                or error_text.startswith("Could not reach Gemini:")
-            )
+            else:
+                raise RuntimeError("Gemini request failed.")
+        else:
+            gemini_retryable = True
             if not gemini_retryable:
                 raise
 
