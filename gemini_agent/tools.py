@@ -1616,6 +1616,12 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_refresh_rate",
+        "description": "Get the current Android display refresh rate in Hz.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+
+    {
         "name": "get_screen_timeout",
         "description": "Get the Android screen-off timeout duration.",
         "parameters": {"type": "OBJECT", "properties": {}},
