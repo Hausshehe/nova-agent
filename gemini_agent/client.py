@@ -60,7 +60,7 @@ class GeminiClient:
             raise ValueError("Tool arguments must be a JSON object.")
         return parsed
 
-    _TOOL_ALIASES = {"read_text_file": "read_file"}
+    _CLOUD_TOOL_NAMES = {"read_text_file": "read_file"}
 
     @classmethod
     def _requested_local_tool(cls, contents: list[dict]) -> str | None:
@@ -76,9 +76,6 @@ class GeminiClient:
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
-                return name
-        for alias, name in cls._TOOL_ALIASES.items():
-            if alias in user_text:
                 return name
         return None
 
@@ -134,7 +131,7 @@ class GeminiClient:
         tools = [{
             "type": "function",
             "function": {
-                "name": d["name"],
+                "name": self._CLOUD_TOOL_NAMES.get(d["name"], d["name"]),
                 "description": d["description"],
                 "parameters": self._schema(d["parameters"]),
             },
@@ -149,7 +146,7 @@ class GeminiClient:
         if requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
-                "function": {"name": requested_tool},
+                "function": {"name": self._CLOUD_TOOL_NAMES.get(requested_tool, requested_tool)},
             }
         elif self._requires_local_tool(contents):
             payload["tool_choice"] = "required"
@@ -203,7 +200,11 @@ class GeminiClient:
             for tool_call in tool_calls:
                 function = tool_call.get("function") or {}
                 name = function.get("name")
-                handler = self.tool_handlers.get(name)
+                local_name = next(
+                    (tool_name for tool_name, cloud_name in self._CLOUD_TOOL_NAMES.items() if cloud_name == name),
+                    name,
+                )
+                handler = self.tool_handlers.get(local_name)
                 if handler is None:
                     raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
 
@@ -214,7 +215,7 @@ class GeminiClient:
                     args = {}
                     tool_result = f"Tool error: {exc}"
 
-                trace = {"name": name, "args": args, "result": tool_result}
+                trace = {"name": local_name, "args": args, "result": tool_result}
                 if "expression" in args:
                     trace["expression"] = str(args["expression"])
                 self.last_tool_calls.append(trace)
