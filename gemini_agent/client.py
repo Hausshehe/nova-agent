@@ -399,6 +399,17 @@ class GeminiClient:
                 }]
                 native_tool_calls = False
 
+            if requested_tool == "get_python_executable" and loop_index == 0:
+                tool_calls = [{
+                    "id": "requested-python-executable",
+                    "type": "function",
+                    "function": {
+                        "name": "get_python_executable",
+                        "arguments": "{}",
+                    },
+                }]
+                native_tool_calls = False
+
             if requested_tool == "get_cpu_count" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-cpu-count",
