@@ -256,6 +256,21 @@ def get_system_cpu_usage() -> str:
             usage = float(match.group(1))
             if 0.0 <= usage <= 100.0:
                 return f"{usage:.2f}%"
+        android_match = re.search(
+            r"(?P<total>[0-9]+(?:\.[0-9]+)?)%cpu\s+"
+            r"(?P<user>[0-9]+(?:\.[0-9]+)?)%user\s+"
+            r"(?P<nice>[0-9]+(?:\.[0-9]+)?)%nice\s+"
+            r"(?P<sys>[0-9]+(?:\.[0-9]+)?)%sys\s+"
+            r"(?P<idle>[0-9]+(?:\.[0-9]+)?)%idle",
+            line,
+            re.IGNORECASE,
+        )
+        if android_match:
+            total = float(android_match.group("total"))
+            idle = float(android_match.group("idle"))
+            if total > 0.0 and idle >= 0.0:
+                usage = max(0.0, min(100.0, (total - idle) / total * 100.0))
+                return f"{usage:.2f}%"
     raise RuntimeError("System CPU usage is unavailable.")
 
 def get_system_swap_usage() -> str:
