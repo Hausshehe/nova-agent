@@ -16,6 +16,7 @@ from gemini_agent.tools import (
     copy_file,
     copy_directory,
     calculator,
+    self_test,
     count_file_lines,
     create_directory,
     current_datetime,
@@ -99,6 +100,17 @@ from gemini_agent.tools import (
     get_process_nice,
 )
 
+
+
+class SelfTestToolTests(unittest.TestCase):
+    def test_self_test_passes(self):
+        result = self_test()
+        self.assertRegex(result, r"^Self-test: PASS \\(5/5 checks passed\\)$")
+
+    def test_self_test_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["self_test"], self_test)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("self_test", names)
 
 
 class FindExecutableToolTests(unittest.TestCase):
