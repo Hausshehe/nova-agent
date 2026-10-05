@@ -1,6 +1,7 @@
 import re\n"""Cloudflare Workers AI client for the minimal Nova agent."""
 
 import json
+import re
 import os
 import urllib.error
 import urllib.request
