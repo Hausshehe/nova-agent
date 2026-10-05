@@ -54,6 +54,17 @@ def calculator(expression: str) -> str:
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
 
+def capability_inventory() -> str:
+    """List the capabilities Nova currently exposes to its local tool runtime."""
+    entries = []
+    for declaration in TOOL_DECLARATIONS:
+        name = declaration.get("name")
+        description = declaration.get("description", "")
+        if name in TOOL_HANDLERS:
+            entries.append(f"- {name}: {description}")
+    return f"Capabilities ({len(entries)}):\n" + "\n".join(entries)
+
+
 def self_test() -> str:
     """Run a small deterministic health check of Nova's local execution substrate."""
     checks = []
@@ -1905,6 +1916,11 @@ TOOL_DECLARATIONS = [
         "description": "Run a small deterministic health check of Nova's local execution substrate without modifying user data.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    {
+        "name": "capability_inventory",
+        "description": "List the local tools Nova currently exposes and their purposes.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
     FIND_EXECUTABLE_DECLARATION,
     DIAGNOSE_COMMAND_FAILURE_DECLARATION,
     VERIFY_COMMAND_RESULT_DECLARATION,
@@ -2652,6 +2668,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "capability_inventory": capability_inventory,
     "self_test": self_test,
     "find_executable": find_executable,
     "diagnose_command_failure": diagnose_command_failure,
