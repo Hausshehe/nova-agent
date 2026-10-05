@@ -149,6 +149,31 @@ def get_network_addresses() -> str:
     return "\n".join(addresses) if addresses else "(no network addresses)"
 
 
+def get_network_interfaces() -> str:
+    """Return local network interface names and their operational state."""
+    interfaces = []
+    net_root = Path("/sys/class/net")
+    if net_root.is_dir():
+        for entry in sorted(net_root.iterdir(), key=lambda item: item.name):
+            try:
+                state = (entry / "operstate").read_text(encoding="utf-8").strip() or "unknown"
+            except OSError:
+                state = "unknown"
+            interfaces.append(f"{entry.name}: {state}")
+    if not interfaces:
+        proc_net = Path("/proc/net/dev")
+        if proc_net.is_file():
+            try:
+                for line in proc_net.read_text(encoding="utf-8").splitlines()[2:]:
+                    if ":" in line:
+                        name = line.split(":", 1)[0].strip()
+                        if name:
+                            interfaces.append(f"{name}: unknown")
+            except OSError:
+                pass
+    return "\n".join(interfaces) if interfaces else "(no network interfaces)"
+
+
 def get_cpu_count() -> str:
     """Return the number of logical CPUs visible to the runtime."""
     count = os.cpu_count()
@@ -943,6 +968,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_network_interfaces",
+        "description": "List local network interface names and their operational state.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "get_system_info",
         "description": "Get basic operating system, architecture, and Python runtime information.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -1494,6 +1524,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
+    "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
     "get_process_id": get_process_id,
     "get_current_working_directory": get_current_working_directory,
