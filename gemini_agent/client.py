@@ -87,12 +87,12 @@ class GeminiClient:
 
     @staticmethod
     def _extract_mechanism(request_text: str) -> str:
-        match = re.search(r"(?:mechanism|candidate)\s*[:=]\s*([^\n]+)", request_text, re.IGNORECASE)
-        if match:
-            return match.group(1).strip().strip("`")
         match = re.search(r"\b(intent|executable|service|ui):[^\s,]+", request_text, re.IGNORECASE)
         if match:
             return match.group(0)
+        match = re.search(r"(?:mechanism|candidate)\s*[:=]\s*([^\n]+)", request_text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip().strip("`")
         return ""
 
     @classmethod
