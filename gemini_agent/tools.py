@@ -1488,6 +1488,11 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_screen_timeout",
+        "description": "Get the Android screen-off timeout duration.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "path_exists",
         "description": "Check whether a file or directory exists under Nova's allowed local filesystem root.",
         "parameters": {
@@ -1758,11 +1763,6 @@ TOOL_DECLARATIONS = [
             },
             "required": ["path"],
         },
-    },
-    {
-        "name": "get_screen_timeout",
-        "description": "Get the Android screen-off timeout duration.",
-        "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
         "name": "find_files",
