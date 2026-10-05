@@ -30,6 +30,7 @@ from gemini_agent.tools import (
     get_system_info,
     get_hostname,
     get_network_addresses,
+    get_network_interfaces,
     get_process_id,
     get_current_working_directory,
     get_python_executable,
@@ -220,6 +221,18 @@ class GetNetworkAddressesToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["get_network_addresses"], get_network_addresses)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("get_network_addresses", names)
+
+
+class GetNetworkInterfacesToolTests(unittest.TestCase):
+    def test_get_network_interfaces_returns_nonempty_value(self):
+        result = get_network_interfaces()
+        self.assertTrue(result)
+        self.assertIn(":", result)
+
+    def test_get_network_interfaces_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_network_interfaces"], get_network_interfaces)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_network_interfaces", names)
 
 
 class GetProcessNiceToolTests(unittest.TestCase):
