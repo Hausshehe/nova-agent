@@ -117,6 +117,24 @@ def find_executable(name: str) -> str:
 
     return f"Executable not found: {candidate}"
 
+def diagnose_command_failure(command: str, error: str) -> str:
+    """Classify a failed command and recommend the safest next diagnostic step."""
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("Command cannot be empty.")
+    if not isinstance(error, str) or not error.strip():
+        raise ValueError("Error output cannot be empty.")
+    text = error.strip().lower()
+    if any(term in text for term in ("not found", "no such file or directory", "command not found")):
+        return "Diagnosis: executable or path not found. Next: use find_executable for the command name or inspect the required path."
+    if any(term in text for term in ("permission denied", "operation not permitted", "access denied")):
+        return "Diagnosis: permission denied. Next: use Nova's manual su workflow and run a bounded root diagnostic if the operation requires privilege."
+    if any(term in text for term in ("timed out", "timeout", "timedout")):
+        return "Diagnosis: command timed out. Next: retry once if the operation may be transient; otherwise inspect the command and environment before retrying."
+    if any(term in text for term in ("failed transaction", "service unavailable", "binder", "cannot connect to")):
+        return "Diagnosis: Android service or IPC failure. Next: inspect the relevant service with run_root_command and choose an alternate mechanism if needed."
+    if any(term in text for term in ("invalid argument", "invalid option", "usage:", "unknown option", "bad argument")):
+        return "Diagnosis: command arguments are invalid. Next: inspect the command's supported syntax before retrying."
+    return "Diagnosis: cause is unknown from the supplied error. Next: inspect stderr and environment, then use the narrowest relevant diagnostic tool before retrying."
 
 def run_command(command: str) -> str:
     """Run one approved read-only command from Nova's bounded working root."""
@@ -2222,6 +2240,18 @@ TOOL_DECLARATIONS = [
 ]
 
 
+DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
+    "name": "diagnose_command_failure",
+    "description": "Classify a failed command and recommend the safest next diagnostic step. Use this before blindly retrying a failed operation.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "The command that failed."},
+            "error": {"type": "STRING", "description": "The error or stderr returned by the failed command."},
+        },
+        "required": ["command", "error"],
+    },
+}
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
@@ -2421,7 +2451,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "find_executable": find_executable,
-    "find_executable": find_executable,
+    "diagnose_command_failure": diagnose_command_failure,
     "run_command": run_command,
     "run_root_command": run_root_command,
     "list_processes": list_processes,
