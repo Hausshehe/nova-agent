@@ -20,6 +20,7 @@ from gemini_agent.tools import (
     edit_text_file,
     get_file_info,
     get_file_modified_time,
+    get_file_extension,
     path_exists,
     hash_file,
     get_directory_size,
@@ -356,6 +357,37 @@ class FilesystemToolTests(unittest.TestCase):
             parsed = __import__("datetime").datetime.fromisoformat(result)
             self.assertIsNotNone(parsed.tzinfo)
 
+    def test_get_file_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.TXT").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(get_file_extension("notes.TXT"), ".txt")
+
+    def test_get_file_extension_returns_empty_for_extensionless_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README").write_text("hello", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                self.assertEqual(get_file_extension("README"), "")
+
+    def test_get_file_extension_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "Not a regular file"):
+                    get_file_extension("missing.txt")
+
+    def test_get_file_extension_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    get_file_extension("../outside.txt")
+
+    def test_get_file_extension_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["get_file_extension"], get_file_extension)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("get_file_extension", names)
+
     def test_get_file_modified_time_rejects_missing_path(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
@@ -409,7 +441,7 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["read_text_file"], read_text_file)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertEqual(names[names.index("path_exists"):names.index("find_files") + 1], [
-            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_modified_time", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
+            "path_exists", "create_directory", "delete_directory", "get_file_info", "get_file_modified_time", "get_file_extension", "list_directory_recursive", "move_directory", "copy_directory", "hash_file", "count_file_lines", "get_directory_size", "list_directory", "read_text_file", "search_text", "write_text_file", "edit_text_file",
             "append_text_file", "copy_file", "move_file", "delete_file", "find_files"
         ])
 
