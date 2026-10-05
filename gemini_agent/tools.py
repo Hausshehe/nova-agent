@@ -819,6 +819,9 @@ _ROOT_DIAGNOSTIC_PATTERNS = (
     re.compile(r"^uiautomator\s+dump\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
     re.compile(r"^cat\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
     re.compile(r"^rm\s+-f\s+/data/local/tmp/nova-ui-hierarchy\.xml$"),
+    re.compile(r"^uiautomator\s+dump\s+/data/local/tmp/nova-ui-actions\.xml$"),
+    re.compile(r"^cat\s+/data/local/tmp/nova-ui-actions\.xml$"),
+    re.compile(r"^rm\s+-f\s+/data/local/tmp/nova-ui-actions\.xml$"),
     re.compile(r"^settings\s+get\s+(?:global|system|secure)\s+[A-Za-z0-9_.-]+$"),
     re.compile(r"^(?:id|whoami|pwd)$"),
 )
