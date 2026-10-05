@@ -296,17 +296,17 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIn("Proposed tool: extend_camera_shutter", result)
         self.assertIn("Status: plan only; no code or device state was modified.", result)
 
-    def test_apply_capability_extension_blocks_camera_without_real_primitive(self):
+    def test_apply_capability_extension_blocks_inspection_primitive(self):
         result = apply_capability_extension(
             "control the phone camera shutter",
             "gemini_agent/tools.py",
             "existing_tool",
-            "calculator",
-            '{"expression": "2 + 2"}',
+            "discover_camera_control",
+            "{}",
             "Take a photo with the phone camera.",
         )
-        self.assertIn("Extension blocked: no existing local primitive can safely implement camera shutter.", result)
-        self.assertIn("Environment discovery is required", result)
+        self.assertIn("Extension blocked:", result)
+        self.assertIn("inspection or orchestration tool", result)
 
     def test_capability_extension_plan_ignores_model_generated_camera_filler(self):
         result = plan_capability_extension(
