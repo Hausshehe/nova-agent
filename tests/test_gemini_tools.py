@@ -14,6 +14,7 @@ from gemini_agent.tools import (
     copy_file,
     copy_directory,
     calculator,
+    count_file_lines,
     create_directory,
     current_datetime,
     edit_text_file,
@@ -241,6 +242,31 @@ class FilesystemToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["copy_directory"], copy_directory)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("copy_directory", names)
+
+    def test_counts_file_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "notes.txt").write_text("one\ntwo\nthree\n", encoding="utf-8")
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                result = count_file_lines("notes.txt")
+            self.assertEqual(result, "3")
+
+    def test_count_file_lines_rejects_missing_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "Not a regular file"):
+                    count_file_lines("missing.txt")
+
+    def test_count_file_lines_rejects_path_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_FILES_ROOT": directory}, clear=False):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    count_file_lines("../outside.txt")
+
+    def test_count_file_lines_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["count_file_lines"], count_file_lines)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("count_file_lines", names)
 
     def test_hashes_file(self):
         with tempfile.TemporaryDirectory() as directory:
