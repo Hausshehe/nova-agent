@@ -102,6 +102,34 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "assess_capability_gap")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_natural_android_key_event_request_uses_local_action_tool(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-keyevent",
+                "type": "function",
+                "function": {
+                    "name": "send_android_keyevent",
+                    "arguments": '{"keycode":"CAMERA"}',
+                },
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url, patch(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {"send_android_keyevent": lambda keycode: f"Android key event {keycode} sent."},
+        ):
+            client = GeminiClient()
+            answer = client.ask("Use the Android key event tool with CAMERA.")
+        self.assertIn("Android key event CAMERA sent.", answer)
+        self.assertEqual(client.last_tool_calls[0]["name"], "send_android_keyevent")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_natural_extension_request_uses_extension_planner(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
