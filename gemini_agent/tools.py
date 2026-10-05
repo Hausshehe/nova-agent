@@ -692,6 +692,7 @@ TOOL_DECLARATIONS = [
             "required": ["expression"],
         },
     },
+
     {
         "name": "run_command",
         "description": "Run one approved read-only command from Nova's bounded working root.",
