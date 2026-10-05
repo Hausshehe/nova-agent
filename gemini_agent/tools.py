@@ -217,18 +217,24 @@ def get_wifi_status() -> str:
 
 def get_airplane_mode() -> str:
     """Return whether Android airplane mode is currently enabled or disabled."""
+    commands = (
+        "/system/bin/settings get global airplane_mode_on",
+        "/system/bin/settings get system airplane_mode_on",
+        "/system/bin/settings get secure airplane_mode_on",
+    )
     try:
-        result = subprocess.run(
-            ["su", "-c", "/system/bin/settings get global airplane_mode_on"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        output = (result.stdout or "").strip()
-        if output == "1":
-            return "Airplane mode: Enabled"
-        if output == "0":
-            return "Airplane mode: Disabled"
+        for command in commands:
+            result = subprocess.run(
+                ["su", "-c", command],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = (result.stdout or "").strip()
+            if output == "1":
+                return "Airplane mode: Enabled"
+            if output == "0":
+                return "Airplane mode: Disabled"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Airplane mode status is unavailable.") from exc
     raise RuntimeError("Airplane mode status is unavailable.")
