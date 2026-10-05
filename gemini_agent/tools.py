@@ -334,10 +334,12 @@ def apply_capability_extension(
             "Extension not applied: implementation_kind must be 'existing_tool'. "
             "Nova may only compose capabilities from primitives that already exist locally."
         )
-    if target_name not in TOOL_HANDLERS:
+    available_targets = set(TOOL_HANDLERS)
+    if target_name not in available_targets:
+        available = ", ".join(sorted(available_targets))
         return (
             f"Extension not applied: existing local tool '{target_name}' is not available. "
-            "Inspect capability_inventory before proposing an extension."
+            f"Valid implementation targets are: {available}"
         )
     if target_name == proposed:
         return "Extension not applied: extension primitive must be an existing capability, not the new capability itself."
