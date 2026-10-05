@@ -154,7 +154,11 @@ def get_network_interfaces() -> str:
     interfaces = []
     net_root = Path("/sys/class/net")
     if net_root.is_dir():
-        for entry in sorted(net_root.iterdir(), key=lambda item: item.name):
+        try:
+            entries = sorted(net_root.iterdir(), key=lambda item: item.name)
+        except OSError:
+            entries = []
+        for entry in entries:
             try:
                 state = (entry / "operstate").read_text(encoding="utf-8").strip() or "unknown"
             except OSError:
