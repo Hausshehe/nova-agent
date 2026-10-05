@@ -59,8 +59,20 @@ from gemini_agent.tools import (
     list_directory_recursive,
     read_text_file,
     run_command,
+    list_processes,
 )
 
+
+
+class ListProcessesToolTests(unittest.TestCase):
+    def test_list_processes_returns_pid_and_name(self):
+        result = list_processes()
+        self.assertTrue(result)
+        self.assertTrue(all(line.split(maxsplit=1)[0].isdigit() for line in result.splitlines()))
+
+    def test_list_processes_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["list_processes"], list_processes)
+        self.assertNotEqual(TOOL_DECLARATIONS[-1]["name"], "list_processes")
 
 
 class RunCommandToolTests(unittest.TestCase):
