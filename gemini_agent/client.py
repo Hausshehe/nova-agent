@@ -108,7 +108,7 @@ class GeminiClient:
             return "inspect_android_ui"
         if any(phrase in user_text for phrase in ("inspect foreground android component", "inspect foreground android app", "current foreground android component", "current foreground activity")):
             return "get_foreground_android_component"
-        if any(phrase in user_text for phrase in ("discover android ui actions", "discover clickable android controls", "find clickable ui controls", "inspect clickable ui controls")):
+        if any(phrase in user_text for phrase in ("discover android ui actions", "discover clickable android controls", "discover clickable android ui controls", "clickable android ui controls", "find clickable ui controls", "inspect clickable ui controls")):
             return "discover_android_ui_actions"
         if any(phrase in user_text for phrase in ("discover camera control", "camera control environment", "camera shutter mechanism")):
             return "discover_camera_control"
