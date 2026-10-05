@@ -1608,6 +1608,18 @@ GET_AIRPLANE_MODE_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+RUN_ROOT_COMMAND_DECLARATION = {
+    "name": "run_root_command",
+    "description": "Run one bounded read-only diagnostic command inside a root shell using Nova's manual su workflow. Use it to discover paths, inspect Android services, and diagnose privileged command failures.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "command": {"type": "STRING", "description": "Bounded read-only diagnostic command, such as command -v dumpsys, readlink -f /system/bin/dumpsys, dumpsys wifi, or settings get global airplane_mode_on."}
+        },
+        "required": ["command"],
+    },
+}
+
 TOOL_DECLARATIONS = [
     {
         "name": "calculator",
@@ -2160,17 +2172,6 @@ TOOL_DECLARATIONS = [
     },
 ]
 
-RUN_ROOT_COMMAND_DECLARATION = {
-    "name": "run_root_command",
-    "description": "Run one bounded read-only diagnostic command inside a root shell using Nova's manual su workflow. Use it to discover paths, inspect Android services, and diagnose privileged command failures.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "command": {"type": "STRING", "description": "Bounded read-only diagnostic command, such as command -v dumpsys, readlink -f /system/bin/dumpsys, dumpsys wifi, or settings get global airplane_mode_on."}
-        },
-        "required": ["command"],
-    },
-}
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
     "description": "Run one approved read-only command from Nova's bounded working root.",
