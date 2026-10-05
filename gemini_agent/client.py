@@ -1572,6 +1572,11 @@ class GeminiClient:
                 continue
 
             elif not content:
+                if requested_tool == "apply_capability_extension":
+                    return (
+                        "Extension not applied: Cloudflare did not return a valid "
+                        "capability-extension proposal. No code or device state was modified."
+                    )
                 raise RuntimeError(
                     f"Cloudflare returned an unexpected response: {result}"
                 )
