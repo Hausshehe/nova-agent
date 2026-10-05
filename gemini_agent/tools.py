@@ -1605,6 +1605,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_hostname": get_hostname,
     "get_network_addresses": get_network_addresses,
     "get_load_average": get_load_average,
+    "get_system_uptime": get_system_uptime,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
     "get_system_info": get_system_info,
