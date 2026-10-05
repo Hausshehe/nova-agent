@@ -295,7 +295,7 @@ def get_process_nice(pid: str) -> str:
         fields = raw[closing + 2:].split()
         if len(fields) < 16:
             raise RuntimeError(f"Process nice value is unavailable: {pid}")
-        return str(int(fields[16 - 1]))
+        return str(int(fields[16]))
     except (OSError, UnicodeError, ValueError, IndexError) as exc:
         raise RuntimeError(f"Process nice value is unavailable: {pid}") from exc
 
