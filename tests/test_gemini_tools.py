@@ -68,7 +68,7 @@ class RunCommandToolTests(unittest.TestCase):
             "gemini_agent.tools.subprocess.run",
             return_value=type("Result", (), {
                 "returncode": 0,
-                "stdout": "hello\\n",
+                "stdout": "hello\n",
                 "stderr": "",
             })(),
         ) as run:
