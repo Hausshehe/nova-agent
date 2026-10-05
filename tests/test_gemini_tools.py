@@ -1301,7 +1301,7 @@ class GetSystemMemoryUsageToolTests(unittest.TestCase):
 class GetSystemSwapUsageToolTests(unittest.TestCase):
     def test_get_system_swap_usage_returns_swap_values(self):
         result = get_system_swap_usage()
-        self.assertRegex(result, r"^Total: \\d+ bytes\\nUsed: \\d+ bytes\\nFree: \\d+ bytes$")
+        self.assertRegex(result, r"^Total: \d+ bytes\nUsed: \d+ bytes\nFree: \d+ bytes$")
         values = [int(line.split()[1]) for line in result.splitlines()]
         self.assertEqual(len(values), 3)
         self.assertGreaterEqual(values[0], 0)
