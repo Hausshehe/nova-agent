@@ -193,8 +193,7 @@ def discover_android_ui_actions() -> str:
                 f"{dump_result}\n"
                 "No UI interaction or device state change was performed."
             )
-        read_result = run_root_command(f"cat {dump_path}")
-        xml_text = read_result.split("stdout:\n", 1)[1] if "stdout:\n" in read_result else ""
+        xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError as exc:
@@ -1040,6 +1039,35 @@ def _dump_camera_ui_hierarchy() -> str:
     if len(output) > _ROOT_COMMAND_OUTPUT_BYTES:
         output = output[:_ROOT_COMMAND_OUTPUT_BYTES] + b"\n[output truncated]"
     return output.decode("utf-8", errors="ignore").rstrip()
+
+
+def _read_bounded_root_file(path: str, max_bytes: int) -> str:
+    """Read one allowlisted root-owned diagnostic file with a bounded size."""
+    if path != "/data/local/tmp/nova-ui-actions.xml":
+        raise ValueError("Root file path is not allowed.")
+    if not isinstance(max_bytes, int) or max_bytes <= 0 or max_bytes > 64 * 1024:
+        raise ValueError("Invalid bounded read size.")
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=f"cat {path}\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            timeout=_ROOT_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Bounded root file read timed out.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Bounded root file read failed to start: {exc}") from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"Bounded root file read failed{': ' + detail if detail else '.'}")
+    data = completed.stdout[:max_bytes]
+    if len(completed.stdout) > max_bytes:
+        raise RuntimeError("UI hierarchy exceeds the bounded parsing size.")
+    return data.decode("utf-8", errors="strict")
 
 
 def run_root_command(command: str) -> str:
