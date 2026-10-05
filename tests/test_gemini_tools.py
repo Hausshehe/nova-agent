@@ -146,9 +146,11 @@ class RunRootCommandToolTests(unittest.TestCase):
         completed = type("Completed", (), {"stdout": "/system/bin/dumpsys\n", "stderr": "", "returncode": 0})()
         with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
             result = run_root_command("command -v dumpsys")
+            bare_result = run_root_command("dumpsys")
         self.assertEqual(result, "Exit code: 0\nstdout:\n/system/bin/dumpsys")
+        self.assertEqual(bare_result, "Exit code: 0\nstdout:\n/system/bin/dumpsys")
         self.assertEqual(run.call_args.args[0], ["su"])
-        self.assertEqual(run.call_args.kwargs["input"], "command -v dumpsys\n")
+        self.assertEqual(run.call_args.kwargs["input"], "dumpsys\n")
 
     def test_run_root_command_rejects_non_diagnostic_commands(self):
         with self.assertRaises(ValueError):
