@@ -233,6 +233,23 @@ def get_process_status(pid: str) -> str:
     return "\n".join(result)
 
 
+def get_process_command_line(pid: str) -> str:
+    """Return the command line of a visible local process."""
+    if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+        raise ValueError("PID must be a positive integer.")
+    cmdline = Path("/proc") / pid / "cmdline"
+    if not cmdline.is_file():
+        raise ValueError(f"Process does not exist: {pid}")
+    try:
+        raw = cmdline.read_bytes()
+    except OSError as exc:
+        raise RuntimeError(f"Process command line is unavailable: {pid}") from exc
+    if not raw:
+        raise RuntimeError(f"Process command line is unavailable: {pid}")
+    command = " ".join(part for part in raw.decode(errors="replace").split(String.fromCharCode(0)) if part)
+    return command or f"PID: {pid}"
+
+
 def get_process_thread_count() -> str:
     """Return the number of threads in Nova's current process."""
     status = Path("/proc/self/status")
@@ -1161,6 +1178,18 @@ LIST_PROCESSES_DECLARATION = {
     "description": "List visible local processes by PID and command name.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_PROCESS_COMMAND_LINE_DECLARATION = {
+    "name": "get_process_command_line",
+    "description": "Get the command line of a visible local process.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "pid": {"type": "STRING", "description": "Positive process ID to inspect."}
+        },
+        "required": ["pid"],
+    },
+}
+
 GET_PROCESS_STATUS_DECLARATION = {
     "name": "get_process_status",
     "description": "Get basic status information for a visible local process.",
@@ -1177,6 +1206,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "run_command": run_command,
     "list_processes": list_processes,
     "get_process_status": get_process_status,
+    "get_process_command_line": get_process_command_line,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
