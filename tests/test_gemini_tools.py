@@ -270,7 +270,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("Clickable enabled controls found: 1", result)
         self.assertIn("shutter_button", result)
         self.assertIn("Capture", result)
-        self.assertIn("without interaction", result)
+        self.assertIn("no interaction or device state change", result)
         self.assertEqual(root.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-actions.xml")
         self.assertEqual(root.call_args_list[1].args[0], "cat /data/local/tmp/nova-ui-actions.xml")
         self.assertEqual(root.call_args_list[2].args[0], "rm -f /data/local/tmp/nova-ui-actions.xml")
