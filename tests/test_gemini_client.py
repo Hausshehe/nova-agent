@@ -408,7 +408,7 @@ class GeminiClientTests(unittest.TestCase):
             ],
         ) as open_url, patch("time.sleep"):
             client = GeminiClient()
-            answer = client.ask("What is 12 times 7?")
+            answer = client.ask("Use the calculator tool to calculate 12 times 7.")
 
         self.assertEqual(answer, "84")
         self.assertEqual(
