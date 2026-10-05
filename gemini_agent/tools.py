@@ -98,6 +98,30 @@ def get_file_info(path: str) -> str:
     return f"Path: {relative}\\nType: {kind}\\nSize: {size} bytes"
 
 
+def list_directory_recursive(path: str = ".") -> str:
+    """List all non-symlink files and directories recursively under the bounded root."""
+    target = _safe_path(path)
+    if not target.is_dir():
+        raise ValueError(f"Not a directory: {path}")
+
+    results = []
+    for directory, dirnames, filenames in os.walk(target, followlinks=False):
+        current_dir = _safe_path(directory)
+        dirnames[:] = sorted(
+            name for name in dirnames
+            if not (current_dir / name).is_symlink()
+        )
+        for name in sorted(dirnames + filenames, key=str.casefold):
+            candidate = _safe_path(str(Path(directory) / name))
+            if candidate.is_symlink():
+                continue
+            kind = "directory" if candidate.is_dir() else "file" if candidate.is_file() else "other"
+            results.append(f"{kind}: {candidate.relative_to(_filesystem_root())}")
+            if len(results) >= _MAX_FIND_RESULTS:
+                return "\n".join(results)
+    return "\n".join(results) if results else "(empty directory)"
+
+
 def list_directory(path: str = ".") -> str:
     """List entries under the bounded Nova filesystem root."""
     target = _safe_path(path)
@@ -371,6 +395,16 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "list_directory_recursive",
+        "description": "Recursively list files and directories under Nova's allowed local filesystem root.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "path": {"type": "STRING", "description": "Relative directory path to list recursively."}
+            },
+        },
+    },
+    {
         "name": "list_directory",
         "description": "List files and directories under Nova's allowed local filesystem root.",
         "parameters": {
@@ -498,6 +532,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "create_directory": create_directory,
     "delete_directory": delete_directory,
     "get_file_info": get_file_info,
+    "list_directory_recursive": list_directory_recursive,
     "list_directory": list_directory,
     "read_text_file": read_text_file,
     "write_text_file": write_text_file,
