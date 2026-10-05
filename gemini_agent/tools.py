@@ -908,6 +908,15 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "get_process_memory_usage",
+        "description": "Get resident memory usage in bytes for a visible local process.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {"pid": {"type": "STRING", "description": "Positive process ID to inspect."}},
+            "required": ["pid"],
+        },
+    },
+    {
         "name": "get_process_cpu_time",
         "description": "Get user, system, and total CPU time of a visible local process.",
         "parameters": {
