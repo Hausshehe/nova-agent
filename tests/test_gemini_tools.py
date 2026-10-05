@@ -186,15 +186,22 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     "Exit code: 0\nstdout:\n<hierarchy><node text=\"Shutter\" content-desc=\"Shutter\" /></hierarchy>"
                 ],
             ):
-                result = discover_camera_control()
-        self.assertIn("Camera control environment discovery (read-only):", result)
+                with patch(
+                    "gemini_agent.tools._run_bounded_root_action",
+                    return_value="Exit code: 0\nstdout:\nStarting: Intent { act=android.media.action.STILL_IMAGE_CAMERA }",
+                ) as action:
+                    result = discover_camera_control()
+        self.assertIn("Camera control environment discovery:", result)
+        self.assertIn("camera foreground launch:", result)
+        self.assertIn("Camera was foregrounded for UI inspection; no shutter action was performed.", result)
+        action.assert_called_once_with("am start -a android.media.action.STILL_IMAGE_CAMERA")
         self.assertIn("cmd: Executable: /system/bin/cmd", result)
         self.assertIn("image-capture activity:", result)
         self.assertIn("still-image camera activity:", result)
         self.assertIn("camera service:", result)
         self.assertIn("camera UI hierarchy:", result)
         self.assertIn("Shutter", result)
-        self.assertIn("No camera action was performed.", result)
+        self.assertNotIn("No camera action was performed.", result)
         self.assertIs(TOOL_HANDLERS["discover_camera_control"], discover_camera_control)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("discover_camera_control", names)
