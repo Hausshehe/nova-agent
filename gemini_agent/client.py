@@ -162,7 +162,7 @@ class GeminiClient:
             f"{self.cloudflare_account_id}/ai/v1/chat/completions"
         )
 
-        for _ in range(3):
+        for loop_index in range(3):
             request = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode(),
@@ -303,7 +303,7 @@ class GeminiClient:
                     }]
 
             # Explicit directory-size requests must use the user's path.
-            if requested_tool == "get_directory_size" and not self.last_tool_calls:
+            if requested_tool == "get_directory_size" and loop_index == 0:
                 user_text = ""
                 for item in reversed(payload["messages"]):
                     if item.get("role") == "user":
