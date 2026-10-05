@@ -441,18 +441,21 @@ def apply_capability_extension(
 
     declaration_marker = '''TOOL_DECLARATIONS = [
     {
-        "name": "send_android_keyevent",
-        "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, CAMERA.",
+        "name": "calculator",
+        "description": "Calculate basic arithmetic expressions.",
         "parameters": {
             "type": "OBJECT",
-            "properties": {"keycode": {"type": "STRING", "description": "HOME, BACK, CAMERA, or Android keycode 3, 4, or 27."}},
-            "required": ["keycode"],
+            "properties": {
+                "expression": {
+                    "type": "STRING",
+                    "description": "A basic arithmetic expression using numbers and +, -, *, /, %, and parentheses.",
+                }
+            },
+            "required": ["expression"],
         },
     },
 '''
-    handler_marker = '''TOOL_HANDLERS: dict[str, Callable[..., str]] = {
-    "send_android_keyevent": send_android_keyevent,
-'''
+    handler_marker = '"calculator": calculator,'
     if declaration_marker not in original or handler_marker not in original:
         return "Extension not applied: required tool integration anchors were not found."
 
@@ -2445,6 +2448,17 @@ TOOL_DECLARATIONS = [
         "description": "Inspect Android for safe, read-only mechanisms that could control the phone camera, without performing a camera action.",
         "parameters": {"type": "OBJECT", "properties": {}},
     },
+    {
+        "name": "send_android_keyevent",
+        "description": "Send one bounded Android key event through the manually entered root shell. Supported actions: HOME, BACK, CAMERA.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "keycode": {"type": "STRING", "description": "HOME, BACK, CAMERA, or Android keycode 3, 4, or 27."}
+            },
+            "required": ["keycode"],
+        },
+    },
 
     {
         "name": "self_test",
@@ -3265,6 +3279,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_process_cpu_time": get_process_cpu_time,
     "get_process_nice": get_process_nice,
         "get_process_memory_usage": get_process_memory_usage,
+    "send_android_keyevent": send_android_keyevent,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
