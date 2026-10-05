@@ -273,6 +273,30 @@ def get_system_cpu_usage() -> str:
                 return f"{usage:.2f}%"
     raise RuntimeError("System CPU usage is unavailable.")
 
+def get_screen_state() -> str:
+    """Return whether the Android device screen is currently on or off."""
+    try:
+        result = subprocess.run(
+            ["su", "-c", "/system/bin/dumpsys power"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("System screen state is unavailable.") from exc
+
+    for line in result.stdout.splitlines():
+        match = re.search(r"Display Power:\s*state=(ON|OFF)", line, re.IGNORECASE)
+        if match:
+            return f"Screen: {match.group(1).upper()}"
+    for line in result.stdout.splitlines():
+        match = re.search(r"mWakefulness=(Awake|Asleep|Dreaming|Dozing)", line, re.IGNORECASE)
+        if match:
+            state = match.group(1).lower()
+            return "Screen: ON" if state in {"awake", "dreaming"} else "Screen: OFF"
+    raise RuntimeError("System screen state is unavailable.")
+
+
 def get_system_battery_status() -> str:
     """Return the Android device battery level, status, health, temperature, and power source."""
     try:
@@ -1738,6 +1762,12 @@ GET_NETWORK_ADDRESSES_DECLARATION = {
     "description": "Get unique IP addresses resolved for the local device hostname.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+GET_SYSTEM_SCREEN_STATE_DECLARATION = {
+    "name": "get_screen_state",
+    "description": "Get whether the Android device screen is currently on or off.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
 GET_SYSTEM_BATTERY_STATUS_DECLARATION = {
     "name": "get_system_battery_status",
     "description": "Get the Android device battery level, status, health, temperature, voltage, and power source.",
@@ -1806,6 +1836,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_system_boot_time": get_system_boot_time,
     "get_system_swap_usage": get_system_swap_usage,
     "get_system_battery_status": get_system_battery_status,
+    "get_screen_state": get_screen_state,
     "get_system_cpu_usage": get_system_cpu_usage,
     "get_system_memory_usage": get_system_memory_usage,
     "get_network_interfaces": get_network_interfaces,
