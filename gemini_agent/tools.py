@@ -68,6 +68,34 @@ def capability_inventory() -> str:
 
 
 
+
+def discover_camera_control() -> str:
+    """Inspect Android for safe, read-only camera control mechanisms."""
+    results = []
+
+    for executable in ("cmd", "dumpsys", "am"):
+        results.append(f"{executable}: {find_executable(executable)}")
+
+    diagnostics = (
+        (
+            "image-capture activity",
+            "cmd package resolve-activity --brief -a android.media.action.IMAGE_CAPTURE",
+        ),
+        ("camera service", "dumpsys media.camera"),
+    )
+    for label, command in diagnostics:
+        try:
+            result = run_root_command(command)
+        except (RuntimeError, ValueError) as exc:
+            result = f"Diagnostic unavailable: {exc}"
+        results.append(f"{label}:\n{result}")
+
+    return (
+        "Camera control environment discovery (read-only):\n"
+        + "\n".join(results)
+        + "\nNo camera action was performed."
+    )
+
 def assess_capability_gap(request: str) -> str:
     """Determine whether Nova has a plausible local capability for a request."""
     if not isinstance(request, str) or not request.strip():
@@ -75,6 +103,8 @@ def assess_capability_gap(request: str) -> str:
 
     text = request.lower()
     capability_phrases = {
+        "camera control": {"camera control": ["discover_camera_control"]},
+        "camera shutter mechanism": {"camera shutter mechanism": ["discover_camera_control"]},
         "battery": {"battery": ["get_system_battery_status"]},
         "date and time": {"date and time": ["current_datetime"]},
         "current time": {"current time": ["current_datetime"]},
@@ -2351,6 +2381,11 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "discover_camera_control",
+        "description": "Inspect Android for safe, read-only mechanisms that could control the phone camera, without performing a camera action.",
+        "parameters": {"type": "OBJECT", "properties": {}},
+    },
+    {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
         "parameters": {
@@ -3165,6 +3200,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "discover_camera_control": discover_camera_control,
     "plan_capability_extension": plan_capability_extension,
     "apply_capability_extension": apply_capability_extension,
     "assess_capability_gap": assess_capability_gap,
