@@ -182,8 +182,7 @@ class GeminiClient:
                 return name
         return None
 
-    @classmethod
-    def _relevant_tool_declarations(cls, contents: list[dict]) -> list[dict]:
+    def _relevant_tool_declarations(self, contents: list[dict]) -> list[dict]:
         """Narrow the model's tool set when the user's intent is unambiguous."""
         user_text = ""
         for item in reversed(contents):
@@ -213,10 +212,10 @@ class GeminiClient:
             if any(term in user_text for term in terms)
         }
         if not selected_groups:
-            return cls.tool_declarations
+            return self.tool_declarations
 
         selected_names: set[str] = set()
-        for declaration in cls.tool_declarations:
+        for declaration in self.tool_declarations:
             name = declaration["name"]
             if (
                 (selected_groups & {"filesystem"} and name in {
@@ -251,7 +250,7 @@ class GeminiClient:
             ):
                 selected_names.add(name)
 
-        selected = [d for d in cls.tool_declarations if d["name"] in selected_names]
+        selected = [d for d in self.tool_declarations if d["name"] in selected_names]
         return selected or cls.tool_declarations
 
     @classmethod
