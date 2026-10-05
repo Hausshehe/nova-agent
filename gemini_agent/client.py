@@ -309,7 +309,35 @@ class GeminiClient:
                 continue
 
             content = message.get("content")
-            if not content:
+            if not content and requested_tool == "copy_directory":
+                user_text = ""
+                for item in reversed(payload["messages"]):
+                    if item.get("role") == "user":
+                        user_text = item.get("content", "")
+                        break
+                match = re.search(
+                    r"copy\\s+(.+?)\\s+to\\s+(.+?)(?:[.]\\s*)?$",
+                    str(user_text).strip(),
+                    re.IGNORECASE,
+                )
+                if match:
+                    tool_calls = [{
+                        "id": "requested-copy-directory",
+                        "type": "function",
+                        "function": {
+                            "name": "copy_directory",
+                            "arguments": json.dumps({
+                                "path": match.group(1).strip(),
+                                "destination": match.group(2).strip(),
+                            }),
+                        },
+                    }]
+                    native_tool_calls = False
+                else:
+                    raise RuntimeError(
+                        f"Cloudflare returned an unexpected response: {result}"
+                    )
+            elif not content:
                 raise RuntimeError(
                     f"Cloudflare returned an unexpected response: {result}"
                 )
