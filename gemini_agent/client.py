@@ -363,11 +363,14 @@ class GeminiClient:
                     )
 
         context.append(
-            "Use only an exact existing source fragment in apply_capability_extension. "
-            "Copy old_text verbatim from the inspected source, including punctuation and whitespace. "
-            "Do not invent a path or claim an implementation exists unless the inspected source supports it. "
-            "Do not make a declaration-only extension: the same transaction must add the implementation "
-            "function and TOOL_HANDLERS registration, or the transaction will be rejected."
+            "Use apply_capability_extension as a structured implementation transaction. "
+            "Provide the existing path gemini_agent/tools.py, a complete single Python function in function_source, "
+            "and a concise declaration_description. Do not provide old_text or new_text. "
+            "The function name must match the proposed capability name. The transaction itself will add the "
+            "tool declaration and TOOL_HANDLERS registration. Do not invent Android APIs, permissions, executables, "
+            "services, or device behavior. The implementation must be based only on mechanisms supported by the "
+            "inspected environment; if the environment has not been inspected enough to implement the capability "
+            "safely, do not fabricate an implementation."
         )
         return "\n".join(context)
 
