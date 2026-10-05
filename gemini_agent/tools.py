@@ -470,21 +470,24 @@ def get_media_volume() -> str:
             text=True,
             check=False,
         )
-        output = result.stdout
-        match = re.search(
-            r"(?ms)^\s*-?STREAM_MUSIC:.*?\bMin:\s*(\d+)\s*Max:\s*(\d+)\s*Current:\s*(\d+)\b",
+        output = (result.stdout or "") + "\n" + (result.stderr or "")
+        stream_match = re.search(
+            r"(?ms)^\s*-?\s*STREAM_MUSIC(?:\(\d+\))?\s*:.*?(?=^\s*-?\s*STREAM_[A-Z_]+(?:\(\d+\))?\s*:|\Z)",
             output,
         )
-        if not match:
-            match = re.search(
-                r"(?ms)^\s*STREAM_MUSIC:.*?\b(?:Min|Index Min):\s*(\d+).*?\b(?:Max|Index Max):\s*(\d+).*?\bCurrent(?: Index)?:\s*(\d+)\b",
-                output,
-            )
-        if match:
-            minimum, maximum, current = (int(value) for value in match.groups())
-            if maximum > minimum and minimum <= current <= maximum:
-                percentage = (current - minimum) * 100 / (maximum - minimum)
-                return f"Media volume: {percentage:.0f}% ({current}/{maximum})"
+        stream = stream_match.group(0) if stream_match else output
+        patterns = (
+            r"(?ms)\bMin:\s*(\d+)\s*Max:\s*(\d+)\s*Current:\s*(\d+)\b",
+            r"(?ms)\bIndex Min:\s*(\d+).*?\bIndex Max:\s*(\d+).*?\bCurrent Index:\s*(\d+)\b",
+            r"(?ms)\bMin:\s*(\d+).*?\bMax:\s*(\d+).*?\bCurrent(?: Index)?:\s*(\d+)\b",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, stream)
+            if match:
+                minimum, maximum, current = (int(value) for value in match.groups())
+                if maximum > minimum and minimum <= current <= maximum:
+                    percentage = (current - minimum) * 100 / (maximum - minimum)
+                    return f"Media volume: {percentage:.0f}% ({current}/{maximum})"
     except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
         raise RuntimeError("Android media volume is unavailable.") from exc
     raise RuntimeError("Android media volume is unavailable.")
