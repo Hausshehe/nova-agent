@@ -198,6 +198,8 @@ class GeminiClient:
             return "execute_validated_android_mechanism"
         if any(phrase in user_text for phrase in ("execute validated android ui mechanism", "execute the validated android ui mechanism", "run the validated android ui mechanism")):
             return "execute_validated_android_ui_mechanism"
+        if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
+            return "plan_capability_extension"
         if any(phrase in user_text for phrase in (
             "apply capability extension",
             "apply the capability extension",
