@@ -280,27 +280,30 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Treat learned experience only as a preference", system_messages[0])
 
     def test_normal_decision_loop_learns_verified_outcome_for_selected_strategy(self):
-        response = {
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "id": "calculator-call",
-                        "type": "function",
-                        "function": {
-                            "name": "calculator",
-                            "arguments": json.dumps({"expression": "17 * 23"}),
-                        },
-                    }]
-                }
-            }]
-        }
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "calculator-call",
+                            "type": "function",
+                            "function": {
+                                "name": "calculator",
+                                "arguments": json.dumps({"expression": "17 * 23"}),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "done"}}]},
+        ]
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            return_value=FakeResponse(response),
+            side_effect=[FakeResponse(item) for item in responses],
         ), patch(
             "gemini_agent.learning.select_verified_strategy",
             return_value="Verified strategy selection: calculator",
@@ -311,18 +314,16 @@ class CloudflareClientTests(unittest.TestCase):
             def verified_calculator(expression):
                 return "Verification: VERIFIED: calculator result confirmed."
             client = GeminiClient(tool_handlers={"calculator": verified_calculator})
-            client.ask(
+            answer = client.ask(
                 'I need to perform a calculation. I have two candidate strategies: "fallback_probe" and "calculator". '
                 'Use the normal decision process to choose which strategy should be preferred first based on verified experience.'
             )
-        recorder.assert_called_once()
-        self.assertEqual(
-            recorder.call_args.args[:3],
-            (
-                "perform a calculation",
-                "calculator",
-                "Verification: VERIFIED: calculator result confirmed.",
-            ),
+        self.assertEqual(answer, "done")
+        recorder.assert_called_once_with(
+            "perform a calculation",
+            "calculator",
+            "Verification: VERIFIED: calculator result confirmed.",
+            "general",
         )
         self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
 
