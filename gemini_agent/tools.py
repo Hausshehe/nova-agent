@@ -1178,7 +1178,12 @@ def _dump_camera_ui_hierarchy() -> str:
 
 def _read_bounded_root_file(path: str, max_bytes: int) -> str:
     """Read one allowlisted root-owned diagnostic file with a bounded size."""
-    if path != "/data/local/tmp/nova-ui-actions.xml":
+    allowed_paths = {
+        "/data/local/tmp/nova-ui-actions.xml",
+        "/data/local/tmp/nova-ui-validation.xml",
+        "/data/local/tmp/nova-ui-execution.xml",
+    }
+    if path not in allowed_paths:
         raise ValueError("Root file path is not allowed.")
     if not isinstance(max_bytes, int) or max_bytes <= 0 or max_bytes > 64 * 1024:
         raise ValueError("Invalid bounded read size.")
