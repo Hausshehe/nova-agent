@@ -232,9 +232,7 @@ def apply_capability_repair(capability: str, candidate: str) -> str:
     original_handlers = dict(TOOL_HANDLERS)
     original_declarations = list(TOOL_DECLARATIONS)
     try:
-        TOOL_HANDLERS.pop(name, None)
-        TOOL_DECLARATIONS[:] = [item for item in TOOL_DECLARATIONS if not (isinstance(item, dict) and item.get("name") == name)]
-        if not _restore_persisted_capability_entry(entry):
+        if not _restore_persisted_capability_entry(entry, replace_existing=True):
             raise RuntimeError("persisted recipe could not restore the capability registration")
         repaired = TOOL_HANDLERS.get(name)
         repaired_declaration = next((item for item in TOOL_DECLARATIONS if isinstance(item, dict) and item.get("name") == name), None)
@@ -4880,7 +4878,7 @@ def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
 
 
 
-def _restore_persisted_capability_entry(entry: dict) -> bool:
+def _restore_persisted_capability_entry(entry: dict, *, replace_existing: bool = False) -> bool:
     """Restore one bounded persisted capability recipe without executing it."""
     if not isinstance(entry, dict):
         return False
@@ -4893,7 +4891,7 @@ def _restore_persisted_capability_entry(entry: dict) -> bool:
     if (
         not isinstance(name, str)
         or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
-        or name in TOOL_HANDLERS
+        or (name in TOOL_HANDLERS and not replace_existing)
         or not isinstance(description, str)
         or not description.strip()
         or kind not in {"existing_tool", "android_mechanism"}
