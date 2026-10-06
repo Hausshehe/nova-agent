@@ -279,6 +279,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("verified-experience preference supplied by Nova", system_messages[0])
         self.assertIn("Treat learned experience only as a preference", system_messages[0])
 
+    def test_normal_decision_loop_preserves_action_verb_for_verified_experience_matching(self):
+        response = {"choices": [{"message": {"content": "selected"}}]}
+        with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"}, clear=True), patch(
+            "urllib.request.urlopen", return_value=FakeResponse(response)
+        ), patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: retry_safe"
+        ) as select:
+            client = GeminiClient()
+            client.ask(
+                'I need to recover a failed network check. I have two candidate strategies: "fallback_probe" and "retry_safe".'
+            )
+        self.assertEqual(select.call_args.args[0], "recover a failed network check")
+        self.assertEqual(select.call_args.args[1], ["fallback_probe", "retry_safe"])
+
     def test_uses_cloudflare_only(self):
         with patch.dict(
             os.environ,
