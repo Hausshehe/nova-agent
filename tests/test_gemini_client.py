@@ -47,6 +47,38 @@ class CloudflareClientTests(unittest.TestCase):
     def test_whitespace_only_tool_arguments_are_treated_as_empty(self):
         self.assertEqual(GeminiClient._parse_tool_arguments("   \n\t"), {})
 
+    def test_outcome_ledger_request_uses_local_persistence_and_retrieval(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            recorded = []
+            def record_capability_outcome(capability, stage, status, evidence):
+                recorded.append((capability, stage, status, evidence))
+                return "Capability outcome recorded: ledger_probe"
+            def get_capability_outcome_history(capability, limit=20):
+                return "Capability outcome history: ledger_probe\\nEntries: 1\\nRecorded at: 2026-10-06T20:03:00+00:00"
+            client.tool_handlers["record_capability_outcome"] = record_capability_outcome
+            client.tool_handlers["get_capability_outcome_history"] = get_capability_outcome_history
+            answer = client.ask(
+                'Record a verified outcome in Nova\'s capability outcome ledger for capability '
+                '"ledger_probe" at stage "verification" with status "VERIFIED" and evidence '
+                '"bounded real-world ledger test". Then read back the most recent outcome history '
+                'for "ledger_probe".'
+            )
+        self.assertIn("Recorded at: 2026-10-06T20:03:00+00:00", answer)
+        self.assertEqual(
+            recorded,
+            [("ledger_probe", "verification", "VERIFIED", "bounded real-world ledger test")],
+        )
+        self.assertEqual([call["name"] for call in client.last_tool_calls], [
+            "record_capability_outcome",
+            "get_capability_outcome_history",
+        ])
+        open_url.assert_not_called()
+
     def test_explicit_generated_capability_returns_after_one_execution(self):
         response = {
             "choices": [{
