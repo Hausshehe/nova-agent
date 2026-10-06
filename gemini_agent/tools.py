@@ -1265,6 +1265,18 @@ def recover_android_mechanism(
         return diagnosis + "\nRecovery action:\n" + recovery
     return diagnosis + "\nRecovery action: NONE."
 
+def record_verified_experience_tool(request: str, strategy: str, verification: str, domain: str = "general") -> str:
+    """Persist a verified experience through the generic learning layer."""
+    from gemini_agent.learning import record_verified_experience
+    return record_verified_experience(request, strategy, verification, domain)
+
+
+def rank_verified_experience_candidates(request: str, candidates: list[str], domain: str = "general") -> list[str]:
+    """Rank candidates using only sufficiently similar verified experience."""
+    from gemini_agent.learning import rank_with_verified_experience
+    return rank_with_verified_experience(request, candidates, domain)
+
+
 def rank_android_mechanism_candidates(
     request: str, candidates: list[str]
 ) -> list[str]:
