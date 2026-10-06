@@ -856,7 +856,7 @@ def assess_capability_gap(request: str) -> str:
 
 
 def plan_capability_extension(request: str) -> str:
-    """Create a bounded implementation plan for a capability Nova does not currently expose."""
+    """Create a bounded, reality-grounded implementation plan for a missing capability."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
 
@@ -885,20 +885,62 @@ def plan_capability_extension(request: str) -> str:
         suffix = "_".join(words[:5]) or "requested_capability"
         tool_name = f"extend_{suffix}"
 
-    return (
-        "Extension plan: capability is missing.\n"
-        f"Requested capability: {request.strip()}\n"
-        f"Proposed tool: {tool_name}\n"
-        "Implementation boundary: inspect Android reality first; do not assume an API, "
-        "permission, executable, or service exists.\n"
-        "Implementation steps: discover the narrowest supported mechanism; implement a "
-        "bounded tool with explicit inputs and safety checks; register its declaration and "
-        "handler; add deterministic unit tests; run the real-device test; only then expose "
-        "the capability to Nova.\n"
-        "Verification: execute the new capability on the device and verify the resulting "
-        "state or observable output.\n"
-        "Status: plan only; no code or device state was modified."
+    # Ground the plan in current Android reality before proposing implementation.
+    # Discovery and validation are read-only, so a plan request cannot mutate state.
+    try:
+        discovery = discover_android_mechanisms(request)
+    except (RuntimeError, ValueError) as exc:
+        return (
+            "Extension plan: capability is missing.\n"
+            f"Requested capability: {request.strip()}\n"
+            f"Proposed tool: {tool_name}\n"
+            f"Reality inspection: unavailable: {exc}\n"
+            "Status: plan only; no code or device state was modified."
+        )
+
+    candidates = re.findall(r"(?m)^(intent|ui-text|ui):(.+)$", discovery)
+    ranked = rank_android_mechanism_candidates(
+        request,
+        [f"{kind}:{value.strip()}" for kind, value in candidates],
     )
+    viable = []
+    validation_errors = []
+    for mechanism in ranked:
+        try:
+            validation = validate_android_mechanism(request, mechanism)
+        except (RuntimeError, ValueError) as exc:
+            validation_errors.append(f"{mechanism}: {exc}")
+            continue
+        if "Status: VIABLE" in validation:
+            viable.append(mechanism)
+
+    lines = [
+        "Extension plan: capability is missing.",
+        f"Requested capability: {request.strip()}",
+        f"Proposed tool: {tool_name}",
+        "Reality inspection: performed read-only before implementation.",
+    ]
+    if viable:
+        lines.append("Viable discovered mechanisms:")
+        lines.extend(f"- {mechanism}" for mechanism in viable[:10])
+        lines.append(
+            f"Preferred implementation mechanism: {viable[0]}"
+        )
+    else:
+        lines.append("Viable discovered mechanisms: none.")
+        if validation_errors:
+            lines.append("Validation observations:")
+            lines.extend(f"- {error}" for error in validation_errors[:10])
+    lines.extend([
+        "Implementation boundary: use only a mechanism grounded in current environment evidence; "
+        "do not assume an API, permission, executable, or service exists.",
+        "Implementation steps: implement a bounded tool with explicit inputs and safety checks; "
+        "register its declaration and handler; add deterministic unit tests; run the real-device "
+        "test; only then expose the capability to Nova.",
+        "Verification: execute the new capability on the device and verify the resulting state or observable output.",
+        "Status: plan only; no code or device state was modified.",
+    ])
+    return "\n".join(lines)
 
 
 def _run_extension_test_suite() -> tuple[bool, str]:
