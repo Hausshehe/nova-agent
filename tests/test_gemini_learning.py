@@ -9,11 +9,50 @@ from gemini_agent.client import GeminiClient
 from gemini_agent.learning import (
     rank_with_verified_android_experience,
     record_verified_android_experience,
+    rank_with_verified_experience,
+    record_verified_experience,
 )
 from gemini_agent.tools import execute_android_mechanism
 
 
 class VerifiedAndroidExperienceTests(unittest.TestCase):
+    def test_generic_experience_round_trip_is_domain_scoped(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "experiences.json"
+            with patch.dict(os.environ, {"NOVA_EXPERIENCE_STORE": str(store)}, clear=False):
+                result = record_verified_experience(
+                    "recover a failed network action",
+                    "retry_safe",
+                    "Verification: VERIFIED: bounded test.",
+                    domain="network",
+                )
+                ranked = rank_with_verified_experience(
+                    "recover failed network action",
+                    ["fallback", "retry_safe"],
+                    domain="network",
+                )
+                other_domain = rank_with_verified_experience(
+                    "recover failed network action",
+                    ["fallback", "retry_safe"],
+                    domain="filesystem",
+                )
+        self.assertIn("Verified experience learned.", result)
+        self.assertEqual(ranked[0], "retry_safe")
+        self.assertEqual(other_domain, ["fallback", "retry_safe"])
+
+    def test_generic_experience_rejects_unverified_evidence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "experiences.json"
+            with patch.dict(os.environ, {"NOVA_EXPERIENCE_STORE": str(store)}, clear=False):
+                result = record_verified_experience(
+                    "recover a failed network action",
+                    "retry_safe",
+                    "Verification: INCONCLUSIVE",
+                    domain="network",
+                )
+            self.assertIn("not learned", result)
+            self.assertFalse(store.exists())
+
     def test_records_only_explicitly_verified_experience(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = Path(temp_dir) / "experiences.json"
@@ -86,6 +125,23 @@ class VerifiedAndroidExperienceTests(unittest.TestCase):
             )
         self.assertIn("Verified Android experience learned.", result)
         recorder.assert_called_once()
+
+    def test_client_routes_generic_learning_and_ranking_locally(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                'Record verified experience for request "recover a failed network action" '
+                'using strategy retry_safe with verification: Verification: VERIFIED: bounded test. '
+                'Then rank verified experience for request "recover a failed network action" '
+                'candidates: fallback, retry_safe. Do not execute anything.'
+            )
+        self.assertIn("Verified experience learned.", result)
+        self.assertIn("retry_safe", result)
+        open_url.assert_not_called()
 
     def test_client_routes_learning_and_ranking_locally(self):
         with patch.dict(
