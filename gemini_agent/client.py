@@ -712,9 +712,6 @@ class GeminiClient:
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
             return str(self.tool_handlers["resolve_android_intent"](action=action))
 
-        if requested_tool == "plan_capability_extension":
-            return str(self.tool_handlers["plan_capability_extension"](request=request_text, inspect_reality=True))
-
         if requested_tool == "apply_capability_extension":
             inspection = self._extension_inspection_context(request_text)
             messages = [
@@ -1821,6 +1818,9 @@ class GeminiClient:
 
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        if local_name == "plan_capability_extension":
+                            args["request"] = request_text
+                            args["inspect_reality"] = True
                         if local_name == "apply_capability_extension":
                             args = self._fill_extension_request(args, request_text)
                             if str(args.get("implementation_kind", "")).strip().lower() == "android_mechanism":
