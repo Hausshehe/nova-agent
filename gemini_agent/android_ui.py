@@ -59,7 +59,6 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
         for node in root.iter("node"):
             if (
                 node.attrib.get("resource-id") == resource_id
-                and node.attrib.get("clickable") == "true"
                 and node.attrib.get("enabled") == "true"
             ):
                 target = node
