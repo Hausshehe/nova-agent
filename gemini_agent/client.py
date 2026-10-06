@@ -474,7 +474,26 @@ class GeminiClient:
             "",
         )
         if requested_tool == "inspect_android_ui":
-            return str(self.tool_handlers["inspect_android_ui"]())
+            user_text = ""
+            for item in reversed(payload["messages"]):
+                if item.get("role") == "user":
+                    user_text = str(item.get("content", ""))
+                    break
+            selector_match = re.search(
+                r"\b(ui(?:-text)?):([^\s.,;]+)",
+                user_text,
+                re.IGNORECASE,
+            )
+            selector = (
+                f"{selector_match.group(1)}:{selector_match.group(2)}"
+                if selector_match
+                else ""
+            )
+            handler = self.tool_handlers["inspect_android_ui"]
+            try:
+                return str(handler(selector=selector))
+            except TypeError:
+                return str(handler())
         if requested_tool == "get_foreground_android_component":
             return str(self.tool_handlers["get_foreground_android_component"]())
         if requested_tool == "discover_android_ui_actions":
