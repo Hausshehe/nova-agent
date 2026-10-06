@@ -672,8 +672,20 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
                 f"Mechanism: {alternative_mechanism}\n"
                 f"{result}"
             )
+        if "Post-action verification: INCONCLUSIVE" in result:
+            return (
+                "Replan: selected alternate viable mechanism, but its outcome is INCONCLUSIVE.\n"
+                f"Mechanism: {alternative_mechanism}\n"
+                f"{result}"
+            )
+        if "Post-action verification: FAILED" in result:
+            return (
+                "Replan: selected alternate viable mechanism, but its postcondition FAILED.\n"
+                f"Mechanism: {alternative_mechanism}\n"
+                f"{result}"
+            )
         return (
-            "Replan: selected alternate viable mechanism, but its postcondition failed.\n"
+            "Replan: selected alternate viable mechanism, but its outcome is UNVERIFIED.\n"
             f"Mechanism: {alternative_mechanism}\n"
             f"{result}"
         )
