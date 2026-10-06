@@ -198,6 +198,29 @@ class GeminiClient:
         ):
             return "apply_capability_repair"
 
+        # Explicitly named generated capabilities are local actions. Resolve them
+        # before Cloudflare so provider-side argument generation cannot reinterpret
+        # the request or execute an adjacent primitive.
+        action_request = bool(
+            re.search(r"\\b(?:execute|run|use|verify|test)\\b", user_text, re.IGNORECASE)
+            and re.search(r"\\bcapabilit(?:y|ies)\\b", user_text, re.IGNORECASE)
+        )
+        if action_request:
+            generated_names = []
+            for name, handler in TOOL_HANDLERS.items():
+                if getattr(handler, "__nova_generated_capability__", False):
+                    generated_names.append(name)
+                    continue
+                code = getattr(handler, "__code__", None)
+                if code is not None and any(
+                    marker in code.co_names
+                    for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")
+                ):
+                    generated_names.append(name)
+            for name in sorted(generated_names, key=len, reverse=True):
+                if re.search(rf"\\b{re.escape(name.lower())}\\b", user_text, re.IGNORECASE):
+                    return name
+
         if "self-test" in user_text or "self test" in user_text:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
