@@ -751,7 +751,7 @@ class GeminiClient:
             result = str(self.tool_handlers["record_verified_experience_tool"](**args))
             self.last_tool_calls.append({"name": "record_verified_experience_tool", "args": args, "result": result})
             rank_match = re.search(
-                r'rank\s+verified\s+experience\s+for\s+request\s+["\']([^"\']+)["\']',
+                r'rank\s+verified\s+experiences?\s+for\s+request\s+["\']([^"\']+)["\']',
                 request_text, re.IGNORECASE,
             )
             candidates = []
