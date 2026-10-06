@@ -627,7 +627,16 @@ class GeminiClient:
             )
             try:
                 with urllib.request.urlopen(request, timeout=180) as response:
-                    result = json.loads(response.read().decode())
+                    raw_response = response.read().decode()
+                try:
+                    result = json.loads(raw_response)
+                except json.JSONDecodeError as exc:
+                    if loop_index < 2:
+                        continue
+                    raise RuntimeError(
+                        "Cloudflare returned an invalid JSON response after retries: "
+                        f"{exc}"
+                    ) from exc
             except urllib.error.HTTPError as exc:
                 details = exc.read().decode(errors="replace")
                 raise RuntimeError(
