@@ -1109,6 +1109,29 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "analyze_capability_history")
         open_url.assert_not_called()
 
+
+    def test_autonomous_self_repair_request_uses_local_workflow(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.client.autonomously_repair_capability",
+            return_value="workflow complete",
+        ) as workflow, patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Autonomously repair the generated_probe capability from failure evidence: "
+                "bounded failure evidence. Do not execute anything outside the self-repair workflow."
+            )
+        self.assertEqual(result, "workflow complete")
+        workflow.assert_called_once_with(
+            capability="generated_probe",
+            failure_evidence="bounded failure evidence.",
+        )
+        self.assertEqual(client.last_tool_calls[0]["name"], "autonomously_repair_capability")
+        open_url.assert_not_called()
+
     def test_explicit_capability_failure_diagnosis_is_read_only_and_deterministic(self):
         with patch.dict(
             os.environ,
