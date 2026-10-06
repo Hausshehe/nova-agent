@@ -302,32 +302,56 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("validate_android_mechanism", [d["name"] for d in TOOL_DECLARATIONS])
 
     def test_inspect_android_ui_captures_hierarchy_and_cleans_up(self):
+        xml = '<hierarchy rotation="0"><node text="Camera" /></hierarchy>'
         with patch(
             "gemini_agent.tools.run_root_command",
-            side_effect=[
-                "Exit code: 0",
-                "Exit code: 0\nstdout:\n<hierarchy rotation=\"0\"><node text=\"Camera\" /></hierarchy>",
-                "Exit code: 0",
-            ],
-        ) as root:
+            side_effect=["Exit code: 0", "Exit code: 0"],
+        ) as root, patch(
+            "gemini_agent.tools._read_bounded_root_file",
+            return_value=xml,
+        ) as bounded_read:
             result = inspect_android_ui()
         self.assertEqual(
             root.call_args_list[0].args[0],
             "uiautomator dump /data/local/tmp/nova-ui-hierarchy.xml",
         )
+        bounded_read.assert_called_once_with("/data/local/tmp/nova-ui-hierarchy.xml", 64 * 1024)
         self.assertEqual(
             root.call_args_list[1].args[0],
-            "cat /data/local/tmp/nova-ui-hierarchy.xml",
-        )
-        self.assertEqual(
-            root.call_args_list[2].args[0],
             "rm -f /data/local/tmp/nova-ui-hierarchy.xml",
         )
-        self.assertIn('text=\"Camera\"', result)
+        self.assertIn('text="Camera"', result)
         self.assertIn("without interaction", result)
         self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("inspect_android_ui", names)
+
+    def test_inspect_android_ui_filters_to_one_enabled_selector(self):
+        xml = (
+            '<hierarchy>'
+            '<node text="ESC" enabled="true" clickable="true" focused="false" '
+            'selected="false" bounds="[6,812][107,887]" />'
+            '<node text="CTRL" enabled="true" clickable="true" focused="false" '
+            'selected="true" checked="false" bounds="[107,887][208,962]" />'
+            '</hierarchy>'
+        )
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            side_effect=["Exit code: 0", "Exit code: 0"],
+        ) as root, patch(
+            "gemini_agent.tools._read_bounded_root_file",
+            return_value=xml,
+        ) as bounded_read:
+            result = inspect_android_ui("ui-text:CTRL")
+        self.assertIn("Matched selector: ui-text:CTRL", result)
+        self.assertIn("text='CTRL'", result)
+        self.assertIn("selected='true'", result)
+        self.assertNotIn("text='ESC'", result)
+        bounded_read.assert_called_once_with("/data/local/tmp/nova-ui-hierarchy.xml", 64 * 1024)
+        self.assertEqual(
+            root.call_args_list[1].args[0],
+            "rm -f /data/local/tmp/nova-ui-hierarchy.xml",
+        )
 
     def test_resolve_android_intent_rejects_unknown_action(self):
         with self.assertRaises(ValueError):
