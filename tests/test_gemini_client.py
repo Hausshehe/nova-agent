@@ -494,6 +494,32 @@ class CloudflareClientTests(unittest.TestCase):
         ])
         self.assertNotEqual(selected, "record_verified_experience_tool")
 
+    def test_normal_decision_loop_extracts_goal_from_compound_request(self):
+        response = {"choices": [{"message": {"content": "selected"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ), patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: verify_command_result",
+        ) as select:
+            client = GeminiClient()
+            client.ask(
+                'First record a verified experience for request "verify a safe command result" '
+                'using strategy "verify_command_result" with verification "Verification: VERIFIED: seed." '
+                'Then use the normal decision process for request "verify a safe command result". '
+                'I have two candidate strategies: "fallback_probe" and "verify_command_result".'
+            )
+        self.assertEqual(select.call_args.args[0], "verify a safe command result")
+        self.assertEqual(
+            select.call_args.args[1],
+            ["fallback_probe", "verify_command_result"],
+        )
+
     def test_normal_decision_loop_preserves_action_verb_for_verified_experience_matching(self):
         response = {"choices": [{"message": {"content": "selected"}}]}
         with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"}, clear=True), patch(
