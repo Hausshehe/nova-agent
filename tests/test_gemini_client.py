@@ -721,7 +721,8 @@ class CloudflareClientTests(unittest.TestCase):
                     "discover_camera_control": lambda: "Camera control environment discovery (read-only): test"
                 }
             )
-            answer = client.ask("Discover the phone camera control environment.")        self.assertIn("Camera control environment discovery (read-only): test", answer)
+            answer = client.ask("Discover the phone camera control environment.")
+            self.assertIn("Camera control environment discovery (read-only): test", answer)
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(client.last_tool_calls[0]["name"], "discover_camera_control")
 
