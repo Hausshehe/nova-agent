@@ -298,7 +298,7 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
     if ":" not in candidate:
         raise ValueError(
             "Mechanism must use a bounded form: intent:<action>, executable:<name>, "
-            "service:<name>, or ui:<resource-id>."
+            "service:<name>, ui:<resource-id>, or ui-text:<text>."
         )
 
     kind, value = candidate.split(":", 1)
@@ -320,13 +320,45 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
             if line.strip() == value
         ]
         evidence = "\n".join(matches) if matches else "Service was not found."
-    elif kind == "ui":
+    elif kind in {"ui", "ui-text"}:
         dump_path = "/data/local/tmp/nova-ui-validation.xml"
         try:
             dump_result = run_root_command(f"uiautomator dump {dump_path}")
             if not dump_result.startswith("Exit code: 0"):
                 evidence = f"UI hierarchy could not be captured.\\n{dump_result}"
             else:
+                xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+                try:
+                    root = ET.fromstring(xml_text)
+                except ET.ParseError as exc:
+                    evidence = f"UI hierarchy could not be parsed: {exc}"
+                else:
+                    matches = []
+                    for node in root.iter("node"):
+                        selector_value = (
+                            node.attrib.get("resource-id", "")
+                            if kind == "ui"
+                            else node.attrib.get("text", "")
+                        )
+                        if (
+                            selector_value == value
+                            and node.attrib.get("enabled") == "true"
+                            and node.attrib.get("bounds")
+                        ):
+                            matches.append(node)
+                    selector_name = "resource ID" if kind == "ui" else "text"
+                    evidence = (
+                        f"UI node with the requested {selector_name} was found and has usable bounds."
+                        if matches
+                        else f"UI node with the requested {selector_name} was not found in the current hierarchy."
+                    )
+        finally:
+            try:
+                run_root_command(f"rm -f {dump_path}")
+            except (RuntimeError, ValueError):
+                pass
+
+    else:
                 xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
                 try:
                     root = ET.fromstring(xml_text)
