@@ -73,6 +73,7 @@ class CloudflareClientTests(unittest.TestCase):
             recorded,
             [("ledger_probe", "verification", "VERIFIED", "bounded real-world ledger test")],
         )
+        self.assertEqual(client.last_tool_calls[0]["args"]["capability"], "ledger_probe")
         self.assertEqual([call["name"] for call in client.last_tool_calls], [
             "record_capability_outcome",
             "get_capability_outcome_history",
