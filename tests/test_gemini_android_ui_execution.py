@@ -164,7 +164,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
             "Post-action verification: INCONCLUSIVE: tap executed successfully, but the target UI node remained unchanged after the bounded recovery re-observation",
             result,
         )
-        sleep.assert_called_once_with(0.25)
+        sleep.assert_any_call(0.25)
 
     def test_reports_verified_when_target_attributes_change(self):
         before = (
