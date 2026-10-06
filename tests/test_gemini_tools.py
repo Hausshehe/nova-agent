@@ -802,6 +802,46 @@ class RecoverAndroidMechanismTests(unittest.TestCase):
 
 
 class ReplanAndroidMechanismTests(unittest.TestCase):
+    def test_replan_android_mechanism_prioritizes_goal_required_ui_mechanisms(self):
+        from gemini_agent.tools import replan_android_mechanism
+        discovered = (
+            "Android mechanism discovery (read-only):\n"
+            "Discovered bounded intent mechanisms:\n"
+            "intent:android.media.action.IMAGE_CAPTURE\n"
+            "Discovered bounded UI mechanisms:\n"
+            "ui-text:CTRL\n"
+            "ui-text:ALT"
+        )
+        validation_calls = []
+
+        def validate(request, mechanism):
+            validation_calls.append(mechanism)
+            return "Android mechanism validation (read-only):\nStatus: VIABLE"
+
+        with patch(
+            "gemini_agent.tools.discover_android_mechanisms",
+            return_value=discovered,
+        ), patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            side_effect=validate,
+        ), patch(
+            "gemini_agent.tools.execute_android_mechanism",
+            return_value="Post-action verification: VERIFIED",
+        ) as execute:
+            result = replan_android_mechanism(
+                "activate a visible clickable Android UI control",
+                "ui-text:CTRL",
+            )
+
+        self.assertIn("selected alternate viable mechanism", result)
+        self.assertIn("Mechanism: ui-text:ALT", result)
+        self.assertEqual(validation_calls, ["ui-text:ALT"])
+        execute.assert_called_once_with(
+            request="activate a visible clickable Android UI control",
+            mechanism="ui-text:ALT",
+            allow_recovery=False,
+        )
+
     def test_replan_android_mechanism_selects_untried_viable_alternative(self):
         from gemini_agent.tools import replan_android_mechanism
         with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
