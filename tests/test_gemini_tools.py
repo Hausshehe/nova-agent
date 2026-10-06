@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import gemini_agent.tools as tools_module
+
 from gemini_agent.tools import (
     RUN_COMMAND_DECLARATION,
     FIND_EXECUTABLE_DECLARATION,
@@ -3080,7 +3082,7 @@ class RecoverCommandToolTests(unittest.TestCase):
             )
             self.assertIn("Capability repair rolled back:", result)
             self.assertIs(TOOL_HANDLERS["generated_probe"], generated_probe)
-            self.assertEqual(TOOL_DECLARATIONS, [original_declaration])
+            self.assertEqual(tools_module.TOOL_DECLARATIONS, [original_declaration])
 
     def test_diagnose_capability_failure_finds_generated_repair_recipe(self):
         def generated_probe():
