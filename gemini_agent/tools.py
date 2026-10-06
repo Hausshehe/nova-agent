@@ -260,7 +260,44 @@ def apply_capability_repair(capability: str, candidate: str) -> str:
 
 
 
-def accept_verified_capability_repair(capability: str, verification: str) -> str:
+def record_capability_repair_verification(capability: str, verification: str) -> str:
+    """Persist the latest bounded execution verification while keeping repair PENDING."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(verification, str):
+        raise ValueError("Verification evidence must be text.")
+    name = capability.strip()
+    evidence = verification.strip()
+    handler = TOOL_HANDLERS.get(name)
+    generated = bool(getattr(handler, "__nova_generated_capability__", False) if handler is not None else False)
+    if not generated:
+        return f"Repair verification not recorded for {name}: capability is not generated."
+    store_path = _extension_store_path()
+    if not store_path.exists():
+        return f"Repair verification not recorded for {name}: persisted repair metadata is unavailable."
+    try:
+        entries = json.loads(store_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"Repair verification not recorded for {name}: persisted metadata could not be read: {exc}"
+    entry = next((item for item in entries if isinstance(item, dict) and item.get("name") == name), None) if isinstance(entries, list) else None
+    if entry is None:
+        return f"Repair verification not recorded for {name}: persisted repair recipe is missing."
+    entry["repair_status"] = "PENDING"
+    entry["repair_verification"] = evidence
+    entry["repair_verified_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=store_path.parent, prefix=f".{store_path.name}.", suffix=".tmp", delete=False) as temp_file:
+            json.dump(entries, temp_file, ensure_ascii=False, indent=2)
+            temp_file.write("\n")
+            temp_path = Path(temp_file.name)
+        os.replace(temp_path, store_path)
+    except (OSError, TypeError, ValueError) as exc:
+        try:
+            if "temp_path" in locals(): temp_path.unlink(missing_ok=True)
+        except OSError: pass
+        return f"Repair verification not recorded for {name}: metadata write failed: {exc}"
+    return f"Repair verification recorded: {name}\nRepair status: PENDING\nLatest verification evidence persisted."
+def accept_verified_capability_repair(capability: str, verification: str = "") -> str:
     """Persist acceptance of a repaired generated capability after verified execution."""
     if not isinstance(capability, str) or not capability.strip():
         raise ValueError("Capability cannot be empty.")
@@ -287,6 +324,18 @@ def accept_verified_capability_repair(capability: str, verification: str) -> str
             f"Repair acceptance not recorded for {name}: capability is not a generated "
             "capability."
         )
+    if not evidence:
+        store_path = _extension_store_path()
+        if not store_path.exists():
+            return f"Repair acceptance not recorded for {name}: persisted repair metadata is unavailable."
+        try:
+            entries = json.loads(store_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return f"Repair acceptance not recorded for {name}: persisted metadata could not be read: {exc}"
+        entry = next((item for item in entries if isinstance(item, dict) and item.get("name") == name), None) if isinstance(entries, list) else None
+        evidence = str(entry.get("repair_verification", "")).strip() if entry else ""
+        if not evidence:
+            return f"Repair acceptance not recorded for {name}: no persisted verification evidence is available; repair remains PENDING."
     if not re.search(
         r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
         evidence,
@@ -3999,6 +4048,18 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "record_capability_repair_verification",
+        "description": "Persist the latest bounded execution verification for a repaired generated capability while keeping the repair PENDING.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING"},
+                "verification": {"type": "STRING", "description": "Bounded verification evidence produced by the capability execution."},
+            },
+            "required": ["capability", "verification"],
+        },
+    },
+    {
         "name": "accept_verified_capability_repair",
         "description": "Persist acceptance of a repaired generated capability after independently verified execution.",
         "parameters": {
@@ -4832,6 +4893,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "record_capability_repair_verification": record_capability_repair_verification,
     "accept_verified_capability_repair": accept_verified_capability_repair,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
