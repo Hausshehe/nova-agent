@@ -1987,14 +1987,8 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = "TOOL_DECLARATIONS = [
-    {
-        "name": "select_verified_strategy_tool",
-        "description": "Select a preferred strategy from candidates using sufficiently similar verified experience; does not execute it.",
-        "parameters": {"type": "OBJECT", "properties": {"request": {"type": "STRING"}, "candidates": {"type": "ARRAY", "items": {"type": "STRING"}}, "domain": {"type": "STRING"}}, "required": ["request", "candidates"]},
-    },"
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {
-    "select_verified_strategy_tool": select_verified_strategy_tool,"
+    declaration_marker = "TOOL_DECLARATIONS = ["
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
     if kind == "android_mechanism":
