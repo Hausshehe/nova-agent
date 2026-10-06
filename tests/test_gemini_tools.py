@@ -702,13 +702,13 @@ class ReplanAndroidMechanismTests(unittest.TestCase):
     def test_replan_android_mechanism_selects_untried_viable_alternative(self):
         from gemini_agent.tools import replan_android_mechanism
         with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
-            "Android mechanism discovery (read-only):\\n"
-            "Discovered bounded intent mechanisms:\\n"
-            "intent:android.media.action.FIRST\\n"
+            "Android mechanism discovery (read-only):\n"
+            "Discovered bounded intent mechanisms:\n"
+            "intent:android.media.action.FIRST\n"
             "intent:android.media.action.SECOND"
         )), patch("gemini_agent.tools.validate_android_mechanism", return_value=(
-            "Android mechanism validation (read-only):\\nStatus: VIABLE\\n"
-            "Evidence:\\ncom.example/.SecondActivity"
+            "Android mechanism validation (read-only):\nStatus: VIABLE\n"
+            "Evidence:\ncom.example/.SecondActivity"
         )), patch("gemini_agent.tools.send_android_intent", return_value="Android intent started."), patch(
             "gemini_agent.tools.get_foreground_android_component",
             return_value="topResumedActivity=com.example/.SecondActivity",
@@ -723,7 +723,7 @@ class ReplanAndroidMechanismTests(unittest.TestCase):
     def test_replan_android_mechanism_stops_when_no_alternative_exists(self):
         from gemini_agent.tools import replan_android_mechanism
         with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
-            "Discovered bounded intent mechanisms:\\n"
+            "Discovered bounded intent mechanisms:\n"
             "intent:android.media.action.FIRST"
         )):
             result = replan_android_mechanism(
@@ -2509,7 +2509,8 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
                 "open the camera", "intent:android.media.action.IMAGE_CAPTURE"
             )
 
-        self.assertIn("VERIFIED after recovery: expected Android component is foreground", result)
+        self.assertIn("Replan: selected alternate viable mechanism.", result)
+        self.assertIn("Post-action verification: VERIFIED: expected Android component is foreground", result)
         self.assertIn("Recovery: discovered an alternate viable Android intent", result)
         self.assertEqual(
             validation_calls,
