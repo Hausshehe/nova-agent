@@ -686,7 +686,7 @@ class GeminiClient:
             self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": result})
             return result
         if requested_tool == "inspect_android_ui":
-            selector_match = re.search(r"\\b(ui-text|ui):[^\\s,]+", prompt, re.IGNORECASE)
+            selector_match = re.search(r"\b(ui-text|ui):[^\s,]+", prompt, re.IGNORECASE)
             selector = selector_match.group(0).rstrip(".,;:!?") if selector_match else ""
             result = str(self.tool_handlers["inspect_android_ui"](selector=selector))
             self.last_tool_calls.append({"name": requested_tool, "args": {"selector": selector}, "result": result})
