@@ -441,33 +441,38 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
             f"Repair acceptance not recorded for {name}: capability is not a generated "
             "capability."
         )
-    if not evidence:
-        ledger_path = _outcome_ledger_path()
-        if not ledger_path.exists():
-            return f"Repair acceptance not recorded for {name}: outcome ledger is unavailable; repair remains PENDING."
-        try:
-            ledger_entries = json.loads(ledger_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            return f"Repair acceptance not recorded for {name}: outcome ledger could not be read: {exc}"
-        if not isinstance(ledger_entries, list):
-            return f"Repair acceptance not recorded for {name}: outcome ledger is invalid; repair remains PENDING."
-        verification_entries = [
-            item for item in ledger_entries
-            if (
-                isinstance(item, dict)
-                and item.get("capability") == name
-                and str(item.get("stage", "")).upper() == "VERIFICATION"
-            )
-        ]
-        latest = verification_entries[-1] if verification_entries else None
-        if latest is None:
-            return f"Repair acceptance not recorded for {name}: no persisted verification outcome is available; repair remains PENDING."
-        evidence = str(latest.get("evidence", "")).strip()
-        if str(latest.get("status", "")).upper() != "VERIFIED":
-            return (
-                f"Repair acceptance not recorded for {name}: the most recent persisted "
-                "verification outcome is not VERIFIED; repair remains PENDING."
-            )
+    ledger_path = _outcome_ledger_path()
+    if not ledger_path.exists():
+        return f"Repair acceptance not recorded for {name}: outcome ledger is unavailable; repair remains PENDING."
+    try:
+        ledger_entries = json.loads(ledger_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"Repair acceptance not recorded for {name}: outcome ledger could not be read: {exc}"
+    if not isinstance(ledger_entries, list):
+        return f"Repair acceptance not recorded for {name}: outcome ledger is invalid; repair remains PENDING."
+    verification_entries = [
+        item for item in ledger_entries
+        if (
+            isinstance(item, dict)
+            and item.get("capability") == name
+            and str(item.get("stage", "")).upper() == "VERIFICATION"
+        )
+    ]
+    latest = verification_entries[-1] if verification_entries else None
+    if latest is None:
+        return f"Repair acceptance not recorded for {name}: no persisted verification outcome is available; repair remains PENDING."
+    persisted_evidence = str(latest.get("evidence", "")).strip()
+    if str(latest.get("status", "")).upper() != "VERIFIED":
+        return (
+            f"Repair acceptance not recorded for {name}: the most recent persisted "
+            "verification outcome is not VERIFIED; repair remains PENDING."
+        )
+    if evidence and evidence != persisted_evidence:
+        return (
+            f"Repair acceptance not recorded for {name}: supplied verification evidence "
+            "does not exactly match the most recent persisted verification evidence; repair remains PENDING."
+        )
+    evidence = persisted_evidence
     if not re.search(
         r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
         evidence,
