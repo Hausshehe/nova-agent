@@ -275,6 +275,39 @@ class CloudflareClientTests(unittest.TestCase):
         open_url.assert_not_called()
 
 
+    def test_verified_generated_capability_records_repair_acceptance(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+
+            def repaired_capability():
+                return (
+                    "Android mechanism execution:\\n"
+                    "Post-action verification: VERIFIED: expected component is foreground."
+                )
+
+            repaired_capability.__nova_generated_capability__ = True
+            accepted = []
+
+            def record_acceptance(capability, verification):
+                accepted.append((capability, verification))
+                return "Repair acceptance recorded: camera_shutter"
+
+            client.tool_handlers["camera_shutter"] = repaired_capability
+            client.tool_handlers["accept_verified_capability_repair"] = record_acceptance
+            answer = client.ask(
+                "Independently verify the repaired camera_shutter capability now. "
+                "Execute the repaired capability exactly once and report the result."
+            )
+        self.assertIn("Post-action verification: VERIFIED", answer)
+        self.assertIn("Repair acceptance recorded: camera_shutter", answer)
+        self.assertEqual(accepted[0][0], "camera_shutter")
+        self.assertIn("Post-action verification: VERIFIED", accepted[0][1])
+        open_url.assert_not_called()
+
     def test_foreground_android_component_routes_without_cloudflare(self):
         with patch.dict(
             os.environ,
