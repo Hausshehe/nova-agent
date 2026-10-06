@@ -635,16 +635,16 @@ class GeminiClient:
                 return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
         if requested_tool == "recover_android_mechanism":
-            mechanism = self._extract_mechanism(prompt)
+            mechanism = self._extract_mechanism(request_text)
             verification_match = re.search(
                 r"(?:post-action\s+)?verification(?:\s+as\s+genuinely\s+\w+)?\s+for\s+this\s+test:\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
-                prompt,
+                request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             if not verification_match:
                 verification_match = re.search(
                     r"(?:verification|post-action verification)\s*[:=]\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
-                    prompt,
+                    request_text,
                     re.IGNORECASE | re.DOTALL,
                 )
             verification = verification_match.group(1).strip() if verification_match else ""
@@ -654,14 +654,14 @@ class GeminiClient:
                     "and supplied verification evidence."
                 )
             result = self.tool_handlers["recover_android_mechanism"](
-                request=prompt,
+                request=request_text,
                 mechanism=mechanism,
                 verification=verification,
             )
             self.last_tool_calls.append({
                 "name": "recover_android_mechanism",
                 "args": {
-                    "request": prompt,
+                    "request": request_text,
                     "mechanism": mechanism,
                     "verification": verification,
                 },
