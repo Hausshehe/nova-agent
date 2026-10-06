@@ -1009,6 +1009,9 @@ def apply_capability_extension(
         returns=ast.Name(id="str", ctx=ast.Load()),
     )
     function_source = ast.unparse(ast.fix_missing_locations(function_node))
+    function_source += (
+        f"\n{proposed}.__nova_generated_capability__ = True"
+    )
 
     declaration = (
         "    {\n"
@@ -4241,6 +4244,7 @@ def _load_persisted_capability_extensions() -> None:
 
         restored_capability.__name__ = name
         restored_capability.__qualname__ = name
+        restored_capability.__nova_generated_capability__ = True
         TOOL_HANDLERS[name] = restored_capability
         TOOL_DECLARATIONS.append(
             {
