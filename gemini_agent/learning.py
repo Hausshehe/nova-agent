@@ -116,6 +116,22 @@ def rank_with_verified_experience(request: str, candidates: list[str], domain: s
     return [candidate for _, candidate in sorted(enumerate(candidates), key=lambda item: (-scores[item[1]], item[0]))]
 
 
+def select_verified_strategy(request: str, candidates: list[str], domain: str = "general") -> str:
+    """Select the highest-ranked candidate using only existing verified experience."""
+    ranked = rank_with_verified_experience(request, candidates, domain)
+    if not ranked:
+        return ("Verified strategy selection: NONE\n"
+                "Basis: no strategy candidates were supplied.\n"
+                "No strategy execution or device state change was performed.")
+    selected = ranked[0]
+    changed = bool(candidates) and selected != candidates[0]
+    return (f"Verified strategy selection: {selected}\n"
+            f"Candidates: {ranked}\n"
+            f"Selection basis: {'verified experience ranking changed the preferred candidate' if changed else 'verified experience ranking preserved the existing candidate order'}\n"
+            "Safety boundary: selection is a preference only; validation and execution verification remain authoritative.\n"
+            "No strategy execution or device state change was performed.")
+
+
 def record_verified_android_experience(
     request: str,
     mechanism: str,
