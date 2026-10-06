@@ -323,7 +323,7 @@ class CloudflareClientTests(unittest.TestCase):
             "perform a calculation",
             "calculator",
             "Verification: VERIFIED: calculator result confirmed.",
-            "general",
+            domain="general",
         )
         self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
 
