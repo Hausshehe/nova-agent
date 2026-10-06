@@ -190,12 +190,15 @@ class GeminiClient:
             return "rank_android_mechanism_candidates"
         if any(phrase in user_text for phrase in (
             "record verified experience",
+            "record a verified experience",
             "persist verified experience",
+            "persist a verified experience",
             "learn from verified experience",
         )):
             return "record_verified_experience_tool"
         if any(phrase in user_text for phrase in (
             "rank verified experience",
+            "rank verified experiences",
             "rank candidates using verified experience",
         )):
             return "rank_verified_experience_candidates"
@@ -742,7 +745,7 @@ class GeminiClient:
             args = {
                 "request": request_match.group(1).strip(),
                 "strategy": strategy_match.group(1).strip().rstrip("."),
-                "verification": verification_match.group(1).strip(),
+                "verification": next(group.strip() for group in verification_match.groups() if group),
                 "domain": domain_match.group(1).strip() if domain_match else "general",
             }
             result = str(self.tool_handlers["record_verified_experience_tool"](**args))
