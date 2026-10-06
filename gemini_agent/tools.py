@@ -598,6 +598,128 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
         "Persisted repair recipe retained."
     )
 
+
+def autonomously_repair_capability(capability: str, failure_evidence: str) -> str:
+    """Run one bounded self-repair transaction from diagnosis through final repair decision."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(failure_evidence, str) or not failure_evidence.strip():
+        raise ValueError("Failure evidence cannot be empty.")
+
+    name = capability.strip()
+    evidence = failure_evidence.strip()
+    diagnosis = diagnose_capability_failure(name, evidence)
+    if "Recovery decision: REPAIR_CANDIDATE_AVAILABLE." not in diagnosis:
+        return (
+            "Autonomous self-repair stopped safely.\n"
+            + diagnosis
+            + "\nNo repair transaction, capability execution, or acceptance mutation was performed."
+        )
+
+    candidate = select_capability_repair_candidate(name, diagnosis)
+    if "Candidate: RESTORE_GENERATED_CAPABILITY" not in candidate:
+        return (
+            "Autonomous self-repair stopped safely.\n"
+            + diagnosis
+            + "\n"
+            + candidate
+            + "\nNo repair transaction, capability execution, or acceptance mutation was performed."
+        )
+
+    repair = apply_capability_repair(name, "RESTORE_GENERATED_CAPABILITY")
+    if not repair.startswith("Capability repair transaction applied:"):
+        return (
+            "Autonomous self-repair stopped safely.\n"
+            + diagnosis
+            + "\n"
+            + candidate
+            + "\n"
+            + repair
+        )
+
+    handler = TOOL_HANDLERS.get(name)
+    if handler is None or not callable(handler):
+        return (
+            "Autonomous self-repair stopped safely after repair transaction: "
+            f"repaired capability '{name}' is not callable."
+        )
+
+    try:
+        execution = str(handler())
+    except Exception as exc:
+        execution = f"Verification: FAILED\nExecution error: {exc}"
+
+    if re.search(
+        r"(?:Post-action verification|Verification)\s*:\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\\b",
+        execution,
+        re.IGNORECASE,
+    ):
+        verification_evidence = execution
+    else:
+        verification_evidence = (
+            "Verification: INCONCLUSIVE\n"
+            "The repaired capability executed, but it did not provide explicit bounded "
+            "post-action verification evidence.\n"
+            f"Execution result: {execution}"
+        )
+
+    verification_record = record_capability_repair_verification(
+        capability=name,
+        verification=verification_evidence,
+    )
+    if not verification_record.startswith("Repair verification recorded:"):
+        return (
+            "Autonomous self-repair stopped safely after execution because verification "
+            "could not be persisted.\n"
+            + repair
+            + "\n"
+            + execution
+            + "\n"
+            + verification_record
+        )
+
+    analysis = analyze_capability_history(name)
+    decision_match = re.search(r"Repair decision:\s*([^\\n]+)", analysis)
+    decision = decision_match.group(1).strip() if decision_match else "UNKNOWN"
+
+    if decision == "ACCEPT_ELIGIBLE":
+        acceptance = accept_verified_capability_repair(name)
+        return (
+            "Autonomous self-repair completed.\n"
+            + diagnosis
+            + "\n"
+            + candidate
+            + "\n"
+            + repair
+            + "\n"
+            + "Independent verification execution:\n"
+            + execution
+            + "\n"
+            + verification_record
+            + "\n"
+            + analysis
+            + "\n"
+            + acceptance
+        )
+
+    return (
+        "Autonomous self-repair reached a bounded non-acceptance decision.\n"
+        + diagnosis
+        + "\n"
+        + candidate
+        + "\n"
+        + repair
+        + "\n"
+        + "Independent verification execution:\n"
+        + execution
+        + "\n"
+        + verification_record
+        + "\n"
+        + analysis
+        + "\n"
+        + f"Final repair decision: {decision}. No acceptance mutation was performed."
+    )
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -4059,6 +4181,18 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "autonomously_repair_capability",
+        "description": "Run one bounded generic self-repair workflow from failure diagnosis through repair, independent verification, persisted evidence analysis, and acceptance or safe stop. The workflow executes the repaired capability at most once.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the failing local capability."},
+                "failure_evidence": {"type": "STRING", "description": "Observed evidence that the capability failed."},
+            },
+            "required": ["capability", "failure_evidence"],
+        },
+    },
+    {
         "name": "select_capability_repair_candidate",
         "description": "Select a bounded repair candidate from read-only capability registration and persisted-recipe evidence. Do not execute or modify the capability.",
         "parameters": {
@@ -5106,6 +5240,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "autonomously_repair_capability": autonomously_repair_capability,
     "record_capability_repair_verification": record_capability_repair_verification,
     "analyze_capability_history": analyze_capability_history,
     "record_capability_outcome": record_capability_outcome,
