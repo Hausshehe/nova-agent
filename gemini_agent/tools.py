@@ -855,8 +855,8 @@ def assess_capability_gap(request: str) -> str:
     )
 
 
-def plan_capability_extension(request: str) -> str:
-    """Create a bounded, reality-grounded implementation plan for a missing capability."""
+def plan_capability_extension(request: str, inspect_reality: bool = False) -> str:
+    """Create a bounded implementation plan, optionally grounded in current Android reality."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
 
@@ -884,6 +884,20 @@ def plan_capability_extension(request: str) -> str:
         }]
         suffix = "_".join(words[:5]) or "requested_capability"
         tool_name = f"extend_{suffix}"
+
+    if not inspect_reality:
+        return (
+            "Extension plan: capability is missing.\n"
+            f"Requested capability: {request.strip()}\n"
+            f"Proposed tool: {tool_name}\n"
+            "Implementation boundary: inspect Android reality before committing to a mechanism; "
+            "do not assume an API, permission, executable, or service exists.\n"
+            "Implementation steps: discover the narrowest supported mechanism; implement a bounded "
+            "tool with explicit inputs and safety checks; register its declaration and handler; "
+            "add deterministic unit tests; run the real-device test; only then expose the capability to Nova.\n"
+            "Verification: execute the new capability on the device and verify the resulting state or observable output.\n"
+            "Status: plan only; no code or device state was modified."
+        )
 
     # Ground the plan in current Android reality before proposing implementation.
     # Discovery and validation are read-only, so a plan request cannot mutate state.
@@ -971,7 +985,7 @@ def _run_extension_test_suite() -> tuple[bool, str]:
 
 def _extension_registered_capability_error(original: str, updated: str, request: str) -> str | None:
     """Reject source edits that declare a new tool without implementing it."""
-    plan = plan_capability_extension(request)
+    plan = plan_capability_extension(request, inspect_reality=False)
     prefix = "Proposed tool: "
     if prefix not in plan:
         return "Extension not applied: could not determine the proposed capability name."
@@ -1170,7 +1184,7 @@ def apply_capability_extension(
     if not gap.startswith("Capability gap:"):
         return f"Extension not applied: {gap}"
 
-    plan = plan_capability_extension(request)
+    plan = plan_capability_extension(request, inspect_reality=False)
     if plan.startswith("Extension not needed:"):
         return f"Extension not applied: {plan}"
 
@@ -1181,7 +1195,7 @@ def apply_capability_extension(
     if not target.exists() or not target.is_file() or target.is_symlink():
         return f"Extension not applied: target is not a regular source file: {relative}"
 
-    plan = plan_capability_extension(request)
+    plan = plan_capability_extension(request, inspect_reality=False)
     if plan.startswith("Extension blocked:"):
         return plan
     proposed = plan.split("Proposed tool: ", 1)[1].splitlines()[0].strip()
