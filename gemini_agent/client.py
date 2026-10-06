@@ -613,11 +613,15 @@ class GeminiClient:
                             request=request_text
                         )
                     )
-                    candidates = re.findall(
-                        r"(?m)^(intent|ui-text|ui|executable|service):(.+)$",
-                        discovery,
-                        re.IGNORECASE,
-                    )
+                    candidates = [
+                        (kind, value.strip().strip("`").strip())
+                        for kind, value in re.findall(
+                            r"(?m)^\s*(intent|ui-text|ui|executable|service):(.+?)\s*$",
+                            discovery,
+                            re.IGNORECASE,
+                        )
+                        if value.strip()
+                    ]
                     for kind, value in candidates:
                         candidate = f"{kind.lower()}:{value}"
                         validation = str(
