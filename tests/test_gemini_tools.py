@@ -720,6 +720,21 @@ class ReplanAndroidMechanismTests(unittest.TestCase):
         self.assertIn("intent:android.media.action.SECOND", result)
         self.assertIn("VERIFIED", result)
 
+    def test_execute_android_mechanism_dispatches_ui_mechanism(self):
+        from gemini_agent.tools import execute_android_mechanism
+        with patch(
+            "gemini_agent.android_ui.execute_validated_android_ui_mechanism",
+            return_value="UI EXECUTED",
+        ) as execute_ui:
+            result = execute_android_mechanism("press CTRL", "ui-text:CTRL")
+        self.assertEqual(result, "UI EXECUTED")
+        execute_ui.assert_called_once_with(request="press CTRL", mechanism="ui-text:CTRL")
+
+    def test_execute_android_mechanism_blocks_unsupported_mechanism_type(self):
+        from gemini_agent.tools import execute_android_mechanism
+        result = execute_android_mechanism("use service", "service:camera")
+        self.assertIn("no bounded executor exists", result)
+
     def test_replan_android_mechanism_stops_when_no_alternative_exists(self):
         from gemini_agent.tools import replan_android_mechanism
         with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
