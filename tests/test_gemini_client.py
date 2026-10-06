@@ -276,7 +276,7 @@ class CloudflareClientTests(unittest.TestCase):
             if message.get("role") == "system"
         ]
         self.assertTrue(system_messages)
-        self.assertIn("use select_verified_strategy_tool", system_messages[0])
+        self.assertIn("verified-experience preference supplied by Nova", system_messages[0])
         self.assertIn("Treat its result only as a preference", system_messages[0])
 
     def test_uses_cloudflare_only(self):
