@@ -40,7 +40,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
         self.assertIn("Resolved bounds: [10,20][110,80]", result)
         self.assertIn("Tap result:", result)
         self.assertEqual(
-            run.call_args_list[2].args[0],
+            run.call_args_list[1].args[0],
             "input tap 60 50",
         )
 
@@ -72,7 +72,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
             )
 
         self.assertIn("Resolved bounds: [0,1400][720,1612]", result)
-        self.assertEqual(run.call_args_list[2].args[0], "input tap 360 1506")
+        self.assertEqual(run.call_args_list[1].args[0], "input tap 360 1506")
 
     def test_executes_ui_text_selector(self):
         hierarchy = (
@@ -101,7 +101,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
             )
 
         self.assertIn("Resolved bounds: [6,812][100,962]", result)
-        self.assertEqual(run.call_args_list[2].args[0], "input tap 53 887")
+        self.assertEqual(run.call_args_list[1].args[0], "input tap 53 887")
 
     def test_blocks_non_ui_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated ui"):
