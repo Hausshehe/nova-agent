@@ -113,7 +113,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
         self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
         tap.assert_called_once_with(53, 887)
 
-    def test_reports_unverified_when_target_attributes_do_not_change(self):
+    def test_reports_inconclusive_when_successful_tap_has_no_observable_ui_change(self):
         hierarchy = (
             '<hierarchy><node class="android.widget.Button" text="CTRL" '
             'resource-id="" enabled="true" clickable="true" selected="false" '
@@ -137,7 +137,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
                 "ui-text:CTRL",
             )
         self.assertIn(
-            "Post-action verification: UNVERIFIED: target UI node attributes were unchanged after the tap.",
+            "Post-action verification: INCONCLUSIVE: tap executed successfully, but the target UI node attributes were unchanged",
             result,
         )
 
