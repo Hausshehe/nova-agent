@@ -189,6 +189,17 @@ class GeminiClient:
         )):
             return "rank_android_mechanism_candidates"
         if any(phrase in user_text for phrase in (
+            "record verified experience",
+            "persist verified experience",
+            "learn from verified experience",
+        )):
+            return "record_verified_experience_tool"
+        if any(phrase in user_text for phrase in (
+            "rank verified experience",
+            "rank candidates using verified experience",
+        )):
+            return "rank_verified_experience_candidates"
+        if any(phrase in user_text for phrase in (
             "autonomously repair",
             "autonomous self-repair",
             "run the self-repair workflow",
@@ -712,6 +723,50 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "record_verified_experience_tool":
+            request_match = re.search(
+                r'(?:for|request)\s+(?:experience\s+)?["\']([^"\']+)["\']\s+(?:using|with)\s+(?:strategy\s+)?',
+                request_text, re.IGNORECASE,
+            )
+            strategy_match = re.search(
+                r'(?:strategy|candidate)\s*[:=]\s*([^\s,;]+)',
+                request_text, re.IGNORECASE,
+            )
+            verification_match = re.search(
+                r'(?:verification|evidence)\s*[:=]\s*(.+?)(?=\s+Then\s+rank|\s+Do not|\s+Report|$)',
+                request_text, re.IGNORECASE | re.DOTALL,
+            )
+            domain_match = re.search(r'\bdomain\s*[:=]\s*([A-Za-z0-9_-]+)', request_text, re.IGNORECASE)
+            if not request_match or not strategy_match or not verification_match:
+                return "Recording a verified experience requires request, strategy, and verification evidence."
+            args = {
+                "request": request_match.group(1).strip(),
+                "strategy": strategy_match.group(1).strip().rstrip("."),
+                "verification": verification_match.group(1).strip(),
+                "domain": domain_match.group(1).strip() if domain_match else "general",
+            }
+            result = str(self.tool_handlers["record_verified_experience_tool"](**args))
+            self.last_tool_calls.append({"name": "record_verified_experience_tool", "args": args, "result": result})
+            rank_match = re.search(
+                r'rank\s+verified\s+experience\s+for\s+request\s+["\']([^"\']+)["\']',
+                request_text, re.IGNORECASE,
+            )
+            candidates = []
+            if rank_match:
+                candidate_text = request_text[rank_match.end():]
+                candidate_match = re.search(r'candidates?\s*[:=]\s*(.+?)(?=\s+Do not|\s+Report|$)', candidate_text, re.IGNORECASE | re.DOTALL)
+                if candidate_match:
+                    candidates = [c.strip().rstrip(".") for c in candidate_match.group(1).split(",") if c.strip()]
+                    candidates = list(dict.fromkeys(candidates))
+            if rank_match and candidates:
+                ranked = self.tool_handlers["rank_verified_experience_candidates"](
+                    request=rank_match.group(1).strip(),
+                    candidates=candidates,
+                    domain=args["domain"],
+                )
+                self.last_tool_calls.append({"name": "rank_verified_experience_candidates", "args": {"request": rank_match.group(1).strip(), "candidates": candidates, "domain": args["domain"]}, "result": ranked})
+                return result + "\n" + str(ranked)
+            return result
         if requested_tool == "record_verified_android_experience":
             request_match = re.search(
                 r'(?:for|request)\s+(?:capability\s+)?["\']([^"\']+)["\']\s+(?:using|with)',
