@@ -813,9 +813,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             def generated_probe():
                 return "Post-action verification: VERIFIED"
             generated_probe.__nova_generated_capability__ = True
+            ledger = Path(tmp) / "outcomes.json"
+            ledger.write_text(
+                '[{"capability":"generated_probe","stage":"VERIFICATION","status":"VERIFIED",'
+                '"evidence":"Post-action verification: VERIFIED: expected component is present.",'
+                '"recorded_at":"2026-10-06T17:08:40+00:00"}]',
+                encoding="utf-8",
+            )
             with patch(
                 "gemini_agent.tools._extension_store_path",
                 return_value=store,
+            ), patch(
+                "gemini_agent.tools._outcome_ledger_path",
+                return_value=ledger,
             ), patch.dict(
                 TOOL_HANDLERS,
                 {"generated_probe": generated_probe},
@@ -845,9 +855,19 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             def generated_probe():
                 return "INCONCLUSIVE"
             generated_probe.__nova_generated_capability__ = True
+            ledger = Path(tmp) / "outcomes.json"
+            ledger.write_text(
+                '[{"capability":"generated_probe","stage":"VERIFICATION","status":"INCONCLUSIVE",'
+                '"evidence":"Post-action verification: INCONCLUSIVE",'
+                '"recorded_at":"2026-10-06T17:08:40+00:00"}]',
+                encoding="utf-8",
+            )
             with patch(
                 "gemini_agent.tools._extension_store_path",
                 return_value=store,
+            ), patch(
+                "gemini_agent.tools._outcome_ledger_path",
+                return_value=ledger,
             ), patch.dict(
                 TOOL_HANDLERS,
                 {"generated_probe": generated_probe},
