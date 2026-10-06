@@ -83,10 +83,10 @@ class AndroidUiExecutionTests(unittest.TestCase):
         ), patch(
             "gemini_agent.android_ui.run_root_command",
             side_effect=[
-                "Exit code: 0\\nstdout:\\nUI dump complete",
-                "Exit code: 0\\nstdout:\\n" + hierarchy,
-                "Exit code: 0\\nstdout:\\nTap complete",
-                "Exit code: 0\\nstdout:\\n",
+                "Exit code: 0\nstdout:\nUI dump complete",
+                "Exit code: 0\nstdout:\n" + hierarchy,
+                "Exit code: 0\nstdout:\nTap complete",
+                "Exit code: 0\nstdout:\n",
             ],
         ) as run:
             result = execute_validated_android_ui_mechanism(
