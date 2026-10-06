@@ -506,6 +506,32 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
 
     return "Replan: no untried viable alternative Android mechanism was found.\nOutcome: FAILED"
 
+def execute_android_mechanism(request: str, mechanism: str) -> str:
+    """Dispatch one validated Android mechanism to its bounded executor."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(mechanism, str) or not mechanism.strip():
+        raise ValueError("Mechanism cannot be empty.")
+    candidate = mechanism.strip()
+    if ":" not in candidate:
+        raise ValueError(
+            "Mechanism must use a bounded form: intent:<action>, executable:<name>, "
+            "service:<name>, ui:<resource-id>, or ui-text:<text>."
+        )
+    kind = candidate.split(":", 1)[0].strip().lower()
+    if kind == "intent":
+        return execute_validated_android_mechanism(request=request, mechanism=candidate)
+    if kind in {"ui", "ui-text"}:
+        from gemini_agent.android_ui import execute_validated_android_ui_mechanism
+        return execute_validated_android_ui_mechanism(
+            request=request,
+            mechanism=candidate,
+        )
+    return (
+        "Android mechanism execution blocked: no bounded executor exists for "
+        f"mechanism type '{kind}'."
+    )
+
 def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     """Execute one previously validated Android mechanism through a bounded action primitive."""
     if not isinstance(request, str) or not request.strip():
