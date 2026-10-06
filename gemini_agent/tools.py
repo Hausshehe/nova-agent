@@ -260,6 +260,103 @@ def apply_capability_repair(capability: str, candidate: str) -> str:
 
 
 
+def _outcome_ledger_path() -> Path:
+    """Return the persistent bounded ledger for capability outcomes."""
+    configured = os.environ.get("NOVA_OUTCOME_LEDGER", "").strip()
+    return Path(configured).expanduser() if configured else Path.home() / ".nova-agent-outcomes.json"
+
+
+def record_capability_outcome(
+    capability: str,
+    stage: str,
+    status: str,
+    evidence: str,
+) -> str:
+    """Append one bounded, structured capability outcome to the persistent ledger."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(stage, str) or not stage.strip():
+        raise ValueError("Outcome stage cannot be empty.")
+    if not isinstance(status, str) or not status.strip():
+        raise ValueError("Outcome status cannot be empty.")
+    if not isinstance(evidence, str) or not evidence.strip():
+        raise ValueError("Outcome evidence cannot be empty.")
+    event = {
+        "capability": capability.strip(),
+        "stage": stage.strip().upper(),
+        "status": status.strip().upper(),
+        "evidence": evidence.strip()[:_MAX_READ_BYTES],
+        "recorded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    path = _outcome_ledger_path()
+    entries = []
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return f"Capability outcome not recorded: ledger could not be read: {exc}"
+        if not isinstance(loaded, list):
+            return "Capability outcome not recorded: ledger is not a JSON list."
+        entries = loaded
+    entries.append(event)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as temp_file:
+            json.dump(entries, temp_file, ensure_ascii=False, indent=2)
+            temp_file.write("\n")
+            temp_path = Path(temp_file.name)
+        os.replace(temp_path, path)
+    except (OSError, TypeError, ValueError) as exc:
+        try:
+            if "temp_path" in locals():
+                temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return f"Capability outcome not recorded: ledger write failed: {exc}"
+    return (
+        f"Capability outcome recorded: {event['capability']}\n"
+        f"Stage: {event['stage']}\n"
+        f"Status: {event['status']}\n"
+        "Evidence persisted."
+    )
+
+
+def get_capability_outcome_history(capability: str, limit: int = 20) -> str:
+    """Read a bounded capability outcome history without modifying it."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise ValueError("History limit must be a positive integer.")
+    path = _outcome_ledger_path()
+    if not path.exists():
+        return f"Capability outcome history: {capability.strip()}\nNo persisted outcomes found."
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"Capability outcome history unavailable: {exc}"
+    if not isinstance(entries, list):
+        return "Capability outcome history unavailable: ledger is not a JSON list."
+    name = capability.strip()
+    matches = [
+        item for item in entries
+        if isinstance(item, dict) and item.get("capability") == name
+    ][-limit:]
+    if not matches:
+        return f"Capability outcome history: {name}\nNo persisted outcomes found."
+    lines = [f"Capability outcome history: {name}", f"Entries: {len(matches)}"]
+    for index, item in enumerate(matches, 1):
+        lines.extend([
+            f"{index}. Stage: {item.get('stage', '')}",
+            f"   Status: {item.get('status', '')}",
+            f"   Evidence: {item.get('evidence', '')}",
+            f"   Recorded at: {item.get('recorded_at', '')}",
+        ])
+    return "\n".join(lines)
+
+
 def record_capability_repair_verification(capability: str, verification: str) -> str:
     """Persist the latest bounded execution verification while keeping repair PENDING."""
     if not isinstance(capability, str) or not capability.strip():
@@ -4894,6 +4991,8 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "record_capability_repair_verification": record_capability_repair_verification,
+    "record_capability_outcome": record_capability_outcome,
+    "get_capability_outcome_history": get_capability_outcome_history,
     "accept_verified_capability_repair": accept_verified_capability_repair,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
