@@ -6,6 +6,20 @@ import xml.etree.ElementTree as ET
 from gemini_agent.tools import _read_bounded_root_file, _run_bounded_ui_tap, run_root_command, validate_android_mechanism
 
 
+def _read_ui_target(xml_text: str, kind: str, selector: str):
+    """Parse one uniquely enabled UI target from a bounded hierarchy snapshot."""
+    root = ET.fromstring(xml_text)
+    attribute = "resource-id" if kind == "ui" else "text"
+    matches = [
+        node for node in root.iter("node")
+        if node.attrib.get(attribute, "") == selector
+        and node.attrib.get("enabled") == "true"
+    ]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
 def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
     """Execute one validated UI mechanism by resource ID using current UI bounds."""
     if not isinstance(request, str) or not request.strip():
@@ -35,49 +49,32 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
     dump_path = "/data/local/tmp/nova-ui-execution.xml"
     try:
-        dump_result = run_root_command(f"uiautomator dump {dump_path}")
-        if not dump_result.startswith("Exit code: 0"):
-            return (
-                "Android UI mechanism execution failed: UI hierarchy could not be captured.\n"
-                f"{dump_result}"
-            )
+        def capture_hierarchy() -> str:
+            dump_result = run_root_command(f"uiautomator dump {dump_path}")
+            if not dump_result.startswith("Exit code: 0"):
+                raise RuntimeError(dump_result)
+            return _read_bounded_root_file(dump_path, 64 * 1024)
 
         try:
-            xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+            xml_before = capture_hierarchy()
         except (RuntimeError, ValueError) as exc:
-            return f"Android UI mechanism execution failed: could not read UI hierarchy: {exc}"
+            return f"Android UI mechanism execution failed: UI hierarchy could not be captured: {exc}"
 
         try:
-            root = ET.fromstring(xml_text)
+            target = _read_ui_target(xml_before, kind, selector)
         except ET.ParseError as exc:
             return f"Android UI mechanism execution failed: invalid UI hierarchy: {exc}"
 
-        target = None
-        for node in root.iter("node"):
-            selector_value = (
-                node.attrib.get("resource-id", "")
-                if kind == "ui"
-                else node.attrib.get("text", "")
-            )
-            if (
-                selector_value == selector
-                and node.attrib.get("enabled") == "true"
-            ):
-                target = node
-                break
-
         if target is None:
             return (
-                "Android UI mechanism execution blocked: the validated control is no longer "
-                "present as an enabled node."
+                "Android UI mechanism execution blocked: the validated control is not present "
+                "as exactly one enabled UI node."
             )
 
         bounds = target.attrib.get("bounds", "")
         match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
         if not match:
-            return (
-                "Android UI mechanism execution blocked: the target control has no usable bounds."
-            )
+            return "Android UI mechanism execution blocked: the target control has no usable bounds."
 
         left, top, right, bottom = map(int, match.groups())
         if right <= left or bottom <= top:
@@ -86,13 +83,38 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
         center_x = (left + right) // 2
         center_y = (top + bottom) // 2
         result = _run_bounded_ui_tap(center_x, center_y)
+
+        try:
+            xml_after = capture_hierarchy()
+            after_target = _read_ui_target(xml_after, kind, selector)
+        except (RuntimeError, ValueError, ET.ParseError) as exc:
+            return (
+                "Android UI mechanism execution:\n"
+                f"Requested capability: {request.strip()}\n"
+                f"Mechanism: {candidate}\n"
+                "Validation: VIABLE\n"
+                f"Resolved bounds: {bounds}\n"
+                f"Tap result:\n{result}\n"
+                f"Post-action verification: UNAVAILABLE ({exc})"
+            )
+
+        before_attrs = dict(target.attrib)
+        after_attrs = dict(after_target.attrib) if after_target is not None else None
+        if after_attrs is not None and before_attrs != after_attrs:
+            verification = "VERIFIED: target UI node attributes changed after the tap."
+        elif after_attrs is None:
+            verification = "UNVERIFIED: target UI node was no longer uniquely present after the tap."
+        else:
+            verification = "UNVERIFIED: target UI node attributes were unchanged after the tap."
+
         return (
             "Android UI mechanism execution:\n"
             f"Requested capability: {request.strip()}\n"
             f"Mechanism: {candidate}\n"
             "Validation: VIABLE\n"
             f"Resolved bounds: {bounds}\n"
-            f"Tap result:\n{result}"
+            f"Tap result:\n{result}\n"
+            f"Post-action verification: {verification}"
         )
     finally:
         try:
