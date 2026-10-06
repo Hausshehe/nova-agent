@@ -2420,22 +2420,30 @@ class GetSystemBootTimeToolTests(unittest.TestCase):
 
 
 class VerifyAndroidComponentPresenceTests(unittest.TestCase):
-    def test_verifies_component_in_active_activity_state(self):
+    def test_verifies_component_from_multiple_android_observation_sources(self):
         with patch(
             "gemini_agent.tools.run_root_command",
-            return_value=(
-                "topResumedActivity=ActivityRecord{abc com.topjohnwu.magisk/.ui.surequest.SuRequestActivity}\n"
-                "ActivityRecord{def com.transsion.camera/.app.CaptureActivity}"
-            ),
+            side_effect=[
+                "topResumedActivity=ActivityRecord{abc com.topjohnwu.magisk/.ui.surequest.SuRequestActivity}",
+                "mCurrentFocus=Window{def com.transsion.camera/.app.CaptureActivity}",
+                "recent task: com.transsion.camera/.app.CaptureActivity",
+            ],
         ) as run:
             result = verify_android_component_presence(
                 "com.transsion.camera/.app.CaptureActivity"
             )
         self.assertIn("VERIFIED", result)
         self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
-        run.assert_called_once_with("dumpsys activity activities")
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                "dumpsys activity activities",
+                "dumpsys window windows",
+                "dumpsys activity recents",
+            ],
+        )
 
-    def test_fails_when_component_is_absent_from_active_activity_state(self):
+    def test_reports_inconclusive_when_component_is_not_observed(self):
         with patch(
             "gemini_agent.tools.run_root_command",
             return_value="topResumedActivity=ActivityRecord com.termux/.app.TermuxActivity",
@@ -2443,7 +2451,9 @@ class VerifyAndroidComponentPresenceTests(unittest.TestCase):
             result = verify_android_component_presence(
                 "com.transsion.camera/.app.CaptureActivity"
             )
-        self.assertIn("FAILED", result)
+        self.assertIn("INCONCLUSIVE", result)
+        self.assertIn("does not prove the component is absent", result)
+
 
 
 class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
@@ -2478,6 +2488,36 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
     def test_blocks_non_intent_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated intent mechanisms"):
             execute_validated_android_mechanism("tap", "ui:com.example:id/button")
+
+    def test_does_not_replan_from_inconclusive_component_observation(self):
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value=(
+                "Android mechanism validation (read-only):\\n"
+                "Status: VIABLE\\n"
+                "Evidence:\\npriority=0 com.transsion.camera/.app.CaptureActivity"
+            ),
+        ), patch(
+            "gemini_agent.tools.send_android_intent",
+            return_value="Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
+        ), patch(
+            "gemini_agent.tools.get_foreground_android_component",
+            return_value="Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.topjohnwu.magisk/.ui.surequest.SuRequestActivity",
+        ), patch(
+            "gemini_agent.tools.verify_android_component_presence",
+            return_value="Android component presence verification (read-only): INCONCLUSIVE",
+        ), patch(
+            "gemini_agent.tools.replan_android_mechanism",
+        ) as replan, patch(
+            "gemini_agent.tools.time.sleep",
+        ):
+            result = execute_validated_android_mechanism(
+                "open the camera", "intent:android.media.action.IMAGE_CAPTURE"
+            )
+        self.assertIn("INCONCLUSIVE:", result)
+        self.assertNotIn("FAILED: intent launch returned successfully", result)
+        replan.assert_not_called()
+
 
     def test_reports_failed_postcondition_when_foreground_does_not_match(self):
         with patch(
