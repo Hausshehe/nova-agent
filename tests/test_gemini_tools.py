@@ -403,6 +403,22 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("Extension blocked:", result)
         self.assertIn("inspection or orchestration tool", result)
 
+    def test_android_mechanism_extension_uses_actual_handler_anchor(self):
+        source = Path("gemini_agent/tools.py").read_text(encoding="utf-8")
+        updated = source
+        handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
+        function_source = "def generated_probe():\n    return _run_android_mechanism_extension('open camera', 'intent:android.media.action.IMAGE_CAPTURE')"
+        handler_insert_index = updated.rfind(handler_marker)
+        self.assertGreater(handler_insert_index, updated.find("handler_marker ="))
+        updated = (
+            updated[:handler_insert_index]
+            + "\n"
+            + function_source
+            + "\n"
+            + updated[handler_insert_index:]
+        )
+        compile(updated, "generated_tools.py", "exec")
+
     def test_android_mechanism_extension_normalizes_embedded_model_formatting(self):
         self.assertEqual(
             _normalize_android_mechanism_target(
