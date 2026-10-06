@@ -104,6 +104,30 @@ class CloudflareClientTests(unittest.TestCase):
             "command": "python --version",
             "expected": "Python",
         })
+    def test_explicit_android_recovery_routes_with_supplied_verification(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            from unittest.mock import Mock
+            recover = Mock(return_value="Replan: selected alternate viable mechanism.")
+            client.tool_handlers["recover_android_mechanism"] = recover
+            answer = client.ask(
+                "Use recover_android_mechanism for the Android mechanism ui-text:CTRL. "
+                "Treat the supplied post-action verification as genuinely FAILED for this test:\n"
+                "FAILED: bounded verification proved the goal was not achieved.\n\n"
+                "The request goal is:\n"
+                "activate a visible clickable Android UI control."
+            )
+        self.assertEqual(answer, "Replan: selected alternate viable mechanism.")
+        recover.assert_called_once()
+        args = recover.call_args.kwargs
+        self.assertEqual(args["mechanism"], "ui-text:CTRL")
+        self.assertIn("FAILED: bounded verification proved the goal was not achieved.", args["verification"])
+        self.assertEqual(client.last_tool_calls[-1]["name"], "recover_android_mechanism")
+
     def test_requested_local_tool_resolves_unnamed_newly_generated_capability(self):
         def generated_camera_capability():
             return "CAMERA OPENED"
@@ -697,8 +721,7 @@ class CloudflareClientTests(unittest.TestCase):
                     "discover_camera_control": lambda: "Camera control environment discovery (read-only): test"
                 }
             )
-            answer = client.ask("Discover the phone camera control environment.")
-        self.assertIn("Camera control environment discovery (read-only): test", answer)
+            answer = client.ask("Discover the phone camera control environment.")        self.assertIn("Camera control environment discovery (read-only): test", answer)
         self.assertEqual(open_url.call_count, 1)
         self.assertEqual(client.last_tool_calls[0]["name"], "discover_camera_control")
 
