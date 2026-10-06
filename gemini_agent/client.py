@@ -176,6 +176,13 @@ class GeminiClient:
                     scored.append((score, index, name))
                 return max(scored)[2]
 
+        if any(phrase in user_text for phrase in (
+            "diagnose a capability failure",
+            "diagnose capability failure",
+            "capability failure diagnosis",
+        )):
+            return "diagnose_capability_failure"
+
         if "self-test" in user_text or "self test" in user_text:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
@@ -640,6 +647,32 @@ class GeminiClient:
             if not mechanism:
                 return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
+        if requested_tool == "diagnose_capability_failure":
+            match = re.search(
+                r"(?:capability|tool)\\s+(?:named\\s+)?([a-zA-Z_][a-zA-Z0-9_]*)",
+                request_text,
+                re.IGNORECASE,
+            )
+            capability = match.group(1) if match else ""
+            evidence_match = re.search(
+                r"(?:evidence|supplied evidence)\\s*[:=]\\s*(.+?)(?=\\s+(?:diagnose|determine|do not|report)\\b|$)",
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            evidence = evidence_match.group(1).strip() if evidence_match else ""
+            if not capability or not evidence:
+                return "Capability failure diagnosis requires an explicit capability name and supplied failure evidence."
+            result = self.tool_handlers["diagnose_capability_failure"](
+                capability=capability,
+                failure_evidence=evidence,
+            )
+            self.last_tool_calls.append({
+                "name": "diagnose_capability_failure",
+                "args": {"capability": capability, "failure_evidence": evidence},
+                "result": result,
+            })
+            return str(result)
+
         if requested_tool == "recover_android_mechanism":
             mechanism = self._extract_mechanism(request_text)
             verification_match = re.search(
