@@ -670,7 +670,30 @@ class GeminiClient:
         if requested_tool in self.tool_handlers and getattr(self.tool_handlers[requested_tool], "__nova_generated_capability__", False):
             tool_result = self.tool_handlers[requested_tool]()
             self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": tool_result})
-            return str(tool_result)
+            result_text = str(tool_result)
+            if "Post-action verification: VERIFIED" in result_text or re.search(
+                r"Verification\\s*:\\s*VERIFIED\\b", result_text, re.IGNORECASE
+            ):
+                acceptance_handler = self.tool_handlers.get("accept_verified_capability_repair")
+                if acceptance_handler is not None:
+                    acceptance = str(
+                        acceptance_handler(
+                            requested_tool,
+                            result_text,
+                        )
+                    )
+                    self.last_tool_calls.append(
+                        {
+                            "name": "accept_verified_capability_repair",
+                            "args": {
+                                "capability": requested_tool,
+                                "verification": result_text,
+                            },
+                            "result": acceptance,
+                        }
+                    )
+                    result_text += "\\n" + acceptance
+            return result_text
         normalized_prompt = str(prompt).upper()
         if (
             requested_tool == "resolve_android_intent"
