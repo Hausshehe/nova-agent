@@ -88,11 +88,9 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ):
             client = GeminiClient()
-            with patch.object(
-                client.tool_handlers,
-                "recover_command",
-                return_value="Outcome: VERIFIED",
-            ) as recover:
+            from unittest.mock import Mock
+            recover = Mock(return_value="Outcome: VERIFIED")
+            with patch.dict(client.tool_handlers, {"recover_command": recover}):
                 answer = client.ask(
                     "Use recover_command to run `python --version`. "
                     "The expected postcondition is exactly `Python`. "
