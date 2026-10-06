@@ -32,6 +32,7 @@ from gemini_agent.tools import (
     get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
+    _normalize_android_mechanism_target,
     count_file_lines,
     create_directory,
     current_datetime,
@@ -427,7 +428,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
 
     def test_android_mechanism_extension_accepts_whitespace_after_prefix(self):
         self.assertEqual(
-            tools._normalize_android_mechanism_target("intent: android.media.action.IMAGE_CAPTURE"),
+            _normalize_android_mechanism_target("intent: android.media.action.IMAGE_CAPTURE"),
             "intent:android.media.action.IMAGE_CAPTURE",
         )
     def test_apply_capability_extension_can_persist_validated_android_mechanism(self):
