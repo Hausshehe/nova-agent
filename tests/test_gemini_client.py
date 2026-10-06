@@ -278,6 +278,24 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("intent:android.media.action.IMAGE_CAPTURE", answer)
         open_url.assert_not_called()
 
+    def test_android_mechanism_execution_routes_through_generic_dispatcher(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "discover_android_mechanisms": lambda request: "intent:android.media.action.IMAGE_CAPTURE",
+                    "validate_android_mechanism": lambda request, mechanism: "Status: VIABLE",
+                    "execute_android_mechanism": lambda request, mechanism: f"executed {mechanism}",
+                }
+            )
+            answer = client.ask(
+                "Use the Android mechanism execution capability. Discover, validate, select, and execute a viable mechanism."
+            )
+        self.assertEqual(answer, "executed intent:android.media.action.IMAGE_CAPTURE")
+
     def test_android_mechanism_execution_capability_selects_discovered_viable_mechanism(self):
         with patch.dict(
             os.environ,
