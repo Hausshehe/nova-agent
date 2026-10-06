@@ -118,22 +118,22 @@ class AndroidUiExecutionTests(unittest.TestCase):
 
     def test_diagnoses_inconclusive_ui_outcome_without_tapping_again(self):
         with patch(
-            "gemini_agent.tools.run_root_command",
-            side_effect=[
-                "Exit code: 0\nstdout:\nUI dump complete",
-                "Exit code: 0\nstdout:\n",
-            ],
-        ), patch(
-            "gemini_agent.tools._read_bounded_root_file",
-            return_value='<hierarchy><node text="CTRL" enabled="true" /></hierarchy>',
-        ):
+            "gemini_agent.tools.inspect_android_ui",
+            return_value=(
+                "Android UI inspection (read-only):\n"
+                "Matched selector: ui-text:CTRL\n"
+                "Node attributes: text='CTRL' enabled='true' clickable='true'"
+            ),
+        ) as inspect:
             from gemini_agent.tools import diagnose_android_mechanism_outcome
             result = diagnose_android_mechanism_outcome(
                 "activate CTRL",
                 "ui-text:CTRL",
                 "INCONCLUSIVE: target UI node remained unchanged",
             )
+        inspect.assert_called_once_with("ui-text:CTRL")
         self.assertIn("Android mechanism outcome diagnosis (read-only): INCONCLUSIVE", result)
+        self.assertIn("Current UI observation:", result)
         self.assertIn("Recovery decision: OBSERVE_OR_REPLAN", result)
         self.assertIn("No interaction or device state change was performed by diagnosis.", result)
 
