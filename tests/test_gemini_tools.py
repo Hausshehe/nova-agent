@@ -28,6 +28,7 @@ from gemini_agent.tools import (
     select_capability_repair_candidate,
     apply_capability_repair,
     accept_verified_capability_repair,
+    record_capability_repair_verification,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -131,6 +132,39 @@ from gemini_agent.tools import (
 
 
 
+class CapabilityRepairVerificationTests(unittest.TestCase):
+    def test_record_repair_verification_persists_pending_state(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "capabilities.json"
+            store.write_text(json.dumps([{"name":"generated_probe","description":"probe","implementation_kind":"existing_tool","implementation_target":"calculator","implementation_args":"{}","request":"probe"}]), encoding="utf-8")
+            def generated_probe():
+                return "probe"
+            generated_probe.__nova_generated_capability__ = True
+            with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+                "gemini_agent.tools._extension_store_path", return_value=store
+            ):
+                result = record_capability_repair_verification("generated_probe", "Post-action verification: VERIFIED")
+            saved = json.loads(store.read_text(encoding="utf-8"))[0]
+        self.assertIn("Repair status: PENDING", result)
+        self.assertEqual(saved["repair_status"], "PENDING")
+        self.assertIn("VERIFIED", saved["repair_verification"])
+
+    def test_accept_repair_reads_persisted_verification_without_execution(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "capabilities.json"
+            store.write_text(json.dumps([{"name":"generated_probe","description":"probe","implementation_kind":"existing_tool","implementation_target":"calculator","implementation_args":"{}","request":"probe","repair_status":"PENDING","repair_verification":"Post-action verification: VERIFIED"}]), encoding="utf-8")
+            def generated_probe():
+                return "MUST NOT EXECUTE"
+            generated_probe.__nova_generated_capability__ = True
+            with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+                "gemini_agent.tools._extension_store_path", return_value=store
+            ):
+                result = accept_verified_capability_repair("generated_probe")
+            saved = json.loads(store.read_text(encoding="utf-8"))[0]
+        self.assertIn("Repair status: ACCEPTED", result)
+        self.assertEqual(saved["repair_status"], "ACCEPTED")
 class AndroidMechanismDiscoveryTests(unittest.TestCase):
     def test_discover_android_mechanisms_reports_candidates_without_action(self):
         with patch(
