@@ -1686,7 +1686,23 @@ class GeminiClient:
                             and local_name.lower() in request_text.lower()
                         )
                     )
-                    if explicit_capability_use and requested_tool == local_name and loop_index == 0:
+                    if explicit_capability_use and requested_tool == local_name:
+                        return str(tool_result)
+
+                    # Dynamically added capabilities are local extensions, not
+                    # ordinary Cloudflare planning tools. When the user explicitly
+                    # asks to use one, execute it once and return its result.
+                    builtin_names = {declaration["name"] for declaration in TOOL_DECLARATIONS}
+                    dynamic_capability_use = bool(
+                        local_name
+                        and local_name not in builtin_names
+                        and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
+                        and (
+                            local_name.lower() in request_text.lower()
+                            or re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
+                        )
+                    )
+                    if dynamic_capability_use:
                         return str(tool_result)
 
                     if requested_tool == "apply_capability_extension" and not str(tool_result).startswith("Extension status: source edit applied and transaction committed."):
