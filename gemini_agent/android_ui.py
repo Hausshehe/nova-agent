@@ -100,12 +100,26 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
         before_attrs = dict(target.attrib)
         after_attrs = dict(after_target.attrib) if after_target is not None else None
+        tap_succeeded = re.search(r"(?m)^Exit code: 0(?:$|\\n)", result) is not None
         if after_attrs is not None and before_attrs != after_attrs:
             verification = "VERIFIED: target UI node attributes changed after the tap."
         elif after_attrs is None:
-            verification = "UNVERIFIED: target UI node was no longer uniquely present after the tap."
+            verification = (
+                "INCONCLUSIVE: target UI node was no longer uniquely present after the tap."
+                if tap_succeeded
+                else "FAILED: target UI node was no longer uniquely present after a failed tap."
+            )
+        elif tap_succeeded:
+            verification = (
+                "INCONCLUSIVE: tap executed successfully, but the target UI node "
+                "attributes were unchanged; the goal's visible effect could not be observed "
+                "from the bounded hierarchy."
+            )
         else:
-            verification = "UNVERIFIED: target UI node attributes were unchanged after the tap."
+            verification = (
+                "FAILED: tap did not execute successfully and the target UI node "
+                "attributes were unchanged."
+            )
 
         return (
             "Android UI mechanism execution:\n"
