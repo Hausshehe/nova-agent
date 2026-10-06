@@ -289,6 +289,16 @@ class GeminiClient:
             return "plan_capability_extension"
         if any(phrase in user_text for phrase in ("do i have a capability", "do you have a capability", "is there a tool", "can you do this", "can you do that", "do you support this")):
             return "assess_capability_gap"
+        if (
+            ("record a" in user_text or "record an" in user_text or "record the" in user_text)
+            and "outcome" in user_text
+            and "ledger" in user_text
+        ):
+            return "record_capability_outcome"
+        if ("outcome history" in user_text or "capability history" in user_text) and (
+            "read" in user_text or "retrieve" in user_text or "show" in user_text
+        ):
+            return "get_capability_outcome_history"
         if "capability inventory" in user_text or "capabilities" in user_text or "what tools" in user_text:
             return "capability_inventory"
         if "assess_capability_gap" in user_text:
@@ -735,6 +745,57 @@ class GeminiClient:
             if not mechanism:
                 return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
+        if requested_tool == "record_capability_outcome":
+            capability_match = re.search(
+                r"capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
+                request_text,
+                re.IGNORECASE,
+            )
+            stage_match = re.search(r"\bstage\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?", request_text, re.IGNORECASE)
+            status_match = re.search(r"\bstatus\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?", request_text, re.IGNORECASE)
+            evidence_match = re.search(
+                r"evidence\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE
+            )
+            capability = capability_match.group(1) if capability_match else ""
+            stage = stage_match.group(1) if stage_match else ""
+            status = status_match.group(1) if status_match else ""
+            evidence = evidence_match.group(1).strip() if evidence_match else ""
+            if not all((capability, stage, status, evidence)):
+                return "Capability outcome recording requires explicit capability, stage, status, and quoted evidence."
+            recorded = str(self.tool_handlers["record_capability_outcome"](
+                capability=capability, stage=stage, status=status, evidence=evidence
+            ))
+            self.last_tool_calls.append({
+                "name": "record_capability_outcome",
+                "args": {"capability": capability, "stage": stage, "status": status, "evidence": evidence},
+                "result": recorded,
+            })
+            if re.search(r"\bread back\b|\bretrieve\b|\bmost recent outcome history\b", request_text, re.IGNORECASE):
+                history = str(self.tool_handlers["get_capability_outcome_history"](capability=capability))
+                self.last_tool_calls.append({
+                    "name": "get_capability_outcome_history",
+                    "args": {"capability": capability},
+                    "result": history,
+                })
+                return recorded + "\n" + history
+            return recorded
+        if requested_tool == "get_capability_outcome_history":
+            match = re.search(
+                r"(?:history|outcomes?)\s+(?:for|of)\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
+                request_text,
+                re.IGNORECASE,
+            )
+            capability = match.group(1) if match else ""
+            if not capability:
+                return "Capability outcome history requires an explicit capability name."
+            result = str(self.tool_handlers["get_capability_outcome_history"](capability=capability))
+            self.last_tool_calls.append({
+                "name": "get_capability_outcome_history",
+                "args": {"capability": capability},
+                "result": result,
+            })
+            return result
+
         if requested_tool == "diagnose_capability_failure":
             match = re.search(
                 r"\bof\s+(?:the\s+)?(?:existing\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+capability\b",
