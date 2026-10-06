@@ -197,6 +197,12 @@ class GeminiClient:
         )):
             return "record_verified_experience_tool"
         if any(phrase in user_text for phrase in (
+            "select verified strategy",
+            "choose strategy using verified experience",
+            "choose a strategy using verified experience",
+        )):
+            return "select_verified_strategy_tool"
+        if any(phrase in user_text for phrase in (
             "rank verified experience",
             "rank verified experiences",
             "rank candidates using verified experience",
@@ -726,6 +732,18 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "select_verified_strategy_tool":
+            request_match = re.search(r'(?:for|request)\s+(?:strategy\s+)?["\']([^"\']+)["\']', request_text, re.IGNORECASE)
+            candidates_match = re.search(r'candidates?\s*(?::|=)?\s*(.+?)(?=\s+Do not|\s+Report|$)', request_text, re.IGNORECASE | re.DOTALL)
+            if not request_match or not candidates_match:
+                return "Selecting a verified strategy requires a request and strategy candidates."
+            candidates = [c.strip().strip('"').strip("'").rstrip(".").strip() for c in candidates_match.group(1).split(",") if c.strip()]
+            domain_match = re.search(r'\bdomain\s*[:=]\s*([A-Za-z0-9_-]+)', request_text, re.IGNORECASE)
+            args = {"request": request_match.group(1).strip(), "candidates": candidates, "domain": domain_match.group(1).strip() if domain_match else "general"}
+            result = str(self.tool_handlers[requested_tool](**args))
+            self.last_tool_calls.append({"name": requested_tool, "args": args, "result": result})
+            return result
+
         if requested_tool == "record_verified_experience_tool":
             request_match = re.search(
                 r'(?:for|request)\s+(?:experience\s+)?["\']([^"\']+)["\']\s+(?:using|with)\s+(?:strategy\s+)?',
