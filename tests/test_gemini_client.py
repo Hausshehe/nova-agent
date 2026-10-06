@@ -115,9 +115,9 @@ class CloudflareClientTests(unittest.TestCase):
         }
 
         def generated_camera_capability():
-            if False:
-                return _run_android_mechanism_extension
             return "CAMERA OPENED"
+
+        generated_camera_capability.__nova_generated_capability__ = True
 
         with patch.dict(
             os.environ,
