@@ -2631,6 +2631,19 @@ class GeminiClient:
                         "type": "function",
                         "function": {"name": "apply_capability_extension"},
                     }
+                elif strategy_candidates and selected_strategy:
+                    selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                        selected_strategy, selected_strategy
+                    )
+                    payload["tools"] = [
+                        tool
+                        for tool in payload.get("tools", [])
+                        if tool.get("function", {}).get("name") == selected_cloud_name
+                    ]
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": selected_cloud_name},
+                    }
                 elif requested_tool:
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
