@@ -680,7 +680,14 @@ class GeminiClient:
         # prevents provider-side argument generation from reinterpreting a repair
         # verification request.
         lower_prompt = prompt_text.lower()
-        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
+        # Compound autonomous workflows own the whole request. Do not let a
+        # nested instruction such as "execute the repaired capability" hijack
+        # routing to the generated capability itself.
+        if (
+            requested_tool != "autonomously_repair_capability"
+            and re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt)
+            and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt)
+        ):
             generated_names = []
             for name, handler in self.tool_handlers.items():
                 if getattr(handler, "__nova_generated_capability__", False):
