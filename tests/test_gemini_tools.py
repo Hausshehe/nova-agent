@@ -144,14 +144,21 @@ class CapabilityRepairVerificationTests(unittest.TestCase):
             def generated_probe():
                 return "probe"
             generated_probe.__nova_generated_capability__ = True
+            ledger = Path(temp_dir) / "outcomes.json"
             with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
                 "gemini_agent.tools._extension_store_path", return_value=store
+            ), patch(
+                "gemini_agent.tools._outcome_ledger_path", return_value=ledger
             ):
                 result = record_capability_repair_verification("generated_probe", "Post-action verification: VERIFIED")
             saved = json.loads(store.read_text(encoding="utf-8"))[0]
+            ledger_entries = json.loads(ledger.read_text(encoding="utf-8"))
         self.assertIn("Repair status: PENDING", result)
         self.assertEqual(saved["repair_status"], "PENDING")
         self.assertIn("VERIFIED", saved["repair_verification"])
+        self.assertEqual(ledger_entries[-1]["capability"], "generated_probe")
+        self.assertEqual(ledger_entries[-1]["stage"], "VERIFICATION")
+        self.assertEqual(ledger_entries[-1]["status"], "VERIFIED")
 
     def test_accept_repair_reads_persisted_verification_without_execution(self):
         import tempfile
@@ -161,13 +168,66 @@ class CapabilityRepairVerificationTests(unittest.TestCase):
             def generated_probe():
                 return "MUST NOT EXECUTE"
             generated_probe.__nova_generated_capability__ = True
+            ledger = Path(temp_dir) / "outcomes.json"
+            ledger.write_text(json.dumps([{
+                "capability": "generated_probe",
+                "stage": "VERIFICATION",
+                "status": "VERIFIED",
+                "evidence": "Post-action verification: VERIFIED",
+                "recorded_at": "2026-10-06T17:08:40+00:00",
+            }]), encoding="utf-8")
             with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
                 "gemini_agent.tools._extension_store_path", return_value=store
+            ), patch(
+                "gemini_agent.tools._outcome_ledger_path", return_value=ledger
             ):
                 result = accept_verified_capability_repair("generated_probe")
             saved = json.loads(store.read_text(encoding="utf-8"))[0]
         self.assertIn("Repair status: ACCEPTED", result)
         self.assertEqual(saved["repair_status"], "ACCEPTED")
+
+    def test_accept_repair_rejects_latest_non_verified_ledger_outcome(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "capabilities.json"
+            store.write_text(json.dumps([{
+                "name": "generated_probe",
+                "description": "probe",
+                "implementation_kind": "existing_tool",
+                "implementation_target": "calculator",
+                "implementation_args": "{}",
+                "request": "probe",
+                "repair_status": "PENDING",
+            }]), encoding="utf-8")
+            ledger = Path(temp_dir) / "outcomes.json"
+            ledger.write_text(json.dumps([
+                {
+                    "capability": "generated_probe",
+                    "stage": "VERIFICATION",
+                    "status": "VERIFIED",
+                    "evidence": "Post-action verification: VERIFIED",
+                    "recorded_at": "2026-10-06T17:00:00+00:00",
+                },
+                {
+                    "capability": "generated_probe",
+                    "stage": "VERIFICATION",
+                    "status": "INCONCLUSIVE",
+                    "evidence": "Post-action verification: INCONCLUSIVE",
+                    "recorded_at": "2026-10-06T17:01:00+00:00",
+                },
+            ]), encoding="utf-8")
+            def generated_probe():
+                return "MUST NOT EXECUTE"
+            generated_probe.__nova_generated_capability__ = True
+            with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+                "gemini_agent.tools._extension_store_path", return_value=store
+            ), patch(
+                "gemini_agent.tools._outcome_ledger_path", return_value=ledger
+            ):
+                result = accept_verified_capability_repair("generated_probe")
+            saved = json.loads(store.read_text(encoding="utf-8"))[0]
+        self.assertIn("most recent persisted verification outcome is not VERIFIED", result)
+        self.assertEqual(saved["repair_status"], "PENDING")
+
 class AndroidMechanismDiscoveryTests(unittest.TestCase):
     def test_discover_android_mechanisms_reports_candidates_without_action(self):
         with patch(
