@@ -97,13 +97,16 @@ class GeminiClient:
         if not preferred_kinds:
             return candidates
         rank = {kind: index for index, kind in enumerate(preferred_kinds)}
-        return sorted(
-            enumerate(candidates),
-            key=lambda item: (rank.get(item[1].split(":", 1)[0].lower(), len(rank)), item[0]),
-        ) and [candidate for _, candidate in sorted(
-            enumerate(candidates),
-            key=lambda item: (rank.get(item[1].split(":", 1)[0].lower(), len(rank)), item[0]),
-        )]
+        return [
+            candidate
+            for _, candidate in sorted(
+                enumerate(candidates),
+                key=lambda item: (
+                    rank.get(item[1].split(":", 1)[0].lower(), len(rank)),
+                    item[0],
+                ),
+            )
+        ]
 
     @staticmethod
     def _parse_tool_arguments(arguments) -> dict:
