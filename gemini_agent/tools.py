@@ -2907,6 +2907,18 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "execute_validated_android_ui_mechanism",
+        "description": "Execute a previously validated Android UI mechanism by resolving its current UI node and performing one bounded tap. Supports ui:<resource-id> and ui-text:<text> selectors.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability the validated UI mechanism implements."},
+                "mechanism": {"type": "STRING", "description": "Previously validated UI mechanism in ui:<resource-id> or ui-text:<text> form."},
+            },
+            "required": ["request", "mechanism"],
+        },
+    },
+    {
         "name": "validate_android_mechanism",
         "description": "Validate a discovered Android mechanism without executing the requested capability or changing device state.",
         "parameters": {
@@ -3775,6 +3787,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "execute_validated_android_mechanism": execute_validated_android_mechanism,
+    "execute_validated_android_ui_mechanism": execute_validated_android_ui_mechanism,
     "discover_android_mechanisms": discover_android_mechanisms,
     "validate_android_mechanism": validate_android_mechanism,
     "resolve_android_intent": resolve_android_intent,
