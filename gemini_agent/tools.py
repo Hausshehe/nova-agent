@@ -1154,7 +1154,7 @@ def _run_bounded_root_action(command: str) -> str:
     try:
         completed = subprocess.run(
             ["su"],
-            input=command + "\n",
+            input=f"command={command}\nexit\n",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -3968,4 +3968,3 @@ GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "description": "Get the Android screen-off timeout duration.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
-
