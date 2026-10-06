@@ -3048,10 +3048,10 @@ class RecoverCommandToolTests(unittest.TestCase):
                 "generated_probe",
                 "RESTORE_GENERATED_CAPABILITY",
             )
-        self.assertIn("Capability repair transaction applied: generated_probe", result)
-        self.assertIn("Repair action: restored from persisted verified recipe.", result)
-        self.assertIn("Real-world verification status: PENDING", result)
-        self.assertTrue(getattr(TOOL_HANDLERS["generated_probe"], "__nova_generated_capability__", False))
+            self.assertIn("Capability repair transaction applied: generated_probe", result)
+            self.assertIn("Repair action: restored from persisted verified recipe.", result)
+            self.assertIn("Real-world verification status: PENDING", result)
+            self.assertTrue(getattr(TOOL_HANDLERS["generated_probe"], "__nova_generated_capability__", False))
 
     def test_apply_capability_repair_rolls_back_when_deterministic_tests_fail(self):
         def generated_probe():
@@ -3078,9 +3078,9 @@ class RecoverCommandToolTests(unittest.TestCase):
                 "generated_probe",
                 "RESTORE_GENERATED_CAPABILITY",
             )
-        self.assertIn("Capability repair rolled back:", result)
-        self.assertIs(TOOL_HANDLERS["generated_probe"], generated_probe)
-        self.assertEqual(TOOL_DECLARATIONS, [original_declaration])
+            self.assertIn("Capability repair rolled back:", result)
+            self.assertIs(TOOL_HANDLERS["generated_probe"], generated_probe)
+            self.assertEqual(TOOL_DECLARATIONS, [original_declaration])
 
     def test_diagnose_capability_failure_finds_generated_repair_recipe(self):
         def generated_probe():
