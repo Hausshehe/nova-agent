@@ -1,6 +1,7 @@
 """Bounded Android UI mechanism execution for Nova."""
 
 import re
+import time
 import xml.etree.ElementTree as ET
 
 from gemini_agent.tools import _read_bounded_root_file, _run_bounded_ui_tap, run_root_command, validate_android_mechanism
@@ -110,11 +111,28 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
                 else "FAILED: target UI node was no longer uniquely present after a failed tap."
             )
         elif tap_succeeded:
-            verification = (
-                "INCONCLUSIVE: tap executed successfully, but the target UI node "
-                "attributes were unchanged; the goal's visible effect could not be observed "
-                "from the bounded hierarchy."
-            )
+            time.sleep(0.25)
+            try:
+                xml_recheck = capture_hierarchy()
+                recheck_target = _read_ui_target(xml_recheck, kind, selector)
+            except (RuntimeError, ValueError, ET.ParseError) as exc:
+                verification = (
+                    "INCONCLUSIVE: tap executed successfully and the first bounded "
+                    f"observation was unchanged; recovery re-observation was unavailable ({exc})."
+                )
+            else:
+                recheck_attrs = dict(recheck_target.attrib) if recheck_target is not None else None
+                if recheck_attrs is not None and before_attrs != recheck_attrs:
+                    verification = (
+                        "VERIFIED: tap executed successfully and a bounded recovery "
+                        "re-observation detected a target UI attribute change."
+                    )
+                else:
+                    verification = (
+                        "INCONCLUSIVE: tap executed successfully, but the target UI node "
+                        "remained unchanged after the bounded recovery re-observation; "
+                        "the goal's visible effect could not be observed."
+                    )
         else:
             verification = (
                 "FAILED: tap did not execute successfully and the target UI node "
