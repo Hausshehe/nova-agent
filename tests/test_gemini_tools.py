@@ -2550,6 +2550,20 @@ class RetryCommandToolTests(unittest.TestCase):
 
 
 class RecoverCommandToolTests(unittest.TestCase):
+    def test_recover_command_verifies_optional_postcondition(self):
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nexpected-value") as run:
+            result = recover_command("pwd", expected="expected-value")
+        self.assertIn("Outcome: VERIFIED", result)
+        self.assertIn("Postcondition: VERIFIED: expected text found: expected-value", result)
+        run.assert_called_once_with("pwd")
+
+    def test_recover_command_rejects_success_without_expected_postcondition(self):
+        with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nother-value") as run:
+            result = recover_command("pwd", expected="expected-value")
+        self.assertIn("Outcome: FAILED", result)
+        self.assertIn("Postcondition: FAILED: expected text not found: expected-value", result)
+        run.assert_called_once_with("pwd")
+
     def test_recover_command_returns_success_without_recovery(self):
         with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nok") as run:
             result = recover_command("pwd")
