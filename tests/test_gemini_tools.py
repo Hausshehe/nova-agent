@@ -450,7 +450,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             updated = target.read_text(encoding="utf-8")
             self.assertIn("_run_android_mechanism_extension", updated)
             self.assertIn("intent:android.media.action.IMAGE_CAPTURE", updated)
-            self.assertIn('"name": "open_camera"', updated)
+            self.assertIn('"name": "camera_shutter"', updated)
             self.assertIn('"camera_shutter": camera_shutter', updated)
 
     def test_apply_capability_extension_blocks_nonviable_android_mechanism(self):
