@@ -78,6 +78,34 @@ class GeminiClient:
         return candidates
 
     @staticmethod
+    def _rank_android_mechanism_candidates(
+        request: str, candidates: list[str]
+    ) -> list[str]:
+        """Prefer mechanism types explicitly required by the goal."""
+        text = str(request).lower()
+        preferred_kinds = []
+        if any(term in text for term in (
+            "ui", "user interface", "visible", "clickable", "control", "button"
+        )):
+            preferred_kinds.extend(["ui-text", "ui"])
+        if any(term in text for term in ("intent", "activity", "launch")):
+            preferred_kinds.append("intent")
+        if any(term in text for term in ("executable", "command", "binary")):
+            preferred_kinds.append("executable")
+        if any(term in text for term in ("service", "daemon")):
+            preferred_kinds.append("service")
+        if not preferred_kinds:
+            return candidates
+        rank = {kind: index for index, kind in enumerate(preferred_kinds)}
+        return sorted(
+            enumerate(candidates),
+            key=lambda item: (rank.get(item[1].split(":", 1)[0].lower(), len(rank)), item[0]),
+        ) and [candidate for _, candidate in sorted(
+            enumerate(candidates),
+            key=lambda item: (rank.get(item[1].split(":", 1)[0].lower(), len(rank)), item[0]),
+        )]
+
+    @staticmethod
     def _parse_tool_arguments(arguments) -> dict:
         if arguments is None:
             return {}
@@ -1941,7 +1969,11 @@ class GeminiClient:
                             request=prompt
                         )
                     )
-                    for candidate in self._parse_android_mechanism_candidates(discovery):
+                    candidates = self._rank_android_mechanism_candidates(
+                        prompt,
+                        self._parse_android_mechanism_candidates(discovery),
+                    )
+                    for candidate in candidates:
                         validation = str(
                             self.tool_handlers["validate_android_mechanism"](
                                 request=prompt,
