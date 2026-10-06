@@ -2555,8 +2555,8 @@ def verify_command_result(result: str, expected: str) -> str:
     if not isinstance(expected, str) or not expected.strip():
         raise ValueError("Expected text cannot be empty.")
     if expected in result:
-        return f"Verification: passed. Expected text found: {expected}"
-    return f"Verification: failed. Expected text not found: {expected}"
+        return f"Verification: VERIFIED: expected text found: {expected}"
+    return f"Verification: FAILED: expected text not found: {expected}"
 
 
 def retry_command(command: str) -> str:
