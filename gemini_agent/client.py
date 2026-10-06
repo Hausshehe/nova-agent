@@ -9,7 +9,7 @@ import urllib.request
 from collections.abc import Callable
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
-from gemini_agent.tools import plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, rank_android_mechanism_candidates, validate_android_mechanism, execute_validated_android_mechanism, execute_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
+from gemini_agent.tools import plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, rank_android_mechanism_candidates, validate_android_mechanism, execute_validated_android_mechanism, execute_android_mechanism, recover_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -181,7 +181,7 @@ class GeminiClient:
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
             return "discover_android_mechanisms"
         if any(phrase in user_text for phrase in (
-            "execute validated android mechanism",
+        if any(phrase in user_text for phrase in (\n            "recover_android_mechanism",\n            "use recover_android_mechanism",\n            "use the generic android recovery capability",\n            "generic android recovery capability",\n        )):\n            return "recover_android_mechanism"\n            "execute validated android mechanism",
             "execute the validated android mechanism",
             "run the validated android mechanism",
             "android mechanism execution capability",
@@ -627,6 +627,40 @@ class GeminiClient:
             if not mechanism:
                 return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
+        if requested_tool == "recover_android_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            verification_match = re.search(
+                r"(?:post-action\s+)?verification(?:\s+as\s+genuinely\s+\w+)?\s+for\s+this\s+test:\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
+                prompt,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not verification_match:
+                verification_match = re.search(
+                    r"(?:verification|post-action verification)\s*[:=]\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
+                    prompt,
+                    re.IGNORECASE | re.DOTALL,
+                )
+            verification = verification_match.group(1).strip() if verification_match else ""
+            if not mechanism or not verification:
+                return (
+                    "Android mechanism recovery requires both an explicit mechanism "
+                    "and supplied verification evidence."
+                )
+            result = self.tool_handlers["recover_android_mechanism"](
+                request=prompt,
+                mechanism=mechanism,
+                verification=verification,
+            )
+            self.last_tool_calls.append({
+                "name": "recover_android_mechanism",
+                "args": {
+                    "request": prompt,
+                    "mechanism": mechanism,
+                    "verification": verification,
+                },
+                "result": result,
+            })
+            return str(result)
         if requested_tool == "execute_validated_android_mechanism":
             mechanism = self._extract_mechanism(request_text)
             if not mechanism:
@@ -697,8 +731,7 @@ class GeminiClient:
             "messages": messages,
             "max_completion_tokens": 2048,
             "tools": tools,
-        }
-        if requested_tool == "apply_capability_extension":
+        }        if requested_tool == "apply_capability_extension":
             payload["tool_choice"] = {
                 "type": "function",
                 "function": {"name": "apply_capability_extension"},
@@ -1397,8 +1430,7 @@ class GeminiClient:
                     if item.get("role") == "user":
                         user_text = item.get("content", "")
                         break
-                match = re.search(
-                    r"diagnose_command_failure.*?command\\s+[\\\"']?(.+?)[\\\"']?\\s+with\\s+error\\s+[\\\"']?(.+?)[\\\"']?\\.?$",
+                match = re.search(                    r"diagnose_command_failure.*?command\\s+[\\\"']?(.+?)[\\\"']?\\s+with\\s+error\\s+[\\\"']?(.+?)[\\\"']?\\.?$",
                     str(user_text).strip(),
                     re.IGNORECASE,
                 )
