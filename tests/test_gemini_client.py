@@ -380,6 +380,109 @@ class CloudflareClientTests(unittest.TestCase):
             "Exit code: 0\nstdout:\nok",
         )
 
+    def test_selected_strategy_is_authoritative_after_seed_record(self):
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "seed-call",
+                            "type": "function",
+                            "function": {
+                                "name": "record_verified_experience_tool",
+                                "arguments": json.dumps({
+                                    "request": "verify a safe command result",
+                                    "strategy": "verify_command_result",
+                                    "verification": "Verification: VERIFIED: seed.",
+                                    "domain": "general",
+                                }),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "selected-call",
+                            "type": "function",
+                            "function": {
+                                "name": "verify_command_result",
+                                "arguments": json.dumps({"result": "", "expected": "Python"}),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "done"}}]},
+        ]
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(item) for item in responses],
+        ) as open_url, patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: verify_command_result",
+        ), patch(
+            "gemini_agent.learning.record_verified_experience",
+            return_value="Verified experience learned.",
+        ) as recorder:
+            client = GeminiClient(
+                tool_handlers={
+                    "record_verified_experience_tool": lambda **kwargs: "Verified experience learned.",
+                    "verify_command_result": lambda result, expected: (
+                        "Verification: VERIFIED: expected text found: Python"
+                        if "Python" in result
+                        else "Verification: FAILED: expected text not found: Python"
+                    ),
+                    "run_command": lambda command: "Exit code: 0\nstdout:\nPython 3.14.6",
+                }
+            )
+            answer = client.ask(
+                'First record a verified experience for request "verify a safe command result" '
+                'using strategy "verify_command_result" with verification "Verification: VERIFIED: seed." '
+                'Then use the normal decision process for request "verify a safe command result". '
+                'I have two candidate strategies: "fallback_probe" and "verify_command_result". '
+                'Use the verified-experience preference to choose the preferred strategy, then '
+                'execute the selected strategy exactly once to verify the goal using command '
+                '"python --version" and expected text "Python".'
+            )
+        self.assertEqual(answer, "done")
+        self.assertEqual(
+            [call["name"] for call in client.last_tool_calls],
+            [
+                "select_verified_strategy_tool",
+                "record_verified_experience_tool",
+                "verify_command_result",
+            ],
+        )
+        verify_call = client.last_tool_calls[-1]
+        self.assertEqual(verify_call["args"]["result"], "Exit code: 0\nstdout:\nPython 3.14.6")
+        self.assertEqual(open_url.call_count, 3)
+        first_payload = json.loads(open_url.call_args_list[0].args[0].data)
+        self.assertNotIn("run_command", [
+            tool["function"]["name"] for tool in first_payload["tools"]
+        ])
+        second_payload = json.loads(open_url.call_args_list[1].args[0].data)
+        self.assertEqual(
+            [tool["function"]["name"] for tool in second_payload["tools"]],
+            ["verify_command_result"],
+        )
+        self.assertEqual(
+            second_payload["tool_choice"],
+            {"type": "function", "function": {"name": "verify_command_result"}},
+        )
+        recorder.assert_called_once_with(
+            "verify a safe command result",
+            "verify_command_result",
+            "Verification: VERIFIED: expected text found: Python",
+            domain="general",
+        )
+
     def test_compound_verified_learning_request_stays_in_normal_decision_loop(self):
         request = (
             'First record a verified experience for request "verify a safe command result" '
