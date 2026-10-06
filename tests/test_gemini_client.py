@@ -277,7 +277,7 @@ class CloudflareClientTests(unittest.TestCase):
         ]
         self.assertTrue(system_messages)
         self.assertIn("verified-experience preference supplied by Nova", system_messages[0])
-        self.assertIn("Treat its result only as a preference", system_messages[0])
+        self.assertIn("Treat learned experience only as a preference", system_messages[0])
 
     def test_uses_cloudflare_only(self):
         with patch.dict(
