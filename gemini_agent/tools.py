@@ -179,10 +179,8 @@ def inspect_android_ui(selector: str = "") -> str:
         dump_result = run_root_command(f"uiautomator dump {dump_path}")
         if not dump_result.startswith("Exit code: 0"):
             return (
-                "Android UI inspection (read-only):
-"
-                f"{dump_result}
-"
+                "Android UI inspection (read-only):\n"
+                f"{dump_result}\n"
                 "UI was inspected only; no interaction or device state change was performed."
             )
 
@@ -191,19 +189,15 @@ def inspect_android_ui(selector: str = "") -> str:
             root = ET.fromstring(xml_text)
         except (RuntimeError, ValueError, ET.ParseError) as exc:
             return (
-                "Android UI inspection (read-only):
-"
-                f"UI hierarchy could not be read or parsed: {exc}
-"
+                "Android UI inspection (read-only):\n"
+                f"UI hierarchy could not be read or parsed: {exc}\n"
                 "No interaction or device state change was performed."
             )
 
         if not normalized:
             return (
-                "Android UI inspection (read-only):
-"
-                f"{xml_text}
-"
+                "Android UI inspection (read-only):\n"
+                f"{xml_text}\n"
                 "UI hierarchy was captured without interaction or device state change."
             )
 
@@ -216,16 +210,13 @@ def inspect_android_ui(selector: str = "") -> str:
 
         if not matches:
             return (
-                "Android UI inspection (read-only):
-"
-                f"No enabled UI node matched selector {normalized!r}.
-"
+                "Android UI inspection (read-only):\n"
+                f"No enabled UI node matched selector {normalized!r}.\n"
                 "No interaction or device state change was performed."
             )
         if len(matches) > 1:
             return (
-                "Android UI inspection (read-only):
-"
+                "Android UI inspection (read-only):\n"
                 f"Selector {normalized!r} matched {len(matches)} enabled UI nodes; inspection is ambiguous.
 "
                 "No interaction or device state change was performed."
@@ -235,8 +226,7 @@ def inspect_android_ui(selector: str = "") -> str:
             f'{key}={value!r}' for key, value in matches[0].attrib.items()
         )
         return (
-            "Android UI inspection (read-only):
-"
+            "Android UI inspection (read-only):\n"
             f"Matched selector: {normalized}
 "
             f"Node attributes: {attributes}
