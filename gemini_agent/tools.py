@@ -3888,17 +3888,7 @@ TOOL_DECLARATIONS = [
 ]
 
 
-RECOVER_COMMAND_DECLARATION = {
-    "name": "recover_command",
-    "description": "Execute one approved command and apply one safe diagnostic recovery step when it fails. Use this for adaptive command recovery instead of blindly retrying.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "command": {"type": "STRING", "description": "Approved command and arguments to execute."}
-        },
-        "required": ["command"],
-    },
-}
+
 
 RUN_COMMAND_DECLARATION = {
     "name": "run_command",
