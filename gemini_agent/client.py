@@ -474,11 +474,7 @@ class GeminiClient:
             "",
         )
         if requested_tool == "inspect_android_ui":
-            user_text = ""
-            for item in reversed(payload["messages"]):
-                if item.get("role") == "user":
-                    user_text = str(item.get("content", ""))
-                    break
+            user_text = request_text
             selector_match = re.search(
                 r"\b(ui(?:-text)?):([^\s.,;]+)",
                 user_text,
