@@ -3,7 +3,7 @@
 import re
 import xml.etree.ElementTree as ET
 
-from gemini_agent.tools import run_root_command, validate_android_mechanism
+from gemini_agent.tools import _read_bounded_root_file, run_root_command, validate_android_mechanism
 
 
 def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
@@ -42,12 +42,10 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
                 f"{dump_result}"
             )
 
-        xml_result = run_root_command(f"cat {dump_path}")
-        xml_text = xml_result
-        if "stdout:\n" in xml_text:
-            xml_text = xml_text.split("stdout:\n", 1)[1]
-            if "\nExit code:" in xml_text:
-                xml_text = xml_text.split("\nExit code:", 1)[0]
+        try:
+            xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+        except (RuntimeError, ValueError) as exc:
+            return f"Android UI mechanism execution failed: could not read UI hierarchy: {exc}"
 
         try:
             root = ET.fromstring(xml_text)
