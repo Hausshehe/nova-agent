@@ -714,36 +714,69 @@ class GeminiClient:
                     break
         if requested_tool == "record_verified_android_experience":
             request_match = re.search(
-                r'(?:for|request)\s+(?:capability\s+)?["\']?(.+?)["\']?\s+(?:using|with)\s+(?:mechanism\s+)?(?:intent|ui-text|ui):[^\s,]+',
+                r'(?:for|request)\s+(?:capability\s+)?["\']([^"\']+)["\']\s+(?:using|with)',
                 request_text,
                 re.IGNORECASE,
             )
+            if not request_match:
+                request_match = re.search(
+                    r'(?:for|request)\s+(?:capability\s+)?(.+?)\s+(?:using|with)\s+(?:mechanism\s+)?(?:intent|ui-text|ui):',
+                    request_text,
+                    re.IGNORECASE,
+                )
             mechanism_match = re.search(
                 r"((?:intent|ui-text|ui):[^\s,]+)",
                 request_text,
                 re.IGNORECASE,
             )
             verification_match = re.search(
-                r"(?:verification|evidence)\s*[:=]\s*(.+)$",
+                r"(?:verification|evidence)\s*[:=]\s*(.+?)(?=\s+Then\s+rank|\s+Do not|\s+Report|$)",
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             if not request_match or not mechanism_match or not verification_match:
                 return "Recording a verified Android experience requires request, mechanism, and verification evidence."
+            record_request = request_match.group(1).strip()
+            record_mechanism = mechanism_match.group(1).strip()
+            record_verification = verification_match.group(1).strip()
             result = str(self.tool_handlers["record_verified_android_experience"](
-                request=request_match.group(1).strip(),
-                mechanism=mechanism_match.group(1).strip(),
-                verification=verification_match.group(1).strip(),
+                request=record_request,
+                mechanism=record_mechanism,
+                verification=record_verification,
             ))
             self.last_tool_calls.append({
                 "name": "record_verified_android_experience",
                 "args": {
-                    "request": request_match.group(1).strip(),
-                    "mechanism": mechanism_match.group(1).strip(),
-                    "verification": verification_match.group(1).strip(),
+                    "request": record_request,
+                    "mechanism": record_mechanism,
+                    "verification": record_verification,
                 },
                 "result": result,
             })
+            rank_request_match = re.search(
+                r'rank\s+Android\s+mechanisms\s+for\s+request\s+["\']([^"\']+)["\']',
+                request_text,
+                re.IGNORECASE,
+            )
+            rank_candidates = re.findall(
+                r"(?:intent|ui-text|ui):[^\s,;]+",
+                request_text,
+                re.IGNORECASE,
+            )
+            if rank_request_match and rank_candidates:
+                ranked = self.tool_handlers["rank_android_mechanism_candidates"](
+                    request=rank_request_match.group(1).strip(),
+                    candidates=rank_candidates,
+                )
+                self.last_tool_calls.append({
+                    "name": "rank_android_mechanism_candidates",
+                    "args": {
+                        "request": rank_request_match.group(1).strip(),
+                        "candidates": rank_candidates,
+                    },
+                    "result": ranked,
+                })
+                return result + "\n" + str(ranked)
             return result
         if requested_tool == "rank_android_mechanism_candidates":
             request_match = re.search(
