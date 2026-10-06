@@ -69,9 +69,9 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_requested_local_tool_resolves_unnamed_newly_generated_capability(self):
         def generated_camera_capability():
-            if False:
-                return _run_android_mechanism_extension
             return "CAMERA OPENED"
+
+        generated_camera_capability.__nova_generated_capability__ = True
 
         contents = [{
             "role": "user",
