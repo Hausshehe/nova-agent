@@ -679,7 +679,7 @@ def autonomously_repair_capability(capability: str, failure_evidence: str) -> st
         )
 
     analysis = analyze_capability_history(name)
-    decision_match = re.search(r"Repair decision:\s*([^\\n]+)", analysis)
+    decision_match = re.search(r"Repair decision:\s*([^\n]+)", analysis)
     decision = decision_match.group(1).strip() if decision_match else "UNKNOWN"
 
     if decision == "ACCEPT_ELIGIBLE":
