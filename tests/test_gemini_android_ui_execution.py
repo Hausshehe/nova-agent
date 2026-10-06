@@ -43,10 +43,8 @@ class AndroidUiExecutionTests(unittest.TestCase):
         )
         self.assertIn("Resolved bounds: [10,20][110,80]", result)
         self.assertIn("Tap result:", result)
-        self.assertEqual(
-            run.call_args_list[1].args[0],
-            "input tap 60 50",
-        )
+        self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
+        tap.assert_called_once_with(60, 50)
 
 
     def test_executes_enabled_non_clickable_resource_id(self):
