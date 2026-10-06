@@ -11,6 +11,7 @@ import operator
 import shlex
 import shutil
 import subprocess
+import time
 import shutil
 import os
 import platform
@@ -472,12 +473,30 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
             + validation
         )
     result = send_android_intent(value)
+    expected_match = re.findall(r"\\b([A-Za-z0-9._$]+/[A-Za-z0-9._$]+)\\b", validation)
+    expected_component = expected_match[-1] if expected_match else ""
+    verification = "UNVERIFIED: no expected foreground component could be derived from mechanism validation."
+    if expected_component:
+        time.sleep(1)
+        foreground = get_foreground_android_component()
+        if expected_component in foreground:
+            verification = (
+                "VERIFIED: expected Android component is foreground: "
+                + expected_component
+            )
+        else:
+            verification = (
+                "FAILED: intent launch returned successfully, but the expected "
+                "Android component did not become foreground. "
+                f"Expected: {expected_component}. Observed:\\n{foreground}"
+            )
     return (
         "Android mechanism execution:\\n"
         f"Requested capability: {request.strip()}\\n"
         f"Mechanism: {candidate}\\n"
         "Validation: VIABLE\\n"
-        f"Result:\\n{result}"
+        f"Result:\\n{result}\\n"
+        f"Post-action verification: {verification}"
     )
 
 
