@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
-from gemini_agent.tools import _run_bounded_ui_tap
+from gemini_agent.tools import _run_bounded_ui_tap, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class AndroidUiExecutionTests(unittest.TestCase):
@@ -132,6 +132,11 @@ class AndroidUiExecutionTests(unittest.TestCase):
             timeout=unittest.mock.ANY,
             check=False,
         )
+
+    def test_ui_executor_is_exposed_as_a_tool(self):
+        declaration = next(d for d in TOOL_DECLARATIONS if d["name"] == "execute_validated_android_ui_mechanism")
+        self.assertIn("ui-text:<text>", declaration["parameters"]["properties"]["mechanism"]["description"])
+        self.assertIs(TOOL_HANDLERS["execute_validated_android_ui_mechanism"], execute_validated_android_ui_mechanism)
 
     def test_blocks_non_ui_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated ui"):
