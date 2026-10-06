@@ -1922,8 +1922,37 @@ class GeminiClient:
         if requested_tool == "execute_validated_android_mechanism":
             mechanism = self._extract_mechanism(prompt)
             if not mechanism:
-                return "Mechanism execution requires an explicit mechanism such as intent:IMAGE_CAPTURE."
-            return str(self.tool_handlers["execute_validated_android_mechanism"](request=prompt, mechanism=mechanism))
+                try:
+                    discovery = str(
+                        self.tool_handlers["discover_android_mechanisms"](
+                            request=prompt
+                        )
+                    )
+                    candidates = re.findall(r"(?m)^intent:([^\\s]+)$", discovery)
+                    for action in candidates:
+                        candidate = f"intent:{action}"
+                        validation = str(
+                            self.tool_handlers["validate_android_mechanism"](
+                                request=prompt,
+                                mechanism=candidate,
+                            )
+                        )
+                        if "Status: VIABLE" in validation:
+                            mechanism = candidate
+                            break
+                except (RuntimeError, ValueError, TypeError):
+                    mechanism = ""
+            if not mechanism:
+                return (
+                    "Mechanism execution could not select a viable discovered mechanism. "
+                    "No Android mechanism was executed."
+                )
+            return str(
+                self.tool_handlers["execute_validated_android_mechanism"](
+                    request=prompt,
+                    mechanism=mechanism,
+                )
+            )
         if requested_tool == "execute_validated_android_ui_mechanism":
             mechanism = self._extract_mechanism(prompt)
             if not mechanism:
