@@ -202,8 +202,8 @@ class GeminiClient:
         # before Cloudflare so provider-side argument generation cannot reinterpret
         # the request or execute an adjacent primitive.
         action_request = bool(
-            re.search(r"\\b(?:execute|run|use|verify|test)\\b", user_text, re.IGNORECASE)
-            and re.search(r"\\bcapabilit(?:y|ies)\\b", user_text, re.IGNORECASE)
+            re.search(r"\b(?:execute|run|use|verify|test)\b", user_text, re.IGNORECASE)
+            and re.search(r"\bcapabilit(?:y|ies)\b", user_text, re.IGNORECASE)
         )
         if action_request:
             generated_names = []
@@ -218,7 +218,7 @@ class GeminiClient:
                 ):
                     generated_names.append(name)
             for name in sorted(generated_names, key=len, reverse=True):
-                if re.search(rf"\\b{re.escape(name.lower())}\\b", user_text, re.IGNORECASE):
+                if re.search(rf"\b{re.escape(name.lower())}\b", user_text, re.IGNORECASE):
                     return name
 
         if "self-test" in user_text or "self test" in user_text:
