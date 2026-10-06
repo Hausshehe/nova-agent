@@ -296,6 +296,30 @@ class CloudflareClientTests(unittest.TestCase):
             )
         self.assertEqual(answer, "executed intent:android.media.action.IMAGE_CAPTURE")
 
+    def test_android_mechanism_execution_selects_discovered_ui_text_mechanism(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "discover_android_mechanisms": lambda request: (
+                        "Android mechanism discovery (read-only):\n"
+                        "Discovered bounded UI mechanisms:\n"
+                        "ui-text:Take Photo"
+                    ),
+                    "validate_android_mechanism": lambda request, mechanism: "Status: VIABLE",
+                    "execute_android_mechanism": lambda request, mechanism: f"executed {mechanism}",
+                }
+            )
+            answer = client.ask(
+                "Use the Android mechanism execution capability to activate the visible "
+                "Take Photo control. Discover the mechanism yourself and execute it."
+            )
+        self.assertIn("executed ui-text:Take Photo", answer)
+
+
     def test_android_mechanism_execution_capability_selects_discovered_viable_mechanism(self):
         with patch.dict(
             os.environ,
