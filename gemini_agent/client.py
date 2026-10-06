@@ -736,7 +736,7 @@ class GeminiClient:
                 request_text, re.IGNORECASE,
             )
             verification_match = re.search(
-                r'(?:verification|evidence)\s*[:=]\s*(.+?)(?=\s+Then\s+rank|\s+Do not|\s+Report|$)',
+                r'(?:verification|evidence)\s*(?::|=)?\s*(?:"([^"]+)"|'([^']+)'|(.+?))(?=\s+Then\s+rank|\s+Do not|\s+Report|$)',
                 request_text, re.IGNORECASE | re.DOTALL,
             )
             domain_match = re.search(r'\bdomain\s*[:=]\s*([A-Za-z0-9_-]+)', request_text, re.IGNORECASE)
