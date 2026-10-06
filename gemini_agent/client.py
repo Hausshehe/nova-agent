@@ -770,6 +770,11 @@ class GeminiClient:
         )
 
         requested_tool = self._requested_local_tool(contents)
+        # A compound strategy-selection workflow must stay in the normal decision
+        # loop. Do not let a nested strategy name such as verify_command_result
+        # hijack the whole request into a single local verifier call.
+        if strategy_candidates:
+            requested_tool = None
         # Resolve explicitly named generated capabilities from the live client
         # registry before any provider round-trip. This keeps execution local and
         # prevents provider-side argument generation from reinterpreting a repair
