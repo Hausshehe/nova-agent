@@ -5061,6 +5061,25 @@ TOOL_DECLARATIONS = [
         },
     },
 
+    {
+        "name": "record_verified_experience_tool",
+        "description": "Persist an explicitly VERIFIED experience for conservative future reuse across domains.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "request": {"type": "STRING"},
+            "strategy": {"type": "STRING"},
+            "verification": {"type": "STRING"},
+            "domain": {"type": "STRING"}
+        }, "required": ["request", "strategy", "verification"]},
+    },
+    {
+        "name": "rank_verified_experience_candidates",
+        "description": "Rank candidate strategies using only sufficiently similar explicitly VERIFIED experience.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "request": {"type": "STRING"},
+            "candidates": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "domain": {"type": "STRING"}
+        }, "required": ["request", "candidates"]},
+    },
 ]
 
 
@@ -5411,6 +5430,9 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "delete_file": delete_file,
     "find_files": find_files,
     "search_text": search_text,
+    "record_verified_experience_tool": record_verified_experience_tool,
+    "rank_verified_experience_candidates": rank_verified_experience_candidates,
+
 }
 
 
