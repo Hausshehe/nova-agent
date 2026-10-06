@@ -1679,6 +1679,12 @@ class GeminiClient:
                     # sending the same action back to Cloudflare for another round.
                     explicit_capability_use = bool(
                         re.search(r"\buse\s+(?:the\s+)?[\w.-]+\s+capability\b", request_text, re.IGNORECASE)
+                        or (
+                            local_name
+                            and re.search(r"\buse\b", request_text, re.IGNORECASE)
+                            and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
+                            and local_name.lower() in request_text.lower()
+                        )
                     )
                     if explicit_capability_use and requested_tool == local_name and loop_index == 0:
                         return str(tool_result)
