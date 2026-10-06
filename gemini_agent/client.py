@@ -697,22 +697,55 @@ class GeminiClient:
         prompt_text = request_text
 
         # Verified experience is part of Nova's normal decision loop. When a task
-        # presents multiple strategies, the provider may use the existing generic
-        # selector before execution. Learned experience is preference only: it
-        # never substitutes for validation, execution, or postcondition verification.
+        # presents multiple candidate strategies, deterministically apply the existing
+        # generic selector before the provider reasons about execution. Learned experience
+        # is preference only: it never substitutes for validation, execution, or
+        # postcondition verification.
         decision_policy = (
-            "Nova decision policy: when the user presents multiple candidate strategies "
-            "for the same goal, use select_verified_strategy_tool before executing a strategy "
-            "when candidate selection is materially relevant. Treat its result only as a "
+            "Nova decision policy: when multiple candidate strategies are explicitly "
+            "available for the same goal, use the verified-experience preference supplied "
+            "by Nova before deciding what to execute. Treat learned experience only as a "
             "preference from sufficiently similar VERIFIED experience. Never treat learned "
             "experience as proof of current viability or success; validate the selected "
-            "mechanism/capability and independently verify execution. If selection is "
-            "unnecessary or candidates are not explicitly available, continue normally."
+            "mechanism/capability and independently verify execution."
         )
         if system_instruction:
             messages[0]["content"] = str(messages[0]["content"]) + "\n\n" + decision_policy
         else:
             messages.insert(0, {"role": "system", "content": decision_policy})
+
+        # Deterministic normal-loop bridge. This is deliberately generic: it only handles
+        # explicit candidate-strategy lists, applies the existing selector, and feeds its
+        # result back as preference context. It does not execute a strategy or treat the
+        # learned result as proof of viability.
+        strategy_candidates = []
+        candidate_patterns = (
+            r'candidate strategies?\s*[:=]?\s*["\']([^"\']+)["\']\s*(?:,|and)\s*["\']([^"\']+)["\']',
+            r'between\s+strategy\s+["\']([^"\']+)["\']\s+and\s+strategy\s+["\']([^"\']+)["\']',
+        )
+        for pattern in candidate_patterns:
+            candidate_match = re.search(pattern, request_text, re.IGNORECASE)
+            if candidate_match:
+                strategy_candidates = [candidate_match.group(1).strip(), candidate_match.group(2).strip()]
+                break
+        if strategy_candidates:
+            goal_match = re.search(
+                r'(?:recover|solve|handle|complete|perform)\s+(?:a|an|the)?\s*(.+?)(?=\.\s*(?:I have|You have|There are)|$)',
+                request_text,
+                re.IGNORECASE,
+            )
+            goal = goal_match.group(1).strip() if goal_match else request_text.strip()
+            from gemini_agent.learning import select_verified_strategy
+            selection = select_verified_strategy(goal, strategy_candidates)
+            messages[0]["content"] = str(messages[0]["content"]) + (
+                "\n\nVerified strategy preference from Nova:\n" + selection +
+                "\nThis is preference only. Independently validate and verify any execution."
+            )
+            self.last_tool_calls.append({
+                "name": "select_verified_strategy_tool",
+                "args": {"request": goal, "candidates": strategy_candidates, "domain": "general"},
+                "result": selection,
+            })
 
         unnamed_generated_capability_request = bool(
             re.search(r"\\b(?:use|execute|run|verify|test)\\b", request_text, re.IGNORECASE)
