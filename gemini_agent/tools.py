@@ -150,6 +150,42 @@ def diagnose_capability_failure(capability: str, failure_evidence: str) -> str:
     lines.append("No capability execution, code modification, or device state change was performed.")
     return "\n".join(lines)
 
+def select_capability_repair_candidate(capability: str, diagnosis: str) -> str:
+    """Select a bounded repair candidate from read-only capability state."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(diagnosis, str) or not diagnosis.strip():
+        raise ValueError("Diagnosis cannot be empty.")
+    name = capability.strip()
+    lines = ["Capability repair-candidate selection (read-only):", f"Capability: {name}", "Selection evidence: supplied diagnosis plus current registration state."]
+    declaration = next((item for item in TOOL_DECLARATIONS if isinstance(item, dict) and item.get("name") == name), None)
+    handler = TOOL_HANDLERS.get(name)
+    if declaration is None or handler is None or not callable(handler):
+        lines += ["Candidate: REPAIR_REGISTRATION", "Basis: capability registration is incomplete or invalid.", "Safety boundary: repair only the bounded declaration/handler registration; do not invent implementation code.", "Status: CANDIDATE_SELECTED", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    generated = bool(getattr(handler, "__nova_generated_capability__", False) or (getattr(handler, "__code__", None) is not None and any(marker in handler.__code__.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive"))))
+    if not generated:
+        lines += ["Candidate: NONE", "Basis: capability is locally implemented and the supplied diagnosis does not establish a bounded generic repair target.", "Safety boundary: do not mutate a local implementation without failure-specific evidence identifying a bounded repair.", "Status: NO_SAFE_CANDIDATE", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    try:
+        persisted = _load_persisted_capability_extensions()
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        lines += ["Candidate: NONE", f"Basis: persisted repair metadata is unavailable ({exc}).", "Safety boundary: do not reconstruct generated implementation from inference.", "Status: NO_SAFE_CANDIDATE", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    entry = next((item for item in persisted if isinstance(item, dict) and item.get("name") == name), None)
+    if entry is None:
+        lines += ["Candidate: NONE", "Basis: no persisted verified repair recipe exists for this generated capability.", "Safety boundary: do not invent a replacement implementation.", "Status: NO_SAFE_CANDIDATE", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    kind = str(entry.get("implementation_kind", "")).strip().lower()
+    target = str(entry.get("implementation_target", "")).strip()
+    if kind not in {"existing_tool", "android_mechanism"} or not target:
+        lines += ["Candidate: NONE", "Basis: persisted recipe is malformed or outside the bounded repair classes.", "Safety boundary: reject unbounded repair metadata.", "Status: NO_SAFE_CANDIDATE", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    if kind == "existing_tool" and target not in TOOL_HANDLERS:
+        lines += ["Candidate: NONE", f"Basis: persisted existing-tool target '{target}' is no longer registered.", "Safety boundary: do not substitute an inferred target.", "Status: NO_SAFE_CANDIDATE", "No capability execution or mutation was performed."]
+        return "\n".join(lines)
+    lines += ["Candidate: RESTORE_GENERATED_CAPABILITY", f"Implementation kind: {kind}", f"Implementation target: {target}", "Basis: generated capability has a persisted bounded repair recipe.", "Safety boundary: restore only from the persisted recipe; deterministic tests and real-world verification are required before acceptance.", "Status: CANDIDATE_SELECTED", "No capability execution or mutation was performed."]
+    return "\n".join(lines)
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -3611,6 +3647,18 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "select_capability_repair_candidate",
+        "description": "Select a bounded repair candidate from read-only capability registration and persisted-recipe evidence. Do not execute or modify the capability.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the local capability reported as failing."},
+                "diagnosis": {"type": "STRING", "description": "Read-only diagnosis result for the capability failure."},
+            },
+            "required": ["capability", "diagnosis"],
+        },
+    },
+    {
         "name": "diagnose_capability_failure",
         "description": "Diagnose a reported local capability failure using read-only registration and repair-recipe evidence. Do not execute or modify the capability.",
         "parameters": {
@@ -4599,6 +4647,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
     "recover_android_mechanism": recover_android_mechanism,
