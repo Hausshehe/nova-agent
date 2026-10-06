@@ -85,11 +85,16 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch("urllib.request.urlopen") as open_url:
             client = GeminiClient()
-            client.tool_handlers["inspect_android_ui"] = lambda: (
-                "Android UI inspection (read-only): <hierarchy/>"
+            seen = []
+            client.tool_handlers["inspect_android_ui"] = lambda selector="": (
+                seen.append(selector) or "Android UI inspection (read-only): <node text='CTRL'/>"
             )
-            answer = client.ask("Inspect the current Android UI without interacting with it.")
+            answer = client.ask(
+                "Use the Android UI inspection tool with selector ui-text:CTRL. "
+                "Inspect read-only and do not interact with the UI."
+            )
         self.assertIn("Android UI inspection", answer)
+        self.assertEqual(seen, ["ui-text:CTRL"])
         open_url.assert_not_called()
 
     def test_discover_android_ui_actions_routes_without_cloudflare(self):
