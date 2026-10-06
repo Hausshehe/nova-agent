@@ -195,7 +195,11 @@ class GeminiClient:
             "persist a verified experience",
             "learn from verified experience",
         )):
-            return "record_verified_experience_tool"
+            # Compound requests must stay in the normal decision loop so that
+            # the record step can be followed by selection, execution, and
+            # automatic outcome learning rather than terminating early.
+            if not re.search(r"then\s+use\s+(?:the\s+)?normal\s+decision\s+process", user_text):
+                return "record_verified_experience_tool"
         if any(phrase in user_text for phrase in (
             "select verified strategy",
             "choose strategy using verified experience",
