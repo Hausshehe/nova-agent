@@ -116,6 +116,9 @@ class GeminiClient:
         ):
             generated_names = []
             for name, handler in TOOL_HANDLERS.items():
+                if getattr(handler, "__nova_generated_capability__", False):
+                    generated_names.append(name)
+                    continue
                 code = getattr(handler, "__code__", None)
                 if code is not None and "_run_android_mechanism_extension" in code.co_names:
                     generated_names.append(name)
