@@ -135,6 +135,31 @@ from gemini_agent.tools import (
 
 
 
+class CapabilityHistoryAnalysisTests(unittest.TestCase):
+    def test_analyze_capability_history_uses_latest_verification_outcome(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger = Path(temp_dir) / "outcomes.json"
+            ledger.write_text(json.dumps([
+                {"capability": "generated_probe", "stage": "VERIFICATION", "status": "FAILED", "evidence": "Post-action verification: FAILED", "recorded_at": "2026-10-06T17:00:00+00:00"},
+                {"capability": "generated_probe", "stage": "VERIFICATION", "status": "VERIFIED", "evidence": "Post-action verification: VERIFIED", "recorded_at": "2026-10-06T17:01:00+00:00"},
+            ]), encoding="utf-8")
+            with patch("gemini_agent.tools._outcome_ledger_path", return_value=ledger):
+                result = tools_module.analyze_capability_history("generated_probe")
+        self.assertIn("Latest verification outcome: VERIFIED", result)
+        self.assertIn("Repair decision: ACCEPT_ELIGIBLE", result)
+        self.assertIn("No capability execution", result)
+
+    def test_analyze_capability_history_does_not_accept_latest_inconclusive(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger = Path(temp_dir) / "outcomes.json"
+            ledger.write_text(json.dumps([
+                {"capability": "generated_probe", "stage": "VERIFICATION", "status": "INCONCLUSIVE", "evidence": "Post-action verification: INCONCLUSIVE", "recorded_at": "2026-10-06T17:02:00+00:00"},
+            ]), encoding="utf-8")
+            with patch("gemini_agent.tools._outcome_ledger_path", return_value=ledger):
+                result = tools_module.analyze_capability_history("generated_probe")
+        self.assertIn("Repair decision: REVERIFY", result)
+        self.assertNotIn("ACCEPT_ELIGIBLE", result)
+
 class CapabilityRepairVerificationTests(unittest.TestCase):
     def test_record_repair_verification_persists_pending_state(self):
         import tempfile
