@@ -602,8 +602,6 @@ def recover_android_mechanism(
         return diagnosis + "\nRecovery action:\n" + recovery
     return diagnosis + "\nRecovery action: NONE."
 
-
-
 def rank_android_mechanism_candidates(
     request: str, candidates: list[str]
 ) -> list[str]:
@@ -633,6 +631,7 @@ def rank_android_mechanism_candidates(
             ),
         )
     ]
+
 
 def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
     """Discover, validate, and execute one untried Android mechanism through the generic dispatcher."""
@@ -4474,3 +4473,177 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_load_average": get_load_average,
     "get_system_uptime": get_system_uptime,
     "get_system_boot_time": get_system_boot_time,
+    "get_system_swap_usage": get_system_swap_usage,
+    "get_screen_brightness_mode": get_screen_brightness_mode,
+    "get_screen_orientation": get_screen_orientation,
+    "get_screen_resolution": get_screen_resolution,
+    "get_screen_density": get_screen_density,
+    "get_media_volume": get_media_volume,
+    "get_screen_refresh_rate": get_screen_refresh_rate,
+    "get_screen_timeout": get_screen_timeout,
+    "get_system_battery_status": get_system_battery_status,
+    "get_screen_state": get_screen_state,
+    "get_screen_brightness": get_screen_brightness,
+    "get_system_cpu_usage": get_system_cpu_usage,
+    "get_system_memory_usage": get_system_memory_usage,
+    "get_network_interfaces": get_network_interfaces,
+    "get_system_info": get_system_info,
+    "get_process_id": get_process_id,
+    "get_current_working_directory": get_current_working_directory,
+    "get_python_executable": get_python_executable,
+    "get_cpu_count": get_cpu_count,
+    "get_memory_usage": get_memory_usage,
+    "get_temp_directory": get_temp_directory,
+    "get_home_directory": get_home_directory,
+    "get_process_uptime": get_process_uptime,
+    "get_process_thread_count": get_process_thread_count,
+    "get_parent_process_id": get_parent_process_id,
+    "get_process_group_id": get_process_group_id,
+    "get_session_id": get_session_id,
+    "get_user_id": get_user_id,
+    "get_umask": get_umask,
+    "remember_fact": remember_fact,
+    "forget_fact": forget_fact,
+    "list_memory": list_memory,
+    "path_exists": path_exists,
+    "create_directory": create_directory,
+    "delete_directory": delete_directory,
+    "get_file_info": get_file_info,
+    "get_file_access_time": get_file_access_time,
+    "get_file_modified_time": get_file_modified_time,
+    "get_file_extension": get_file_extension,
+    "get_file_name": get_file_name,
+    "get_file_stem": get_file_stem,
+    "get_file_parent": get_file_parent,
+    "get_file_permissions": get_file_permissions,
+    "list_directory_recursive": list_directory_recursive,
+    "move_directory": move_directory,
+    "copy_directory": copy_directory,
+    "hash_file": hash_file,
+    "get_directory_entry_count": get_directory_entry_count,
+    "get_disk_usage": get_disk_usage,
+    "get_directory_size": get_directory_size,
+    "count_file_lines": count_file_lines,
+    "list_directory": list_directory,
+    "read_text_file": read_text_file,
+    "write_text_file": write_text_file,
+    "edit_text_file": edit_text_file,
+    "append_text_file": append_text_file,
+    "copy_file": copy_file,
+    "move_file": move_file,
+    "delete_file": delete_file,
+    "find_files": find_files,
+    "search_text": search_text,
+}
+
+
+GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
+    "name": "get_screen_timeout",
+    "description": "Get the Android screen-off timeout duration.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+
+
+def _run_extension_primitive(tool_name: str, arguments: str) -> str:
+    handler = TOOL_HANDLERS.get(tool_name)
+    if handler is None:
+        raise ValueError(f"Unknown extension primitive: {tool_name}")
+    parsed = json.loads(arguments) if arguments.strip() else {}
+    if not isinstance(parsed, dict):
+        raise ValueError("Extension primitive arguments must be a JSON object.")
+    return str(handler(**parsed))
+
+
+def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
+    validation = validate_android_mechanism(request, mechanism)
+    if "Status: VIABLE" not in validation:
+        return "Extension capability blocked: Android mechanism is no longer viable.\n" + validation
+    if mechanism.lower().startswith(("ui:", "ui-text:")):
+        from gemini_agent.android_ui import execute_validated_android_ui_mechanism
+        return str(
+            execute_validated_android_ui_mechanism(
+                request=request,
+                mechanism=mechanism,
+            )
+        )
+    return str(execute_validated_android_mechanism(request=request, mechanism=mechanism))
+
+
+
+def _load_persisted_capability_extensions() -> None:
+    """Restore verified self-generated capabilities without executing them at startup."""
+    path = _extension_store_path()
+    if not path.exists():
+        return
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(entries, list):
+        return
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name", "")
+        description = entry.get("description", "")
+        kind = entry.get("implementation_kind", "")
+        target = entry.get("implementation_target", "")
+        arguments = entry.get("implementation_args", "")
+        request = entry.get("request", "")
+        if (
+            not isinstance(name, str)
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+            or name in TOOL_HANDLERS
+            or not isinstance(description, str)
+            or not description.strip()
+            or kind not in {"existing_tool", "android_mechanism"}
+            or not isinstance(target, str)
+            or not target.strip()
+            or not isinstance(arguments, str)
+            or not isinstance(request, str)
+            or not request.strip()
+        ):
+            continue
+
+        if kind == "android_mechanism":
+            mechanism = target.strip()
+            capability_request = request.strip()
+
+            def restored_capability(
+                _request: str = capability_request,
+                _mechanism: str = mechanism,
+            ) -> str:
+                return str(_run_android_mechanism_extension(_request, _mechanism))
+
+        else:
+            primitive = target.strip()
+            primitive_arguments = arguments.strip()
+            # Existing-tool extensions depend on the generated primitive helper
+            # being present in the current source. Stale persisted entries must
+            # not be restored into a callable that cannot execute.
+            if "_run_extension_primitive" not in globals():
+                continue
+            if primitive not in TOOL_HANDLERS:
+                continue
+
+            def restored_capability(
+                _primitive: str = primitive,
+                _arguments: str = primitive_arguments,
+            ) -> str:
+                return str(_run_extension_primitive(_primitive, _arguments))
+
+        restored_capability.__name__ = name
+        restored_capability.__qualname__ = name
+        restored_capability.__nova_generated_capability__ = True
+        TOOL_HANDLERS[name] = restored_capability
+        TOOL_DECLARATIONS.append(
+            {
+                "name": name,
+                "description": description.strip(),
+                "parameters": {"type": "OBJECT", "properties": {}},
+            }
+        )
+
+
+_load_persisted_capability_extensions()
