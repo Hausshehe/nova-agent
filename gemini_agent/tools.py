@@ -1154,7 +1154,7 @@ def _run_bounded_root_action(command: str) -> str:
     try:
         completed = subprocess.run(
             ["su"],
-            input=f"command={command}\nexit\n",
+            input=command + "\nexit\n",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
