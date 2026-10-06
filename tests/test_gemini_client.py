@@ -462,19 +462,20 @@ class CloudflareClientTests(unittest.TestCase):
         )
         verify_call = client.last_tool_calls[-1]
         self.assertEqual(verify_call["args"]["result"], "Exit code: 0\nstdout:\nPython 3.14.6")
-        self.assertEqual(open_url.call_count, 3)
+        self.assertEqual(open_url.call_count, 2)
         first_payload = json.loads(open_url.call_args_list[0].args[0].data)
-        self.assertNotIn("run_command", [
-            tool["function"]["name"] for tool in first_payload["tools"]
-        ])
+        self.assertEqual(
+            [tool["function"]["name"] for tool in first_payload["tools"]],
+            ["verify_command_result"],
+        )
+        self.assertEqual(
+            first_payload["tool_choice"],
+            {"type": "function", "function": {"name": "verify_command_result"}},
+        )
         second_payload = json.loads(open_url.call_args_list[1].args[0].data)
         self.assertEqual(
             [tool["function"]["name"] for tool in second_payload["tools"]],
             ["verify_command_result"],
-        )
-        self.assertEqual(
-            second_payload["tool_choice"],
-            {"type": "function", "function": {"name": "verify_command_result"}},
         )
         recorder.assert_called_once_with(
             "verify a safe command result",
