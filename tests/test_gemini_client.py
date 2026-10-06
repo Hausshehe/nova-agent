@@ -279,6 +279,54 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("verified-experience preference supplied by Nova", system_messages[0])
         self.assertIn("Treat learned experience only as a preference", system_messages[0])
 
+    def test_normal_decision_loop_learns_verified_outcome_for_selected_strategy(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "calculator-call",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": json.dumps({"expression": "17 * 23"}),
+                        },
+                    }]
+                }
+            }]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ), patch(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {**__import__("gemini_agent.tools", fromlist=["TOOL_HANDLERS"]).TOOL_HANDLERS},
+        ), patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: calculator",
+        ), patch(
+            "gemini_agent.learning.record_verified_experience",
+            return_value="Verified experience learned.",
+        ) as recorder:
+            client = GeminiClient()
+            client.ask(
+                'I need to perform a calculation. I have two candidate strategies: "fallback_probe" and "calculator". '
+                'Use the normal decision process to choose which strategy should be preferred first based on verified experience.'
+            )
+        recorder.assert_called_once()
+        self.assertEqual(
+            recorder.call_args.args[:3],
+            (
+                "perform a calculation",
+                "calculator",
+                "17 * 23 = 391",
+            ),
+        )
+        self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
+
     def test_normal_decision_loop_preserves_action_verb_for_verified_experience_matching(self):
         response = {"choices": [{"message": {"content": "selected"}}]}
         with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"}, clear=True), patch(
