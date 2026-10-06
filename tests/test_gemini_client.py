@@ -454,10 +454,8 @@ class CloudflareClientTests(unittest.TestCase):
             {"type": "function", "function": {"name": "verify_command_result"}},
         )
         second_payload = json.loads(open_url.call_args_list[1].args[0].data)
-        self.assertEqual(
-            [tool["function"]["name"] for tool in second_payload["tools"]],
-            ["verify_command_result"],
-        )
+        self.assertNotIn("tools", second_payload)
+        self.assertNotIn("tool_choice", second_payload)
         recorder.assert_called_once_with(
             "verify a safe command result",
             "verify_command_result",
