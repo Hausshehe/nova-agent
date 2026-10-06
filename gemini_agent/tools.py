@@ -295,6 +295,12 @@ def discover_android_ui_actions() -> str:
         except (RuntimeError, ValueError):
             pass
 
+_DISCOVERABLE_ANDROID_INTENTS = (
+    "android.media.action.IMAGE_CAPTURE",
+    "android.media.action.STILL_IMAGE_CAMERA",
+)
+
+
 def discover_android_mechanisms(request: str) -> str:
     """Discover safe, read-only Android mechanisms that may implement a missing capability."""
     if not isinstance(request, str) or not request.strip():
@@ -313,6 +319,19 @@ def discover_android_mechanisms(request: str) -> str:
     results = [f"Requested capability: {requested}"]
     for executable in ("am", "cmd", "dumpsys", "pm", "uiautomator"):
         results.append(f"{executable}: {find_executable(executable)}")
+
+    # Validate the bounded Android intent catalog against the current device.
+    # This is discovery only: no intent is launched.
+    intent_candidates = []
+    for action in _DISCOVERABLE_ANDROID_INTENTS:
+        try:
+            evidence = resolve_android_intent(action)
+        except (RuntimeError, ValueError) as exc:
+            evidence = str(exc)
+        if "Intent was resolved only" in evidence:
+            intent_candidates.append(f"intent:{action}")
+    if intent_candidates:
+        results.append("Discovered bounded intent mechanisms:\n" + "\n".join(intent_candidates))
 
     try:
         services = run_root_command("dumpsys -l")
@@ -2990,7 +3009,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "discover_android_mechanisms",
-        "description": "Discover safe, read-only Android executables and service candidates that may implement a missing capability. No action is performed.",
+        "description": "Discover safe, read-only Android executables, services, and bounded intent mechanisms that may implement a missing capability. Intent candidates are resolved only; no action is performed.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
