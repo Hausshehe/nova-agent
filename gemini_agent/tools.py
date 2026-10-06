@@ -479,6 +479,7 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     )
     expected_component = expected_matches[-1] if expected_matches else ""
     verification = "UNVERIFIED: no expected foreground component could be derived from mechanism validation."
+    recovery = ""
     if expected_component:
         time.sleep(1)
         foreground = get_foreground_android_component()
@@ -493,6 +494,50 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
                 "Android component did not become foreground. "
                 f"Expected: {expected_component}. Observed:\\n{foreground}"
             )
+            # A successful launch command is not proof of goal success. If the
+            # postcondition fails, discover other bounded intent mechanisms and
+            # try one untried candidate once. This is generic mechanism
+            # recovery, not capability-specific behavior.
+            try:
+                discovered = discover_android_mechanisms(request)
+                alternatives = re.findall(r"(?m)^intent:([^\s]+)$", discovered)
+            except (RuntimeError, ValueError):
+                alternatives = []
+            for alternative in alternatives:
+                alternative_mechanism = f"intent:{alternative}"
+                if alternative_mechanism.lower() == candidate.lower():
+                    continue
+                alternate_validation = validate_android_mechanism(
+                    request, alternative_mechanism
+                )
+                if "Status: VIABLE" not in alternate_validation:
+                    continue
+                alternate_result = send_android_intent(alternative)
+                time.sleep(1)
+                alternate_foreground = get_foreground_android_component()
+                alternate_matches = re.findall(
+                    r"(?<![A-Za-z0-9._$-])([A-Za-z0-9._$-]+/[A-Za-z0-9._$-]+)(?![A-Za-z0-9._$-])",
+                    alternate_validation,
+                )
+                alternate_component = (
+                    alternate_matches[-1] if alternate_matches else ""
+                )
+                if alternate_component and alternate_component in alternate_foreground:
+                    recovery = (
+                        "Recovery: discovered an alternate viable Android intent "
+                        f"({alternative_mechanism}) and it satisfied the expected "
+                        f"foreground component {alternate_component}.\\n"
+                        f"Recovery result:\\n{alternate_result}"
+                    )
+                    verification = (
+                        "VERIFIED after recovery: expected Android component is "
+                        f"foreground: {alternate_component}"
+                    )
+                    break
+                recovery = (
+                    "Recovery attempt failed: alternate intent "
+                    f"{alternative_mechanism} did not satisfy its postcondition."
+                )
     return (
         "Android mechanism execution:\\n"
         f"Requested capability: {request.strip()}\\n"
@@ -500,8 +545,8 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
         "Validation: VIABLE\\n"
         f"Result:\\n{result}\\n"
         f"Post-action verification: {verification}"
+        + (f"\\n{recovery}" if recovery else "")
     )
-
 
 def assess_capability_gap(request: str) -> str:
     """Determine whether Nova has a plausible local capability for a request."""
