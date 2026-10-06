@@ -971,6 +971,30 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["list_memory"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "list_memory"}})
 
+    def test_explicit_capability_failure_diagnosis_is_read_only_and_deterministic(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {
+                **__import__("gemini_agent.tools", fromlist=["TOOL_HANDLERS"]).TOOL_HANDLERS,
+                "diagnose_capability_failure": lambda capability, failure_evidence: (
+                    f"diagnosed {capability}: {failure_evidence}"
+                ),
+            },
+        ), patch(
+            "urllib.request.urlopen",
+        ) as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Diagnose a capability failure of the calculator capability. "
+                "Supplied evidence: FAILED: incorrect result."
+            )
+        self.assertIn("diagnosed calculator", result)
+        self.assertEqual(client.last_tool_calls[0]["name"], "diagnose_capability_failure")
+        open_url.assert_not_called()
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
