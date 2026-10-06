@@ -730,7 +730,7 @@ class GeminiClient:
                 break
         if strategy_candidates:
             goal_match = re.search(
-                r'(?:recover|solve|handle|complete|perform)\s+(?:a|an|the)?\s*(.+?)(?=\.\s*(?:I have|You have|There are)|$)',
+                r'((?:recover|solve|handle|complete|perform)\s+(?:a|an|the)?\s*.+?)(?=\.\s*(?:I have|You have|There are)|$)',
                 request_text,
                 re.IGNORECASE,
             )
