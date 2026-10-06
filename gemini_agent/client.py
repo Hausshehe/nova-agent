@@ -129,10 +129,19 @@ class GeminiClient:
             return "discover_android_ui_actions"
         if any(phrase in user_text for phrase in ("discover camera control", "camera control environment", "camera shutter mechanism")):
             return "discover_camera_control"
+        if any(phrase in user_text for phrase in (
+            "apply capability extension",
+            "apply the capability extension",
+            "apply the extension",
+        )):
+            return "apply_capability_extension"
+        if (
+            ("extend yourself" in user_text or "self-extend" in user_text or "self extension" in user_text)
+            and any(phrase in user_text for phrase in ("add a capability", "add this capability", "new capability", "missing capability", "capability"))
+        ):
+            return "apply_capability_extension"
         if any(phrase in user_text for phrase in ("plan a capability extension", "plan an extension", "extend yourself", "add this capability", "how would you add this capability")):
             return "plan_capability_extension"
-        if "apply capability extension" in user_text or "apply the capability extension" in user_text or "apply the extension" in user_text:
-            return "apply_capability_extension"
         if any(phrase in user_text for phrase in ("do i have a capability", "do you have a capability", "is there a tool", "can you do this", "can you do that", "do you support this")):
             return "assess_capability_gap"
         if "capability inventory" in user_text or "capabilities" in user_text or "what tools" in user_text:
@@ -429,17 +438,25 @@ class GeminiClient:
                 "The local transaction rejects those categories automatically."
             )
 
+        discovery = ""
+        try:
+            discovery = str(self.tool_handlers["discover_android_mechanisms"](request=request))
+        except Exception as exc:
+            discovery = f"Android mechanism discovery failed: {exc}"
+        context.append("Fresh Android mechanism discovery for this request:")
+        context.append(discovery)
         context.append(
-            "Use apply_capability_extension as a structured existing-tool composition transaction. "
-            "Provide path gemini_agent/tools.py, implementation_kind='existing_tool', an exact existing "
-            "implementation_target from the exact TOOL_HANDLERS list above, JSON object text in "
-            "implementation_args, and a concise declaration_description. Do not provide function_source, "
-            "old_text, or new_text. "
+            "Use apply_capability_extension as a bounded self-extension transaction. "
+            "For an existing local primitive, use implementation_kind='existing_tool' and an exact "
+            "TOOL_HANDLERS target. For a discovered Android mechanism, use implementation_kind="
+            "'android_mechanism', implementation_target equal to the exact validated mechanism string "
+            "from the discovery results, and implementation_args='{}'. Prefer a discovered mechanism "
+            "over inventing an API, permission, executable, service, or device behavior. The transaction "
+            "validates the Android mechanism again before writing code and runs the deterministic test suite "
+            "before committing. Do not provide function_source, old_text, or new_text. "
             f"HARD CONSTRAINT: the proposed capability name is exactly '{proposed_name}'. "
-            "The implementation_target must match an existing TOOL_HANDLERS key character-for-character. "
-            "Do not invent Android APIs, permissions, executables, services, or device behavior. "
-            "The local transaction generates the new Python wrapper itself. If no existing local primitive "
-            "can safely implement the capability, do not fabricate one."
+            "If no viable mechanism or existing primitive can safely implement the capability, do not "
+            "fabricate one and do not modify the repository."
         )
         return "\n".join(context)
 
