@@ -327,6 +327,16 @@ class CloudflareClientTests(unittest.TestCase):
         )
         self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
 
+    def test_compound_verified_learning_request_stays_in_normal_decision_loop(self):
+        request = (
+            'First record a verified experience for request "verify a safe command result" '
+            'using strategy "verify_command_result" with verification "Verification: VERIFIED: seed." '
+            'Then use the normal decision process to choose and execute a strategy.'
+        )
+        self.assertIsNone(GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ]))
+
     def test_normal_decision_loop_preserves_action_verb_for_verified_experience_matching(self):
         response = {"choices": [{"message": {"content": "selected"}}]}
         with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"}, clear=True), patch(
