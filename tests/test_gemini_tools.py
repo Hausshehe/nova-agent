@@ -131,12 +131,24 @@ class AndroidMechanismDiscoveryTests(unittest.TestCase):
         ), patch(
             "gemini_agent.tools.run_root_command",
             return_value="Currently running services:\ncamera\naudio\nwindow",
+        ), patch(
+            "gemini_agent.tools.discover_android_ui_actions",
+            return_value=(
+                "Android UI action discovery (read-only):\n"
+                "Discovered bounded UI mechanisms:\n"
+                "ui:com.example:id/capture\n"
+                "ui-text:Take Photo\n"
+                "UI actions were discovered only; no interaction or device state change was performed."
+            ),
         ):
             result = discover_android_mechanisms("control the camera")
         self.assertIn("Android mechanism discovery (read-only):", result)
         self.assertIn("dumpsys: Executable: /system/bin/dumpsys", result)
         self.assertIn("Candidate Android services:", result)
         self.assertIn("camera", result)
+        self.assertIn("Discovered bounded UI mechanisms:", result)
+        self.assertIn("ui:com.example:id/capture", result)
+        self.assertIn("ui-text:Take Photo", result)
         self.assertIn("No action was performed", result)
 
     def test_discover_android_mechanisms_rejects_empty_request(self):
