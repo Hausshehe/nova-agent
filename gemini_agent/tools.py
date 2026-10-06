@@ -314,18 +314,14 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
         evidence = find_executable(value)
     elif kind == "service":
         services = run_root_command("dumpsys -l")
-        matches = [
-            line.strip()
-            for line in services.splitlines()
-            if line.strip() == value
-        ]
+        matches = [line.strip() for line in services.splitlines() if line.strip() == value]
         evidence = "\n".join(matches) if matches else "Service was not found."
     elif kind in {"ui", "ui-text"}:
         dump_path = "/data/local/tmp/nova-ui-validation.xml"
         try:
             dump_result = run_root_command(f"uiautomator dump {dump_path}")
             if not dump_result.startswith("Exit code: 0"):
-                evidence = f"UI hierarchy could not be captured.\\n{dump_result}"
+                evidence = f"UI hierarchy could not be captured.\n{dump_result}"
             else:
                 xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
                 try:
@@ -333,6 +329,7 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
                 except ET.ParseError as exc:
                     evidence = f"UI hierarchy could not be parsed: {exc}"
                 else:
+                    selector_name = "resource ID" if kind == "ui" else "text"
                     matches = []
                     for node in root.iter("node"):
                         selector_value = (
@@ -346,7 +343,6 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
                             and node.attrib.get("bounds")
                         ):
                             matches.append(node)
-                    selector_name = "resource ID" if kind == "ui" else "text"
                     evidence = (
                         f"UI node with the requested {selector_name} was found and has usable bounds."
                         if matches
@@ -357,35 +353,9 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
                 run_root_command(f"rm -f {dump_path}")
             except (RuntimeError, ValueError):
                 pass
-
-    else:
-                xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
-                try:
-                    root = ET.fromstring(xml_text)
-                except ET.ParseError as exc:
-                    evidence = f"UI hierarchy could not be parsed: {exc}"
-                else:
-                    matches = []
-                    for node in root.iter("node"):
-                        if (
-                            node.attrib.get("resource-id") == value
-                            and node.attrib.get("enabled") == "true"
-                            and node.attrib.get("bounds")
-                        ):
-                            matches.append(node)
-                    evidence = (
-                        "UI node with the requested resource ID was found and has usable bounds."
-                        if matches
-                        else "UI node with the requested resource ID was not found in the current hierarchy."
-                    )
-        finally:
-            try:
-                run_root_command(f"rm -f {dump_path}")
-            except (RuntimeError, ValueError):
-                pass
     else:
         raise ValueError(
-            "Unsupported mechanism type. Allowed types: intent, executable, service, ui."
+            "Unsupported mechanism type. Allowed types: intent, executable, service, ui, ui-text."
         )
 
     viable = "not found" not in evidence.lower() and "unsupported" not in evidence.lower()
@@ -398,7 +368,6 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
         f"Evidence:\n{evidence}\n"
         "No capability action was executed and no device state was modified."
     )
-
 
 def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     """Execute one previously validated Android mechanism through a bounded action primitive."""
