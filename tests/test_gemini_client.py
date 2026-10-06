@@ -281,6 +281,43 @@ class CloudflareClientTests(unittest.TestCase):
             ["apply_capability_extension"],
         )
 
+    def test_android_mechanism_extension_normalizes_spaced_target(self):
+        tool_response = {
+            "choices": [{"message": {"content": "", "tool_calls": [{
+                "id": "call-extension",
+                "type": "function",
+                "function": {
+                    "name": "apply_capability_extension",
+                    "arguments": json.dumps({
+                        "request": "open the device camera",
+                        "implementation_kind": "android_mechanism",
+                        "implementation_target": "intent: android.media.action.IMAGE_CAPTURE",
+                        "implementation_args": "{}",
+                        "path": "gemini_agent/tools.py",
+                        "declaration_description": "Open the device camera.",
+                    }),
+                },
+            }]}}]
+        }
+        seen = []
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(tool_response),
+        ) as open_url:
+            client = GeminiClient(
+                tool_handlers={
+                    "apply_capability_extension": lambda **kwargs: seen.append(kwargs) or "extension result"
+                }
+            )
+            answer = client.ask("Add a capability to open the device camera and extend yourself using the discovered Android mechanism.")
+        self.assertEqual(answer, "extension result")
+        self.assertEqual(seen[0]["implementation_target"], "intent:android.media.action.IMAGE_CAPTURE")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_natural_extension_request_uses_extension_planner(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
