@@ -4186,6 +4186,33 @@ GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+
+def _run_extension_primitive(tool_name: str, arguments: str) -> str:
+    handler = TOOL_HANDLERS.get(tool_name)
+    if handler is None:
+        raise ValueError(f"Unknown extension primitive: {tool_name}")
+    parsed = json.loads(arguments) if arguments.strip() else {}
+    if not isinstance(parsed, dict):
+        raise ValueError("Extension primitive arguments must be a JSON object.")
+    return str(handler(**parsed))
+
+
+def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
+    validation = validate_android_mechanism(request, mechanism)
+    if "Status: VIABLE" not in validation:
+        return "Extension capability blocked: Android mechanism is no longer viable.\n" + validation
+    if mechanism.lower().startswith(("ui:", "ui-text:")):
+        from gemini_agent.android_ui import execute_validated_android_ui_mechanism
+        return str(
+            execute_validated_android_ui_mechanism(
+                request=request,
+                mechanism=mechanism,
+            )
+        )
+    return str(execute_validated_android_mechanism(request=request, mechanism=mechanism))
+
+
+
 def _load_persisted_capability_extensions() -> None:
     """Restore verified self-generated capabilities without executing them at startup."""
     path = _extension_store_path()
