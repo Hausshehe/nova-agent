@@ -4235,6 +4235,13 @@ def _load_persisted_capability_extensions() -> None:
         else:
             primitive = target.strip()
             primitive_arguments = arguments.strip()
+            # Existing-tool extensions depend on the generated primitive helper
+            # being present in the current source. Stale persisted entries must
+            # not be restored into a callable that cannot execute.
+            if "_run_extension_primitive" not in globals():
+                continue
+            if primitive not in TOOL_HANDLERS:
+                continue
 
             def restored_capability(
                 _primitive: str = primitive,
