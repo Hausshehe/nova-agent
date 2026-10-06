@@ -30,6 +30,40 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_explicit_generated_capability_returns_after_one_execution(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "camera-call",
+                        "type": "function",
+                        "function": {
+                            "name": "camera_shutter",
+                            "arguments": "{}",
+                        },
+                    }]
+                }
+            }]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url:
+            client = GeminiClient()
+            client.tool_declarations.append({
+                "name": "camera_shutter",
+                "description": "Open the device camera.",
+                "parameters": {"type": "OBJECT", "properties": {}},
+            })
+            client.tool_handlers["camera_shutter"] = lambda: "CAMERA OPENED"
+            answer = client.ask("Use the camera_shutter capability to open the device camera.")
+        self.assertEqual(answer, "CAMERA OPENED")
+        self.assertEqual(open_url.call_count, 1)
+
     def test_uses_cloudflare_only(self):
         with patch.dict(
             os.environ,
