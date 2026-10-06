@@ -117,6 +117,22 @@ class AndroidUiExecutionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside the bounded screen range"):
             _run_bounded_ui_tap(10001, 887)
 
+    def test_bounded_ui_tap_allows_valid_coordinates(self):
+        completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = _run_bounded_ui_tap(53, 887)
+
+        self.assertIn("Exit code: 0", result)
+        run.assert_called_once_with(
+            ["su"],
+            input="input tap 53 887\\n",
+            stdout=unittest.mock.ANY,
+            stderr=unittest.mock.ANY,
+            text=True,
+            timeout=unittest.mock.ANY,
+            check=False,
+        )
+
     def test_blocks_non_ui_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated ui"):
             execute_validated_android_ui_mechanism(
