@@ -439,7 +439,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                  patch("gemini_agent.tools.subprocess.run") as run:
                 run.return_value = type("Completed", (), {"returncode": 0, "stdout": "OK", "stderr": ""})()
                 result = apply_capability_extension(
-                    "open the camera",
+                    "open the device camera",
                     "gemini_agent/tools.py",
                     "android_mechanism",
                     "intent:android.media.action.IMAGE_CAPTURE",
@@ -451,7 +451,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn("_run_android_mechanism_extension", updated)
             self.assertIn("intent:android.media.action.IMAGE_CAPTURE", updated)
             self.assertIn('"name": "open_camera"', updated)
-            self.assertIn('"open_camera": open_camera', updated)
+            self.assertIn('"camera_shutter": camera_shutter', updated)
 
     def test_apply_capability_extension_blocks_nonviable_android_mechanism(self):
         with patch(
