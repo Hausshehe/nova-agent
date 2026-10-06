@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
+from gemini_agent.tools import _run_bounded_ui_tap
 
 
 class AndroidUiExecutionTests(unittest.TestCase):
@@ -72,7 +73,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
             )
 
         self.assertIn("Resolved bounds: [0,1400][720,1612]", result)
-        self.assertEqual(run.call_args_list[1].args[0], "input tap 360 1506")
+        self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
 
     def test_executes_ui_text_selector(self):
         hierarchy = (
@@ -101,7 +102,11 @@ class AndroidUiExecutionTests(unittest.TestCase):
             )
 
         self.assertIn("Resolved bounds: [6,812][100,962]", result)
-        self.assertEqual(run.call_args_list[1].args[0], "input tap 53 887")
+        self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
+
+    def test_bounded_ui_tap_rejects_out_of_range_coordinates(self):
+        with self.assertRaisesRegex(ValueError, "outside the bounded screen range"):
+            _run_bounded_ui_tap(10001, 887)
 
     def test_blocks_non_ui_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated ui"):
