@@ -30,6 +30,8 @@ from gemini_agent.tools import (
     apply_capability_repair,
     accept_verified_capability_repair,
     record_capability_repair_verification,
+    record_capability_outcome,
+    get_capability_outcome_history,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -3077,6 +3079,35 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIn("Handler: MISSING", result)
         self.assertIn("Recovery decision: REPAIR_REQUIRED.", result)
         self.assertIn("No capability execution, code modification, or device state change was performed.", result)
+
+    def test_record_capability_outcome_persists_structured_event(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            os.environ, {"NOVA_OUTCOME_LEDGER": str(Path(temp_dir) / "outcomes.json")}, clear=False
+        ):
+            result = record_capability_outcome(
+                "generated_probe", "verification", "verified", "Post-action verification: VERIFIED"
+            )
+            self.assertIn("Capability outcome recorded: generated_probe", result)
+            ledger = json.loads((Path(temp_dir) / "outcomes.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(ledger), 1)
+            self.assertEqual(ledger[0]["stage"], "VERIFICATION")
+            self.assertEqual(ledger[0]["status"], "VERIFIED")
+            self.assertIn("Post-action verification: VERIFIED", ledger[0]["evidence"])
+
+    def test_get_capability_outcome_history_is_bounded_and_read_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            os.environ, {"NOVA_OUTCOME_LEDGER": str(Path(temp_dir) / "outcomes.json")}, clear=False
+        ):
+            for index in range(3):
+                record_capability_outcome("generated_probe", "test", str(index), f"evidence-{index}")
+            before = (Path(temp_dir) / "outcomes.json").read_text(encoding="utf-8")
+            result = get_capability_outcome_history("generated_probe", limit=2)
+            after = (Path(temp_dir) / "outcomes.json").read_text(encoding="utf-8")
+            self.assertEqual(before, after)
+            self.assertIn("Entries: 2", result)
+            self.assertNotIn("evidence-0", result)
+            self.assertIn("evidence-1", result)
+            self.assertIn("evidence-2", result)
 
     def test_diagnose_capability_failure_classifies_local_runtime_failure(self):
         result = diagnose_capability_failure(
