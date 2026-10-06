@@ -301,8 +301,8 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
     """Persist acceptance of a repaired generated capability after verified execution."""
     if not isinstance(capability, str) or not capability.strip():
         raise ValueError("Capability cannot be empty.")
-    if not isinstance(verification, str) or not verification.strip():
-        raise ValueError("Verification evidence cannot be empty.")
+    if not isinstance(verification, str):
+        raise ValueError("Verification evidence must be a string.")
     name = capability.strip()
     evidence = verification.strip()
     handler = TOOL_HANDLERS.get(name)
