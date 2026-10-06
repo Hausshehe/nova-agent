@@ -382,6 +382,26 @@ def record_capability_repair_verification(capability: str, verification: str) ->
     entry["repair_status"] = "PENDING"
     entry["repair_verification"] = evidence
     entry["repair_verified_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+
+    verification_status = ""
+    if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b", evidence, re.IGNORECASE):
+        verification_status = "VERIFIED"
+    elif re.search(r"(?:Post-action verification|Verification)\s*:\s*FAILED\b", evidence, re.IGNORECASE):
+        verification_status = "FAILED"
+    elif re.search(r"(?:Post-action verification|Verification)\s*:\s*INCONCLUSIVE\b", evidence, re.IGNORECASE):
+        verification_status = "INCONCLUSIVE"
+    if verification_status:
+        ledger_result = record_capability_outcome(
+            capability=name,
+            stage="verification",
+            status=verification_status,
+            evidence=evidence,
+        )
+        if not ledger_result.startswith("Capability outcome recorded:"):
+            return (
+                f"Repair verification not recorded for {name}: outcome ledger update failed. "
+                f"{ledger_result}"
+            )
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=store_path.parent, prefix=f".{store_path.name}.", suffix=".tmp", delete=False) as temp_file:
             json.dump(entries, temp_file, ensure_ascii=False, indent=2)
@@ -422,17 +442,32 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
             "capability."
         )
     if not evidence:
-        store_path = _extension_store_path()
-        if not store_path.exists():
-            return f"Repair acceptance not recorded for {name}: persisted repair metadata is unavailable."
+        ledger_path = _outcome_ledger_path()
+        if not ledger_path.exists():
+            return f"Repair acceptance not recorded for {name}: outcome ledger is unavailable; repair remains PENDING."
         try:
-            entries = json.loads(store_path.read_text(encoding="utf-8"))
+            ledger_entries = json.loads(ledger_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            return f"Repair acceptance not recorded for {name}: persisted metadata could not be read: {exc}"
-        entry = next((item for item in entries if isinstance(item, dict) and item.get("name") == name), None) if isinstance(entries, list) else None
-        evidence = str(entry.get("repair_verification", "")).strip() if entry else ""
-        if not evidence:
-            return f"Repair acceptance not recorded for {name}: no persisted verification evidence is available; repair remains PENDING."
+            return f"Repair acceptance not recorded for {name}: outcome ledger could not be read: {exc}"
+        if not isinstance(ledger_entries, list):
+            return f"Repair acceptance not recorded for {name}: outcome ledger is invalid; repair remains PENDING."
+        verification_entries = [
+            item for item in ledger_entries
+            if (
+                isinstance(item, dict)
+                and item.get("capability") == name
+                and str(item.get("stage", "")).upper() == "VERIFICATION"
+            )
+        ]
+        latest = verification_entries[-1] if verification_entries else None
+        if latest is None:
+            return f"Repair acceptance not recorded for {name}: no persisted verification outcome is available; repair remains PENDING."
+        evidence = str(latest.get("evidence", "")).strip()
+        if str(latest.get("status", "")).upper() != "VERIFIED":
+            return (
+                f"Repair acceptance not recorded for {name}: the most recent persisted "
+                "verification outcome is not VERIFIED; repair remains PENDING."
+            )
     if not re.search(
         r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
         evidence,
