@@ -9,7 +9,7 @@ import urllib.request
 from collections.abc import Callable
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
-from gemini_agent.tools import plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, rank_android_mechanism_candidates, validate_android_mechanism, select_capability_repair_candidate, apply_capability_repair, execute_validated_android_mechanism, execute_android_mechanism, recover_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
+from gemini_agent.tools import analyze_capability_history, plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, rank_android_mechanism_candidates, validate_android_mechanism, select_capability_repair_candidate, apply_capability_repair, execute_validated_android_mechanism, execute_android_mechanism, recover_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GeminiClient:
@@ -289,6 +289,14 @@ class GeminiClient:
             return "plan_capability_extension"
         if any(phrase in user_text for phrase in ("do i have a capability", "do you have a capability", "is there a tool", "can you do this", "can you do that", "do you support this")):
             return "assess_capability_gap"
+        if any(phrase in user_text for phrase in (
+            "analyze capability history",
+            "analyze the capability history",
+            "analyze persisted capability history",
+            "repair verification decision",
+            "analyze repair verification",
+        )):
+            return "analyze_capability_history"
         if (
             ("record a" in user_text or "record an" in user_text or "record the" in user_text)
             and "outcome" in user_text
@@ -715,6 +723,30 @@ class GeminiClient:
                 })
                 result_text += "\\n" + record_result
             return result_text
+        if requested_tool == "analyze_capability_history":
+            match = re.search(
+                r"(?:for|of)\s+capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
+                prompt_text,
+                re.IGNORECASE,
+            )
+            capability = match.group(1) if match else ""
+            if not capability:
+                match = re.search(
+                    r"analy[sz]e(?:\s+the)?\s+capability\s+([A-Za-z_][A-Za-z0-9_]*)",
+                    prompt_text,
+                    re.IGNORECASE,
+                )
+                capability = match.group(1) if match else ""
+            if not capability:
+                return "Capability history analysis requires an explicit capability name."
+            result = str(analyze_capability_history(capability))
+            self.last_tool_calls.append({
+                "name": "analyze_capability_history",
+                "args": {"capability": capability},
+                "result": result,
+            })
+            return result
+
         normalized_prompt = str(prompt).upper()
         if (
             requested_tool == "resolve_android_intent"
