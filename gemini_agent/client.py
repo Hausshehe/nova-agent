@@ -758,14 +758,15 @@ class GeminiClient:
                 request_text,
                 re.IGNORECASE,
             )
-            rank_candidates = [
-                candidate.rstrip(".")
-                for candidate in re.findall(
-                    r"(?:intent|ui-text|ui):[^\s,;]+",
-                    request_text,
-                    re.IGNORECASE,
-                )
-            ]
+            rank_candidates = []
+            for candidate in re.findall(
+                r"(?:intent|ui-text|ui):[^\s,;]+",
+                request_text,
+                re.IGNORECASE,
+            ):
+                normalized = candidate.rstrip(".")
+                if normalized not in rank_candidates:
+                    rank_candidates.append(normalized)
             if rank_request_match and rank_candidates:
                 ranked = self.tool_handlers["rank_android_mechanism_candidates"](
                     request=rank_request_match.group(1).strip(),
