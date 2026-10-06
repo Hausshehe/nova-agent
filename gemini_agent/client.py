@@ -2100,7 +2100,7 @@ class GeminiClient:
         # prevents provider-side argument generation from reinterpreting a repair
         # verification request.
         lower_prompt = prompt_text.lower()
-        if re.search(r"\\b(?:execute|run|use|verify|test)\\b", lower_prompt) and re.search(r"\\bcapabilit(?:y|ies)\\b", lower_prompt):
+        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
             generated_names = []
             for name, handler in self.tool_handlers.items():
                 if getattr(handler, "__nova_generated_capability__", False):
@@ -2110,7 +2110,7 @@ class GeminiClient:
                 if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
                     generated_names.append(name)
             for name in sorted(generated_names, key=len, reverse=True):
-                if re.search(rf"\\b{re.escape(name)}\\b", lower_prompt):
+                if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
         normalized_prompt = str(prompt).upper()
