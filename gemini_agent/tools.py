@@ -1604,6 +1604,15 @@ def recover_command(command: str, expected: str = "") -> str:
         first_result = f"Tool error: {exc}"
 
     if first_result.startswith("Exit code: 0"):
+        if expected and expected not in first_result:
+            try:
+                recovery_result = run_command(command)
+            except (RuntimeError, ValueError) as exc:
+                recovery_result = f"Tool error: {exc}"
+            return format_result(
+                "Recovery: command exited successfully but its postcondition was not verified; retried once.\nAttempts: 2",
+                recovery_result,
+            )
         return format_result("Recovery: none needed.\nAttempts: 1", first_result)
 
     diagnosis = diagnose_command_failure(command, first_result)
