@@ -369,6 +369,12 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
         "No capability action was executed and no device state was modified."
     )
 
+def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
+    """Lazily dispatch UI execution to avoid the android_ui/tools import cycle."""
+    from gemini_agent.android_ui import execute_validated_android_ui_mechanism as _execute_ui
+    return _execute_ui(request=request, mechanism=mechanism)
+
+
 def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     """Execute one previously validated Android mechanism through a bounded action primitive."""
     if not isinstance(request, str) or not request.strip():
