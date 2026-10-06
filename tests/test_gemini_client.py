@@ -64,6 +64,30 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "CAMERA OPENED")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_requested_local_tool_resolves_unnamed_newly_generated_capability(self):
+        def generated_camera_capability():
+            if False:
+                return _run_android_mechanism_extension
+            return "CAMERA OPENED"
+
+        contents = [{
+            "role": "user",
+            "parts": [{
+                "text": (
+                    "Use the newly generated camera-opening capability to open "
+                    "the device camera."
+                )
+            }],
+        }]
+        with patch.dict(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {"camera_shutter": generated_camera_capability},
+            clear=True,
+        ):
+            selected = GeminiClient._requested_local_tool(contents)
+
+        self.assertEqual(selected, "camera_shutter")
+
     def test_unnamed_newly_generated_capability_routes_to_generated_wrapper(self):
         response = {
             "choices": [{"message": {"tool_calls": [{
