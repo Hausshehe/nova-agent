@@ -1853,17 +1853,12 @@ class GeminiClient:
         self.last_tool_calls = []
         self.last_grounding_sources = []
         prompt_text = str(prompt)
-        if "expected postcondition" in prompt_text.lower() and "recover_command" in prompt_text.lower():
-            command_match = re.search(r"`([^`]+)`", prompt_text)
-            expected_match = re.search(
-                r"expected postcondition(?:\s+is|\s*[:=])?\s*`([^`]+)`",
-                prompt_text,
-                re.IGNORECASE,
-            )
-            if command_match and expected_match:
+        if "recover_command" in prompt_text.lower() and "expected postcondition" in prompt_text.lower():
+            quoted = re.findall(r"`([^`]+)`", prompt_text)
+            if len(quoted) >= 2:
                 arguments = {
-                    "command": command_match.group(1).strip(),
-                    "expected": expected_match.group(1).strip(),
+                    "command": quoted[0].strip(),
+                    "expected": quoted[1].strip(),
                 }
                 tool_result = self.tool_handlers["recover_command"](**arguments)
                 self.last_tool_calls.append({
