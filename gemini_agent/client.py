@@ -1941,9 +1941,7 @@ class GeminiClient:
                             request=prompt
                         )
                     )
-                    candidates = re.findall(r"\bintent:([A-Za-z0-9._-]+)", discovery)
-                    for action in candidates:
-                        candidate = f"intent:{action}"
+                    for candidate in self._parse_android_mechanism_candidates(discovery):
                         validation = str(
                             self.tool_handlers["validate_android_mechanism"](
                                 request=prompt,
