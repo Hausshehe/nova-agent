@@ -1089,7 +1089,7 @@ def _run_bounded_root_action(command: str) -> str:
         "am start -a android.media.action.IMAGE_CAPTURE",
         "am start -a android.media.action.STILL_IMAGE_CAMERA",
     }
-    if command not in allowed_commands:
+    if command not in allowed_commands and not re.fullmatch(r"input tap (?:[0-9]|[1-9][0-9]{1,3}|10000) (?:[0-9]|[1-9][0-9]{1,3}|10000)", command):
         raise ValueError("Root action is not allowed.")
     try:
         completed = subprocess.run(
