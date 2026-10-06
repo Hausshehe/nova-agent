@@ -126,6 +126,8 @@ class GeminiClient:
             and any(phrase in user_text for phrase in ("add a capability", "add this capability", "new capability", "missing capability", "capability"))
         ):
             return "apply_capability_extension"
+        if ("validate" in user_text and "android mechanism" in user_text) or "check android mechanism" in user_text:
+            return "validate_android_mechanism"
         if any(phrase in user_text for phrase in ("resolve android intent", "resolve an android intent", "check android intent handler", "inspect android intent handler")):
             return "resolve_android_intent"
         if any(phrase in user_text for phrase in ("inspect android ui", "inspect the android ui", "inspect the current android ui", "inspect foreground ui", "inspect the current ui", "dump the android ui hierarchy", "android ui inspection")):
