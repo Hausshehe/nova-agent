@@ -234,7 +234,8 @@ def apply_capability_repair(capability: str, candidate: str) -> str:
     try:
         TOOL_HANDLERS.pop(name, None)
         TOOL_DECLARATIONS[:] = [item for item in TOOL_DECLARATIONS if not (isinstance(item, dict) and item.get("name") == name)]
-        _load_persisted_capability_extensions()
+        if not _restore_persisted_capability_entry(entry):
+            raise RuntimeError("persisted recipe could not restore the capability registration")
         repaired = TOOL_HANDLERS.get(name)
         repaired_declaration = next((item for item in TOOL_DECLARATIONS if isinstance(item, dict) and item.get("name") == name), None)
         if repaired is None or not callable(repaired) or repaired_declaration is None:
@@ -4879,6 +4880,68 @@ def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
 
 
 
+def _restore_persisted_capability_entry(entry: dict) -> bool:
+    """Restore one bounded persisted capability recipe without executing it."""
+    if not isinstance(entry, dict):
+        return False
+    name = entry.get("name", "")
+    description = entry.get("description", "")
+    kind = entry.get("implementation_kind", "")
+    target = entry.get("implementation_target", "")
+    arguments = entry.get("implementation_args", "")
+    request = entry.get("request", "")
+    if (
+        not isinstance(name, str)
+        or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+        or name in TOOL_HANDLERS
+        or not isinstance(description, str)
+        or not description.strip()
+        or kind not in {"existing_tool", "android_mechanism"}
+        or not isinstance(target, str)
+        or not target.strip()
+        or not isinstance(arguments, str)
+        or not isinstance(request, str)
+        or not request.strip()
+    ):
+        return False
+
+    if kind == "android_mechanism":
+        mechanism = target.strip()
+        capability_request = request.strip()
+
+        def restored_capability(
+            _request: str = capability_request,
+            _mechanism: str = mechanism,
+        ) -> str:
+            return str(_run_android_mechanism_extension(_request, _mechanism))
+    else:
+        primitive = target.strip()
+        primitive_arguments = arguments.strip()
+        if "_run_extension_primitive" not in globals():
+            return False
+        if primitive not in TOOL_HANDLERS:
+            return False
+
+        def restored_capability(
+            _primitive: str = primitive,
+            _arguments: str = primitive_arguments,
+        ) -> str:
+            return str(_run_extension_primitive(_primitive, _arguments))
+
+    restored_capability.__name__ = name
+    restored_capability.__qualname__ = name
+    restored_capability.__nova_generated_capability__ = True
+    TOOL_HANDLERS[name] = restored_capability
+    TOOL_DECLARATIONS.append(
+        {
+            "name": name,
+            "description": description.strip(),
+            "parameters": {"type": "OBJECT", "properties": {}},
+        }
+    )
+    return True
+
+
 def _load_persisted_capability_extensions() -> None:
     """Restore verified self-generated capabilities without executing them at startup."""
     path = _extension_store_path()
@@ -4892,67 +4955,7 @@ def _load_persisted_capability_extensions() -> None:
         return
 
     for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        name = entry.get("name", "")
-        description = entry.get("description", "")
-        kind = entry.get("implementation_kind", "")
-        target = entry.get("implementation_target", "")
-        arguments = entry.get("implementation_args", "")
-        request = entry.get("request", "")
-        if (
-            not isinstance(name, str)
-            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
-            or name in TOOL_HANDLERS
-            or not isinstance(description, str)
-            or not description.strip()
-            or kind not in {"existing_tool", "android_mechanism"}
-            or not isinstance(target, str)
-            or not target.strip()
-            or not isinstance(arguments, str)
-            or not isinstance(request, str)
-            or not request.strip()
-        ):
-            continue
-
-        if kind == "android_mechanism":
-            mechanism = target.strip()
-            capability_request = request.strip()
-
-            def restored_capability(
-                _request: str = capability_request,
-                _mechanism: str = mechanism,
-            ) -> str:
-                return str(_run_android_mechanism_extension(_request, _mechanism))
-
-        else:
-            primitive = target.strip()
-            primitive_arguments = arguments.strip()
-            # Existing-tool extensions depend on the generated primitive helper
-            # being present in the current source. Stale persisted entries must
-            # not be restored into a callable that cannot execute.
-            if "_run_extension_primitive" not in globals():
-                continue
-            if primitive not in TOOL_HANDLERS:
-                continue
-
-            def restored_capability(
-                _primitive: str = primitive,
-                _arguments: str = primitive_arguments,
-            ) -> str:
-                return str(_run_extension_primitive(_primitive, _arguments))
-
-        restored_capability.__name__ = name
-        restored_capability.__qualname__ = name
-        restored_capability.__nova_generated_capability__ = True
-        TOOL_HANDLERS[name] = restored_capability
-        TOOL_DECLARATIONS.append(
-            {
-                "name": name,
-                "description": description.strip(),
-                "parameters": {"type": "OBJECT", "properties": {}},
-            }
-        )
+        _restore_persisted_capability_entry(entry)
 
 
 _load_persisted_capability_extensions()
