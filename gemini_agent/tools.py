@@ -357,6 +357,76 @@ def get_capability_outcome_history(capability: str, limit: int = 20) -> str:
     return "\n".join(lines)
 
 
+def analyze_capability_history(capability: str) -> str:
+    """Read persisted outcomes and make a bounded repair-verification decision."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    name = capability.strip()
+    path = _outcome_ledger_path()
+    if not path.exists():
+        return (
+            f"Capability history analysis: {name}\n"
+            "Latest verification outcome: MISSING\n"
+            "Repair decision: REMAIN_PENDING\n"
+            "Basis: no persisted outcome ledger is available."
+        )
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return (
+            f"Capability history analysis: {name}\n"
+            "Latest verification outcome: UNAVAILABLE\n"
+            f"Repair decision: STOP_SAFELY\nBasis: outcome ledger could not be read: {exc}"
+        )
+    if not isinstance(entries, list):
+        return (
+            f"Capability history analysis: {name}\n"
+            "Latest verification outcome: UNAVAILABLE\n"
+            "Repair decision: STOP_SAFELY\n"
+            "Basis: outcome ledger is not a JSON list."
+        )
+    matches = [
+        item for item in entries
+        if isinstance(item, dict)
+        and item.get("capability") == name
+        and str(item.get("stage", "")).upper() == "VERIFICATION"
+    ]
+    latest = matches[-1] if matches else None
+    if latest is None:
+        return (
+            f"Capability history analysis: {name}\n"
+            "Latest verification outcome: MISSING\n"
+            "Repair decision: REMAIN_PENDING\n"
+            "Basis: no persisted verification outcome exists for this capability."
+        )
+    status = str(latest.get("status", "")).strip().upper()
+    evidence = str(latest.get("evidence", "")).strip()
+    if status == "VERIFIED" and re.search(
+        r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
+        evidence,
+        re.IGNORECASE,
+    ):
+        decision = "ACCEPT_ELIGIBLE"
+        basis = "the latest persisted verification outcome is VERIFIED and its evidence explicitly records VERIFIED."
+    elif status == "FAILED":
+        decision = "REMAIN_PENDING"
+        basis = "the latest persisted verification outcome is FAILED."
+    elif status == "INCONCLUSIVE":
+        decision = "REVERIFY"
+        basis = "the latest persisted verification outcome is INCONCLUSIVE, so acceptance cannot be inferred."
+    else:
+        decision = "REMAIN_PENDING"
+        basis = "the latest persisted verification outcome is not sufficient to establish verified execution."
+    return (
+        f"Capability history analysis: {name}\n"
+        f"Latest verification outcome: {status or 'UNKNOWN'}\n"
+        f"Evidence: {evidence}\n"
+        f"Repair decision: {decision}\n"
+        f"Basis: {basis}\n"
+        "No capability execution, code modification, repair mutation, or device state change was performed."
+    )
+
+
 def record_capability_repair_verification(capability: str, verification: str) -> str:
     """Persist the latest bounded execution verification while keeping repair PENDING."""
     if not isinstance(capability, str) or not capability.strip():
@@ -4185,6 +4255,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "analyze_capability_history",
+        "description": "Read persisted capability outcome history and make a bounded repair-verification decision without executing or modifying anything.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Capability name whose persisted verification history should be analyzed."}
+            },
+            "required": ["capability"],
+        },
+    },
+    {
         "name": "record_capability_repair_verification",
         "description": "Persist the latest bounded execution verification for a repaired generated capability while keeping the repair PENDING.",
         "parameters": {
@@ -5031,6 +5112,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "record_capability_repair_verification": record_capability_repair_verification,
+    "analyze_capability_history": analyze_capability_history,
     "record_capability_outcome": record_capability_outcome,
     "get_capability_outcome_history": get_capability_outcome_history,
     "accept_verified_capability_repair": accept_verified_capability_repair,
