@@ -2572,6 +2572,9 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
             "gemini_agent.tools.validate_android_mechanism",
             side_effect=validate,
         ), patch(
+            "gemini_agent.tools.execute_android_mechanism",
+            wraps=execute_android_mechanism,
+        ) as dispatcher, patch(
             "gemini_agent.tools.send_android_intent",
             side_effect=[
                 "Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
@@ -2609,6 +2612,8 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
             ],
         )
         self.assertEqual(send.call_count, 2)
+        self.assertEqual(dispatcher.call_count, 1)
+        self.assertFalse(dispatcher.call_args.kwargs["allow_recovery"])
 
     def test_blocks_non_viable_mechanism_without_action(self):
         with patch(
