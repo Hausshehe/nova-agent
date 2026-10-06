@@ -3404,7 +3404,19 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
-    DIAGNOSE_ANDROID_MECHANISM_OUTCOME_DECLARATION,
+    {
+        "name": "diagnose_android_mechanism_outcome",
+        "description": "Diagnose inconclusive or failed Android mechanism outcomes using bounded read-only evidence.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "Original capability request."},
+                "mechanism": {"type": "STRING", "description": "Executed Android mechanism."},
+                "verification": {"type": "STRING", "description": "Observed post-action verification result."},
+            },
+            "required": ["request", "mechanism", "verification"],
+        },
+    },
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
