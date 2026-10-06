@@ -203,22 +203,35 @@ def discover_android_ui_actions() -> str:
                 "No UI interaction or device state change was performed."
             )
         controls = []
+        candidates = []
         for node in root.iter("node"):
-            if node.attrib.get("clickable") != "true" or node.attrib.get("enabled") != "true":
+            if node.attrib.get("enabled") != "true":
                 continue
-            controls.append({
+            control = {
                 "text": node.attrib.get("text", ""),
                 "content_desc": node.attrib.get("content-desc", ""),
                 "resource_id": node.attrib.get("resource-id", ""),
                 "class": node.attrib.get("class", ""),
                 "bounds": node.attrib.get("bounds", ""),
-            })
+                "clickable": node.attrib.get("clickable", ""),
+            }
+            if control["clickable"] == "true":
+                controls.append(control)
+            if control["resource_id"] and control["bounds"]:
+                candidates.append(control)
         lines = [f"Clickable enabled controls found: {len(controls)}"]
         for index, control in enumerate(controls[:50], 1):
             label = control["text"] or control["content_desc"] or control["resource_id"] or "<unlabeled>"
             lines.append(
                 f"{index}. label={label!r} resource_id={control['resource_id']!r} "
                 f"class={control['class']!r} bounds={control['bounds']!r}"
+            )
+        lines.append(f"Enabled UI nodes with resource IDs and bounds: {len(candidates)}")
+        for index, candidate in enumerate(candidates[:50], 1):
+            label = candidate["text"] or candidate["content_desc"] or candidate["resource_id"] or "<unlabeled>"
+            lines.append(
+                f"candidate {index}. label={label!r} resource_id={candidate['resource_id']!r} "
+                f"clickable={candidate['clickable']!r} class={candidate['class']!r} bounds={candidate['bounds']!r}"
             )
         lines.append("UI actions were discovered only; no interaction or device state change was performed.")
         return "Android UI action discovery (read-only):\n" + "\n".join(lines)
@@ -308,12 +321,36 @@ def validate_android_mechanism(request: str, mechanism: str) -> str:
         ]
         evidence = "\n".join(matches) if matches else "Service was not found."
     elif kind == "ui":
-        actions = discover_android_ui_actions()
-        evidence = (
-            "UI control was found."
-            if value in actions
-            else "UI control was not found in the current hierarchy."
-        )
+        dump_path = "/data/local/tmp/nova-ui-validation.xml"
+        try:
+            dump_result = run_root_command(f"uiautomator dump {dump_path}")
+            if not dump_result.startswith("Exit code: 0"):
+                evidence = f"UI hierarchy could not be captured.\\n{dump_result}"
+            else:
+                xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+                try:
+                    root = ET.fromstring(xml_text)
+                except ET.ParseError as exc:
+                    evidence = f"UI hierarchy could not be parsed: {exc}"
+                else:
+                    matches = []
+                    for node in root.iter("node"):
+                        if (
+                            node.attrib.get("resource-id") == value
+                            and node.attrib.get("enabled") == "true"
+                            and node.attrib.get("bounds")
+                        ):
+                            matches.append(node)
+                    evidence = (
+                        "UI node with the requested resource ID was found and has usable bounds."
+                        if matches
+                        else "UI node with the requested resource ID was not found in the current hierarchy."
+                    )
+        finally:
+            try:
+                run_root_command(f"rm -f {dump_path}")
+            except (RuntimeError, ValueError):
+                pass
     else:
         raise ValueError(
             "Unsupported mechanism type. Allowed types: intent, executable, service, ui."
