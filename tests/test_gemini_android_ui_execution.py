@@ -24,6 +24,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
                 "Exit code: 0\nstdout:\nUI dump complete",
                 "Exit code: 0\nstdout:\nTap complete",
                 "Exit code: 0\nstdout:\n",
+                "Exit code: 0\nstdout:\n",
             ],
         ) as run, patch(
             "gemini_agent.android_ui._read_bounded_root_file",
@@ -63,6 +64,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
                 "Exit code: 0\nstdout:\nUI dump complete",
                 "Exit code: 0\nstdout:\nTap complete",
                 "Exit code: 0\nstdout:\n",
+                "Exit code: 0\nstdout:\n",
             ],
         ) as run, patch(
             "gemini_agent.android_ui._read_bounded_root_file",
@@ -95,6 +97,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
             side_effect=[
                 "Exit code: 0\nstdout:\nUI dump complete",
                 "Exit code: 0\nstdout:\nTap complete",
+                "Exit code: 0\nstdout:\n",
                 "Exit code: 0\nstdout:\n",
             ],
         ) as run, patch(
