@@ -693,6 +693,34 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "autonomously_repair_capability":
+            match = re.search(
+                r"(?:for|of)\s+capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
+                request_text,
+                re.IGNORECASE,
+            )
+            if not match:
+                match = re.search(
+                    r"(?:the\s+)?([A-Za-z_][A-Za-z0-9_]*)\s+capability\b",
+                    request_text,
+                    re.IGNORECASE,
+                )
+            capability = match.group(1) if match else ""
+            evidence_match = re.search(
+                r"(?:failure evidence|supplied failure evidence|evidence)\s*[:=]\s*(.+?)(?=\s+Do not|\s+Report|$)",
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            evidence = evidence_match.group(1).strip() if evidence_match else ""
+            if not capability or not evidence:
+                return "Autonomous self-repair requires an explicit capability name and supplied failure evidence."
+            result = str(autonomously_repair_capability(capability=capability, failure_evidence=evidence))
+            self.last_tool_calls.append({
+                "name": "autonomously_repair_capability",
+                "args": {"capability": capability, "failure_evidence": evidence},
+                "result": result,
+            })
+            return result
         if (
             requested_tool != "accept_verified_capability_repair"
             and re.search(r"\baccept\b", lower_prompt, re.IGNORECASE)
