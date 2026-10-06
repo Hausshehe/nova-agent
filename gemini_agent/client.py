@@ -2528,7 +2528,11 @@ class GeminiClient:
                             and local_name.lower() in request_text.lower()
                         )
                     )
-                    if explicit_capability_use and requested_tool == local_name:
+                    if (
+                        explicit_capability_use
+                        and requested_tool == local_name
+                        and not strategy_candidates
+                    ):
                         return str(tool_result)
 
                     # Dynamically added capabilities are local extensions, not
