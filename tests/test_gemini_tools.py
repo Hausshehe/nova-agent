@@ -24,6 +24,7 @@ from gemini_agent.tools import (
     capability_inventory,
     diagnose_capability_failure,
     select_capability_repair_candidate,
+    apply_capability_repair,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -3021,6 +3022,65 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIn("Implementation target: calculator", result)
         self.assertIn("Status: CANDIDATE_SELECTED", result)
         self.assertIn("No capability execution or mutation was performed.", result)
+
+    def test_apply_capability_repair_restores_persisted_generated_capability(self):
+        def generated_probe():
+            return "original"
+
+        generated_probe.__nova_generated_capability__ = True
+        original_declaration = {"name": "generated_probe", "description": "Generated probe"}
+        with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+            "gemini_agent.tools.TOOL_DECLARATIONS",
+            [original_declaration],
+        ), tempfile.TemporaryDirectory() as temp_dir, patch(
+            "gemini_agent.tools._extension_store_path",
+            return_value=Path(temp_dir) / "capabilities.json",
+        ), patch(
+            "gemini_agent.tools._run_extension_test_suite",
+            return_value=(True, "Extension tests: PASS"),
+        ):
+            store = Path(temp_dir) / "capabilities.json"
+            store.write_text(
+                '[{"name":"generated_probe","description":"Generated probe","implementation_kind":"existing_tool","implementation_target":"calculator","implementation_args":"{}","request":"run generated probe"}]',
+                encoding="utf-8",
+            )
+            result = apply_capability_repair(
+                "generated_probe",
+                "RESTORE_GENERATED_CAPABILITY",
+            )
+        self.assertIn("Capability repair transaction applied: generated_probe", result)
+        self.assertIn("Repair action: restored from persisted verified recipe.", result)
+        self.assertIn("Real-world verification status: PENDING", result)
+        self.assertTrue(getattr(TOOL_HANDLERS["generated_probe"], "__nova_generated_capability__", False))
+
+    def test_apply_capability_repair_rolls_back_when_deterministic_tests_fail(self):
+        def generated_probe():
+            return "original"
+
+        generated_probe.__nova_generated_capability__ = True
+        original_declaration = {"name": "generated_probe", "description": "Generated probe"}
+        with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+            "gemini_agent.tools.TOOL_DECLARATIONS",
+            [original_declaration],
+        ), tempfile.TemporaryDirectory() as temp_dir, patch(
+            "gemini_agent.tools._extension_store_path",
+            return_value=Path(temp_dir) / "capabilities.json",
+        ), patch(
+            "gemini_agent.tools._run_extension_test_suite",
+            return_value=(False, "Extension tests: FAIL"),
+        ):
+            store = Path(temp_dir) / "capabilities.json"
+            store.write_text(
+                '[{"name":"generated_probe","description":"Generated probe","implementation_kind":"existing_tool","implementation_target":"calculator","implementation_args":"{}","request":"run generated probe"}]',
+                encoding="utf-8",
+            )
+            result = apply_capability_repair(
+                "generated_probe",
+                "RESTORE_GENERATED_CAPABILITY",
+            )
+        self.assertIn("Capability repair rolled back:", result)
+        self.assertIs(TOOL_HANDLERS["generated_probe"], generated_probe)
+        self.assertEqual(TOOL_DECLARATIONS, [original_declaration])
 
     def test_diagnose_capability_failure_finds_generated_repair_recipe(self):
         def generated_probe():
