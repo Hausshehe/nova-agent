@@ -525,6 +525,20 @@ class GeminiClient:
             re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
             and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
         )
+        # An unnamed request for the newly generated capability is already
+        # an explicit local action. Execute the generated wrapper directly rather
+        # than asking Cloudflare to rediscover the same capability. This also makes
+        # generated-capability execution independent of transient provider output.
+        if unnamed_generated_capability_request and requested_tool:
+            handler = self.tool_handlers.get(requested_tool)
+            if handler is not None:
+                try:
+                    tool_result = handler()
+                except TypeError:
+                    tool_result = handler(request=request_text)
+                trace = {"name": requested_tool, "args": {}, "result": tool_result}
+                self.last_tool_calls.append(trace)
+                return str(tool_result)
         if requested_tool == "inspect_android_ui":
             user_text = request_text
             selector_match = re.search(
