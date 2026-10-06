@@ -989,8 +989,10 @@ class CloudflareClientTests(unittest.TestCase):
         ) as open_url:
             client = GeminiClient()
             result = client.ask(
-                "Diagnose a capability failure of the calculator capability. "
-                "Supplied evidence: FAILED: incorrect result."
+                "Diagnose a failure of the existing calculator capability. "
+                "Treat this supplied evidence as genuinely FAILED: the calculator "
+                "returned an incorrect result for a valid arithmetic request. "
+                "Diagnose the capability using read-only evidence only."
             )
         self.assertIn("diagnosed calculator", result)
         self.assertEqual(client.last_tool_calls[0]["name"], "diagnose_capability_failure")
