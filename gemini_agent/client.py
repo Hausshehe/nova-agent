@@ -719,6 +719,8 @@ class GeminiClient:
         # result back as preference context. It does not execute a strategy or treat the
         # learned result as proof of viability.
         strategy_candidates = []
+        strategy_goal = ""
+        selected_strategy = ""
         candidate_patterns = (
             r'candidate strategies?\s*[:=]?\s*["\']([^"\']+)["\']\s*(?:,|and)\s*["\']([^"\']+)["\']',
             r'between\s+strategy\s+["\']([^"\']+)["\']\s+and\s+strategy\s+["\']([^"\']+)["\']',
@@ -735,8 +737,14 @@ class GeminiClient:
                 re.IGNORECASE,
             )
             goal = goal_match.group(1).strip() if goal_match else request_text.strip()
+            strategy_goal = goal
             from gemini_agent.learning import select_verified_strategy
             selection = select_verified_strategy(goal, strategy_candidates)
+            selected_match = re.search(
+                r"(?m)^Verified strategy selection:\s*(.+)$",
+                selection,
+            )
+            selected_strategy = selected_match.group(1).strip() if selected_match else ""
             messages[0]["content"] = str(messages[0]["content"]) + (
                 "\n\nVerified strategy preference from Nova:\n" + selection +
                 "\nThis is preference only. Independently validate and verify any execution."
@@ -2432,6 +2440,24 @@ class GeminiClient:
                         tool_result = f"Tool error: {exc}"
 
                     trace = {"name": local_name, "args": args, "result": tool_result}
+                    if (
+                        selected_strategy
+                        and strategy_goal
+                        and local_name == selected_strategy
+                        and re.search(
+                            r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b",
+                            str(tool_result),
+                            re.IGNORECASE,
+                        )
+                    ):
+                        from gemini_agent.learning import record_verified_experience
+                        learning_result = record_verified_experience(
+                            strategy_goal,
+                            selected_strategy,
+                            str(tool_result),
+                            domain="general",
+                        )
+                        trace["verified_experience_learning"] = learning_result
                     if "expression" in args:
                         trace["expression"] = str(args["expression"])
                     self.last_tool_calls.append(trace)
