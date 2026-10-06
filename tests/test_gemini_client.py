@@ -336,7 +336,7 @@ class CloudflareClientTests(unittest.TestCase):
             client.tool_handlers["validate_android_mechanism"] = (
                 lambda request, mechanism: f"Status: VIABLE\nMechanism: {mechanism}"
             )
-            client.tool_handlers["execute_validated_android_mechanism"] = (
+            client.tool_handlers["execute_android_mechanism"] = (
                 lambda request, mechanism: f"executed via {mechanism}"
             )
             answer = client.ask(
@@ -353,7 +353,7 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch("urllib.request.urlopen") as open_url:
             client = GeminiClient()
-            client.tool_handlers["execute_validated_android_mechanism"] = (
+            client.tool_handlers["execute_android_mechanism"] = (
                 lambda request, mechanism: f"executed {request} via {mechanism}"
             )
             answer = client.ask(
