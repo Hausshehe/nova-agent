@@ -216,7 +216,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("Exit code: 0", result)
         run.assert_called_once()
         self.assertEqual(run.call_args.args[0], ["su"])
-        self.assertEqual(run.call_args.kwargs["input"], "am start -a android.media.action.STILL_IMAGE_CAMERA\n")
+        self.assertEqual(run.call_args.kwargs["input"], "am start -a android.media.action.STILL_IMAGE_CAMERA\nexit\n")
 
     def test_dump_camera_ui_hierarchy_uses_bounded_temp_file(self):
         completed_dump = type("Completed", (), {"stdout": "", "stderr": "", "returncode": 0})()
