@@ -1383,24 +1383,6 @@ class GeminiClient:
                 d for d in self.tool_declarations
                 if d["name"] == selected_strategy
             ]
-        if strategy_candidates and selected_strategy:
-            strategy_seed_tool = (
-                "record_verified_experience_tool"
-                if re.search(
-                    r"\bfirst\s+record\s+(?:a\s+)?verified\s+experience\b",
-                    request_text,
-                    re.IGNORECASE,
-                )
-                else ""
-            )
-            allowed_strategy_tools = {selected_strategy}
-            if strategy_seed_tool:
-                allowed_strategy_tools.add(strategy_seed_tool)
-            declarations = [
-                d for d in self.tool_declarations
-                if d["name"] in allowed_strategy_tools
-            ]
-
         tools = [{
             "type": "function",
             "function": {
