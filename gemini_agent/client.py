@@ -568,7 +568,7 @@ class GeminiClient:
         if requested_tool == "recover_command" and "expected postcondition" in request_text.lower():
             command_match = re.search(r"`([^`]+)`", request_text)
             expected_match = re.search(
-                r"expected postcondition(?:\\s+is|\\s*[:=])?\\s*[`\\"\']([^`\\"\']+)[`\\"\']",
+                r"expected postcondition(?:\s+is|\s*[:=])?\s*[`\'"]([^`\'"]+)[`\'"]",
                 request_text,
                 re.IGNORECASE,
             )
