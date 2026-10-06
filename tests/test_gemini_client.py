@@ -116,10 +116,9 @@ class CloudflareClientTests(unittest.TestCase):
             client.tool_handlers["recover_android_mechanism"] = recover
             answer = client.ask(
                 "Use recover_android_mechanism for the Android mechanism ui-text:CTRL. "
-                "Treat the supplied post-action verification as genuinely FAILED for this test:\n"
-                "FAILED: bounded verification proved the goal was not achieved.\n\n"
-                "The request goal is:\n"
-                "activate a visible clickable Android UI control."
+                "Treat the supplied post-action verification as genuinely FAILED for this test: "
+                "FAILED: bounded verification proved the goal was not achieved. "
+                "The request goal is: activate a visible clickable Android UI control."
             )
         self.assertEqual(answer, "Replan: selected alternate viable mechanism.")
         recover.assert_called_once()
