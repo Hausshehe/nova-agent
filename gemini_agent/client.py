@@ -630,7 +630,7 @@ class GeminiClient:
                         )
                     )
                     candidates = self._parse_android_mechanism_candidates(discovery)
-                    for candidate in candidates
+                    for candidate in candidates:
                         validation = str(
                             self.tool_handlers["validate_android_mechanism"](
                                 request=request_text,
