@@ -2577,7 +2577,8 @@ class RecoverCommandToolTests(unittest.TestCase):
             result = recover_command("pwd", expected="expected-value")
         self.assertIn("Outcome: FAILED", result)
         self.assertIn("Postcondition: FAILED: expected text not found: expected-value", result)
-        run.assert_called_once_with("pwd")
+        self.assertIn("Attempts: 2", result)
+        self.assertEqual(run.call_count, 2)
 
     def test_recover_command_returns_success_without_recovery(self):
         with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nok") as run:
