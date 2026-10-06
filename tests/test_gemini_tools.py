@@ -2420,9 +2420,9 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
         ) as send, patch(
             "gemini_agent.tools.discover_android_mechanisms",
             return_value=(
-                "Android mechanism discovery (read-only):\\n"
-                "Discovered bounded intent mechanisms:\\n"
-                "intent:android.media.action.IMAGE_CAPTURE\\n"
+                "Android mechanism discovery (read-only):\n"
+                "Discovered bounded intent mechanisms:\n"
+                "intent:android.media.action.IMAGE_CAPTURE\n"
                 "intent:android.media.action.STILL_IMAGE_CAMERA"
             ),
         ), patch(
