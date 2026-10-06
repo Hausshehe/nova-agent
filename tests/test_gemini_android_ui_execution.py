@@ -28,7 +28,10 @@ class AndroidUiExecutionTests(unittest.TestCase):
         ) as run, patch(
             "gemini_agent.android_ui._read_bounded_root_file",
             return_value=hierarchy,
-        ):
+        ), patch(
+            "gemini_agent.android_ui._run_bounded_ui_tap",
+            return_value="Exit code: 0\nstdout:\nTap complete",
+        ) as tap:
             result = execute_validated_android_ui_mechanism(
                 "activate the action control",
                 "ui:com.example:id/action",
@@ -66,7 +69,10 @@ class AndroidUiExecutionTests(unittest.TestCase):
         ) as run, patch(
             "gemini_agent.android_ui._read_bounded_root_file",
             return_value=hierarchy,
-        ):
+        ), patch(
+            "gemini_agent.android_ui._run_bounded_ui_tap",
+            return_value="Exit code: 0\nstdout:\nTap complete",
+        ) as tap:
             result = execute_validated_android_ui_mechanism(
                 "activate the Termux extra keys surface",
                 "ui:com.termux:id/extra_keys",
@@ -74,6 +80,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
 
         self.assertIn("Resolved bounds: [0,1400][720,1612]", result)
         self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
+        tap.assert_called_once_with(360, 1506)
 
     def test_executes_ui_text_selector(self):
         hierarchy = (
@@ -95,7 +102,10 @@ class AndroidUiExecutionTests(unittest.TestCase):
         ) as run, patch(
             "gemini_agent.android_ui._read_bounded_root_file",
             return_value=hierarchy,
-        ):
+        ), patch(
+            "gemini_agent.android_ui._run_bounded_ui_tap",
+            return_value="Exit code: 0\nstdout:\nTap complete",
+        ) as tap:
             result = execute_validated_android_ui_mechanism(
                 "activate the ESC extra key",
                 "ui-text:ESC",
@@ -103,6 +113,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
 
         self.assertIn("Resolved bounds: [6,812][100,962]", result)
         self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
+        tap.assert_called_once_with(53, 887)
 
     def test_bounded_ui_tap_rejects_out_of_range_coordinates(self):
         with self.assertRaisesRegex(ValueError, "outside the bounded screen range"):
