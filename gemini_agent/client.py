@@ -564,6 +564,21 @@ class GeminiClient:
                     tool_result = handler(request=request_text)
                 trace = {"name": requested_tool, "args": {}, "result": tool_result}
                 self.last_tool_calls.append(trace)
+                return str(tool_result)        if requested_tool == "recover_command" and "expected postcondition" in request_text.lower():
+            command_match = re.search(r"`([^`]+)`", request_text)
+            expected_match = re.search(
+                r"expected postcondition(?:\\s+is|\\s*[:=])?\\s*[`\\"\']([^`\\"\']+)[`\\"\']",
+                request_text,
+                re.IGNORECASE,
+            )
+            if command_match and expected_match:
+                arguments = {
+                    "command": command_match.group(1).strip(),
+                    "expected": expected_match.group(1).strip(),
+                }
+                tool_result = self.tool_handlers["recover_command"](**arguments)
+                trace = {"name": "recover_command", "args": arguments, "result": tool_result}
+                self.last_tool_calls.append(trace)
                 return str(tool_result)
         if requested_tool == "inspect_android_ui":
             user_text = request_text
