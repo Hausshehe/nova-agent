@@ -2589,6 +2589,9 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
             "gemini_agent.tools.get_foreground_android_component",
             side_effect=lambda: next(foregrounds),
         ), patch(
+            "gemini_agent.tools.verify_android_component_presence",
+            return_value="Android component presence verification (read-only): FAILED",
+        ), patch(
             "gemini_agent.tools.time.sleep",
         ):
             result = execute_validated_android_mechanism(
