@@ -2333,22 +2333,58 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
     def test_executes_only_after_viable_validation(self):
         with patch(
             "gemini_agent.tools.validate_android_mechanism",
-            return_value="Android mechanism validation (read-only):\\nStatus: VIABLE",
+            return_value=(
+                "Android mechanism validation (read-only):\\n"
+                "Status: VIABLE\\n"
+                "Evidence:\\npriority=0 com.transsion.camera/.app.CaptureActivity"
+            ),
         ) as validate, patch(
             "gemini_agent.tools.send_android_intent",
             return_value="Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
-        ) as send:
+        ) as send, patch(
+            "gemini_agent.tools.get_foreground_android_component",
+            return_value="Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.transsion.camera/.app.CaptureActivity",
+        ) as foreground, patch(
+            "gemini_agent.tools.time.sleep",
+        ) as sleep:
             result = execute_validated_android_mechanism(
                 "capture a photo", "intent:android.media.action.IMAGE_CAPTURE"
             )
         self.assertIn("Validation: VIABLE", result)
         self.assertIn("Exit code: 0", result)
+        self.assertIn("VERIFIED: expected Android component is foreground", result)
         validate.assert_called_once_with("capture a photo", "intent:android.media.action.IMAGE_CAPTURE")
         send.assert_called_once_with("android.media.action.IMAGE_CAPTURE")
+        foreground.assert_called_once()
+        sleep.assert_called_once_with(1)
 
     def test_blocks_non_intent_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated intent mechanisms"):
             execute_validated_android_mechanism("tap", "ui:com.example:id/button")
+
+    def test_reports_failed_postcondition_when_foreground_does_not_match(self):
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value=(
+                "Android mechanism validation (read-only):\\n"
+                "Status: VIABLE\\n"
+                "Evidence:\\npriority=0 com.transsion.camera/.app.CaptureActivity"
+            ),
+        ), patch(
+            "gemini_agent.tools.send_android_intent",
+            return_value="Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
+        ), patch(
+            "gemini_agent.tools.get_foreground_android_component",
+            return_value="Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.termux/.app.TermuxActivity",
+        ), patch(
+            "gemini_agent.tools.time.sleep",
+        ):
+            result = execute_validated_android_mechanism(
+                "open the camera", "intent:android.media.action.IMAGE_CAPTURE"
+            )
+        self.assertIn("FAILED: intent launch returned successfully", result)
+        self.assertIn("Expected: com.transsion.camera/.app.CaptureActivity", result)
+        self.assertIn("com.termux/.app.TermuxActivity", result)
 
     def test_blocks_non_viable_mechanism_without_action(self):
         with patch(
