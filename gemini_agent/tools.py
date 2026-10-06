@@ -158,22 +158,90 @@ def get_foreground_android_component() -> str:
         + "\nNo interaction or device state change was performed."
     )
 
-def inspect_android_ui() -> str:
-    """Inspect the current foreground Android UI hierarchy without interacting with it."""
+def inspect_android_ui(selector: str = "") -> str:
+    """Inspect the current foreground Android UI hierarchy, optionally filtering to one UI selector."""
+    if not isinstance(selector, str):
+        raise ValueError("Selector must be a string.")
+
+    normalized = selector.strip()
+    kind = value = ""
+    if normalized:
+        if ":" not in normalized:
+            raise ValueError("Selector must use ui:<resource-id> or ui-text:<text>.")
+        kind, value = normalized.split(":", 1)
+        kind = kind.strip().lower()
+        value = value.strip()
+        if kind not in {"ui", "ui-text"} or not value:
+            raise ValueError("Selector must use ui:<resource-id> or ui-text:<text>.")
+
     dump_path = "/data/local/tmp/nova-ui-hierarchy.xml"
     try:
         dump_result = run_root_command(f"uiautomator dump {dump_path}")
         if not dump_result.startswith("Exit code: 0"):
             return (
-                "Android UI inspection (read-only):\n"
-                f"{dump_result}\n"
+                "Android UI inspection (read-only):
+"
+                f"{dump_result}
+"
                 "UI was inspected only; no interaction or device state change was performed."
             )
-        read_result = run_root_command(f"cat {dump_path}")
+
+        try:
+            xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+            root = ET.fromstring(xml_text)
+        except (RuntimeError, ValueError, ET.ParseError) as exc:
+            return (
+                "Android UI inspection (read-only):
+"
+                f"UI hierarchy could not be read or parsed: {exc}
+"
+                "No interaction or device state change was performed."
+            )
+
+        if not normalized:
+            return (
+                "Android UI inspection (read-only):
+"
+                f"{xml_text}
+"
+                "UI hierarchy was captured without interaction or device state change."
+            )
+
+        attribute = "resource-id" if kind == "ui" else "text"
+        matches = [
+            node for node in root.iter("node")
+            if node.attrib.get(attribute, "") == value
+            and node.attrib.get("enabled") == "true"
+        ]
+
+        if not matches:
+            return (
+                "Android UI inspection (read-only):
+"
+                f"No enabled UI node matched selector {normalized!r}.
+"
+                "No interaction or device state change was performed."
+            )
+        if len(matches) > 1:
+            return (
+                "Android UI inspection (read-only):
+"
+                f"Selector {normalized!r} matched {len(matches)} enabled UI nodes; inspection is ambiguous.
+"
+                "No interaction or device state change was performed."
+            )
+
+        attributes = " ".join(
+            f'{key}={value!r}' for key, value in matches[0].attrib.items()
+        )
         return (
-            "Android UI inspection (read-only):\n"
-            f"{read_result}\n"
-            "UI hierarchy was captured without interaction or device state change."
+            "Android UI inspection (read-only):
+"
+            f"Matched selector: {normalized}
+"
+            f"Node attributes: {attributes}
+"
+            "No interaction or device state change was performed."
         )
     finally:
         try:
@@ -2978,8 +3046,17 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "inspect_android_ui",
-        "description": "Inspect the current foreground Android UI hierarchy using read-only diagnostics without interacting with the UI.",
-        "parameters": {"type": "OBJECT", "properties": {}, "required": []},
+        "description": "Inspect the current foreground Android UI hierarchy using read-only diagnostics, optionally filtered to one ui:<resource-id> or ui-text:<text> selector.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "selector": {
+                    "type": "STRING",
+                    "description": "Optional UI selector to inspect one enabled node, using ui:<resource-id> or ui-text:<text>.",
+                }
+            },
+            "required": [],
+        },
     },
     {
         "name": "send_android_intent",
