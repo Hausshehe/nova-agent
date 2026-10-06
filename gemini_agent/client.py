@@ -738,7 +738,8 @@ class GeminiClient:
             "messages": messages,
             "max_completion_tokens": 2048,
             "tools": tools,
-        }        if requested_tool == "apply_capability_extension":
+        }
+        if requested_tool == "apply_capability_extension":
             payload["tool_choice"] = {
                 "type": "function",
                 "function": {"name": "apply_capability_extension"},
