@@ -412,7 +412,8 @@ class GeminiClient:
                             excerpts.append(excerpt)
                         break
             if excerpts:
-                context.append("Relevant gemini_agent/tools.py excerpts:")                context.extend(excerpts)
+                context.append("Relevant gemini_agent/tools.py excerpts:")
+                context.extend(excerpts)
 
             # Give the model exact, copyable integration anchors. The model must
             # not have to reconstruct whitespace or guess where a declaration or
