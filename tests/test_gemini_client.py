@@ -1089,6 +1089,26 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["list_memory"])
         self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "list_memory"}})
 
+    def test_explicit_capability_history_analysis_is_local_and_read_only(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.client.analyze_capability_history",
+            return_value="Repair decision: ACCEPT_ELIGIBLE",
+        ) as analyzer, patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Analyze persisted capability history for capability \"generated_probe\" "
+                "and report the repair verification decision. Do not execute any capability "
+                "or modify anything."
+            )
+        self.assertEqual(result, "Repair decision: ACCEPT_ELIGIBLE")
+        analyzer.assert_called_once_with("generated_probe")
+        self.assertEqual(client.last_tool_calls[0]["name"], "analyze_capability_history")
+        open_url.assert_not_called()
+
     def test_explicit_capability_failure_diagnosis_is_read_only_and_deterministic(self):
         with patch.dict(
             os.environ,
