@@ -278,6 +278,32 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("intent:android.media.action.IMAGE_CAPTURE", answer)
         open_url.assert_not_called()
 
+    def test_android_mechanism_execution_capability_selects_discovered_viable_mechanism(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            client.tool_handlers["discover_android_mechanisms"] = lambda request: (
+                "Android mechanism discovery (read-only):\n"
+                "Discovered bounded intent mechanisms:\n"
+                "intent:android.media.action.IMAGE_CAPTURE\n"
+                "intent:android.media.action.STILL_IMAGE_CAMERA"
+            )
+            client.tool_handlers["validate_android_mechanism"] = (
+                lambda request, mechanism: f"Status: VIABLE\nMechanism: {mechanism}"
+            )
+            client.tool_handlers["execute_validated_android_mechanism"] = (
+                lambda request, mechanism: f"executed via {mechanism}"
+            )
+            answer = client.ask(
+                "Use the Android mechanism execution capability to open the device camera. "
+                "Before executing, choose a viable mechanism."
+            )
+        self.assertIn("executed via intent:android.media.action.IMAGE_CAPTURE", answer)
+        open_url.assert_not_called()
+
     def test_execute_validated_android_mechanism_routes_without_cloudflare(self):
         with patch.dict(
             os.environ,
