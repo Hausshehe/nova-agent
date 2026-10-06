@@ -2445,7 +2445,7 @@ class GeminiClient:
                         and strategy_goal
                         and local_name == selected_strategy
                         and re.search(
-                            r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b",
+                            r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
                             str(tool_result),
                             re.IGNORECASE,
                         )
