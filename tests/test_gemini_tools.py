@@ -325,6 +325,34 @@ class AutonomousSelfRepairWorkflowTests(unittest.TestCase):
             ["diagnose", "candidate", "repair", "execute", "record", "analyze", "accept"],
         )
 
+    def test_autonomous_self_repair_passes_explicit_execution_verification_to_record(self):
+        captured = []
+
+        def handler():
+            return "Android mechanism execution:\\nPost-action verification: VERIFIED: expected component is foreground"
+
+        def record(capability, verification):
+            captured.append(verification)
+            return "Repair verification recorded: generated_probe\\nRepair status: PENDING"
+
+        with patch("gemini_agent.tools.diagnose_capability_failure", return_value="Recovery decision: REPAIR_CANDIDATE_AVAILABLE."), patch(
+            "gemini_agent.tools.select_capability_repair_candidate",
+            return_value="Candidate: RESTORE_GENERATED_CAPABILITY",
+        ), patch(
+            "gemini_agent.tools.apply_capability_repair",
+            return_value="Capability repair transaction applied: generated_probe",
+        ), patch.dict(TOOL_HANDLERS, {"generated_probe": handler}, clear=False), patch(
+            "gemini_agent.tools.record_capability_repair_verification", side_effect=record
+        ), patch(
+            "gemini_agent.tools.analyze_capability_history", return_value="Repair decision: REVERIFY"
+        ):
+            result = autonomously_repair_capability("generated_probe", "bounded failure evidence")
+
+        self.assertTrue(captured)
+        self.assertIn("Post-action verification: VERIFIED", captured[0])
+        self.assertNotIn("Verification: INCONCLUSIVE", captured[0])
+        self.assertIn("Final repair decision: REVERIFY", result)
+
     def test_autonomous_self_repair_stops_safely_when_no_candidate_exists(self):
         with patch(
             "gemini_agent.tools.diagnose_capability_failure",
