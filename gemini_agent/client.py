@@ -1866,7 +1866,7 @@ class GeminiClient:
             if not mechanism:
                 return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
             return str(execute_validated_android_ui_mechanism(request=prompt, mechanism=mechanism))
-        if requested_tool == "recover_command" and "expected postcondition" in prompt.lower():
+        if "expected postcondition" in prompt.lower() and "recover_command" in prompt.lower():
             command_match = re.search(r"`([^`]+)`", prompt)
             expected_match = re.search(
                 r"expected postcondition(?:\s+is|\s*[:=])?\s*`([^`]+)`",
