@@ -757,6 +757,44 @@ class RecoverAndroidMechanismTests(unittest.TestCase):
         replan.assert_called_once_with("activate CTRL", "ui-text:CTRL")
         self.assertIn("Replan: selected alternate viable mechanism", result)
 
+    def test_failed_outcome_executes_real_replan_path(self):
+        with patch(
+            "gemini_agent.tools.diagnose_android_mechanism_outcome",
+            return_value=(
+                "Android mechanism outcome diagnosis (read-only): INCONCLUSIVE\n"
+                "Recovery decision: OBSERVE_OR_REPLAN"
+            ),
+        ), patch(
+            "gemini_agent.tools.discover_android_mechanisms",
+            return_value=(
+                "Discovered bounded UI mechanisms:\n"
+                "ui-text:FAILED\n"
+                "ui-text:ALTERNATIVE"
+            ),
+        ), patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\nStatus: VIABLE",
+        ) as validate, patch(
+            "gemini_agent.tools.execute_android_mechanism",
+            return_value="Post-action verification: VERIFIED",
+        ) as execute:
+            result = recover_android_mechanism(
+                "activate a visible control",
+                "ui-text:FAILED",
+                "FAILED: bounded verification proved the goal was not achieved",
+            )
+        self.assertIn("Replan: selected alternate viable mechanism.", result)
+        self.assertIn("Mechanism: ui-text:ALTERNATIVE", result)
+        validate.assert_called_once_with(
+            "activate a visible control",
+            "ui-text:ALTERNATIVE",
+        )
+        execute.assert_called_once_with(
+            request="activate a visible control",
+            mechanism="ui-text:ALTERNATIVE",
+            allow_recovery=False,
+        )
+
     def test_recover_android_mechanism_is_registered(self):
         self.assertIs(TOOL_HANDLERS["recover_android_mechanism"], recover_android_mechanism)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
