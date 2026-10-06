@@ -277,7 +277,7 @@ class CloudflareClientTests(unittest.TestCase):
         ]
         self.assertTrue(system_messages)
         self.assertIn("use select_verified_strategy_tool", system_messages[0])
-        self.assertIn("Learned experience is preference only", system_messages[0])
+        self.assertIn("Treat its result only as a preference", system_messages[0])
 
     def test_uses_cloudflare_only(self):
         with patch.dict(
