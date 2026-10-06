@@ -649,13 +649,13 @@ class GeminiClient:
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
         if requested_tool == "diagnose_capability_failure":
             match = re.search(
-                r"(?:capability|tool)\\s+(?:named\\s+)?([a-zA-Z_][a-zA-Z0-9_]*)",
+                r"(?:capability|tool)\s+(?:named\s+)?([a-zA-Z_][a-zA-Z0-9_]*)",
                 request_text,
                 re.IGNORECASE,
             )
             capability = match.group(1) if match else ""
             evidence_match = re.search(
-                r"(?:evidence|supplied evidence)\\s*[:=]\\s*(.+?)(?=\\s+(?:diagnose|determine|do not|report)\\b|$)",
+                r"(?:evidence|supplied evidence)\s*[:=]\s*(.+?)(?=\s+(?:diagnose|determine|do not|report)\b|$)",
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
