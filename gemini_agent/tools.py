@@ -518,6 +518,79 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
     return _execute_ui(request=request, mechanism=mechanism)
 
 
+def diagnose_android_mechanism_outcome(
+    request: str,
+    mechanism: str,
+    verification: str,
+) -> str:
+    """Diagnose Android mechanism evidence without another state-changing action."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(mechanism, str) or not mechanism.strip():
+        raise ValueError("Mechanism cannot be empty.")
+    if not isinstance(verification, str) or not verification.strip():
+        raise ValueError("Verification result cannot be empty.")
+
+    candidate = mechanism.strip()
+    observed = verification.strip()
+    if "VERIFIED" in observed and "INCONCLUSIVE" not in observed and "FAILED" not in observed:
+        return (
+            "Android mechanism outcome diagnosis (read-only): VERIFIED\n"
+            "Evidence is sufficient for the reported postcondition.\n"
+            "Recovery decision: NONE.\n"
+            "No interaction or device state change was performed."
+        )
+
+    evidence = []
+    kind = candidate.split(":", 1)[0].lower() if ":" in candidate else ""
+    if kind in {"ui", "ui-text"}:
+        dump_path = "/data/local/tmp/nova-ui-diagnosis.xml"
+        try:
+            dump = run_root_command(f"uiautomator dump {dump_path}")
+            if dump.startswith("Exit code: 0"):
+                xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
+                try:
+                    root = ET.fromstring(xml_text)
+                    selector = candidate.split(":", 1)[1].strip()
+                    attribute = "resource-id" if kind == "ui" else "text"
+                    matches = [
+                        node for node in root.iter("node")
+                        if node.attrib.get(attribute, "") == selector
+                        and node.attrib.get("enabled") == "true"
+                    ]
+                    evidence.append(f"Current matching enabled UI nodes: {len(matches)}")
+                except (ET.ParseError, ValueError) as exc:
+                    evidence.append(f"Current UI evidence could not be parsed: {exc}")
+            else:
+                evidence.append(f"Current UI observation failed: {dump}")
+        except (RuntimeError, ValueError) as exc:
+            evidence.append(f"Current UI observation unavailable: {exc}")
+        finally:
+            try:
+                run_root_command(f"rm -f {dump_path}")
+            except (RuntimeError, ValueError):
+                pass
+    elif kind == "intent":
+        try:
+            foreground = get_foreground_android_component()
+            evidence.append(foreground.replace(
+                "No interaction or device state change was performed.", ""
+            ).strip())
+        except (RuntimeError, ValueError) as exc:
+            evidence.append(f"Foreground observation unavailable: {exc}")
+
+    return (
+        "Android mechanism outcome diagnosis (read-only): INCONCLUSIVE\n"
+        f"Requested capability: {request.strip()}\n"
+        f"Mechanism: {candidate}\n"
+        f"Reported verification: {observed}\n"
+        "Diagnosis: the bounded evidence does not prove whether the requested goal was achieved.\n"
+        + ("Evidence:\n" + "\n".join(evidence) + "\n" if evidence else "")
+        + "Recovery decision: OBSERVE_OR_REPLAN, but do not perform another state-changing action from uncertainty alone.\n"
+        "No interaction or device state change was performed by diagnosis."
+    )
+
+
 def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
     """Discover, validate, and execute one untried Android mechanism through the generic dispatcher."""
     if not isinstance(request, str) or not request.strip():
@@ -3331,6 +3404,7 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
+    DIAGNOSE_ANDROID_MECHANISM_OUTCOME_DECLARATION,
     {
         "name": "calculator",
         "description": "Calculate basic arithmetic expressions.",
@@ -4199,6 +4273,21 @@ GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+DIAGNOSE_ANDROID_MECHANISM_OUTCOME_DECLARATION = {
+    "name": "diagnose_android_mechanism_outcome",
+    "description": "Diagnose inconclusive or failed Android mechanism outcomes using bounded read-only evidence.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "request": {"type": "STRING", "description": "Original capability request."},
+            "mechanism": {"type": "STRING", "description": "Executed Android mechanism."},
+            "verification": {"type": "STRING", "description": "Observed post-action verification result."},
+        },
+        "required": ["request", "mechanism", "verification"],
+    },
+}
+
+
 GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "name": "get_screen_timeout",
     "description": "Get the Android screen-off timeout duration.",
@@ -4253,6 +4342,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
     "execute_android_mechanism": execute_android_mechanism,
     "execute_validated_android_mechanism": execute_validated_android_mechanism,
     "execute_validated_android_ui_mechanism": execute_validated_android_ui_mechanism,
