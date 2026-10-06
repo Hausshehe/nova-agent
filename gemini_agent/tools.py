@@ -1570,17 +1570,41 @@ def retry_command(command: str) -> str:
 
 
 
-def recover_command(command: str) -> str:
-    """Execute an approved command and apply one safe, diagnostic recovery step."""
+def recover_command(command: str, expected: str = "") -> str:
+    """Execute an approved command, recover once when needed, and optionally verify a postcondition."""
     if not isinstance(command, str) or not command.strip():
         raise ValueError("Command cannot be empty.")
+    if not isinstance(expected, str):
+        raise ValueError("Expected postcondition must be text.")
+    expected = expected.strip()
+
+    def outcome(result: str) -> str:
+        if not result.startswith("Exit code: 0"):
+            return "FAILED"
+        if expected and expected not in result:
+            return "FAILED"
+        return "VERIFIED" if expected else "SUCCEEDED"
+
+    def format_result(prefix: str, result: str) -> str:
+        status = outcome(result)
+        evidence = (
+            f"\nPostcondition: VERIFIED: expected text found: {expected}"
+            if expected and status == "VERIFIED"
+            else (
+                f"\nPostcondition: FAILED: expected text not found: {expected}"
+                if expected
+                else ""
+            )
+        )
+        return f"{prefix}\nOutcome: {status}\n{result}" + evidence
+
     try:
         first_result = run_command(command)
     except (RuntimeError, ValueError) as exc:
         first_result = f"Tool error: {exc}"
 
-    if first_result.startswith("Exit code: 0"):
-        return "Recovery: none needed.\nAttempts: 1\n" + first_result
+    if outcome(first_result) in ("SUCCEEDED", "VERIFIED"):
+        return format_result("Recovery: none needed.\nAttempts: 1", first_result)
 
     diagnosis = diagnose_command_failure(command, first_result)
     lowered = first_result.lower()
@@ -1590,7 +1614,7 @@ def recover_command(command: str) -> str:
             retry_result = run_command(command)
         except (RuntimeError, ValueError) as exc:
             retry_result = f"Tool error: {exc}"
-        return diagnosis + "\nAttempts: 2\n" + retry_result
+        return diagnosis + "\n" + format_result("Attempts: 2", retry_result)
 
     parts = shlex.split(command)
     executable = Path(parts[0]).name
@@ -1616,13 +1640,13 @@ def recover_command(command: str) -> str:
                             root_result = run_root_command("dumpsys -l")
                         except (RuntimeError, ValueError) as retry_exc:
                             root_result = f"Tool error: {retry_exc}"
-                        if root_result.startswith("Exit code: 0"):
-                            return diagnosis + "\nRecovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic and command succeeded.\n" + root_result
-                        return diagnosis + "\nRecovery: bare dumpsys was unbounded; bounded manual-su diagnostic also failed.\n" + root_result
+                        if outcome(root_result) in ("SUCCEEDED", "VERIFIED"):
+                            return diagnosis + "\nRecovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic.\n" + format_result("Attempts: 2", root_result)
+                        return diagnosis + "\nRecovery: bare dumpsys was unbounded; bounded manual-su diagnostic also failed.\n" + format_result("Attempts: 2", root_result)
                     root_result = f"Tool error: {exc}"
-                if root_result.startswith("Exit code: 0"):
-                    return diagnosis + "\nRecovery: executable discovered; used the manual-su root workflow and command succeeded.\n" + root_result
-                return diagnosis + "\nRecovery: executable discovered; root workflow attempted but command failed.\n" + root_result
+                if outcome(root_result) in ("SUCCEEDED", "VERIFIED"):
+                    return diagnosis + "\nRecovery: executable discovered; used the manual-su root workflow.\n" + format_result("Attempts: 2", root_result)
+                return diagnosis + "\nRecovery: executable discovered; root workflow attempted but command failed.\n" + format_result("Attempts: 2", root_result)
 
             recovered_command = " ".join(
                 [shlex.quote(discovered_path), *(shlex.quote(part) for part in parts[1:])]
@@ -1631,12 +1655,12 @@ def recover_command(command: str) -> str:
                 recovered_result = run_command(recovered_command)
             except (RuntimeError, ValueError) as exc:
                 recovered_result = f"Recovery execution failed: {exc}"
-            if recovered_result.startswith("Exit code: 0"):
-                return diagnosis + "\nRecovery: executable path discovered and command succeeded.\n" + recovered_result
-            return diagnosis + "\nRecovery: executable path discovered but corrected command failed.\n" + recovered_result
-        return diagnosis + "\n" + discovered
+            if outcome(recovered_result) in ("SUCCEEDED", "VERIFIED"):
+                return diagnosis + "\nRecovery: executable path discovered and command succeeded.\n" + format_result("Attempts: 2", recovered_result)
+            return diagnosis + "\nRecovery: executable path discovered but corrected command failed.\n" + format_result("Attempts: 2", recovered_result)
+        return diagnosis + "\n" + discovered + "\nOutcome: FAILED"
 
-    return diagnosis + "\nRecovery: no automatic retry performed."
+    return diagnosis + "\nRecovery: no automatic retry performed.\nOutcome: FAILED"
 
 def current_datetime() -> str:
     """Return the device's current local date and time."""
@@ -3114,9 +3138,10 @@ DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
 
 RECOVER_COMMAND_DECLARATION = {
     "name": "recover_command",
-    "description": "Execute one approved command and apply one safe diagnostic recovery step when it fails. Use this for adaptive command recovery instead of blindly retrying.",
+    "description": "Execute one approved command, apply one safe diagnostic recovery step when it fails, and optionally verify an expected postcondition. Use this for adaptive recovery instead of treating exit code alone as proof of success.",
     "parameters": {"type": "OBJECT", "properties": {
         "command": {"type": "STRING", "description": "Approved command and arguments to execute."},
+        "expected": {"type": "STRING", "description": "Optional exact text that must appear in the final result to verify the requested postcondition."},
     }, "required": ["command"]},
 }
 
