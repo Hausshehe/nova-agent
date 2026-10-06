@@ -1026,6 +1026,30 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "select_capability_repair_candidate")
         open_url.assert_not_called()
 
+    def test_explicit_capability_repair_is_read_only_to_model_and_deterministic(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {
+                **__import__("gemini_agent.tools", fromlist=["TOOL_HANDLERS"]).TOOL_HANDLERS,
+                "apply_capability_repair": lambda capability, candidate: (
+                    f"repaired {capability} with {candidate}"
+                ),
+            },
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Apply the capability repair for the existing generated_probe capability "
+                "using candidate RESTORE_GENERATED_CAPABILITY. Execute the bounded repair "
+                "transaction only. Do not ask the model to choose another tool."
+            )
+        self.assertIn("repaired generated_probe with RESTORE_GENERATED_CAPABILITY", result)
+        self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_repair")
+        open_url.assert_not_called()
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
