@@ -3192,11 +3192,11 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
 class VerifyCommandResultToolTests(unittest.TestCase):
     def test_verify_command_result_passes_when_expected_text_is_present(self):
         result = verify_command_result("Exit code: 0\nstdout:\n/system/bin/dumpsys", "/system/bin/dumpsys")
-        self.assertEqual(result, "Verification: passed. Expected text found: /system/bin/dumpsys")
+        self.assertEqual(result, "Verification: VERIFIED: expected text found: /system/bin/dumpsys")
 
     def test_verify_command_result_fails_when_expected_text_is_missing(self):
         result = verify_command_result("Exit code: 1\nstderr:\nnot found", "/system/bin/dumpsys")
-        self.assertEqual(result, "Verification: failed. Expected text not found: /system/bin/dumpsys")
+        self.assertEqual(result, "Verification: FAILED: expected text not found: /system/bin/dumpsys")
 
     def test_verify_command_result_is_registered(self):
         self.assertIs(TOOL_HANDLERS["verify_command_result"], verify_command_result)
