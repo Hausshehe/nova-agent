@@ -1251,6 +1251,7 @@ def _read_bounded_root_file(path: str, max_bytes: int) -> str:
         "/data/local/tmp/nova-ui-actions.xml",
         "/data/local/tmp/nova-ui-validation.xml",
         "/data/local/tmp/nova-ui-execution.xml",
+        "/data/local/tmp/nova-ui-hierarchy.xml",
     }
     if path not in allowed_paths:
         raise ValueError("Root file path is not allowed.")
