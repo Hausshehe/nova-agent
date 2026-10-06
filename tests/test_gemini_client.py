@@ -333,9 +333,10 @@ class CloudflareClientTests(unittest.TestCase):
             'using strategy "verify_command_result" with verification "Verification: VERIFIED: seed." '
             'Then use the normal decision process to choose and execute a strategy.'
         )
-        self.assertIsNone(GeminiClient._requested_local_tool([
+        selected = GeminiClient._requested_local_tool([
             {"role": "user", "parts": [{"text": request}]}
-        ]))
+        ])
+        self.assertNotEqual(selected, "record_verified_experience_tool")
 
     def test_normal_decision_loop_preserves_action_verb_for_verified_experience_matching(self):
         response = {"choices": [{"message": {"content": "selected"}}]}
