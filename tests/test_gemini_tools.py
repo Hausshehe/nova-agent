@@ -32,6 +32,8 @@ from gemini_agent.tools import (
     get_foreground_android_component,
     plan_capability_extension,
     apply_capability_extension,
+    _load_persisted_capability_extensions,
+    _persist_capability_extension,
     _normalize_android_mechanism_target,
     count_file_lines,
     create_directory,
@@ -470,6 +472,38 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             _normalize_android_mechanism_target("intent: android.media.action.IMAGE_CAPTURE"),
             "intent:android.media.action.IMAGE_CAPTURE",
         )
+    def test_persisted_android_capability_survives_source_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "capabilities.json"
+            name = "persisted_android_test_capability"
+            with patch.dict(
+                os.environ,
+                {"NOVA_CAPABILITY_STORE": str(store)},
+                clear=False,
+            ):
+                _persist_capability_extension(
+                    name,
+                    "Persisted Android test capability.",
+                    "android_mechanism",
+                    "intent:android.media.action.IMAGE_CAPTURE",
+                    "{}",
+                    "open the camera",
+                )
+                TOOL_HANDLERS.pop(name, None)
+                TOOL_DECLARATIONS[:] = [
+                    item for item in TOOL_DECLARATIONS
+                    if item.get("name") != name
+                ]
+                _load_persisted_capability_extensions()
+
+            self.assertIn(name, TOOL_HANDLERS)
+            self.assertIn(name, [item["name"] for item in TOOL_DECLARATIONS])
+            self.assertIn(
+                "_run_android_mechanism_extension",
+                TOOL_HANDLERS[name].__code__.co_names,
+            )
+            store.unlink()
+
     def test_apply_capability_extension_can_persist_validated_android_mechanism(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
