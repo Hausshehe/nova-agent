@@ -485,7 +485,7 @@ def record_capability_repair_verification(capability: str, verification: str) ->
         return f"Repair verification not recorded for {name}: metadata write failed: {exc}"
     return f"Repair verification recorded: {name}\nRepair status: PENDING\nLatest verification evidence persisted."
 def accept_verified_capability_repair(capability: str, verification: str = "") -> str:
-    """Persist acceptance of a repaired generated capability after verified execution."""
+    """Persist acceptance only when the history analyzer says acceptance is eligible."""
     if not isinstance(capability, str) or not capability.strip():
         raise ValueError("Capability cannot be empty.")
     if not isinstance(verification, str):
@@ -511,15 +511,24 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
             f"Repair acceptance not recorded for {name}: capability is not a generated "
             "capability."
         )
+
+    analysis = analyze_capability_history(name)
+    if "Repair decision: ACCEPT_ELIGIBLE" not in analysis:
+        decision_match = re.search(r"Repair decision:\s*([^\n]+)", analysis)
+        decision = decision_match.group(1).strip() if decision_match else "UNKNOWN"
+        return (
+            f"Repair acceptance not recorded for {name}: history analyzer decision is "
+            f"{decision}; repair remains PENDING."
+        )
+
     ledger_path = _outcome_ledger_path()
-    if not ledger_path.exists():
-        return f"Repair acceptance not recorded for {name}: outcome ledger is unavailable; repair remains PENDING."
     try:
         ledger_entries = json.loads(ledger_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return f"Repair acceptance not recorded for {name}: outcome ledger could not be read: {exc}"
     if not isinstance(ledger_entries, list):
         return f"Repair acceptance not recorded for {name}: outcome ledger is invalid; repair remains PENDING."
+
     verification_entries = [
         item for item in ledger_entries
         if (
@@ -532,26 +541,12 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
     if latest is None:
         return f"Repair acceptance not recorded for {name}: no persisted verification outcome is available; repair remains PENDING."
     persisted_evidence = str(latest.get("evidence", "")).strip()
-    if str(latest.get("status", "")).upper() != "VERIFIED":
-        return (
-            f"Repair acceptance not recorded for {name}: the most recent persisted "
-            "verification outcome is not VERIFIED; repair remains PENDING."
-        )
     if evidence and evidence != persisted_evidence:
         return (
             f"Repair acceptance not recorded for {name}: supplied verification evidence "
             "does not exactly match the most recent persisted verification evidence; repair remains PENDING."
         )
     evidence = persisted_evidence
-    if not re.search(
-        r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
-        evidence,
-        re.IGNORECASE,
-    ):
-        return (
-            f"Repair acceptance not recorded for {name}: verification evidence is not "
-            "explicitly VERIFIED; repair remains PENDING."
-        )
 
     store_path = _extension_store_path()
     if not store_path.exists():
@@ -559,7 +554,7 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
     try:
         entries = json.loads(store_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return f"Repair acceptance not recorded for {name}: persisted metadata could not be read: {exc}"
+        return f"Repair acceptance not recorded for {name}: persisted metadata could not be read, {exc}"
     if not isinstance(entries, list):
         return f"Repair acceptance not recorded for {name}: persisted capability store is invalid."
 
@@ -599,7 +594,7 @@ def accept_verified_capability_repair(capability: str, verification: str = "") -
     return (
         f"Repair acceptance recorded: {name}\n"
         "Repair status: ACCEPTED\n"
-        "Acceptance basis: independently verified capability execution.\n"
+        "Acceptance basis: persisted history analyzer returned ACCEPT_ELIGIBLE.\n"
         "Persisted repair recipe retained."
     )
 
