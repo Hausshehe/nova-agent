@@ -26,6 +26,7 @@ from gemini_agent.tools import (
     _dump_camera_ui_hierarchy,
     capability_inventory,
     diagnose_capability_failure,
+    autonomously_repair_capability,
     select_capability_repair_candidate,
     apply_capability_repair,
     accept_verified_capability_repair,
@@ -281,6 +282,91 @@ class CapabilityRepairVerificationTests(unittest.TestCase):
             saved = json.loads(store.read_text(encoding="utf-8"))[0]
         self.assertIn("history analyzer decision is REVERIFY", result)
         self.assertEqual(saved["repair_status"], "PENDING")
+
+
+class AutonomousSelfRepairWorkflowTests(unittest.TestCase):
+    def test_autonomous_self_repair_chains_repair_verify_record_analyze_accept(self):
+        calls = []
+
+        def diagnosis(capability, failure_evidence):
+            calls.append(("diagnose", capability, failure_evidence))
+            return "Recovery decision: REPAIR_CANDIDATE_AVAILABLE."
+
+        def candidate(capability, diagnosis):
+            calls.append(("candidate", capability))
+            return "Candidate: RESTORE_GENERATED_CAPABILITY"
+
+        def repair(capability, candidate):
+            calls.append(("repair", capability, candidate))
+            return "Capability repair transaction applied: generated_probe"
+
+        def handler():
+            calls.append(("execute",))
+            return "Post-action verification: VERIFIED\nObserved bounded success."
+
+        def record(capability, verification):
+            calls.append(("record", capability, verification))
+            return "Repair verification recorded: generated_probe\nRepair status: PENDING"
+
+        def analyze(capability):
+            calls.append(("analyze", capability))
+            return "Repair decision: ACCEPT_ELIGIBLE"
+
+        def accept(capability):
+            calls.append(("accept", capability))
+            return "Repair acceptance recorded: generated_probe\nRepair status: ACCEPTED"
+
+        with patch("gemini_agent.tools.diagnose_capability_failure", diagnosis),              patch("gemini_agent.tools.select_capability_repair_candidate", candidate),              patch("gemini_agent.tools.apply_capability_repair", repair),              patch.dict(TOOL_HANDLERS, {"generated_probe": handler}, clear=False),              patch("gemini_agent.tools.record_capability_repair_verification", record),              patch("gemini_agent.tools.analyze_capability_history", analyze),              patch("gemini_agent.tools.accept_verified_capability_repair", accept):
+            result = autonomously_repair_capability("generated_probe", "bounded failure evidence")
+
+        self.assertIn("Repair status: ACCEPTED", result)
+        self.assertEqual(
+            [item[0] for item in calls],
+            ["diagnose", "candidate", "repair", "execute", "record", "analyze", "accept"],
+        )
+
+    def test_autonomous_self_repair_stops_safely_when_no_candidate_exists(self):
+        with patch(
+            "gemini_agent.tools.diagnose_capability_failure",
+            return_value="Recovery decision: OBSERVE_AND_ANALYZE.",
+        ), patch("gemini_agent.tools.select_capability_repair_candidate") as candidate:
+            result = autonomously_repair_capability("calculator", "bounded failure evidence")
+        candidate.assert_not_called()
+        self.assertIn("stopped safely", result.lower())
+        self.assertIn("No repair transaction", result)
+
+    def test_autonomous_self_repair_never_accepts_inconclusive_verification(self):
+        calls = []
+
+        def handler():
+            calls.append("execute")
+            return "Post-action verification: INCONCLUSIVE\nNo bounded state change observed."
+
+        with patch(
+            "gemini_agent.tools.diagnose_capability_failure",
+            return_value="Recovery decision: REPAIR_CANDIDATE_AVAILABLE.",
+        ), patch(
+            "gemini_agent.tools.select_capability_repair_candidate",
+            return_value="Candidate: RESTORE_GENERATED_CAPABILITY",
+        ), patch(
+            "gemini_agent.tools.apply_capability_repair",
+            return_value="Capability repair transaction applied: generated_probe",
+        ), patch.dict(TOOL_HANDLERS, {"generated_probe": handler}, clear=False), patch(
+            "gemini_agent.tools.record_capability_repair_verification",
+            return_value="Repair verification recorded: generated_probe\nRepair status: PENDING",
+        ) as record, patch(
+            "gemini_agent.tools.analyze_capability_history",
+            return_value="Repair decision: REVERIFY",
+        ) as analyze, patch(
+            "gemini_agent.tools.accept_verified_capability_repair"
+        ) as accept:
+            result = autonomously_repair_capability("generated_probe", "bounded failure evidence")
+
+        self.assertEqual(calls, ["execute"])
+        record.assert_called_once()
+        analyze.assert_called_once_with("generated_probe")
+        accept.assert_not_called()
+        self.assertIn("Final repair decision: REVERIFY", result)
 
 class AndroidMechanismDiscoveryTests(unittest.TestCase):
     def test_discover_android_mechanisms_reports_candidates_without_action(self):
