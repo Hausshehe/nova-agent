@@ -650,7 +650,7 @@ def autonomously_repair_capability(capability: str, failure_evidence: str) -> st
         execution = f"Verification: FAILED\nExecution error: {exc}"
 
     if re.search(
-        r"(?:Post-action verification|Verification)\s*:\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\\b",
+        r"(?:Post-action verification|Verification)\s*:\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\b",
         execution,
         re.IGNORECASE,
     ):
