@@ -1603,7 +1603,7 @@ def recover_command(command: str, expected: str = "") -> str:
     except (RuntimeError, ValueError) as exc:
         first_result = f"Tool error: {exc}"
 
-    if outcome(first_result) in ("SUCCEEDED", "VERIFIED"):
+    if first_result.startswith("Exit code: 0"):
         return format_result("Recovery: none needed.\nAttempts: 1", first_result)
 
     diagnosis = diagnose_command_failure(command, first_result)
@@ -1641,7 +1641,7 @@ def recover_command(command: str, expected: str = "") -> str:
                         except (RuntimeError, ValueError) as retry_exc:
                             root_result = f"Tool error: {retry_exc}"
                         if outcome(root_result) in ("SUCCEEDED", "VERIFIED"):
-                            return diagnosis + "\nRecovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic.\n" + format_result("Attempts: 2", root_result)
+                            return diagnosis + "\nRecovery: bare dumpsys was unbounded; adapted to the bounded manual-su service-list diagnostic and command succeeded.\n" + format_result("Attempts: 2", root_result)
                         return diagnosis + "\nRecovery: bare dumpsys was unbounded; bounded manual-su diagnostic also failed.\n" + format_result("Attempts: 2", root_result)
                     root_result = f"Tool error: {exc}"
                 if outcome(root_result) in ("SUCCEEDED", "VERIFIED"):
