@@ -544,32 +544,16 @@ def diagnose_android_mechanism_outcome(
     evidence = []
     kind = candidate.split(":", 1)[0].lower() if ":" in candidate else ""
     if kind in {"ui", "ui-text"}:
-        dump_path = "/data/local/tmp/nova-ui-diagnosis.xml"
         try:
-            dump = run_root_command(f"uiautomator dump {dump_path}")
-            if dump.startswith("Exit code: 0"):
-                xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
-                try:
-                    root = ET.fromstring(xml_text)
-                    selector = candidate.split(":", 1)[1].strip()
-                    attribute = "resource-id" if kind == "ui" else "text"
-                    matches = [
-                        node for node in root.iter("node")
-                        if node.attrib.get(attribute, "") == selector
-                        and node.attrib.get("enabled") == "true"
-                    ]
-                    evidence.append(f"Current matching enabled UI nodes: {len(matches)}")
-                except (ET.ParseError, ValueError) as exc:
-                    evidence.append(f"Current UI evidence could not be parsed: {exc}")
+            observation = inspect_android_ui(candidate)
+            if "No enabled UI node matched" in observation:
+                evidence.append("Current matching enabled UI nodes: 0")
+            elif "matched" in observation.lower():
+                evidence.append("Current UI observation: " + observation.split("Android UI inspection (read-only):", 1)[-1].strip())
             else:
-                evidence.append(f"Current UI observation failed: {dump}")
+                evidence.append("Current UI observation: " + observation)
         except (RuntimeError, ValueError) as exc:
             evidence.append(f"Current UI observation unavailable: {exc}")
-        finally:
-            try:
-                run_root_command(f"rm -f {dump_path}")
-            except (RuntimeError, ValueError):
-                pass
     elif kind == "intent":
         try:
             foreground = get_foreground_android_component()
