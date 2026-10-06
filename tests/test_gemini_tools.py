@@ -19,6 +19,7 @@ from gemini_agent.tools import (
     self_test,
     send_android_keyevent,
     _run_bounded_root_action,
+    _read_bounded_root_file,
     _dump_camera_ui_hierarchy,
     capability_inventory,
     discover_camera_control,
@@ -325,6 +326,13 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["inspect_android_ui"], inspect_android_ui)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("inspect_android_ui", names)
+
+    def test_bounded_read_allows_ui_hierarchy_path(self):
+        completed = type("Completed", (), {"returncode": 0, "stdout": b"<hierarchy />", "stderr": b""})()
+        with patch("gemini_agent.tools.subprocess.run", return_value=completed) as run:
+            result = _read_bounded_root_file("/data/local/tmp/nova-ui-hierarchy.xml", 64 * 1024)
+        self.assertEqual(result, "<hierarchy />")
+        run.assert_called_once()
 
     def test_inspect_android_ui_filters_to_one_enabled_selector(self):
         xml = (
