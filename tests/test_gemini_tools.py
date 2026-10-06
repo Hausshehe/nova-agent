@@ -1,5 +1,6 @@
 """Offline tests for Nova's local tools."""
 
+import json
 import os
 import re
 import tempfile
