@@ -140,9 +140,9 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
             )
 
         diagnosis = ""
-        if verification.startswith("INCONCLUSIVE"):
-            from gemini_agent.tools import diagnose_android_mechanism_outcome
-            diagnosis = "\n" + diagnose_android_mechanism_outcome(
+        if verification.startswith(("INCONCLUSIVE", "FAILED")):
+            from gemini_agent.tools import recover_android_mechanism
+            diagnosis = "\n" + recover_android_mechanism(
                 request=request,
                 mechanism=candidate,
                 verification=verification,
