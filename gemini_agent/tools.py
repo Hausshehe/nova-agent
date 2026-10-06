@@ -731,61 +731,76 @@ def apply_capability_extension(
 
     kind = implementation_kind.strip().lower()
     target_name = implementation_target.strip()
-    if kind != "existing_tool":
+    if kind not in {"existing_tool", "android_mechanism"}:
         return (
-            "Extension not applied: implementation_kind must be 'existing_tool'. "
-            "Nova may only compose capabilities from primitives that already exist locally."
-        )
-    available_targets = set(TOOL_HANDLERS)
-    if target_name not in available_targets:
-        available = ", ".join(sorted(available_targets))
-        return (
-            f"Extension not applied: existing local tool '{target_name}' is not available. "
-            f"Valid implementation targets are: {available}"
+            "Extension not applied: implementation_kind must be 'existing_tool' "
+            "or 'android_mechanism'."
         )
     if target_name == proposed:
-        return "Extension not applied: extension primitive must be an existing capability, not the new capability itself."
+        return "Extension not applied: extension target must not be the new capability itself."
 
-    # Discovery, planning, validation, and health-check tools are observations,
-    # not implementation primitives. Keep this generic so new capabilities do
-    # not require a hard-coded exception in the extension engine.
-    extension_only_tools = {
-        "assess_capability_gap",
-        "plan_capability_extension",
-        "apply_capability_extension",
-        "capability_inventory",
-        "self_test",
-        "discover_camera_control",
-        "find_executable",
-        "diagnose_command_failure",
-        "verify_command_result",
-    }
-    if target_name in extension_only_tools:
-        return (
-            f"Extension blocked: '{target_name}' is an inspection or orchestration tool, "
-            "not an implementation primitive. Nova must choose an action-capable local "
-            "primitive discovered in the environment."
-        )
+    if kind == "android_mechanism":
+        if not re.fullmatch(r"(?:intent|ui|ui-text):[^\s,]+", target_name, re.IGNORECASE):
+            return (
+                "Extension not applied: android_mechanism target must use a bounded "
+                "intent:<action>, ui:<resource-id>, or ui-text:<text> mechanism."
+            )
+        if implementation_args.strip() not in {"", "{}"}:
+            return (
+                "Extension not applied: android_mechanism extensions do not accept "
+                "implementation arguments; use {}."
+            )
+        validation = validate_android_mechanism(request, target_name)
+        if "Status: VIABLE" not in validation:
+            return (
+                "Extension not applied: discovered Android mechanism is not viable.\n"
+                + validation
+            )
+    else:
+        available_targets = set(TOOL_HANDLERS)
+        if target_name not in available_targets:
+            available = ", ".join(sorted(available_targets))
+            return (
+                f"Extension not applied: existing local tool '{target_name}' is not available. "
+                f"Valid implementation targets are: {available}"
+            )
+        extension_only_tools = {
+            "assess_capability_gap",
+            "plan_capability_extension",
+            "apply_capability_extension",
+            "capability_inventory",
+            "self_test",
+            "discover_camera_control",
+            "find_executable",
+            "diagnose_command_failure",
+            "verify_command_result",
+        }
+        if target_name in extension_only_tools:
+            return (
+                f"Extension blocked: '{target_name}' is an inspection or orchestration tool, "
+                "not an implementation primitive. Nova must choose an action-capable local "
+                "primitive discovered in the environment."
+            )
 
-    try:
-        primitive_signature = inspect.signature(TOOL_HANDLERS[target_name])
-    except (TypeError, ValueError) as exc:
-        return f"Extension not applied: could not inspect primitive '{target_name}': {exc}"
+        try:
+            primitive_signature = inspect.signature(TOOL_HANDLERS[target_name])
+        except (TypeError, ValueError) as exc:
+            return f"Extension not applied: could not inspect primitive '{target_name}': {exc}"
 
-    try:
-        parsed_arguments = json.loads(implementation_args.strip()) if implementation_args.strip() else {}
-    except json.JSONDecodeError as exc:
-        return f"Extension not applied: implementation_args is not valid JSON: {exc}"
-    if not isinstance(parsed_arguments, dict):
-        return "Extension not applied: implementation_args must decode to a JSON object."
+        try:
+            parsed_arguments = json.loads(implementation_args.strip()) if implementation_args.strip() else {}
+        except json.JSONDecodeError as exc:
+            return f"Extension not applied: implementation_args is not valid JSON: {exc}"
+        if not isinstance(parsed_arguments, dict):
+            return "Extension not applied: implementation_args must decode to a JSON object."
 
-    try:
-        primitive_signature.bind(**parsed_arguments)
-    except TypeError as exc:
-        return (
-            f"Extension not applied: arguments do not match existing primitive "
-            f"'{target_name}': {exc}"
-        )
+        try:
+            primitive_signature.bind(**parsed_arguments)
+        except TypeError as exc:
+            return (
+                f"Extension not applied: arguments do not match existing primitive "
+                f"'{target_name}': {exc}"
+            )
 
     original = target.read_text(encoding="utf-8")
     try:
@@ -804,6 +819,19 @@ def apply_capability_extension(
     handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
+    if kind == "android_mechanism":
+        call = ast.Call(
+            func=ast.Name(id="_run_android_mechanism_extension", ctx=ast.Load()),
+            args=[ast.Constant(value=request.strip()), ast.Constant(value=target_name)],
+            keywords=[],
+        )
+    else:
+        call = ast.Call(
+            func=ast.Name(id="_run_extension_primitive", ctx=ast.Load()),
+            args=[ast.Constant(value=target_name), ast.Constant(value=implementation_args.strip())],
+            keywords=[],
+        )
+
     function_node = ast.FunctionDef(
         name=proposed,
         args=ast.arguments(
@@ -813,15 +841,7 @@ def apply_capability_extension(
             kw_defaults=[],
             defaults=[],
         ),
-        body=[
-            ast.Return(
-                value=ast.Call(
-                    func=ast.Name(id="_run_extension_primitive", ctx=ast.Load()),
-                    args=[ast.Constant(value=target_name), ast.Constant(value=implementation_args.strip())],
-                    keywords=[],
-                )
-            )
-        ],
+        body=[ast.Return(value=call)],
         decorator_list=[],
         returns=ast.Name(id="str", ctx=ast.Load()),
     )
@@ -872,6 +892,14 @@ def apply_capability_extension(
         "    if not isinstance(parsed, dict):\n"
         "        raise ValueError(\"Extension primitive arguments must be a JSON object.\")\n"
         "    return str(handler(**parsed))\n"
+        "\ndef _run_android_mechanism_extension(request: str, mechanism: str) -> str:\n"
+        "    validation = validate_android_mechanism(request, mechanism)\n"
+        "    if \"Status: VIABLE\" not in validation:\n"
+        "        return \"Extension capability blocked: Android mechanism is no longer viable.\\n\" + validation\n"
+        "    if mechanism.lower().startswith((\"ui:\", \"ui-text:\")):\n"
+        "        from gemini_agent.android_ui import execute_validated_android_ui_mechanism\n"
+        "        return str(execute_validated_android_ui_mechanism(request=request, mechanism=mechanism))\n"
+        "    return str(execute_validated_android_mechanism(request=request, mechanism=mechanism))\n"
     )
     if helper_marker not in updated:
         return "Extension not applied: implementation insertion anchor was not found."
@@ -3107,15 +3135,15 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "apply_capability_extension",
-        "description": "Apply one bounded extension by composing an existing local tool. Nova generates the wrapper locally and never accepts model-generated Python source.",
+        "description": "Apply one bounded extension using either an existing local tool or a validated Android mechanism discovered in the environment. Nova generates the wrapper locally and never accepts model-generated Python source.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "request": {"type": "STRING", "description": "The missing capability being extended."},
                 "path": {"type": "STRING", "description": "Use exactly gemini_agent/tools.py."},
-                "implementation_kind": {"type": "STRING", "description": "Must be existing_tool."},
-                "implementation_target": {"type": "STRING", "description": "Name of an existing tool in Nova's local TOOL_HANDLERS."},
-                "implementation_args": {"type": "STRING", "description": "JSON object of arguments passed to the existing primitive."},
+                "implementation_kind": {"type": "STRING", "description": "Use existing_tool for a local primitive, or android_mechanism for a validated intent:<action>, ui:<resource-id>, or ui-text:<text> mechanism."},
+                "implementation_target": {"type": "STRING", "description": "Existing TOOL_HANDLERS name, or the exact validated Android mechanism when using android_mechanism."},
+                "implementation_args": {"type": "STRING", "description": "JSON arguments for existing_tool; use {} for android_mechanism."},
                 "declaration_description": {"type": "STRING", "description": "Description for the new tool declaration."}
             },
             "required": ["request", "path", "implementation_kind", "implementation_target", "implementation_args", "declaration_description"],
