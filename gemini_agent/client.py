@@ -706,6 +706,9 @@ class GeminiClient:
             action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized else "IMAGE_CAPTURE"
             return str(self.tool_handlers["resolve_android_intent"](action=action))
 
+        if requested_tool == "plan_capability_extension":
+            return str(self.tool_handlers["plan_capability_extension"](request=request_text, inspect_reality=True))
+
         if requested_tool == "apply_capability_extension":
             inspection = self._extension_inspection_context(request_text)
             messages = [
