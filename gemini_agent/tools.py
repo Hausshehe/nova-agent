@@ -162,7 +162,7 @@ def inspect_android_ui() -> str:
     """Inspect the current foreground Android UI hierarchy without interacting with it."""
     dump_path = "/data/local/tmp/nova-ui-hierarchy.xml"
     try:
-        dump_result = run_root_command(f"uiautomator dump {dump_path}")
+        dump_result = _dump_bounded_ui_hierarchy(dump_path)
         if not dump_result.startswith("Exit code: 0"):
             return (
                 "Android UI inspection (read-only):\n"
@@ -177,7 +177,7 @@ def inspect_android_ui() -> str:
         )
     finally:
         try:
-            run_root_command(f"rm -f {dump_path}")
+            subprocess.run(["su"], input=f"rm -f {dump_path}\n", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=False, timeout=3, check=False)
         except (RuntimeError, ValueError):
             pass
 
@@ -1170,9 +1170,43 @@ def _dump_camera_ui_hierarchy() -> str:
     return output.decode("utf-8", errors="ignore").rstrip()
 
 
+def _dump_bounded_ui_hierarchy(path: str) -> str:
+    """Capture the foreground UI hierarchy through one bounded, allowlisted root action."""
+    allowed_paths = {
+        "/data/local/tmp/nova-ui-hierarchy.xml",
+        "/data/local/tmp/nova-ui-actions.xml",
+        "/data/local/tmp/nova-ui-validation.xml",
+        "/data/local/tmp/nova-ui-execution.xml",
+    }
+    if path not in allowed_paths:
+        raise ValueError("UI hierarchy path is not allowed.")
+    try:
+        completed = subprocess.run(
+            ["su"],
+            input=f"uiautomator dump {path}\n".encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            timeout=_ROOT_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("UI hierarchy dump timed out.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"UI hierarchy dump failed to start: {exc}") from exc
+    stdout = (completed.stdout or b"").decode("utf-8", errors="replace").strip()
+    stderr = (completed.stderr or b"").decode("utf-8", errors="replace").strip()
+    result = f"Exit code: {completed.returncode}"
+    if stdout:
+        result += f"\nstdout:\n{stdout}"
+    if stderr:
+        result += f"\nstderr:\n{stderr}"
+    return result
+
+
 def _read_bounded_root_file(path: str, max_bytes: int) -> str:
     """Read one allowlisted root-owned diagnostic file with a bounded size."""
-    if path != "/data/local/tmp/nova-ui-actions.xml":
+    if path not in {"/data/local/tmp/nova-ui-hierarchy.xml", "/data/local/tmp/nova-ui-actions.xml", "/data/local/tmp/nova-ui-validation.xml", "/data/local/tmp/nova-ui-execution.xml"}:
         raise ValueError("Root file path is not allowed.")
     if not isinstance(max_bytes, int) or max_bytes <= 0 or max_bytes > 64 * 1024:
         raise ValueError("Invalid bounded read size.")
