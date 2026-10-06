@@ -124,22 +124,23 @@ class AndroidUiExecutionTests(unittest.TestCase):
             return_value="Status: VIABLE",
         ), patch(
             "gemini_agent.android_ui.run_root_command",
-            side_effect=["Exit code: 0", "Exit code: 0", "Exit code: 0"],
+            side_effect=["Exit code: 0", "Exit code: 0", "Exit code: 0", "Exit code: 0"],
         ), patch(
             "gemini_agent.android_ui._read_bounded_root_file",
             return_value=hierarchy,
         ), patch(
             "gemini_agent.android_ui._run_bounded_ui_tap",
             return_value="Exit code: 0",
-        ):
+        ), patch("gemini_agent.android_ui.time.sleep") as sleep:
             result = execute_validated_android_ui_mechanism(
                 "activate CTRL",
                 "ui-text:CTRL",
             )
         self.assertIn(
-            "Post-action verification: INCONCLUSIVE: tap executed successfully, but the target UI node attributes were unchanged",
+            "Post-action verification: INCONCLUSIVE: tap executed successfully, but the target UI node remained unchanged after the bounded recovery re-observation",
             result,
         )
+        sleep.assert_called_once_with(0.25)
 
     def test_reports_verified_when_target_attributes_change(self):
         before = (
