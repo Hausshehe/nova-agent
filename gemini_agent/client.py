@@ -637,13 +637,13 @@ class GeminiClient:
         if requested_tool == "recover_android_mechanism":
             mechanism = self._extract_mechanism(request_text)
             verification_match = re.search(
-                r"(?:post-action\s+)?verification(?:\s+as\s+genuinely\s+\w+)?\s+for\s+this\s+test:\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
+                r"(?:post-action\s+)?verification(?:\s+as\s+genuinely\s+\w+)?\s+for\s+this\s+test:\s*(.+?)(?=\s+(?:the\s+request\s+goal|request\s+goal|report)\s*:|$)",
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             if not verification_match:
                 verification_match = re.search(
-                    r"(?:verification|post-action verification)\s*[:=]\s*(.+?)(?:\n\s*\n|\n\s*(?:the\s+request\s+goal|request\s+goal|report):)",
+                    r"(?:verification|post-action verification)\s*[:=]\s*(.+?)(?=\s+(?:the\s+request\s+goal|request\s+goal|report)\s*:|$)",
                     request_text,
                     re.IGNORECASE | re.DOTALL,
                 )
