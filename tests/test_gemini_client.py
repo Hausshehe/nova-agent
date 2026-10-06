@@ -302,16 +302,15 @@ class CloudflareClientTests(unittest.TestCase):
             "urllib.request.urlopen",
             return_value=FakeResponse(response),
         ), patch(
-            "gemini_agent.client.TOOL_HANDLERS",
-            {**__import__("gemini_agent.tools", fromlist=["TOOL_HANDLERS"]).TOOL_HANDLERS},
-        ), patch(
             "gemini_agent.learning.select_verified_strategy",
             return_value="Verified strategy selection: calculator",
         ), patch(
             "gemini_agent.learning.record_verified_experience",
             return_value="Verified experience learned.",
         ) as recorder:
-            client = GeminiClient()
+            def verified_calculator(expression):
+                return "Verification: VERIFIED: calculator result confirmed."
+            client = GeminiClient(tool_handlers={"calculator": verified_calculator})
             client.ask(
                 'I need to perform a calculation. I have two candidate strategies: "fallback_probe" and "calculator". '
                 'Use the normal decision process to choose which strategy should be preferred first based on verified experience.'
@@ -322,7 +321,7 @@ class CloudflareClientTests(unittest.TestCase):
             (
                 "perform a calculation",
                 "calculator",
-                "17 * 23 = 391",
+                "Verification: VERIFIED: calculator result confirmed.",
             ),
         )
         self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
