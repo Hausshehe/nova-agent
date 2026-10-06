@@ -783,6 +783,67 @@ def _normalize_android_mechanism_target(target: str) -> str:
     return value.strip(chr(96)).strip().strip(chr(34)).strip(chr(39)).strip()
 
 
+def _extension_store_path() -> Path:
+    """Return the local persistent store for self-generated capability metadata."""
+    configured = os.environ.get("NOVA_CAPABILITY_STORE", "").strip()
+    return Path(configured).expanduser() if configured else Path.home() / ".nova-agent-capabilities.json"
+
+
+def _persist_capability_extension(
+    name: str,
+    description: str,
+    implementation_kind: str,
+    implementation_target: str,
+    implementation_args: str,
+    request: str,
+) -> None:
+    """Atomically persist a verified generated capability outside the Git working tree."""
+    path = _extension_store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = []
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Capability store could not be read: {exc}") from exc
+        if not isinstance(loaded, list):
+            raise RuntimeError("Capability store must contain a JSON list.")
+        entries = loaded
+    entry = {
+        "name": name,
+        "description": description,
+        "implementation_kind": implementation_kind,
+        "implementation_target": implementation_target,
+        "implementation_args": implementation_args,
+        "request": request,
+    }
+    entries = [item for item in entries if not isinstance(item, dict) or item.get("name") != name]
+    entries.append(entry)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            json.dump(entries, temporary, ensure_ascii=False, indent=2, sort_keys=True)
+            temporary.write("\n")
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    except OSError as exc:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise RuntimeError(f"Capability store write failed: {exc}") from exc
+
+
 def apply_capability_extension(
     request: str,
     path: str,
@@ -1059,6 +1120,25 @@ def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
         except OSError as exc:
             return f"Extension transaction failed and rollback failed for {relative}: {exc}\n{verification}"
         return f"Extension rolled back: {verification}"
+
+    try:
+        _persist_capability_extension(
+            proposed,
+            declaration_description.strip(),
+            kind,
+            target_name,
+            implementation_args.strip(),
+            request.strip(),
+        )
+    except RuntimeError as exc:
+        try:
+            target.write_text(original, encoding="utf-8")
+        except OSError as rollback_exc:
+            return (
+                f"Extension persistence failed and rollback failed for {relative}: "
+                f"{rollback_exc}\n{exc}"
+            )
+        return f"Extension rolled back: persistence failed: {exc}"
 
     return (
         f"Edited {relative}\n"
@@ -4102,3 +4182,73 @@ GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION = {
     "description": "Get the Android screen-off timeout duration.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+
+def _load_persisted_capability_extensions() -> None:
+    """Restore verified self-generated capabilities without executing them at startup."""
+    path = _extension_store_path()
+    if not path.exists():
+        return
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(entries, list):
+        return
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name", "")
+        description = entry.get("description", "")
+        kind = entry.get("implementation_kind", "")
+        target = entry.get("implementation_target", "")
+        arguments = entry.get("implementation_args", "")
+        request = entry.get("request", "")
+        if (
+            not isinstance(name, str)
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+            or name in TOOL_HANDLERS
+            or not isinstance(description, str)
+            or not description.strip()
+            or kind not in {"existing_tool", "android_mechanism"}
+            or not isinstance(target, str)
+            or not target.strip()
+            or not isinstance(arguments, str)
+            or not isinstance(request, str)
+            or not request.strip()
+        ):
+            continue
+
+        if kind == "android_mechanism":
+            mechanism = target.strip()
+            capability_request = request.strip()
+
+            def restored_capability(
+                _request: str = capability_request,
+                _mechanism: str = mechanism,
+            ) -> str:
+                return str(_run_android_mechanism_extension(_request, _mechanism))
+
+        else:
+            primitive = target.strip()
+            primitive_arguments = arguments.strip()
+
+            def restored_capability(
+                _primitive: str = primitive,
+                _arguments: str = primitive_arguments,
+            ) -> str:
+                return str(_run_extension_primitive(_primitive, _arguments))
+
+        restored_capability.__name__ = name
+        restored_capability.__qualname__ = name
+        TOOL_HANDLERS[name] = restored_capability
+        TOOL_DECLARATIONS.append(
+            {
+                "name": name,
+                "description": description.strip(),
+                "parameters": {"type": "OBJECT", "properties": {}},
+            }
+        )
+
+
+_load_persisted_capability_extensions()
