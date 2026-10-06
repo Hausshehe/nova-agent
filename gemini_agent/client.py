@@ -2595,6 +2595,17 @@ class GeminiClient:
                             "function": {"name": selected_cloud_name},
                         }
 
+                    # The selected strategy has now executed. Its result is authoritative
+                    # for this decision step. Do not offer the same strategy another turn,
+                    # or the provider can repeat execution until the outer call budget dies.
+                    if (
+                        strategy_candidates
+                        and selected_strategy
+                        and local_name == selected_strategy
+                    ):
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+
                     # Self-extension is transactional and must not enter an
                     # unbounded repair conversation with the model. One model
                     # proposal, one local transaction, then return the result.
