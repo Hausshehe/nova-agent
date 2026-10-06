@@ -81,6 +81,29 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "CAMERA OPENED")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_explicit_recover_command_preserves_expected_postcondition(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            with patch.object(
+                client.tool_handlers,
+                "recover_command",
+                return_value="Outcome: VERIFIED",
+            ) as recover:
+                answer = client.ask(
+                    "Use recover_command to run `python --version`. "
+                    "The expected postcondition is exactly `Python`. "
+                    "You must pass `Python` as the recover_command expected argument."
+                )
+        self.assertEqual(answer, "Outcome: VERIFIED")
+        recover.assert_called_once_with(command="python --version", expected="Python")
+        self.assertEqual(client.last_tool_calls[-1]["args"], {
+            "command": "python --version",
+            "expected": "Python",
+        })
     def test_requested_local_tool_resolves_unnamed_newly_generated_capability(self):
         def generated_camera_capability():
             return "CAMERA OPENED"
