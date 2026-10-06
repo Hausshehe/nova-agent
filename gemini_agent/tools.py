@@ -21,6 +21,7 @@ import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
+from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
 
 
 _OPERATORS = {
@@ -1281,18 +1282,20 @@ def rank_android_mechanism_candidates(
     if any(term in text for term in ("service", "daemon")):
         preferred_kinds.append("service")
     if not preferred_kinds:
-        return candidates
-    rank = {kind: index for index, kind in enumerate(preferred_kinds)}
-    return [
-        candidate
-        for _, candidate in sorted(
-            enumerate(candidates),
-            key=lambda item: (
-                rank.get(item[1].split(":", 1)[0].lower(), len(rank)),
-                item[0],
-            ),
-        )
-    ]
+        ranked = list(candidates)
+    else:
+        rank = {kind: index for index, kind in enumerate(preferred_kinds)}
+        ranked = [
+            candidate
+            for _, candidate in sorted(
+                enumerate(candidates),
+                key=lambda item: (
+                    rank.get(item[1].split(":", 1)[0].lower(), len(rank)),
+                    item[0],
+                ),
+            )
+        ]
+    return rank_with_verified_android_experience(request, ranked)
 
 
 def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
@@ -1372,13 +1375,26 @@ def execute_android_mechanism(
         )
     kind = candidate.split(":", 1)[0].strip().lower()
     if kind == "intent":
-        return execute_validated_android_mechanism(request=request, mechanism=candidate, allow_recovery=allow_recovery)
-    if kind in {"ui", "ui-text"}:
+        result = execute_validated_android_mechanism(request=request, mechanism=candidate, allow_recovery=allow_recovery)
+    elif kind in {"ui", "ui-text"}:
         from gemini_agent.android_ui import execute_validated_android_ui_mechanism
-        return execute_validated_android_ui_mechanism(
+        result = execute_validated_android_ui_mechanism(
             request=request,
             mechanism=candidate,
         )
+    else:
+        return (
+            "Android mechanism execution blocked: no bounded executor exists for "
+            f"mechanism type '{kind}'."
+        )
+    if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b", result, re.IGNORECASE):
+        learning = record_verified_android_experience(
+            request=request,
+            mechanism=candidate,
+            verification=result,
+        )
+        return result + "\n" + learning
+    return result
     return (
         "Android mechanism execution blocked: no bounded executor exists for "
         f"mechanism type '{kind}'."
@@ -4384,6 +4400,19 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "record_verified_android_experience",
+        "description": "Persist a verified Android mechanism experience so future mechanism ranking can conservatively learn from successful executions.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING"},
+                "mechanism": {"type": "STRING"},
+                "verification": {"type": "STRING"},
+            },
+            "required": ["request", "mechanism", "verification"],
+        },
+    },
+    {
         "name": "analyze_capability_history",
         "description": "Read persisted capability outcome history and make a bounded repair-verification decision without executing or modifying anything.",
         "parameters": {
@@ -5242,6 +5271,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "autonomously_repair_capability": autonomously_repair_capability,
     "record_capability_repair_verification": record_capability_repair_verification,
+    "record_verified_android_experience": record_verified_android_experience,
     "analyze_capability_history": analyze_capability_history,
     "record_capability_outcome": record_capability_outcome,
     "get_capability_outcome_history": get_capability_outcome_history,
