@@ -254,6 +254,33 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "send_android_keyevent")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_compound_self_extension_request_uses_extension_transaction(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse({"choices": [{"message": {"content": "ok"}}]}),
+        ) as open_url, patch(
+            "gemini_agent.client.GeminiClient._extension_inspection_context",
+            return_value="inspection context",
+        ):
+            client = GeminiClient()
+            answer = client.ask(
+                "Add a capability to open the device camera. "
+                "You do not currently have this capability. "
+                "Discover the Android mechanism, validate it, extend yourself using that mechanism, "
+                "test the extension, and report exactly what happened."
+            )
+        self.assertEqual(answer, "ok")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(sent["tool_choice"]["function"]["name"], "apply_capability_extension")
+        self.assertEqual(
+            [tool["function"]["name"] for tool in sent["tools"]],
+            ["apply_capability_extension"],
+        )
+
     def test_natural_extension_request_uses_extension_planner(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
