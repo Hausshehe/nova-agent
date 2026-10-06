@@ -106,14 +106,6 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(selected, "camera_shutter")
 
     def test_unnamed_newly_generated_capability_routes_to_generated_wrapper(self):
-        response = {
-            "choices": [{"message": {"tool_calls": [{
-                "id": "generated-call",
-                "type": "function",
-                "function": {"name": "camera_shutter", "arguments": "{}"},
-            }]}}]
-        }
-
         def generated_camera_capability():
             return "CAMERA OPENED"
 
@@ -141,7 +133,7 @@ class CloudflareClientTests(unittest.TestCase):
 
         self.assertEqual(answer, "CAMERA OPENED")
         self.assertEqual(client.last_tool_calls[0]["name"], "camera_shutter")
-        self.assertEqual(open_url.call_count, 1)
+        self.assertEqual(open_url.call_count, 0)
 
     def test_retries_transient_invalid_cloudflare_json_response(self):
         valid = {"choices": [{"message": {"content": "hello after retry"}}]}
