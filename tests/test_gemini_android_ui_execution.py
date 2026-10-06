@@ -125,7 +125,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
         self.assertIn("Exit code: 0", result)
         run.assert_called_once_with(
             ["su"],
-            input="input tap 53 887\\n",
+            input="input tap 53 887\n",
             stdout=unittest.mock.ANY,
             stderr=unittest.mock.ANY,
             text=True,
