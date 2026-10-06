@@ -23,6 +23,7 @@ from gemini_agent.tools import (
     _dump_camera_ui_hierarchy,
     capability_inventory,
     diagnose_capability_failure,
+    select_capability_repair_candidate,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -2985,6 +2986,41 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIn("Implementation class: LOCAL", result)
         self.assertIn("Recovery decision: OBSERVE_AND_ANALYZE.", result)
         self.assertNotIn("REPAIR_CANDIDATE_AVAILABLE", result)
+
+    def test_select_capability_repair_candidate_stops_on_local_capability(self):
+        result = select_capability_repair_candidate(
+            "calculator",
+            "Recovery decision: OBSERVE_AND_ANALYZE.",
+        )
+        self.assertIn("Candidate: NONE", result)
+        self.assertIn("Status: NO_SAFE_CANDIDATE", result)
+
+    def test_select_capability_repair_candidate_selects_persisted_generated_recipe(self):
+        def generated_probe():
+            return "probe"
+
+        generated_probe.__nova_generated_capability__ = True
+        with patch.dict(TOOL_HANDLERS, {"generated_probe": generated_probe}, clear=False), patch(
+            "gemini_agent.tools.TOOL_DECLARATIONS",
+            [{"name": "generated_probe", "description": "Generated probe"}],
+        ), patch(
+            "gemini_agent.tools._load_persisted_capability_extensions",
+            return_value=[{
+                "name": "generated_probe",
+                "implementation_kind": "existing_tool",
+                "implementation_target": "calculator",
+                "implementation_args": "{}",
+                "request": "run generated probe",
+            }],
+        ):
+            result = select_capability_repair_candidate(
+                "generated_probe",
+                "Recovery decision: REPAIR_CANDIDATE_AVAILABLE.",
+            )
+        self.assertIn("Candidate: RESTORE_GENERATED_CAPABILITY", result)
+        self.assertIn("Implementation target: calculator", result)
+        self.assertIn("Status: CANDIDATE_SELECTED", result)
+        self.assertIn("No capability execution or mutation was performed.", result)
 
     def test_diagnose_capability_failure_finds_generated_repair_recipe(self):
         def generated_probe():
