@@ -1928,7 +1928,7 @@ class GeminiClient:
                             request=prompt
                         )
                     )
-                    candidates = re.findall(r"(?m)^intent:([^\\s]+)$", discovery)
+                    candidates = re.findall(r"\bintent:([A-Za-z0-9._-]+)", discovery)
                     for action in candidates:
                         candidate = f"intent:{action}"
                         validation = str(
