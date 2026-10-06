@@ -4400,6 +4400,18 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "rank_android_mechanism_candidates",
+        "description": "Rank bounded Android mechanism candidates using the current goal and only sufficiently similar previously VERIFIED experience.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING"},
+                "candidates": {"type": "ARRAY", "items": {"type": "STRING"}},
+            },
+            "required": ["request", "candidates"],
+        },
+    },
+    {
         "name": "record_verified_android_experience",
         "description": "Persist a verified Android mechanism experience so future mechanism ranking can conservatively learn from successful executions.",
         "parameters": {
@@ -5271,6 +5283,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "autonomously_repair_capability": autonomously_repair_capability,
     "record_capability_repair_verification": record_capability_repair_verification,
+    "rank_android_mechanism_candidates": rank_android_mechanism_candidates,
     "record_verified_android_experience": record_verified_android_experience,
     "analyze_capability_history": analyze_capability_history,
     "record_capability_outcome": record_capability_outcome,
