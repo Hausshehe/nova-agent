@@ -564,7 +564,8 @@ class GeminiClient:
                     tool_result = handler(request=request_text)
                 trace = {"name": requested_tool, "args": {}, "result": tool_result}
                 self.last_tool_calls.append(trace)
-                return str(tool_result)        if requested_tool == "recover_command" and "expected postcondition" in request_text.lower():
+                return str(tool_result)
+        if requested_tool == "recover_command" and "expected postcondition" in request_text.lower():
             command_match = re.search(r"`([^`]+)`", request_text)
             expected_match = re.search(
                 r"expected postcondition(?:\\s+is|\\s*[:=])?\\s*[`\\"\']([^`\\"\']+)[`\\"\']",
