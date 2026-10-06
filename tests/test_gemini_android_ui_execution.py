@@ -113,6 +113,67 @@ class AndroidUiExecutionTests(unittest.TestCase):
         self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
         tap.assert_called_once_with(53, 887)
 
+    def test_reports_unverified_when_target_attributes_do_not_change(self):
+        hierarchy = (
+            '<hierarchy><node class="android.widget.Button" text="CTRL" '
+            'resource-id="" enabled="true" clickable="true" selected="false" '
+            'checked="false" focused="false" bounds="[107,887][208,962]" /></hierarchy>'
+        )
+        with patch(
+            "gemini_agent.android_ui.validate_android_mechanism",
+            return_value="Status: VIABLE",
+        ), patch(
+            "gemini_agent.android_ui.run_root_command",
+            side_effect=["Exit code: 0", "Exit code: 0", "Exit code: 0"],
+        ), patch(
+            "gemini_agent.android_ui._read_bounded_root_file",
+            return_value=hierarchy,
+        ), patch(
+            "gemini_agent.android_ui._run_bounded_ui_tap",
+            return_value="Exit code: 0",
+        ):
+            result = execute_validated_android_ui_mechanism(
+                "activate CTRL",
+                "ui-text:CTRL",
+            )
+        self.assertIn(
+            "Post-action verification: UNVERIFIED: target UI node attributes were unchanged after the tap.",
+            result,
+        )
+
+    def test_reports_verified_when_target_attributes_change(self):
+        before = (
+            '<hierarchy><node class="android.widget.Button" text="CTRL" '
+            'resource-id="" enabled="true" clickable="true" selected="false" '
+            'checked="false" focused="false" bounds="[107,887][208,962]" /></hierarchy>'
+        )
+        after = (
+            '<hierarchy><node class="android.widget.Button" text="CTRL" '
+            'resource-id="" enabled="true" clickable="true" selected="true" '
+            'checked="false" focused="false" bounds="[107,887][208,962]" /></hierarchy>'
+        )
+        with patch(
+            "gemini_agent.android_ui.validate_android_mechanism",
+            return_value="Status: VIABLE",
+        ), patch(
+            "gemini_agent.android_ui.run_root_command",
+            side_effect=["Exit code: 0", "Exit code: 0", "Exit code: 0"],
+        ), patch(
+            "gemini_agent.android_ui._read_bounded_root_file",
+            side_effect=[before, after],
+        ), patch(
+            "gemini_agent.android_ui._run_bounded_ui_tap",
+            return_value="Exit code: 0",
+        ):
+            result = execute_validated_android_ui_mechanism(
+                "activate CTRL",
+                "ui-text:CTRL",
+            )
+        self.assertIn(
+            "Post-action verification: VERIFIED: target UI node attributes changed after the tap.",
+            result,
+        )
+
     def test_bounded_ui_tap_rejects_out_of_range_coordinates(self):
         with self.assertRaisesRegex(ValueError, "outside the bounded screen range"):
             _run_bounded_ui_tap(10001, 887)
