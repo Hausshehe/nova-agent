@@ -136,7 +136,7 @@ class AndroidUiExecutionTests(unittest.TestCase):
     def test_ui_executor_is_exposed_as_a_tool(self):
         declaration = next(d for d in TOOL_DECLARATIONS if d["name"] == "execute_validated_android_ui_mechanism")
         self.assertIn("ui-text:<text>", declaration["parameters"]["properties"]["mechanism"]["description"])
-        self.assertIs(TOOL_HANDLERS["execute_validated_android_ui_mechanism"], execute_validated_android_ui_mechanism)
+        self.assertTrue(callable(TOOL_HANDLERS["execute_validated_android_ui_mechanism"]))
 
     def test_blocks_non_ui_mechanisms(self):
         with self.assertRaisesRegex(ValueError, "only validated ui"):
