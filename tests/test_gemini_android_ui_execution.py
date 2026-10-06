@@ -21,11 +21,13 @@ class AndroidUiExecutionTests(unittest.TestCase):
             "gemini_agent.android_ui.run_root_command",
             side_effect=[
                 "Exit code: 0\nstdout:\nUI dump complete",
-                "Exit code: 0\nstdout:\n" + hierarchy,
                 "Exit code: 0\nstdout:\nTap complete",
                 "Exit code: 0\nstdout:\n",
             ],
-        ) as run:
+        ) as run, patch(
+            "gemini_agent.android_ui._read_bounded_root_file",
+            return_value=hierarchy,
+        ):
             result = execute_validated_android_ui_mechanism(
                 "activate the action control",
                 "ui:com.example:id/action",
@@ -57,11 +59,13 @@ class AndroidUiExecutionTests(unittest.TestCase):
             "gemini_agent.android_ui.run_root_command",
             side_effect=[
                 "Exit code: 0\nstdout:\nUI dump complete",
-                "Exit code: 0\nstdout:\n" + hierarchy,
                 "Exit code: 0\nstdout:\nTap complete",
                 "Exit code: 0\nstdout:\n",
             ],
-        ) as run:
+        ) as run, patch(
+            "gemini_agent.android_ui._read_bounded_root_file",
+            return_value=hierarchy,
+        ):
             result = execute_validated_android_ui_mechanism(
                 "activate the Termux extra keys surface",
                 "ui:com.termux:id/extra_keys",
@@ -84,11 +88,13 @@ class AndroidUiExecutionTests(unittest.TestCase):
             "gemini_agent.android_ui.run_root_command",
             side_effect=[
                 "Exit code: 0\nstdout:\nUI dump complete",
-                "Exit code: 0\nstdout:\n" + hierarchy,
                 "Exit code: 0\nstdout:\nTap complete",
                 "Exit code: 0\nstdout:\n",
             ],
-        ) as run:
+        ) as run, patch(
+            "gemini_agent.android_ui._read_bounded_root_file",
+            return_value=hierarchy,
+        ):
             result = execute_validated_android_ui_mechanism(
                 "activate the ESC extra key",
                 "ui-text:ESC",
