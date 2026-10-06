@@ -186,6 +186,80 @@ def select_capability_repair_candidate(capability: str, diagnosis: str) -> str:
         return "\n".join(lines)
     lines += ["Candidate: RESTORE_GENERATED_CAPABILITY", f"Implementation kind: {kind}", f"Implementation target: {target}", "Basis: generated capability has a persisted bounded repair recipe.", "Safety boundary: restore only from the persisted recipe; deterministic tests and real-world verification are required before acceptance.", "Status: CANDIDATE_SELECTED", "No capability execution or mutation was performed."]
     return "\n".join(lines)
+def apply_capability_repair(capability: str, candidate: str) -> str:
+    """Apply one bounded self-repair transaction from a persisted verified recipe."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise ValueError("Repair candidate cannot be empty.")
+    name = capability.strip()
+    selected = candidate.strip()
+    if selected != "RESTORE_GENERATED_CAPABILITY":
+        return "Capability repair not applied: unsupported repair candidate. Only RESTORE_GENERATED_CAPABILITY is currently bounded."
+
+    store_path = _extension_store_path()
+    if not store_path.exists():
+        return "Capability repair not applied: persisted repair metadata is unavailable."
+    try:
+        entries = json.loads(store_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"Capability repair not applied: persisted repair metadata could not be read: {exc}"
+    if not isinstance(entries, list):
+        return "Capability repair not applied: persisted capability store is not a JSON list."
+    entry = next((item for item in entries if isinstance(item, dict) and item.get("name") == name), None)
+    if entry is None:
+        return f"Capability repair not applied: no persisted verified repair recipe exists for '{name}'."
+
+    kind = str(entry.get("implementation_kind", "")).strip().lower()
+    target = str(entry.get("implementation_target", "")).strip()
+    arguments = entry.get("implementation_args", "")
+    request = str(entry.get("request", "")).strip()
+    description = str(entry.get("description", "")).strip()
+    if kind not in {"existing_tool", "android_mechanism"} or not target or not isinstance(arguments, str) or not request or not description:
+        return "Capability repair not applied: persisted repair recipe is malformed."
+    if kind == "existing_tool" and target not in TOOL_HANDLERS:
+        return f"Capability repair not applied: persisted existing-tool target '{target}' is no longer registered."
+    if kind == "android_mechanism":
+        target = _normalize_android_mechanism_target(target)
+        if not re.fullmatch(r"(?:intent|ui|ui-text):[^\s,]+", target, re.IGNORECASE):
+            return "Capability repair not applied: persisted Android mechanism is outside the bounded repair classes."
+        if arguments.strip() not in {"", "{}"}:
+            return "Capability repair not applied: persisted Android mechanism arguments are invalid."
+        validation = validate_android_mechanism(request, target)
+        if "Status: VIABLE" not in validation:
+            return "Capability repair not applied: persisted Android mechanism is no longer viable.\n" + validation
+
+    original_handlers = dict(TOOL_HANDLERS)
+    original_declarations = list(TOOL_DECLARATIONS)
+    try:
+        TOOL_HANDLERS.pop(name, None)
+        TOOL_DECLARATIONS[:] = [item for item in TOOL_DECLARATIONS if not (isinstance(item, dict) and item.get("name") == name)]
+        _load_persisted_capability_extensions()
+        repaired = TOOL_HANDLERS.get(name)
+        repaired_declaration = next((item for item in TOOL_DECLARATIONS if isinstance(item, dict) and item.get("name") == name), None)
+        if repaired is None or not callable(repaired) or repaired_declaration is None:
+            raise RuntimeError("persisted recipe did not restore the capability registration")
+        passed, verification = _run_extension_test_suite()
+        if not passed:
+            raise RuntimeError(f"deterministic repair tests failed: {verification}")
+    except Exception as exc:
+        TOOL_HANDLERS.clear()
+        TOOL_HANDLERS.update(original_handlers)
+        TOOL_DECLARATIONS[:] = original_declarations
+        return f"Capability repair rolled back: {exc}. Original capability registration was restored."
+
+    return (
+        f"Capability repair transaction applied: {name}\n"
+        f"Repair candidate: {selected}\n"
+        f"Implementation kind: {kind}\n"
+        f"Implementation target: {target}\n"
+        "Snapshot: captured before mutation.\n"
+        "Repair action: restored from persisted verified recipe.\n"
+        f"{verification}\n"
+        "Real-world verification status: PENDING; the repaired capability must be executed and independently verified before this repair is accepted."
+    )
+
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -3838,6 +3912,18 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "apply_capability_repair",
+        "description": "Apply a bounded repair transaction from a persisted verified capability recipe.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING"},
+                "candidate": {"type": "STRING"},
+            },
+            "required": ["capability", "candidate"],
+        },
+    },
+    {
         "name": "capability_inventory",
         "description": "List the local tools Nova currently exposes and their purposes.",
         "parameters": {"type": "OBJECT", "properties": {}},
@@ -4662,6 +4748,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "apply_capability_extension": apply_capability_extension,
     "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
+    "apply_capability_repair": apply_capability_repair,
     "self_test": self_test,
     "find_executable": find_executable,
     "diagnose_command_failure": diagnose_command_failure,
