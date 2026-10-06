@@ -737,7 +737,7 @@ class GeminiClient:
             candidates_match = re.search(r'candidates?\s*(?::|=)?\s*(.+?)(?=\s+Do not|\s+Report|$)', request_text, re.IGNORECASE | re.DOTALL)
             if not request_match or not candidates_match:
                 return "Selecting a verified strategy requires a request and strategy candidates."
-            candidates = [c.strip().strip('"').strip("'").rstrip(".").strip() for c in candidates_match.group(1).split(",") if c.strip()]
+            candidates = [c.strip().rstrip(".").strip().strip('"').strip("'").strip() for c in candidates_match.group(1).split(",") if c.strip()]
             domain_match = re.search(r'\bdomain\s*[:=]\s*([A-Za-z0-9_-]+)', request_text, re.IGNORECASE)
             args = {"request": request_match.group(1).strip(), "candidates": candidates, "domain": domain_match.group(1).strip() if domain_match else "general"}
             result = str(self.tool_handlers[requested_tool](**args))
