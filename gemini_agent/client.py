@@ -741,7 +741,15 @@ class GeminiClient:
                 request_text,
                 re.IGNORECASE,
             )
-            goal = goal_match.group(1).strip() if goal_match else request_text.strip()
+            normal_request_match = re.search(
+                r'\bthen\s+use\s+(?:the\s+)?normal\s+decision\s+process\s+for\s+request\s+["\']([^"\']+)["\']',
+                request_text,
+                re.IGNORECASE,
+            )
+            if normal_request_match:
+                goal = normal_request_match.group(1).strip()
+            else:
+                goal = goal_match.group(1).strip() if goal_match else request_text.strip()
             strategy_goal = goal
             from gemini_agent.learning import select_verified_strategy
             selection = select_verified_strategy(goal, strategy_candidates)
