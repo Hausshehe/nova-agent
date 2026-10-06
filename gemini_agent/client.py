@@ -638,6 +638,16 @@ class GeminiClient:
         prompt = request_text
         prompt_text = request_text
 
+        unnamed_generated_capability_request = bool(
+            re.search(r"\\b(?:use|execute|run|verify|test)\\b", request_text, re.IGNORECASE)
+            and re.search(r"\\bcapabilit(?:y|ies)\\b", request_text, re.IGNORECASE)
+            and not any(
+                getattr(handler, "__nova_generated_capability__", False)
+                and re.search(rf"\\b{re.escape(name)}\\b", request_text, re.IGNORECASE)
+                for name, handler in self.tool_handlers.items()
+            )
+        )
+
         requested_tool = self._requested_local_tool(contents)
         # Resolve explicitly named generated capabilities from the live client
         # registry before any provider round-trip. This keeps execution local and
