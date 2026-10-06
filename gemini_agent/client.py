@@ -178,6 +178,7 @@ class GeminiClient:
 
         if any(phrase in user_text for phrase in (
             "diagnose a capability failure",
+            "diagnose a failure of",
             "diagnose capability failure",
             "capability failure diagnosis",
         )):
