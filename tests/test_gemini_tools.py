@@ -439,6 +439,16 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn("combine_two_existing_local_operations", namespace["TOOL_HANDLERS"])
             self.assertIs(namespace["TOOL_HANDLERS"]["combine_two_existing_local_operations"], namespace["combine_two_existing_local_operations"])
 
+    def test_android_mechanism_discovery_reports_resolved_intent_candidates(self):
+        with patch(
+            "gemini_agent.tools.resolve_android_intent",
+            return_value="Android intent resolution (read-only):\nIntent was resolved only; it was not launched and no device state was modified.",
+        ):
+            result = discover_android_mechanisms("open the device camera")
+        self.assertIn("Discovered bounded intent mechanisms:", result)
+        self.assertIn("intent:android.media.action.IMAGE_CAPTURE", result)
+        self.assertIn("intent:android.media.action.STILL_IMAGE_CAMERA", result)
+
     def test_android_mechanism_extension_accepts_whitespace_after_prefix(self):
         self.assertEqual(
             _normalize_android_mechanism_target("intent: android.media.action.IMAGE_CAPTURE"),
