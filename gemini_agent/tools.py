@@ -1585,18 +1585,43 @@ def recover_command(command: str, expected: str = "") -> str:
             return "FAILED"
         return "VERIFIED" if expected else "SUCCEEDED"
 
+    def postcondition_evidence(result: str) -> str:
+        if not expected:
+            return ""
+        if result.startswith("Exit code: 0") and expected in result:
+            return f"Postcondition: VERIFIED: expected text found: {expected}"
+        return f"Postcondition: FAILED: expected text not found: {expected}"
+
     def format_result(prefix: str, result: str) -> str:
         status = outcome(result)
-        evidence = (
-            f"\nPostcondition: VERIFIED: expected text found: {expected}"
-            if expected and status == "VERIFIED"
-            else (
-                f"\nPostcondition: FAILED: expected text not found: {expected}"
-                if expected
-                else ""
-            )
-        )
-        return f"{prefix}\nOutcome: {status}\n{result}" + evidence
+        evidence = postcondition_evidence(result)
+        return f"{prefix}\nOutcome: {status}\n{result}" + (f"\n{evidence}" if evidence else "")
+
+    def format_recovery_attempts(
+        first_result: str,
+        second_result: str,
+        recovery_reason: str,
+    ) -> str:
+        first_status = outcome(first_result)
+        second_status = outcome(second_result)
+        first_evidence = postcondition_evidence(first_result)
+        second_evidence = postcondition_evidence(second_result)
+        lines = [
+            f"First attempt: {first_status}",
+            first_result,
+        ]
+        if first_evidence:
+            lines.append(first_evidence)
+        lines.extend([
+            recovery_reason,
+            "Attempts: 2",
+            f"Second attempt: {second_status}",
+            second_result,
+        ])
+        if second_evidence:
+            lines.append(second_evidence)
+        lines.append(f"Outcome: {second_status}")
+        return "\n".join(lines)
 
     try:
         first_result = run_command(command)
@@ -1609,9 +1634,10 @@ def recover_command(command: str, expected: str = "") -> str:
                 recovery_result = run_command(command)
             except (RuntimeError, ValueError) as exc:
                 recovery_result = f"Tool error: {exc}"
-            return format_result(
-                "Recovery: command exited successfully but its postcondition was not verified; retried once.\nAttempts: 2",
+            return format_recovery_attempts(
+                first_result,
                 recovery_result,
+                "Recovery: command exited successfully but its postcondition was not verified; retried once.",
             )
         return format_result("Recovery: none needed.\nAttempts: 1", first_result)
 
@@ -1623,7 +1649,11 @@ def recover_command(command: str, expected: str = "") -> str:
             retry_result = run_command(command)
         except (RuntimeError, ValueError) as exc:
             retry_result = f"Tool error: {exc}"
-        return diagnosis + "\n" + format_result("Attempts: 2", retry_result)
+        return diagnosis + "\n" + format_recovery_attempts(
+            first_result,
+            retry_result,
+            "Recovery: command timed out; retried once.",
+        )
 
     parts = shlex.split(command)
     executable = Path(parts[0]).name
