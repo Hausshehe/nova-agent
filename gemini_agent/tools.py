@@ -686,9 +686,13 @@ def _normalize_extension_fragment(fragment: str) -> str:
 def _normalize_android_mechanism_target(target: str) -> str:
     """Normalize harmless formatting around a discovered Android mechanism."""
     value = target.strip().strip(chr(96)).strip()
-    match = re.match(r"^(intent|ui-text|ui)\\s*:\\s*(.*)$", value, flags=re.IGNORECASE)\n    if match:\n        value = f"{match.group(1).lower()}:{match.group(2).strip()}"
+    match = re.match(r"^(intent|ui-text|ui)\s*:\s*(.*)$", value, flags=re.IGNORECASE)
+    if match:
+        value = f"{match.group(1).lower()}:{match.group(2).strip()}"
     value = value.strip().strip(chr(96)).strip().strip(chr(34)).strip(chr(39))
     return value
+
+
 def apply_capability_extension(
     request: str,
     path: str,
