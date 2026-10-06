@@ -3138,7 +3138,7 @@ DIAGNOSE_COMMAND_FAILURE_DECLARATION = {
 
 RECOVER_COMMAND_DECLARATION = {
     "name": "recover_command",
-    "description": "Execute one approved command, apply one safe diagnostic recovery step when it fails, and optionally verify an expected postcondition. Use this for adaptive recovery instead of treating exit code alone as proof of success.",
+    "description": "Execute one approved command, apply one safe diagnostic recovery step when it fails, and optionally verify an expected postcondition. If the user explicitly supplies or requires expected/postcondition text, you MUST pass that text in the expected argument. Do not omit it and do not treat exit code alone as proof of success.",
     "parameters": {"type": "OBJECT", "properties": {
         "command": {"type": "STRING", "description": "Approved command and arguments to execute."},
         "expected": {"type": "STRING", "description": "Optional exact text that must appear in the final result to verify the requested postcondition."},
