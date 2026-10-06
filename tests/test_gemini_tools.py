@@ -29,6 +29,7 @@ from gemini_agent.tools import (
     discover_android_ui_actions,
     validate_android_mechanism,
     execute_validated_android_mechanism,
+    execute_android_mechanism,
     get_foreground_android_component,
     verify_android_component_presence,
     plan_capability_extension,
