@@ -1648,7 +1648,7 @@ class GeminiClient:
                             args = self._fill_extension_request(args, request_text)
                             if str(args.get("implementation_kind", "")).strip().lower() == "android_mechanism":
                                 target = str(args.get("implementation_target", "")).strip()
-                                target = re.sub(r"^(intent|executable|service|ui-text|ui):\\s+", r"\\1:", target, flags=re.IGNORECASE)
+                                target = re.sub(r"^(intent|executable|service|ui-text|ui):\s+", r"\1:", target, flags=re.IGNORECASE)
                                 extracted = self._extract_mechanism(target)
                                 if extracted:
                                     args["implementation_target"] = extracted
