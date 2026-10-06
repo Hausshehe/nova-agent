@@ -22,6 +22,7 @@ from gemini_agent.tools import (
     _read_bounded_root_file,
     _dump_camera_ui_hierarchy,
     capability_inventory,
+    diagnose_capability_failure,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -2960,6 +2961,63 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["recover_command"], recover_command)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("recover_command", names)
+
+
+    def test_diagnose_capability_failure_detects_missing_registration(self):
+        with patch.dict(TOOL_HANDLERS, {}, clear=False):
+            TOOL_HANDLERS.pop("missing_test_capability", None)
+            result = diagnose_capability_failure(
+                "missing_test_capability",
+                "FAILED: capability could not be executed.",
+            )
+        self.assertIn("Declaration: MISSING", result)
+        self.assertIn("Handler: MISSING", result)
+        self.assertIn("Recovery decision: REPAIR_REQUIRED.", result)
+        self.assertIn("No capability execution, code modification, or device state change was performed.", result)
+
+    def test_diagnose_capability_failure_classifies_local_runtime_failure(self):
+        result = diagnose_capability_failure(
+            "calculator",
+            "FAILED: returned an unexpected result.",
+        )
+        self.assertIn("Declaration: PRESENT", result)
+        self.assertIn("Handler: PRESENT and callable", result)
+        self.assertIn("Implementation class: LOCAL", result)
+        self.assertIn("Recovery decision: OBSERVE_AND_ANALYZE.", result)
+        self.assertNotIn("REPAIR_CANDIDATE_AVAILABLE", result)
+
+    def test_diagnose_capability_failure_finds_generated_repair_recipe(self):
+        def generated_probe():
+            return "probe"
+
+        generated_probe.__nova_generated_capability__ = True
+        with patch.dict(
+            TOOL_HANDLERS,
+            {"generated_probe": generated_probe},
+            clear=False,
+        ), patch(
+            "gemini_agent.tools.TOOL_DECLARATIONS",
+            [{"name": "generated_probe", "description": "Generated probe"}],
+        ), patch(
+            "gemini_agent.tools._load_persisted_capability_extensions",
+            return_value=[{
+                "name": "generated_probe",
+                "implementation_kind": "existing_tool",
+                "implementation_target": "calculator",
+                "implementation_args": "{}",
+                "request": "run generated probe",
+            }],
+        ):
+            result = diagnose_capability_failure(
+                "generated_probe",
+                "FAILED: generated capability returned an invalid result.",
+            )
+        self.assertIn("Implementation class: GENERATED", result)
+        self.assertIn("Persisted repair metadata: PRESENT", result)
+        self.assertIn("Persisted implementation target: PRESENT", result)
+        self.assertIn("RESTORE_GENERATED_CAPABILITY", result)
+        self.assertIn("Recovery decision: REPAIR_CANDIDATE_AVAILABLE.", result)
+
 
 
 if __name__ == "__main__":
