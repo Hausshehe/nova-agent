@@ -109,8 +109,8 @@ class GeminiClient:
                 break
         # A request referring to the newly generated capability without naming it
         # must resolve to the actual generated wrapper, not an adjacent primitive.
-        if re.search(r"\\bnewly\\s+generated\\b", user_text, re.IGNORECASE) and re.search(
-            r"\\bcapabilit(?:y|ies)\\b", user_text, re.IGNORECASE
+        if re.search(r"\bnewly\s+generated\b", user_text, re.IGNORECASE) and re.search(
+            r"\bcapabilit(?:y|ies)\b", user_text, re.IGNORECASE
         ):
             generated_names = []
             for name, handler in TOOL_HANDLERS.items():
