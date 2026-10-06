@@ -30,6 +30,7 @@ from gemini_agent.tools import (
     validate_android_mechanism,
     execute_validated_android_mechanism,
     get_foreground_android_component,
+    verify_android_component_presence,
     plan_capability_extension,
     apply_capability_extension,
     _load_persisted_capability_extensions,
@@ -2418,6 +2419,33 @@ class GetSystemBootTimeToolTests(unittest.TestCase):
 
 
 
+class VerifyAndroidComponentPresenceTests(unittest.TestCase):
+    def test_verifies_component_in_active_activity_state(self):
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            return_value=(
+                "topResumedActivity=ActivityRecord{abc com.topjohnwu.magisk/.ui.surequest.SuRequestActivity}\n"
+                "ActivityRecord{def com.transsion.camera/.app.CaptureActivity}"
+            ),
+        ) as run:
+            result = verify_android_component_presence(
+                "com.transsion.camera/.app.CaptureActivity"
+            )
+        self.assertIn("VERIFIED", result)
+        self.assertIn("com.transsion.camera/.app.CaptureActivity", result)
+        run.assert_called_once_with("dumpsys activity activities")
+
+    def test_fails_when_component_is_absent_from_active_activity_state(self):
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            return_value="topResumedActivity=ActivityRecord com.termux/.app.TermuxActivity",
+        ):
+            result = verify_android_component_presence(
+                "com.transsion.camera/.app.CaptureActivity"
+            )
+        self.assertIn("FAILED", result)
+
+
 class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
     def test_executes_only_after_viable_validation(self):
         with patch(
@@ -2465,6 +2493,9 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
         ), patch(
             "gemini_agent.tools.get_foreground_android_component",
             return_value="Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.termux/.app.TermuxActivity",
+        ), patch(
+            "gemini_agent.tools.verify_android_component_presence",
+            return_value="Android component presence verification (read-only): FAILED",
         ), patch(
             "gemini_agent.tools.time.sleep",
         ):
