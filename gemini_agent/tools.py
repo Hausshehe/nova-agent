@@ -449,6 +449,64 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
     return _execute_ui(request=request, mechanism=mechanism)
 
 
+def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
+    """Discover, validate, execute, and verify one alternative Android intent mechanism."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    if not isinstance(failed_mechanism, str) or not failed_mechanism.strip():
+        raise ValueError("Failed mechanism cannot be empty.")
+
+    try:
+        discovered = discover_android_mechanisms(request)
+        alternatives = re.findall(r"(?m)^intent:([^\\s]+)$", discovered)
+    except (RuntimeError, ValueError) as exc:
+        return f"Replan: mechanism discovery failed: {exc}"
+
+    for alternative in alternatives:
+        alternative_mechanism = f"intent:{alternative}"
+        if alternative_mechanism.lower() == failed_mechanism.strip().lower():
+            continue
+        try:
+            validation = validate_android_mechanism(request, alternative_mechanism)
+        except (RuntimeError, ValueError) as exc:
+            continue
+        if "Status: VIABLE" not in validation:
+            continue
+        try:
+            result = send_android_intent(alternative)
+            time.sleep(1)
+            foreground = get_foreground_android_component()
+        except (RuntimeError, ValueError) as exc:
+            return (
+                "Replan: alternate mechanism was viable but execution failed.\\n"
+                f"Mechanism: {alternative_mechanism}\\n"
+                f"Execution error: {exc}"
+            )
+        matches = re.findall(
+            r"(?<![A-Za-z0-9._$-])([A-Za-z0-9._$-]+/[A-Za-z0-9._$-]+)(?![A-Za-z0-9._$-])",
+            validation,
+        )
+        expected_component = matches[-1] if matches else ""
+        if expected_component and expected_component in foreground:
+            return (
+                "Replan: selected alternate viable mechanism.\\n"
+                f"Mechanism: {alternative_mechanism}\\n"
+                "Validation: VIABLE\\n"
+                f"Result:\\n{result}\\n"
+                "Post-action verification: VERIFIED: expected Android component is foreground: "
+                f"{expected_component}"
+            )
+        return (
+            "Replan: selected alternate viable mechanism, but its postcondition failed.\\n"
+            f"Mechanism: {alternative_mechanism}\\n"
+            f"Result:\\n{result}\\n"
+            "Post-action verification: FAILED: expected Android component was not foreground.\\n"
+            f"Observed:\\n{foreground}"
+        )
+
+    return "Replan: no untried viable alternative Android mechanism was found.\\nOutcome: FAILED"
+
+
 def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     """Execute one previously validated Android mechanism through a bounded action primitive."""
     if not isinstance(request, str) or not request.strip():
@@ -494,50 +552,17 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
                 "Android component did not become foreground. "
                 f"Expected: {expected_component}. Observed:\\n{foreground}"
             )
-            # A successful launch command is not proof of goal success. If the
-            # postcondition fails, discover other bounded intent mechanisms and
-            # try one untried candidate once. This is generic mechanism
-            # recovery, not capability-specific behavior.
-            try:
-                discovered = discover_android_mechanisms(request)
-                alternatives = re.findall(r"(?m)^intent:([^\s]+)$", discovered)
-            except (RuntimeError, ValueError):
-                alternatives = []
-            for alternative in alternatives:
-                alternative_mechanism = f"intent:{alternative}"
-                if alternative_mechanism.lower() == candidate.lower():
-                    continue
-                alternate_validation = validate_android_mechanism(
-                    request, alternative_mechanism
-                )
-                if "Status: VIABLE" not in alternate_validation:
-                    continue
-                alternate_result = send_android_intent(alternative)
-                time.sleep(1)
-                alternate_foreground = get_foreground_android_component()
-                alternate_matches = re.findall(
-                    r"(?<![A-Za-z0-9._$-])([A-Za-z0-9._$-]+/[A-Za-z0-9._$-]+)(?![A-Za-z0-9._$-])",
-                    alternate_validation,
-                )
-                alternate_component = (
-                    alternate_matches[-1] if alternate_matches else ""
-                )
-                if alternate_component and alternate_component in alternate_foreground:
-                    recovery = (
-                        "Recovery: discovered an alternate viable Android intent "
-                        f"({alternative_mechanism}) and it satisfied the expected "
-                        f"foreground component {alternate_component}.\\n"
-                        f"Recovery result:\\n{alternate_result}"
-                    )
-                    verification = (
-                        "VERIFIED after recovery: expected Android component is "
-                        f"foreground: {alternate_component}"
-                    )
-                    break
-                recovery = (
-                    "Recovery attempt failed: alternate intent "
-                    f"{alternative_mechanism} did not satisfy its postcondition."
-                )
+            # A successful launch command is not proof of goal success. Replan
+            # through the mechanism layer instead of duplicating recovery logic here.
+            recovery = replan_android_mechanism(request, candidate)
+            if recovery.startswith("Replan: selected alternate viable mechanism."):
+                verification = re.search(
+                    r"Post-action verification: (.+)", recovery
+                ).group(1)
+            elif recovery.startswith("Replan: selected alternate viable mechanism,"):
+                verification = re.search(
+                    r"Post-action verification: (.+)", recovery
+                ).group(1)
     return (
         "Android mechanism execution:\\n"
         f"Requested capability: {request.strip()}\\n"
