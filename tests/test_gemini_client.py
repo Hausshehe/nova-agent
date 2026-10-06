@@ -24,6 +24,20 @@ class FakeResponse:
         return self.payload
 
 
+class RawResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self.payload
+
+
 class CloudflareClientTests(unittest.TestCase):
     def test_requires_cloudflare_credentials(self):
         with patch.dict(os.environ, {}, clear=True):
@@ -128,6 +142,23 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "CAMERA OPENED")
         self.assertEqual(client.last_tool_calls[0]["name"], "camera_shutter")
         self.assertEqual(open_url.call_count, 1)
+
+    def test_retries_transient_invalid_cloudflare_json_response(self):
+        valid = {"choices": [{"message": {"content": "hello after retry"}}]}
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[RawResponse(b"   \n"), FakeResponse(valid)],
+        ) as open_url:
+            answer = GeminiClient().ask("Hello")
+        self.assertEqual(answer, "hello after retry")
+        self.assertEqual(open_url.call_count, 2)
 
     def test_uses_cloudflare_only(self):
         with patch.dict(
