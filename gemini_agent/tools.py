@@ -58,6 +58,98 @@ def calculator(expression: str) -> str:
     except (SyntaxError, ValueError, TypeError, ZeroDivisionError, OverflowError) as exc:
         raise ValueError(f"Invalid arithmetic expression: {exc}") from exc
 
+def diagnose_capability_failure(capability: str, failure_evidence: str) -> str:
+    """Diagnose a local capability failure without executing or modifying the capability."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(failure_evidence, str) or not failure_evidence.strip():
+        raise ValueError("Failure evidence cannot be empty.")
+
+    name = capability.strip()
+    evidence = failure_evidence.strip()
+    declaration = next((
+        item for item in TOOL_DECLARATIONS
+        if isinstance(item, dict) and item.get("name") == name
+    ), None)
+    handler = TOOL_HANDLERS.get(name)
+
+    lines = ["Capability failure diagnosis (read-only):", f"Capability: {name}", f"Supplied failure evidence: {evidence}"]
+
+    if declaration is None:
+        lines.append("Declaration: MISSING")
+    else:
+        lines.append("Declaration: PRESENT")
+
+    if handler is None:
+        lines.append("Handler: MISSING")
+    elif not callable(handler):
+        lines.append("Handler: INVALID (not callable)")
+    else:
+        lines.append("Handler: PRESENT and callable")
+
+    if declaration is None or handler is None or not callable(handler):
+        lines.extend([
+            "Diagnosis: capability registration integrity is broken.",
+            "Repairability: bounded registration repair may be possible, but no mutation was performed.",
+            "Recovery decision: REPAIR_REQUIRED.",
+            "No capability execution, code modification, or device state change was performed.",
+        ])
+        return "\n".join(lines)
+
+    generated = bool(
+        getattr(handler, "__nova_generated_capability__", False)
+        or (
+            getattr(handler, "__code__", None) is not None
+            and any(
+                marker in handler.__code__.co_names
+                for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")
+            )
+        )
+    )
+    lines.append(f"Implementation class: {'GENERATED' if generated else 'LOCAL'}")
+
+    if generated:
+        try:
+            persisted = _load_persisted_capability_extensions()
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            lines.append(f"Persisted repair metadata: UNAVAILABLE ({exc})")
+        else:
+            entry = next((
+                item for item in persisted
+                if isinstance(item, dict) and item.get("name") == name
+            ), None)
+            if entry is None:
+                lines.append("Persisted repair metadata: MISSING")
+            else:
+                lines.append("Persisted repair metadata: PRESENT")
+                target_kind = str(entry.get("implementation_kind", "")).strip().lower()
+                target = str(entry.get("implementation_target", "")).strip()
+                if target_kind == "android_mechanism" and target:
+                    try:
+                        validation = validate_android_mechanism(str(entry.get("request", name)), target)
+                    except (RuntimeError, ValueError) as exc:
+                        lines.append(f"Persisted mechanism validation: UNAVAILABLE ({exc})")
+                    else:
+                        lines.append("Persisted mechanism validation: " + ("VIABLE" if "Status: VIABLE" in validation else "NOT VIABLE"))
+                elif target_kind == "existing_tool" and target:
+                    lines.append("Persisted implementation target: " + ("PRESENT" if target in TOOL_HANDLERS else "MISSING"))
+
+    if generated and any("Persisted repair metadata: PRESENT" in line for line in lines):
+        lines.extend([
+            "Diagnosis: runtime failure is associated with a generated capability that has a persisted repair recipe.",
+            "Repairability: RESTORE_GENERATED_CAPABILITY is a bounded candidate; repair must still be tested and real-world verified before persistence is accepted.",
+            "Recovery decision: REPAIR_CANDIDATE_AVAILABLE.",
+        ])
+    else:
+        lines.extend([
+            "Diagnosis: the supplied evidence establishes a failure report, but it does not identify a safe generic repair mutation.",
+            "Repairability: requires additional failure-specific evidence or a bounded repair strategy.",
+            "Recovery decision: OBSERVE_AND_ANALYZE.",
+        ])
+
+    lines.append("No capability execution, code modification, or device state change was performed.")
+    return "\n".join(lines)
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -3519,6 +3611,18 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "diagnose_capability_failure",
+        "description": "Diagnose a reported local capability failure using read-only registration and repair-recipe evidence. Do not execute or modify the capability.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the local capability reported as failing."},
+                "failure_evidence": {"type": "STRING", "description": "Observed or supplied evidence that the capability failed."},
+            },
+            "required": ["capability", "failure_evidence"],
+        },
+    },
+    {
         "name": "recover_android_mechanism",
         "description": "Diagnose an Android mechanism outcome and perform generic recovery/replanning only when bounded evidence justifies another mechanism.",
         "parameters": {
@@ -4495,6 +4599,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "diagnose_capability_failure": diagnose_capability_failure,
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
     "recover_android_mechanism": recover_android_mechanism,
     "execute_android_mechanism": execute_android_mechanism,
