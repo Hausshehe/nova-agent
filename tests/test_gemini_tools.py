@@ -698,6 +698,41 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIn("self_test", names)
 
 
+class ReplanAndroidMechanismTests(unittest.TestCase):
+    def test_replan_android_mechanism_selects_untried_viable_alternative(self):
+        from gemini_agent.tools import replan_android_mechanism
+        with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
+            "Android mechanism discovery (read-only):\\n"
+            "Discovered bounded intent mechanisms:\\n"
+            "intent:android.media.action.FIRST\\n"
+            "intent:android.media.action.SECOND"
+        )), patch("gemini_agent.tools.validate_android_mechanism", return_value=(
+            "Android mechanism validation (read-only):\\nStatus: VIABLE\\n"
+            "Evidence:\\ncom.example/.SecondActivity"
+        )), patch("gemini_agent.tools.send_android_intent", return_value="Android intent started."), patch(
+            "gemini_agent.tools.get_foreground_android_component",
+            return_value="topResumedActivity=com.example/.SecondActivity",
+        ):
+            result = replan_android_mechanism(
+                "open something", "intent:android.media.action.FIRST"
+            )
+        self.assertIn("selected alternate viable mechanism", result)
+        self.assertIn("intent:android.media.action.SECOND", result)
+        self.assertIn("VERIFIED", result)
+
+    def test_replan_android_mechanism_stops_when_no_alternative_exists(self):
+        from gemini_agent.tools import replan_android_mechanism
+        with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
+            "Discovered bounded intent mechanisms:\\n"
+            "intent:android.media.action.FIRST"
+        )):
+            result = replan_android_mechanism(
+                "open something", "intent:android.media.action.FIRST"
+            )
+        self.assertIn("no untried viable alternative", result)
+        self.assertIn("Outcome: FAILED", result)
+
+
 class FindExecutableToolTests(unittest.TestCase):
     def test_find_executable_uses_path(self):
         with patch("gemini_agent.tools.shutil.which", return_value="/system/bin/dumpsys"):
