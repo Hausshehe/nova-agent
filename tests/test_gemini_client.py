@@ -328,32 +328,42 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[-1]["verified_experience_learning"], "Verified experience learned.")
 
     def test_selected_strategy_receives_required_result_before_execution(self):
-        response = {"choices": [{"message": {"content": "done"}}]}
-        def fake_run_command(command):
-            return "Exit code: 0\\nstdout:\\nok"
-        def fake_verify(result, expected):
-            return (
-                f"Verification: VERIFIED: expected text found: {expected}"
-                if expected in result
-                else f"Verification: FAILED: expected text not found: {expected}"
-            )
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "verify-call",
+                            "type": "function",
+                            "function": {
+                                "name": "verify_command_result",
+                                "arguments": json.dumps({"result": "", "expected": "ok"}),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "done"}}]},
+        ]
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
-            "urllib.request.urlopen", return_value=FakeResponse(response)
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(item) for item in responses],
         ), patch(
             "gemini_agent.learning.select_verified_strategy",
             return_value="Verified strategy selection: verify_command_result",
-        ), patch(
-            "gemini_agent.learning.record_verified_experience",
-            return_value="Verified experience learned.",
         ):
             client = GeminiClient(
                 tool_handlers={
-                    "verify_command_result": fake_verify,
-                    "run_command": fake_run_command,
+                    "verify_command_result": lambda result, expected: (
+                        f"Verification: VERIFIED: expected text found: {expected}"
+                        if expected in result
+                        else f"Verification: FAILED: expected text not found: {expected}"
+                    ),
+                    "run_command": lambda command: "Exit code: 0\nstdout:\nok",
                 }
             )
             client.ask(
@@ -365,7 +375,10 @@ class CloudflareClientTests(unittest.TestCase):
             if call["name"] == "verify_command_result"
         ]
         self.assertEqual(len(verify_calls), 1)
-        self.assertEqual(verify_calls[0]["args"]["result"], "Exit code: 0\\nstdout:\\nok")
+        self.assertEqual(
+            verify_calls[0]["args"]["result"],
+            "Exit code: 0\nstdout:\nok",
+        )
 
     def test_compound_verified_learning_request_stays_in_normal_decision_loop(self):
         request = (
