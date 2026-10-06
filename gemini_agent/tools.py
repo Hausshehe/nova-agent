@@ -683,6 +683,12 @@ def _normalize_extension_fragment(fragment: str) -> str:
         normalized.append(match.group(1) if match else line)
     return "\n".join(normalized)
 
+def _normalize_android_mechanism_target(target: str) -> str:
+    """Normalize harmless formatting around a discovered Android mechanism."""
+    value = target.strip().strip(chr(96)).strip()
+    value = re.sub(r"^(intent|ui-text|ui)\\s*:\\s*", r"\\1:", value, flags=re.IGNORECASE)
+    value = value.strip().strip(chr(96)).strip().strip(chr(34)).strip(chr(39))
+    return value
 def apply_capability_extension(
     request: str,
     path: str,
@@ -731,6 +737,8 @@ def apply_capability_extension(
 
     kind = implementation_kind.strip().lower()
     target_name = implementation_target.strip()
+    if kind == "android_mechanism":
+        target_name = _normalize_android_mechanism_target(target_name)
     if kind not in {"existing_tool", "android_mechanism"}:
         return (
             "Extension not applied: implementation_kind must be 'existing_tool' "
