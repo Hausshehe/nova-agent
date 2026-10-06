@@ -696,6 +696,24 @@ class GeminiClient:
         prompt = request_text
         prompt_text = request_text
 
+        # Verified experience is part of Nova's normal decision loop. When a task
+        # presents multiple strategies, the provider may use the existing generic
+        # selector before execution. Learned experience is preference only: it
+        # never substitutes for validation, execution, or postcondition verification.
+        decision_policy = (
+            "Nova decision policy: when the user presents multiple candidate strategies "
+            "for the same goal, use select_verified_strategy_tool before executing a strategy "
+            "when candidate selection is materially relevant. Treat its result only as a "
+            "preference from sufficiently similar VERIFIED experience. Never treat learned "
+            "experience as proof of current viability or success; validate the selected "
+            "mechanism/capability and independently verify execution. If selection is "
+            "unnecessary or candidates are not explicitly available, continue normally."
+        )
+        if system_instruction:
+            messages[0]["content"] = str(messages[0]["content"]) + "\n\n" + decision_policy
+        else:
+            messages.insert(0, {"role": "system", "content": decision_policy})
+
         unnamed_generated_capability_request = bool(
             re.search(r"\\b(?:use|execute|run|verify|test)\\b", request_text, re.IGNORECASE)
             and re.search(r"\\bcapabilit(?:y|ies)\\b", request_text, re.IGNORECASE)
