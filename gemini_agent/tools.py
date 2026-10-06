@@ -492,7 +492,7 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
 
 def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
-    """Discover, validate, execute, and verify one alternative Android intent mechanism."""
+    """Discover, validate, and execute one untried Android mechanism through the generic dispatcher."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(failed_mechanism, str) or not failed_mechanism.strip():
@@ -500,12 +500,14 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
 
     try:
         discovered = discover_android_mechanisms(request)
-        alternatives = re.findall(r"(?m)^intent:([^\s]+)$", discovered)
+        alternatives = re.findall(
+            r"(?m)^(intent|ui|ui-text):([^\s]+)$", discovered
+        )
     except (RuntimeError, ValueError) as exc:
         return f"Replan: mechanism discovery failed: {exc}"
 
-    for alternative in alternatives:
-        alternative_mechanism = f"intent:{alternative}"
+    for kind, value in alternatives:
+        alternative_mechanism = f"{kind}:{value}"
         if alternative_mechanism.lower() == failed_mechanism.strip().lower():
             continue
         try:
@@ -514,42 +516,31 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
             continue
         if "Status: VIABLE" not in validation:
             continue
-        try:
-            result = send_android_intent(alternative)
-            time.sleep(1)
-            foreground = get_foreground_android_component()
-        except (RuntimeError, ValueError) as exc:
-            return (
-                "Replan: alternate mechanism was viable but execution failed.\n"
-                f"Mechanism: {alternative_mechanism}\n"
-                f"Execution error: {exc}"
-            )
-        matches = re.findall(
-            r"(?<![A-Za-z0-9._$-])([A-Za-z0-9._$-]+/[A-Za-z0-9._$-]+)(?![A-Za-z0-9._$-])",
-            validation,
+        result = execute_android_mechanism(
+            request=request,
+            mechanism=alternative_mechanism,
+            allow_recovery=False,
         )
-        expected_component = matches[-1] if matches else ""
-        if expected_component and expected_component in foreground:
+        if "Post-action verification: VERIFIED" in result:
             return (
                 "Replan: selected alternate viable mechanism.\n"
                 f"Mechanism: {alternative_mechanism}\n"
-                "Validation: VIABLE\n"
-                f"Result:\n{result}\n"
-                "Post-action verification: VERIFIED: expected Android component is foreground: "
-                f"{expected_component}"
+                f"{result}"
             )
         return (
             "Replan: selected alternate viable mechanism, but its postcondition failed.\n"
             f"Mechanism: {alternative_mechanism}\n"
-            f"Result:\n{result}\n"
-            "Post-action verification: FAILED: expected Android component was not foreground.\n"
-            f"Observed:\n{foreground}"
+            f"{result}"
         )
 
     return "Replan: no untried viable alternative Android mechanism was found.\nOutcome: FAILED"
 
-def execute_android_mechanism(request: str, mechanism: str) -> str:
-    """Dispatch one validated Android mechanism to its bounded executor."""
+def execute_android_mechanism(
+    request: str,
+    mechanism: str,
+    allow_recovery: bool = True,
+) -> str:
+    """Dispatch one Android mechanism to its bounded executor."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(mechanism, str) or not mechanism.strip():
@@ -562,7 +553,7 @@ def execute_android_mechanism(request: str, mechanism: str) -> str:
         )
     kind = candidate.split(":", 1)[0].strip().lower()
     if kind == "intent":
-        return execute_validated_android_mechanism(request=request, mechanism=candidate)
+        return execute_validated_android_mechanism(request=request, mechanism=candidate, allow_recovery=allow_recovery)
     if kind in {"ui", "ui-text"}:
         from gemini_agent.android_ui import execute_validated_android_ui_mechanism
         return execute_validated_android_ui_mechanism(
@@ -574,8 +565,12 @@ def execute_android_mechanism(request: str, mechanism: str) -> str:
         f"mechanism type '{kind}'."
     )
 
-def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
-    """Execute one previously validated Android mechanism through a bounded action primitive."""
+def execute_validated_android_mechanism(
+    request: str,
+    mechanism: str,
+    allow_recovery: bool = True,
+) -> str:
+    """Execute one validated Android mechanism, optionally allowing generic recovery."""
     if not isinstance(request, str) or not request.strip():
         raise ValueError("Request cannot be empty.")
     if not isinstance(mechanism, str) or not mechanism.strip():
@@ -636,7 +631,8 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
                     f"Expected: {expected_component}. Observed:\\n{foreground}\\n{presence}"
                 )
                 # Strong negative evidence is required before mechanism replanning.
-                recovery = replan_android_mechanism(request, candidate)
+                if allow_recovery:
+                    recovery = replan_android_mechanism(request, candidate)
     if recovery.startswith("Replan: selected alternate viable mechanism."):
         recovery = "Recovery: discovered an alternate viable Android intent.\n" + recovery
     elif recovery.startswith("Replan: selected alternate viable mechanism,"):
