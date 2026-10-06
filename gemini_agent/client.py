@@ -177,6 +177,18 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
+            "learn from verified android experience",
+            "record verified android experience",
+            "persist verified android experience",
+        )):
+            return "record_verified_android_experience"
+        if any(phrase in user_text for phrase in (
+            "rank android mechanisms",
+            "rank the android mechanisms",
+            "rank discovered android mechanisms",
+        )):
+            return "rank_android_mechanism_candidates"
+        if any(phrase in user_text for phrase in (
             "autonomously repair",
             "autonomous self-repair",
             "run the self-repair workflow",
@@ -700,6 +712,62 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "record_verified_android_experience":
+            request_match = re.search(
+                r"(?:for|request)\s+(?:capability\s+)?["']?(.+?)["']?\s+(?:using|with)\s+(?:mechanism\s+)?(?:intent|ui-text|ui):[^\s,]+",
+                request_text,
+                re.IGNORECASE,
+            )
+            mechanism_match = re.search(
+                r"((?:intent|ui-text|ui):[^\s,]+)",
+                request_text,
+                re.IGNORECASE,
+            )
+            verification_match = re.search(
+                r"(?:verification|evidence)\s*[:=]\s*(.+)$",
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not request_match or not mechanism_match or not verification_match:
+                return "Recording a verified Android experience requires request, mechanism, and verification evidence."
+            result = str(self.tool_handlers["record_verified_android_experience"](
+                request=request_match.group(1).strip(),
+                mechanism=mechanism_match.group(1).strip(),
+                verification=verification_match.group(1).strip(),
+            ))
+            self.last_tool_calls.append({
+                "name": "record_verified_android_experience",
+                "args": {
+                    "request": request_match.group(1).strip(),
+                    "mechanism": mechanism_match.group(1).strip(),
+                    "verification": verification_match.group(1).strip(),
+                },
+                "result": result,
+            })
+            return result
+        if requested_tool == "rank_android_mechanism_candidates":
+            request_match = re.search(
+                r"(?:for|request)\s+(.+?)\s+(?:candidates?|mechanisms?)\s*[:=]",
+                request_text,
+                re.IGNORECASE,
+            )
+            candidates = re.findall(
+                r"(?:intent|ui-text|ui):[^\s,;]+",
+                request_text,
+                re.IGNORECASE,
+            )
+            if not request_match or not candidates:
+                return "Android mechanism ranking requires a request and at least one bounded mechanism candidate."
+            result = str(self.tool_handlers["rank_android_mechanism_candidates"](
+                request=request_match.group(1).strip(),
+                candidates=candidates,
+            ))
+            self.last_tool_calls.append({
+                "name": "rank_android_mechanism_candidates",
+                "args": {"request": request_match.group(1).strip(), "candidates": candidates},
+                "result": result,
+            })
+            return result
         if requested_tool == "autonomously_repair_capability":
             match = re.search(
                 r"(?:for|of)\s+capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
