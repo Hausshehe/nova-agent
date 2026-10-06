@@ -4940,20 +4940,21 @@ def _restore_persisted_capability_entry(entry: dict, *, replace_existing: bool =
     return True
 
 
-def _load_persisted_capability_extensions() -> None:
-    """Restore verified self-generated capabilities without executing them at startup."""
+def _load_persisted_capability_extensions() -> list[dict]:
+    """Restore verified self-generated capabilities and return their persisted recipes."""
     path = _extension_store_path()
     if not path.exists():
-        return
+        return []
     try:
         entries = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return
+        return []
     if not isinstance(entries, list):
-        return
+        return []
 
     for entry in entries:
         _restore_persisted_capability_entry(entry)
+    return [entry for entry in entries if isinstance(entry, dict)]
 
 
 _load_persisted_capability_extensions()
