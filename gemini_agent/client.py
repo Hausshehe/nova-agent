@@ -1211,7 +1211,8 @@ class GeminiClient:
                     native_tool_calls = False
 
             if requested_tool == "get_process_working_directory" and loop_index == 0:
-                user_text = ""                for item in reversed(payload["messages"]):
+                user_text = ""
+                for item in reversed(payload["messages"]):
                     if item.get("role") == "user":
                         user_text = item.get("content", "")
                         break
