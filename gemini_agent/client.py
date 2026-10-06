@@ -1949,8 +1949,11 @@ class GeminiClient:
                     "Mechanism execution could not select a viable discovered mechanism. "
                     "No Android mechanism was executed."
                 )
+            handler = self.tool_handlers.get("execute_android_mechanism")
+            if handler is None:
+                handler = self.tool_handlers["execute_validated_android_mechanism"]
             return str(
-                self.tool_handlers["execute_validated_android_mechanism"](
+                handler(
                     request=prompt,
                     mechanism=mechanism,
                 )
