@@ -212,8 +212,7 @@ class CapabilityRepairVerificationTests(unittest.TestCase):
                 result = accept_verified_capability_repair("generated_probe")
         analyzer.assert_called_once_with("generated_probe")
         self.assertIn("history analyzer decision is REVERIFY", result)
-        saved = json.loads(store.read_text(encoding="utf-8"))[0]
-        self.assertEqual(saved["repair_status"], "PENDING")
+        self.assertFalse(store.exists())
 
     def test_accept_repair_reads_persisted_verification_without_execution(self):
         import tempfile
@@ -280,7 +279,7 @@ class CapabilityRepairVerificationTests(unittest.TestCase):
             ):
                 result = accept_verified_capability_repair("generated_probe")
             saved = json.loads(store.read_text(encoding="utf-8"))[0]
-        self.assertIn("most recent persisted verification outcome is not VERIFIED", result)
+        self.assertIn("history analyzer decision is REVERIFY", result)
         self.assertEqual(saved["repair_status"], "PENDING")
 
 class AndroidMechanismDiscoveryTests(unittest.TestCase):
