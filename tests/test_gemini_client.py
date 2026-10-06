@@ -30,6 +30,9 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_whitespace_only_tool_arguments_are_treated_as_empty(self):
+        self.assertEqual(GeminiClient._parse_tool_arguments("   \n\t"), {})
+
     def test_explicit_generated_capability_returns_after_one_execution(self):
         response = {
             "choices": [{
