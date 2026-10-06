@@ -160,29 +160,43 @@ def get_foreground_android_component() -> str:
     )
 
 def verify_android_component_presence(component: str) -> str:
-    """Verify that an expected Android component is present in the active activity state."""
+    """Verify an Android component using multiple read-only activity/window evidence sources."""
     if not isinstance(component, str) or not component.strip():
         raise ValueError("Android component cannot be empty.")
     expected = component.strip()
-    result = run_root_command("dumpsys activity activities")
+    sources = (
+        ("activity", "dumpsys activity activities"),
+        ("window", "dumpsys window windows"),
+        ("recents", "dumpsys activity recents"),
+    )
     evidence = []
-    for line in result.splitlines():
-        stripped = line.strip()
-        if expected not in stripped:
-            continue
-        if "ActivityRecord" in stripped or "mResumedActivity" in stripped or "topResumedActivity" in stripped:
-            evidence.append(stripped)
+    for source_name, command in sources:
+        result = run_root_command(command)
+        for line in result.splitlines():
+            stripped = line.strip()
+            if expected not in stripped:
+                continue
+            if (
+                "ActivityRecord" in stripped
+                or "mResumedActivity" in stripped
+                or "topResumedActivity" in stripped
+                or "Window" in stripped
+                or "mCurrentFocus" in stripped
+                or "mFocusedApp" in stripped
+            ):
+                evidence.append(f"[{source_name}] {stripped}")
     if evidence:
         return (
             "Android component presence verification (read-only): VERIFIED\\n"
             f"Expected component: {expected}\\n"
             "Evidence:\\n"
-            + "\\n".join(evidence[:5])
+            + "\\n".join(evidence[:10])
         )
     return (
-        "Android component presence verification (read-only): FAILED\\n"
+        "Android component presence verification (read-only): INCONCLUSIVE\\n"
         f"Expected component: {expected}\\n"
-        "No active activity-state evidence for the expected component was found.\\n"
+        "No matching evidence was found in the bounded activity, window, or recents observations.\\n"
+        "This does not prove the component is absent, so no recovery/replanning should be triggered from this observation alone.\\n"
         "No interaction or device state change was performed."
     )
 
@@ -607,15 +621,21 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
                     "activity state, but a higher-priority overlay is foreground.\\n"
                     + presence
                 )
+            elif "INCONCLUSIVE" in presence:
+                verification = (
+                    "INCONCLUSIVE: intent launch returned successfully, but the expected "
+                    "Android component could not be confirmed from the bounded observations. "
+                    "The observation is insufficient to declare failure or trigger recovery. "
+                    f"Expected: {expected_component}. Observed:\\n{foreground}\\n{presence}"
+                )
             else:
                 verification = (
                     "FAILED: intent launch returned successfully, but the expected "
-                    "Android component was neither foreground nor present in the active "
-                    "activity state. "
+                    "Android component was neither foreground nor present in the observed "
+                    "activity/window state. "
                     f"Expected: {expected_component}. Observed:\\n{foreground}\\n{presence}"
                 )
-                # A successful launch command is not proof of goal success. Replan
-                # through the mechanism layer instead of duplicating recovery logic here.
+                # Strong negative evidence is required before mechanism replanning.
                 recovery = replan_android_mechanism(request, candidate)
     if recovery.startswith("Replan: selected alternate viable mechanism."):
         recovery = "Recovery: discovered an alternate viable Android intent.\n" + recovery
