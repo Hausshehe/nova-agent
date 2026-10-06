@@ -63,10 +63,12 @@ class GeminiClient:
 
     @staticmethod
     def _parse_tool_arguments(arguments) -> dict:
-        if arguments in (None, ""):
+        if arguments is None:
             return {}
         if isinstance(arguments, dict):
             return arguments
+        if isinstance(arguments, str) and not arguments.strip():
+            return {}
         parsed = json.loads(arguments)
         if not isinstance(parsed, dict):
             raise ValueError("Tool arguments must be a JSON object.")
