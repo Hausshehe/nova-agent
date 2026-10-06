@@ -181,7 +181,14 @@ class GeminiClient:
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
             return "discover_android_mechanisms"
         if any(phrase in user_text for phrase in (
-        if any(phrase in user_text for phrase in (\n            "recover_android_mechanism",\n            "use recover_android_mechanism",\n            "use the generic android recovery capability",\n            "generic android recovery capability",\n        )):\n            return "recover_android_mechanism"\n            "execute validated android mechanism",
+            "recover_android_mechanism",
+            "use recover_android_mechanism",
+            "use the generic android recovery capability",
+            "generic android recovery capability",
+        )):
+            return "recover_android_mechanism"
+        if any(phrase in user_text for phrase in (
+            "execute validated android mechanism",
             "execute the validated android mechanism",
             "run the validated android mechanism",
             "android mechanism execution capability",
