@@ -4253,6 +4253,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "execute_android_mechanism": execute_android_mechanism,
     "execute_validated_android_mechanism": execute_validated_android_mechanism,
     "execute_validated_android_ui_mechanism": execute_validated_android_ui_mechanism,
     "discover_android_mechanisms": discover_android_mechanisms,
