@@ -614,7 +614,7 @@ class GeminiClient:
                         )
                     )
                     candidates = re.findall(
-                        r"\b(intent|ui-text|ui|executable|service):([^\s,]+)",
+                        r"(?m)^(intent|ui-text|ui|executable|service):(.+)$",
                         discovery,
                         re.IGNORECASE,
                     )
