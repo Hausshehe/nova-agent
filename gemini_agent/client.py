@@ -1724,6 +1724,18 @@ class GeminiClient:
                                 extracted = self._extract_mechanism(target)
                                 if extracted:
                                     args["implementation_target"] = extracted
+                        if requested_tool == "recover_command" and "expected postcondition" in prompt.lower():
+                            command_match = re.search(r"`([^`]+)`", prompt)
+                            expected_match = re.search(
+                                r"expected postcondition(?:\s+is|\s*[:=])?\s*`([^`]+)`",
+                                prompt,
+                                re.IGNORECASE,
+                            )
+                            if command_match and expected_match:
+                                args = {
+                                    "command": command_match.group(1).strip(),
+                                    "expected": expected_match.group(1).strip(),
+                                }
                         tool_result = handler(**args)
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
