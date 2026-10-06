@@ -1070,6 +1070,15 @@ def run_command(command: str) -> str:
     return result
 
 
+def _run_bounded_ui_tap(x: int, y: int) -> str:
+    """Tap one validated UI coordinate through the manually entered root shell."""
+    if not isinstance(x, int) or not isinstance(y, int):
+        raise ValueError("UI tap coordinates must be integers.")
+    if x < 0 or y < 0 or x > 10000 or y > 10000:
+        raise ValueError("UI tap coordinates are outside the bounded screen range.")
+    return _run_bounded_root_action(f"input tap {x} {y}")
+
+
 def _run_bounded_root_action(command: str) -> str:
     """Run one explicitly allowlisted Android action inside a root shell."""
     allowed_commands = {
