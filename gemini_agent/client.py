@@ -62,6 +62,22 @@ class GeminiClient:
         return converted
 
     @staticmethod
+    def _parse_android_mechanism_candidates(discovery: str) -> list[str]:
+        """Parse bounded mechanism lines without assuming values contain no spaces."""
+        candidates = []
+        allowed = {"intent", "ui-text", "ui", "executable", "service"}
+        for line in str(discovery).splitlines():
+            stripped = line.strip().strip(chr(96)).strip()
+            if ":" not in stripped:
+                continue
+            kind, value = stripped.split(":", 1)
+            kind = kind.strip().lower()
+            value = value.strip().strip(chr(96)).strip()
+            if kind in allowed and value:
+                candidates.append(f"{kind}:{value}")
+        return candidates
+
+    @staticmethod
     def _parse_tool_arguments(arguments) -> dict:
         if arguments is None:
             return {}
@@ -613,17 +629,8 @@ class GeminiClient:
                             request=request_text
                         )
                     )
-                    candidates = [
-                        (kind, value.strip().strip("`").strip())
-                        for kind, value in re.findall(
-                            r"(?m)^\s*(intent|ui-text|ui|executable|service):(.+?)\s*$",
-                            discovery,
-                            re.IGNORECASE,
-                        )
-                        if value.strip()
-                    ]
-                    for kind, value in candidates:
-                        candidate = f"{kind.lower()}:{value}"
+                    candidates = self._parse_android_mechanism_candidates(discovery)
+                    for candidate in candidates
                         validation = str(
                             self.tool_handlers["validate_android_mechanism"](
                                 request=request_text,
