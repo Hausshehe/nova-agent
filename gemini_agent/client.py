@@ -729,7 +729,7 @@ class GeminiClient:
                 request_text, re.IGNORECASE,
             )
             strategy_match = re.search(
-                r'(?:strategy|candidate)\s*[:=]\s*([^\s,;]+)',
+                r'(?:strategy|candidate)\s*(?::|=|\s)\s*([^\s,;]+)',
                 request_text, re.IGNORECASE,
             )
             verification_match = re.search(
