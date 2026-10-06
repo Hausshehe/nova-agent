@@ -255,6 +255,26 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(names, ["discover_android_mechanisms"])
 
 
+    def test_named_generated_capability_executes_locally_without_cloudflare(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            def repaired_capability():
+                return "REPAIRED CAPABILITY RESULT"
+            repaired_capability.__nova_generated_capability__ = True
+            client.tool_handlers["camera_shutter"] = repaired_capability
+            answer = client.ask(
+                "Independently verify the repaired camera_shutter capability now. "
+                "Execute the repaired capability exactly once and report the result."
+            )
+        self.assertEqual(answer, "REPAIRED CAPABILITY RESULT")
+        self.assertEqual(client.last_tool_calls[0]["name"], "camera_shutter")
+        open_url.assert_not_called()
+
+
     def test_foreground_android_component_routes_without_cloudflare(self):
         with patch.dict(
             os.environ,
