@@ -927,6 +927,7 @@ def plan_capability_extension(request: str, inspect_reality: bool = False) -> st
             continue
         if "Status: VIABLE" in validation:
             viable.append(mechanism)
+            break
 
     lines = [
         "Extension plan: capability is missing.",
