@@ -521,6 +521,10 @@ class GeminiClient:
             ),
             "",
         )
+        unnamed_generated_capability_request = bool(
+            re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
+            and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
+        )
         if requested_tool == "inspect_android_ui":
             user_text = request_text
             selector_match = re.search(
@@ -1729,7 +1733,10 @@ class GeminiClient:
                             or re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
                         )
                     )
-                    if dynamic_capability_use:
+                    if dynamic_capability_use or (
+                        unnamed_generated_capability_request
+                        and getattr(handler, "__nova_generated_capability__", False)
+                    ):
                         return str(tool_result)
 
                     if requested_tool == "apply_capability_extension" and not str(tool_result).startswith("Extension status: source edit applied and transaction committed."):
