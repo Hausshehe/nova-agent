@@ -409,6 +409,32 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("Extension plan: capability is missing.", result)
         self.assertIn("Proposed tool: extend_camera_shutter", result)
 
+    def test_plan_capability_extension_grounds_plan_in_discovered_viable_mechanism(self):
+        discovery = (
+            "Android mechanism discovery (read-only):\n"
+            "Discovered bounded intent mechanisms:\n"
+            "intent:android.media.action.IMAGE_CAPTURE\n"
+            "Discovered bounded UI mechanisms:\n"
+            "ui-text:Take Photo\n"
+        )
+        with patch(
+            "gemini_agent.tools.discover_android_mechanisms",
+            return_value=discovery,
+        ), patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\nStatus: VIABLE",
+        ) as validate:
+            result = plan_capability_extension("activate a visible clickable Android UI control")
+        self.assertIn("Reality inspection: performed read-only before implementation.", result)
+        self.assertIn("Viable discovered mechanisms:", result)
+        self.assertIn("- ui-text:Take Photo", result)
+        self.assertIn("Preferred implementation mechanism: ui-text:Take Photo", result)
+        validate.assert_called_once_with(
+            "activate a visible clickable Android UI control",
+            "ui-text:Take Photo",
+        )
+        self.assertIn("Status: plan only; no code or device state was modified.", result)
+
     def test_apply_capability_extension_blocks_unsupported_camera(self):
         result = apply_capability_extension(
             "control the phone's camera shutter",
