@@ -15,18 +15,17 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
     candidate = mechanism.strip()
     if ":" not in candidate:
-        raise ValueError("Mechanism must use the bounded form: ui:<resource-id>.")
+        raise ValueError("Mechanism must use a bounded form: ui:<resource-id> or ui-text:<text>.")
 
-    kind, resource_id = candidate.split(":", 1)
+    kind, selector = candidate.split(":", 1)
     kind = kind.strip().lower()
-    resource_id = resource_id.strip()
-    if kind != "ui":
+    selector = selector.strip()
+    if kind not in {"ui", "ui-text"}:
         raise ValueError(
-            "This execution layer supports only validated ui:<resource-id> mechanisms."
+            "This execution layer supports only validated ui:<resource-id> or ui-text:<text> mechanisms."
         )
-    if not resource_id:
-        raise ValueError("UI resource ID cannot be empty.")
-
+    if not selector:
+        raise ValueError("UI selector cannot be empty.")
     validation = validate_android_mechanism(request, candidate)
     if "Status: VIABLE" not in validation:
         return (
@@ -57,8 +56,13 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
         target = None
         for node in root.iter("node"):
+            selector_value = (
+                node.attrib.get("resource-id", "")
+                if kind == "ui"
+                else node.attrib.get("text", "")
+            )
             if (
-                node.attrib.get("resource-id") == resource_id
+                selector_value == selector
                 and node.attrib.get("enabled") == "true"
             ):
                 target = node
@@ -67,7 +71,7 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
         if target is None:
             return (
                 "Android UI mechanism execution blocked: the validated control is no longer "
-                "present as an enabled clickable control."
+                "present as an enabled node."
             )
 
         bounds = target.attrib.get("bounds", "")
