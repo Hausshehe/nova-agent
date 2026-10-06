@@ -30,6 +30,8 @@ from gemini_agent.tools import (
     validate_android_mechanism,
     execute_validated_android_mechanism,
     execute_android_mechanism,
+    diagnose_android_mechanism_outcome,
+    recover_android_mechanism,
     get_foreground_android_component,
     verify_android_component_presence,
     plan_capability_extension,
@@ -710,6 +712,55 @@ class SelfTestToolTests(unittest.TestCase):
         self.assertIs(TOOL_HANDLERS["self_test"], self_test)
         names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
         self.assertIn("self_test", names)
+
+
+class RecoverAndroidMechanismTests(unittest.TestCase):
+    def test_inconclusive_outcome_does_not_replan(self):
+        with patch(
+            "gemini_agent.tools.diagnose_android_mechanism_outcome",
+            return_value=(
+                "Android mechanism outcome diagnosis (read-only): INCONCLUSIVE\n"
+                "Recovery decision: OBSERVE_OR_REPLAN"
+            ),
+        ) as diagnose, patch(
+            "gemini_agent.tools.replan_android_mechanism"
+        ) as replan:
+            result = recover_android_mechanism(
+                "activate CTRL",
+                "ui-text:CTRL",
+                "INCONCLUSIVE: target unchanged",
+            )
+        diagnose.assert_called_once_with(
+            request="activate CTRL",
+            mechanism="ui-text:CTRL",
+            verification="INCONCLUSIVE: target unchanged",
+        )
+        replan.assert_not_called()
+        self.assertIn("Recovery action: NONE", result)
+
+    def test_failed_outcome_replans(self):
+        with patch(
+            "gemini_agent.tools.diagnose_android_mechanism_outcome",
+            return_value=(
+                "Android mechanism outcome diagnosis (read-only): INCONCLUSIVE\n"
+                "Recovery decision: OBSERVE_OR_REPLAN"
+            ),
+        ), patch(
+            "gemini_agent.tools.replan_android_mechanism",
+            return_value="Replan: selected alternate viable mechanism.",
+        ) as replan:
+            result = recover_android_mechanism(
+                "activate CTRL",
+                "ui-text:CTRL",
+                "FAILED: tap did not execute",
+            )
+        replan.assert_called_once_with("activate CTRL", "ui-text:CTRL")
+        self.assertIn("Replan: selected alternate viable mechanism", result)
+
+    def test_recover_android_mechanism_is_registered(self):
+        self.assertIs(TOOL_HANDLERS["recover_android_mechanism"], recover_android_mechanism)
+        names = [declaration["name"] for declaration in TOOL_DECLARATIONS]
+        self.assertIn("recover_android_mechanism", names)
 
 
 class ReplanAndroidMechanismTests(unittest.TestCase):
