@@ -725,6 +725,7 @@ class GeminiClient:
         strategy_candidates = []
         strategy_goal = ""
         selected_strategy = ""
+        strategy_seed_tool = ""
         candidate_patterns = (
             r'candidate strategies?\s*[:=]?\s*["\']([^"\']+)["\']\s*(?:,|and)\s*["\']([^"\']+)["\']',
             r'between\s+strategy\s+["\']([^"\']+)["\']\s+and\s+strategy\s+["\']([^"\']+)["\']',
@@ -1331,6 +1332,23 @@ class GeminiClient:
             declarations = [
                 d for d in self.tool_declarations if d["name"] == requested_tool
             ]
+        if strategy_candidates and selected_strategy:
+            strategy_seed_tool = (
+                "record_verified_experience_tool"
+                if re.search(
+                    r"\bfirst\s+record\s+(?:a\s+)?verified\s+experience\b",
+                    request_text,
+                    re.IGNORECASE,
+                )
+                else ""
+            )
+            allowed_strategy_tools = {selected_strategy}
+            if strategy_seed_tool:
+                allowed_strategy_tools.add(strategy_seed_tool)
+            declarations = [
+                d for d in self.tool_declarations
+                if d["name"] in allowed_strategy_tools
+            ]
 
         tools = [{
             "type": "function",
@@ -1352,6 +1370,8 @@ class GeminiClient:
                 "type": "function",
                 "function": {"name": "apply_capability_extension"},
             }
+        elif strategy_candidates and selected_strategy:
+            payload["tool_choice"] = "required"
         elif requested_tool:
             payload["tool_choice"] = {
                 "type": "function",
@@ -2514,6 +2534,29 @@ class GeminiClient:
                         "tool_call_id": tool_call.get("id", ""),
                         "content": str(tool_result),
                     })
+
+                    # Once a requested seed experience is recorded, the selected
+                    # strategy becomes the only executable tool in this workflow.
+                    # This prevents the provider from substituting a prerequisite
+                    # observation or another candidate for Nova's selected strategy.
+                    if (
+                        strategy_candidates
+                        and selected_strategy
+                        and strategy_seed_tool
+                        and local_name == strategy_seed_tool
+                    ):
+                        selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                            selected_strategy, selected_strategy
+                        )
+                        payload["tools"] = [
+                            tool
+                            for tool in payload.get("tools", [])
+                            if tool.get("function", {}).get("name") == selected_cloud_name
+                        ]
+                        payload["tool_choice"] = {
+                            "type": "function",
+                            "function": {"name": selected_cloud_name},
+                        }
 
                     # Self-extension is transactional and must not enter an
                     # unbounded repair conversation with the model. One model
