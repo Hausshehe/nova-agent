@@ -511,6 +511,11 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             target.parent.mkdir()
             target.write_text(self._source(), encoding="utf-8")
             with patch("gemini_agent.tools._filesystem_root", return_value=root), \
+                 patch.dict(
+                     os.environ,
+                     {"NOVA_CAPABILITY_STORE": str(root / "capabilities.json")},
+                     clear=False,
+                 ), \
                  patch(
                      "gemini_agent.tools.validate_android_mechanism",
                      return_value="Android mechanism validation (read-only):\\nStatus: VIABLE",
