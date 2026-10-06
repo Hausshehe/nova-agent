@@ -652,8 +652,7 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
     except (RuntimeError, ValueError) as exc:
         return f"Replan: mechanism discovery failed: {exc}"
 
-    for kind, value in alternatives:
-        alternative_mechanism = f"{kind}:{value}"
+    for alternative_mechanism in alternatives:
         if alternative_mechanism.lower() == failed_mechanism.strip().lower():
             continue
         try:
