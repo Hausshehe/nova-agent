@@ -425,6 +425,11 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn('"name": "combine_two_existing_local_operations"', updated)
             self.assertIn('"combine_two_existing_local_operations": combine_two_existing_local_operations', updated)
 
+    def test_android_mechanism_extension_accepts_whitespace_after_prefix(self):
+        self.assertEqual(
+            tools._normalize_android_mechanism_target("intent: android.media.action.IMAGE_CAPTURE"),
+            "intent:android.media.action.IMAGE_CAPTURE",
+        )
     def test_apply_capability_extension_can_persist_validated_android_mechanism(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
