@@ -684,13 +684,17 @@ def _normalize_extension_fragment(fragment: str) -> str:
     return "\n".join(normalized)
 
 def _normalize_android_mechanism_target(target: str) -> str:
-    """Normalize harmless formatting around a discovered Android mechanism."""
-    value = target.strip().strip(chr(96)).strip()
-    match = re.match(r"^(intent|ui-text|ui)\s*:\s*(.*)$", value, flags=re.IGNORECASE)
+    """Normalize model formatting around a discovered bounded Android mechanism."""
+    value = str(target).replace("\r\n", "\n").replace("\r", "\n").strip()
+    value = value.strip(chr(96)).strip().strip(chr(34)).strip(chr(39)).strip()
+    match = re.search(
+        r"(intent|ui-text|ui)\s*:\s*(.+)",
+        value,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     if match:
         value = f"{match.group(1).lower()}:{match.group(2).strip()}"
-    value = value.strip().strip(chr(96)).strip().strip(chr(34)).strip(chr(39))
-    return value
+    return value.strip(chr(96)).strip().strip(chr(34)).strip(chr(39)).strip()
 
 
 def apply_capability_extension(
@@ -894,30 +898,30 @@ def apply_capability_extension(
         + updated[handler_end:]
     )
 
-    helper_marker = "\ndef self_test()"
     helper_source = (
         "\ndef _run_extension_primitive(tool_name: str, arguments: str) -> str:\n"
         "    handler = TOOL_HANDLERS.get(tool_name)\n"
         "    if handler is None:\n"
-        "        raise ValueError(f\"Unknown extension primitive: {tool_name}\")\n"
+        "        raise ValueError(f"Unknown extension primitive: {tool_name}")\n"
         "    parsed = json.loads(arguments) if arguments.strip() else {}\n"
         "    if not isinstance(parsed, dict):\n"
-        "        raise ValueError(\"Extension primitive arguments must be a JSON object.\")\n"
+        "        raise ValueError("Extension primitive arguments must be a JSON object.")\n"
         "    return str(handler(**parsed))\n"
         "\ndef _run_android_mechanism_extension(request: str, mechanism: str) -> str:\n"
         "    validation = validate_android_mechanism(request, mechanism)\n"
-        "    if \"Status: VIABLE\" not in validation:\n"
-        "        return \"Extension capability blocked: Android mechanism is no longer viable.\\n\" + validation\n"
-        "    if mechanism.lower().startswith((\"ui:\", \"ui-text:\")):\n"
+        "    if "Status: VIABLE" not in validation:\n"
+        "        return "Extension capability blocked: Android mechanism is no longer viable.\\n" + validation\n"
+        "    if mechanism.lower().startswith(("ui:", "ui-text:")):\n"
         "        from gemini_agent.android_ui import execute_validated_android_ui_mechanism\n"
         "        return str(execute_validated_android_ui_mechanism(request=request, mechanism=mechanism))\n"
         "    return str(execute_validated_android_mechanism(request=request, mechanism=mechanism))\n"
-    )
-    if helper_marker not in updated:
+        )
+    helper_insert = helper_source if "def _run_extension_primitive" not in updated else ""
+    if handler_marker not in updated:
         return "Extension not applied: implementation insertion anchor was not found."
     updated = updated.replace(
-        helper_marker,
-        "\n" + function_source + helper_source + helper_marker,
+        handler_marker,
+        "\n" + function_source + helper_insert + "\n" + handler_marker,
         1,
     )
 
