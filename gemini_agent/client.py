@@ -626,6 +626,18 @@ class GeminiClient:
                     "content": "".join(text_parts),
                 })
 
+        request_text = ""
+        for item in reversed(contents):
+            if item.get("role") == "user":
+                request_text = " ".join(
+                    part.get("text", "")
+                    for part in item.get("parts", [])
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                )
+                break
+        prompt = request_text
+        prompt_text = request_text
+
         requested_tool = self._requested_local_tool(contents)
         # Resolve explicitly named generated capabilities from the live client
         # registry before any provider round-trip. This keeps execution local and
