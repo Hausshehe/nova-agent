@@ -759,7 +759,7 @@ class GeminiClient:
                 candidate_text = request_text[rank_match.end():]
                 candidate_match = re.search(r'candidates?(?:\s*[:=]|\s+)\s*(.+?)(?=\s+Do not|\s+Report|$)', candidate_text, re.IGNORECASE | re.DOTALL)
                 if candidate_match:
-                    candidates = [c.strip().rstrip(".") for c in candidate_match.group(1).split(",") if c.strip()]
+                    candidates = [c.strip().strip('"').strip("'").rstrip(".").strip().strip('"').strip("'") for c in candidate_match.group(1).split(",") if c.strip()]
                     candidates = list(dict.fromkeys(candidates))
             if rank_match and candidates:
                 ranked = self.tool_handlers["rank_verified_experience_candidates"](
