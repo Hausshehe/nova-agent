@@ -27,6 +27,7 @@ from gemini_agent.tools import (
     diagnose_capability_failure,
     select_capability_repair_candidate,
     apply_capability_repair,
+    accept_verified_capability_repair,
     discover_camera_control,
     discover_android_mechanisms,
     resolve_android_intent,
@@ -699,6 +700,69 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             "Combine the existing operations.",
         )
         self.assertIn("Extension not applied:", result)
+
+
+    def test_accept_verified_capability_repair_persists_acceptance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "capabilities.json"
+            store.write_text(
+                '[{"name":"generated_probe","description":"Generated probe",'
+                '"implementation_kind":"android_mechanism",'
+                '"implementation_target":"intent:android.media.action.IMAGE_CAPTURE",'
+                '"implementation_args":"{}","request":"open camera",'
+                '"repair_status":"PENDING"}]',
+                encoding="utf-8",
+            )
+            def generated_probe():
+                return "Post-action verification: VERIFIED"
+            generated_probe.__nova_generated_capability__ = True
+            with patch(
+                "gemini_agent.tools._extension_store_path",
+                return_value=store,
+            ), patch.dict(
+                TOOL_HANDLERS,
+                {"generated_probe": generated_probe},
+                clear=False,
+            ):
+                result = accept_verified_capability_repair(
+                    "generated_probe",
+                    "Post-action verification: VERIFIED: expected component is present.",
+                )
+            self.assertIn("Repair acceptance recorded: generated_probe", result)
+            persisted = __import__("json").loads(store.read_text(encoding="utf-8"))
+            self.assertEqual(persisted[0]["repair_status"], "ACCEPTED")
+            self.assertIn("repair_verification", persisted[0])
+            self.assertIn("repair_verified_at", persisted[0])
+
+    def test_accept_verified_capability_repair_keeps_pending_without_verified_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "capabilities.json"
+            store.write_text(
+                '[{"name":"generated_probe","description":"Generated probe",'
+                '"implementation_kind":"android_mechanism",'
+                '"implementation_target":"intent:android.media.action.IMAGE_CAPTURE",'
+                '"implementation_args":"{}","request":"open camera",'
+                '"repair_status":"PENDING"}]',
+                encoding="utf-8",
+            )
+            def generated_probe():
+                return "INCONCLUSIVE"
+            generated_probe.__nova_generated_capability__ = True
+            with patch(
+                "gemini_agent.tools._extension_store_path",
+                return_value=store,
+            ), patch.dict(
+                TOOL_HANDLERS,
+                {"generated_probe": generated_probe},
+                clear=False,
+            ):
+                result = accept_verified_capability_repair(
+                    "generated_probe",
+                    "Post-action verification: INCONCLUSIVE",
+                )
+            self.assertIn("repair remains PENDING", result)
+            persisted = __import__("json").loads(store.read_text(encoding="utf-8"))
+            self.assertEqual(persisted[0]["repair_status"], "PENDING")
 
 class SelfTestToolTests(unittest.TestCase):
     def test_capability_gap_reports_match(self):
