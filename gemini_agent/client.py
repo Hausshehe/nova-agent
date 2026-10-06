@@ -125,7 +125,33 @@ class GeminiClient:
                 elif code is not None and "_run_extension_primitive" in code.co_names:
                     generated_names.append(name)
             if generated_names:
-                return generated_names[-1]
+                declaration_by_name = {
+                    declaration["name"]: declaration
+                    for declaration in TOOL_DECLARATIONS
+                    if isinstance(declaration, dict) and isinstance(declaration.get("name"), str)
+                }
+                stop_words = {
+                    "the", "newly", "generated", "capability", "to", "use", "device",
+                    "and", "then", "open", "report", "exactly", "what", "happened",
+                }
+                request_terms = {
+                    token for token in re.findall(r"[a-z0-9_]+", user_text)
+                    if token not in stop_words
+                }
+                scored = []
+                for index, name in enumerate(generated_names):
+                    declaration = declaration_by_name.get(name, {})
+                    metadata = " ".join(
+                        str(value)
+                        for value in (
+                            name,
+                            declaration.get("description", ""),
+                        )
+                    ).lower()
+                    candidate_terms = set(re.findall(r"[a-z0-9_]+", metadata))
+                    score = len(request_terms & candidate_terms)
+                    scored.append((score, index, name))
+                return max(scored)[2]
 
         if "self-test" in user_text or "self test" in user_text:
             return "self_test"
