@@ -714,7 +714,7 @@ class GeminiClient:
                     break
         if requested_tool == "record_verified_android_experience":
             request_match = re.search(
-                r"(?:for|request)\s+(?:capability\s+)?["']?(.+?)["']?\s+(?:using|with)\s+(?:mechanism\s+)?(?:intent|ui-text|ui):[^\s,]+",
+                r'(?:for|request)\s+(?:capability\s+)?["\']?(.+?)["\']?\s+(?:using|with)\s+(?:mechanism\s+)?(?:intent|ui-text|ui):[^\s,]+',
                 request_text,
                 re.IGNORECASE,
             )
