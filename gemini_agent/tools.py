@@ -575,6 +575,33 @@ def diagnose_android_mechanism_outcome(
     )
 
 
+def recover_android_mechanism(
+    request: str,
+    mechanism: str,
+    verification: str,
+) -> str:
+    """Diagnose an Android outcome and replan only when bounded evidence justifies it."""
+    diagnosis = diagnose_android_mechanism_outcome(
+        request=request,
+        mechanism=mechanism,
+        verification=verification,
+    )
+    if "Recovery decision: NONE." in diagnosis:
+        return diagnosis + "\nRecovery action: NONE."
+    if "Recovery decision: OBSERVE_OR_REPLAN" not in diagnosis:
+        return diagnosis + "\nRecovery action: STOP_SAFELY."
+    # Uncertainty alone is not permission to perform another state-changing action.
+    if "INCONCLUSIVE" in verification.upper():
+        return (
+            diagnosis
+            + "\nRecovery action: NONE. The outcome is uncertain, so no alternate "
+              "mechanism was executed from uncertainty alone."
+        )
+    if "FAILED" in verification.upper():
+        recovery = replan_android_mechanism(request, mechanism)
+        return diagnosis + "\nRecovery action:\n" + recovery
+    return diagnosis + "\nRecovery action: NONE."
+
 def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
     """Discover, validate, and execute one untried Android mechanism through the generic dispatcher."""
     if not isinstance(request, str) or not request.strip():
@@ -3389,6 +3416,19 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "recover_android_mechanism",
+        "description": "Diagnose an Android mechanism outcome and perform generic recovery/replanning only when bounded evidence justifies another mechanism.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "Original capability request."},
+                "mechanism": {"type": "STRING", "description": "Executed Android mechanism."},
+                "verification": {"type": "STRING", "description": "Observed post-action verification result."},
+            },
+            "required": ["request", "mechanism", "verification"],
+        },
+    },
+    {
         "name": "diagnose_android_mechanism_outcome",
         "description": "Diagnose inconclusive or failed Android mechanism outcomes using bounded read-only evidence.",
         "parameters": {
@@ -4269,6 +4309,20 @@ GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION = {
     "parameters": {"type": "OBJECT", "properties": {}},
 }
 
+RECOVER_ANDROID_MECHANISM_DECLARATION = {
+    "name": "recover_android_mechanism",
+    "description": "Diagnose an Android mechanism outcome and perform generic recovery/replanning only when bounded evidence justifies another mechanism.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "request": {"type": "STRING", "description": "Original capability request."},
+            "mechanism": {"type": "STRING", "description": "Executed Android mechanism."},
+            "verification": {"type": "STRING", "description": "Observed post-action verification result."},
+        },
+        "required": ["request", "mechanism", "verification"],
+    },
+}
+
 DIAGNOSE_ANDROID_MECHANISM_OUTCOME_DECLARATION = {
     "name": "diagnose_android_mechanism_outcome",
     "description": "Diagnose inconclusive or failed Android mechanism outcomes using bounded read-only evidence.",
@@ -4339,6 +4393,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
+    "recover_android_mechanism": recover_android_mechanism,
     "execute_android_mechanism": execute_android_mechanism,
     "execute_validated_android_mechanism": execute_validated_android_mechanism,
     "execute_validated_android_ui_mechanism": execute_validated_android_ui_mechanism,
