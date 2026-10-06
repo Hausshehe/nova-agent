@@ -2610,6 +2610,7 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
             [
                 "intent:android.media.action.IMAGE_CAPTURE",
                 "intent:android.media.action.STILL_IMAGE_CAMERA",
+                "intent:android.media.action.STILL_IMAGE_CAMERA",
             ],
         )
         self.assertEqual(send.call_count, 2)
