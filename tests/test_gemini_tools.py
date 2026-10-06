@@ -2567,7 +2567,11 @@ class RecoverCommandToolTests(unittest.TestCase):
         ) as run:
             result = recover_command("python --version", expected="Python")
         self.assertIn("retried once", result)
-        self.assertIn("Attempts: 2", result)
+        self.assertIn("First attempt: FAILED", result)
+        self.assertIn("stdout:\nwrong output", result)
+        self.assertIn("Postcondition: FAILED: expected text not found: Python", result)
+        self.assertIn("Second attempt: VERIFIED", result)
+        self.assertIn("stdout:\nPython 3.14.6", result)
         self.assertIn("Postcondition: VERIFIED: expected text found: Python", result)
         self.assertIn("Outcome: VERIFIED", result)
         self.assertEqual(run.call_count, 2)
