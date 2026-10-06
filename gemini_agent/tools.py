@@ -5318,6 +5318,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "select_verified_strategy_tool": select_verified_strategy_tool,
     "autonomously_repair_capability": autonomously_repair_capability,
     "record_capability_repair_verification": record_capability_repair_verification,
     "rank_android_mechanism_candidates": rank_android_mechanism_candidates,
