@@ -143,6 +143,23 @@ class VerifiedAndroidExperienceTests(unittest.TestCase):
         self.assertIn("retry_safe", result)
         open_url.assert_not_called()
 
+    def test_client_routes_combined_plural_learning_request_without_candidate_colon(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                'Record a verified experience for request "recover a failed network check" '
+                'using strategy retry_safe with verification "Verification: VERIFIED: bounded real-world learning test." '
+                'Then rank verified experiences for request "recover a failed network check" '
+                'candidates "retry_safe, fallback_probe". Do not execute any recovery strategy or modify device state.'
+            )
+        self.assertIn("Verified experience learned.", result)
+        self.assertIn("['retry_safe', 'fallback_probe']", result)
+        open_url.assert_not_called()
+
     def test_client_routes_learning_and_ranking_locally(self):
         with patch.dict(
             os.environ,
