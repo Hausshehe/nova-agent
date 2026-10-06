@@ -116,7 +116,7 @@ class CloudflareClientTests(unittest.TestCase):
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
-            "urllib.request.urlopen", return_value=FakeResponse(response)
+            "urllib.request.urlopen"
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
             {"camera_shutter": generated_camera_capability},
