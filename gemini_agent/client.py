@@ -672,7 +672,7 @@ class GeminiClient:
             self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": tool_result})
             result_text = str(tool_result)
             if "Post-action verification: VERIFIED" in result_text or re.search(
-                r"Verification\\s*:\\s*VERIFIED\\b", result_text, re.IGNORECASE
+                r"Verification\s*:\s*VERIFIED\b", result_text, re.IGNORECASE
             ):
                 acceptance_handler = self.tool_handlers.get("accept_verified_capability_repair")
                 if acceptance_handler is not None:
