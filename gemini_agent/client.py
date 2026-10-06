@@ -842,6 +842,12 @@ class GeminiClient:
                 request_text,
                 re.IGNORECASE,
             )
+            if not match:
+                match = re.search(
+                    r"(?:the\s+)?([A-Za-z_][A-Za-z0-9_]*)\s+capability\b",
+                    request_text,
+                    re.IGNORECASE,
+                )
             capability = match.group(1) if match else ""
             evidence_match = re.search(
                 r"(?:failure evidence|supplied failure evidence|evidence)\s*[:=]\s*(.+?)(?=\s+Do not|\s+Report|$)",
