@@ -159,6 +159,34 @@ def get_foreground_android_component() -> str:
         + "\nNo interaction or device state change was performed."
     )
 
+def verify_android_component_presence(component: str) -> str:
+    """Verify that an expected Android component is present in the active activity state."""
+    if not isinstance(component, str) or not component.strip():
+        raise ValueError("Android component cannot be empty.")
+    expected = component.strip()
+    result = run_root_command("dumpsys activity activities")
+    evidence = []
+    for line in result.splitlines():
+        stripped = line.strip()
+        if expected not in stripped:
+            continue
+        if "ActivityRecord" in stripped or "mResumedActivity" in stripped or "topResumedActivity" in stripped:
+            evidence.append(stripped)
+    if evidence:
+        return (
+            "Android component presence verification (read-only): VERIFIED\\n"
+            f"Expected component: {expected}\\n"
+            "Evidence:\\n"
+            + "\\n".join(evidence[:5])
+        )
+    return (
+        "Android component presence verification (read-only): FAILED\\n"
+        f"Expected component: {expected}\\n"
+        "No active activity-state evidence for the expected component was found.\\n"
+        "No interaction or device state change was performed."
+    )
+
+
 def inspect_android_ui(selector: str = "") -> str:
     """Inspect the current foreground Android UI hierarchy, optionally filtering to one UI selector."""
     if not isinstance(selector, str):
@@ -572,14 +600,23 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
                 + expected_component
             )
         else:
-            verification = (
-                "FAILED: intent launch returned successfully, but the expected "
-                "Android component did not become foreground. "
-                f"Expected: {expected_component}. Observed:\\n{foreground}"
-            )
-            # A successful launch command is not proof of goal success. Replan
-            # through the mechanism layer instead of duplicating recovery logic here.
-            recovery = replan_android_mechanism(request, candidate)
+            presence = verify_android_component_presence(expected_component)
+            if "VERIFIED" in presence:
+                verification = (
+                    "VERIFIED: expected Android component is present in the active "
+                    "activity state, but a higher-priority overlay is foreground.\\n"
+                    + presence
+                )
+            else:
+                verification = (
+                    "FAILED: intent launch returned successfully, but the expected "
+                    "Android component was neither foreground nor present in the active "
+                    "activity state. "
+                    f"Expected: {expected_component}. Observed:\\n{foreground}\\n{presence}"
+                )
+                # A successful launch command is not proof of goal success. Replan
+                # through the mechanism layer instead of duplicating recovery logic here.
+                recovery = replan_android_mechanism(request, candidate)
     if recovery.startswith("Replan: selected alternate viable mechanism."):
         recovery = "Recovery: discovered an alternate viable Android intent.\n" + recovery
     elif recovery.startswith("Replan: selected alternate viable mechanism,"):
