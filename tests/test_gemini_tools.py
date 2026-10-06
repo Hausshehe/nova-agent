@@ -425,6 +425,49 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn('"name": "combine_two_existing_local_operations"', updated)
             self.assertIn('"combine_two_existing_local_operations": combine_two_existing_local_operations', updated)
 
+    def test_apply_capability_extension_can_persist_validated_android_mechanism(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "gemini_agent" / "tools.py"
+            target.parent.mkdir()
+            target.write_text(self._source(), encoding="utf-8")
+            with patch("gemini_agent.tools._filesystem_root", return_value=root), \
+                 patch(
+                     "gemini_agent.tools.validate_android_mechanism",
+                     return_value="Android mechanism validation (read-only):\\nStatus: VIABLE",
+                 ), \
+                 patch("gemini_agent.tools.subprocess.run") as run:
+                run.return_value = type("Completed", (), {"returncode": 0, "stdout": "OK", "stderr": ""})()
+                result = apply_capability_extension(
+                    "open the camera",
+                    "gemini_agent/tools.py",
+                    "android_mechanism",
+                    "intent:android.media.action.IMAGE_CAPTURE",
+                    "{}",
+                    "Open the device camera using the validated Android mechanism.",
+                )
+            self.assertIn("Extension status: source edit applied and transaction committed.", result)
+            updated = target.read_text(encoding="utf-8")
+            self.assertIn("_run_android_mechanism_extension", updated)
+            self.assertIn("intent:android.media.action.IMAGE_CAPTURE", updated)
+            self.assertIn('"name": "open_camera"', updated)
+            self.assertIn('"open_camera": open_camera', updated)
+
+    def test_apply_capability_extension_blocks_nonviable_android_mechanism(self):
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\\nStatus: NOT VIABLE",
+        ):
+            result = apply_capability_extension(
+                "open the camera",
+                "gemini_agent/tools.py",
+                "android_mechanism",
+                "intent:android.media.action.IMAGE_CAPTURE",
+                "{}",
+                "Open the device camera using the validated Android mechanism.",
+            )
+        self.assertIn("discovered Android mechanism is not viable", result)
+
     def test_apply_capability_extension_rolls_back_when_tests_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -461,7 +504,7 @@ class CapabilityExtensionToolTests(unittest.TestCase):
                     '{"expression": "2 + 2"}',
                     "Combine the existing operations.",
                 )
-            self.assertIn("implementation_kind must be 'existing_tool'", result)
+            self.assertIn("implementation_kind must be 'existing_tool' or 'android_mechanism'", result)
 
     def test_apply_capability_extension_rejects_invalid_primitive_arguments(self):
         result = apply_capability_extension(
