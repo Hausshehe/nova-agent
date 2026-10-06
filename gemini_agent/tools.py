@@ -473,7 +473,7 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
             + validation
         )
     result = send_android_intent(value)
-    expected_match = re.findall(r"\\b([A-Za-z0-9._$]+/[A-Za-z0-9._$]+)\\b", validation)
+    expected_match = re.findall(r"([A-Za-z0-9._$-]+/[A-Za-z0-9._$-]+)", validation)
     expected_component = expected_match[-1] if expected_match else ""
     verification = "UNVERIFIED: no expected foreground component could be derived from mechanism validation."
     if expected_component:
