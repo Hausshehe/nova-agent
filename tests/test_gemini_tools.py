@@ -2386,6 +2386,66 @@ class ExecuteValidatedAndroidMechanismTests(unittest.TestCase):
         self.assertIn("Expected: com.transsion.camera/.app.CaptureActivity", result)
         self.assertIn("com.termux/.app.TermuxActivity", result)
 
+
+    def test_recovers_with_an_alternate_discovered_intent_after_postcondition_failure(self):
+        validation_calls = []
+
+        def validate(request, mechanism):
+            validation_calls.append(mechanism)
+            if mechanism == "intent:android.media.action.IMAGE_CAPTURE":
+                return (
+                    "Android mechanism validation (read-only):\\n"
+                    "Status: VIABLE\\n"
+                    "Evidence:\\npriority=0 com.transsion.camera/.app.CaptureActivity"
+                )
+            return (
+                "Android mechanism validation (read-only):\\n"
+                "Status: VIABLE\\n"
+                "Evidence:\\npriority=0 com.transsion.camera/.app.CaptureActivity"
+            )
+
+        foregrounds = iter([
+            "Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.termux/.app.TermuxActivity",
+            "Foreground Android component inspection (read-only):\\ntopResumedActivity=ActivityRecord com.transsion.camera/.app.CaptureActivity",
+        ])
+        with patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            side_effect=validate,
+        ), patch(
+            "gemini_agent.tools.send_android_intent",
+            side_effect=[
+                "Android intent android.media.action.IMAGE_CAPTURE started.\\nExit code: 0",
+                "Android intent android.media.action.STILL_IMAGE_CAMERA started.\\nExit code: 0",
+            ],
+        ) as send, patch(
+            "gemini_agent.tools.discover_android_mechanisms",
+            return_value=(
+                "Android mechanism discovery (read-only):\\n"
+                "Discovered bounded intent mechanisms:\\n"
+                "intent:android.media.action.IMAGE_CAPTURE\\n"
+                "intent:android.media.action.STILL_IMAGE_CAMERA"
+            ),
+        ), patch(
+            "gemini_agent.tools.get_foreground_android_component",
+            side_effect=lambda: next(foregrounds),
+        ), patch(
+            "gemini_agent.tools.time.sleep",
+        ):
+            result = execute_validated_android_mechanism(
+                "open the camera", "intent:android.media.action.IMAGE_CAPTURE"
+            )
+
+        self.assertIn("VERIFIED after recovery: expected Android component is foreground", result)
+        self.assertIn("Recovery: discovered an alternate viable Android intent", result)
+        self.assertEqual(
+            validation_calls,
+            [
+                "intent:android.media.action.IMAGE_CAPTURE",
+                "intent:android.media.action.STILL_IMAGE_CAMERA",
+            ],
+        )
+        self.assertEqual(send.call_count, 2)
+
     def test_blocks_non_viable_mechanism_without_action(self):
         with patch(
             "gemini_agent.tools.validate_android_mechanism",
