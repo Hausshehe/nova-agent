@@ -403,6 +403,14 @@ class CapabilityExtensionToolTests(unittest.TestCase):
         self.assertIn("Extension blocked:", result)
         self.assertIn("inspection or orchestration tool", result)
 
+    def test_android_mechanism_extension_normalizes_embedded_model_formatting(self):
+        self.assertEqual(
+            _normalize_android_mechanism_target(
+                "validated candidate: intent: android.media.action.IMAGE_CAPTURE"
+            ),
+            "intent:android.media.action.IMAGE_CAPTURE",
+        )
+
     def test_apply_capability_extension_structured_transaction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -425,6 +433,11 @@ class CapabilityExtensionToolTests(unittest.TestCase):
             self.assertIn("def combine_two_existing_local_operations()", updated)
             self.assertIn('"name": "combine_two_existing_local_operations"', updated)
             self.assertIn('"combine_two_existing_local_operations": combine_two_existing_local_operations', updated)
+
+            namespace = {}
+            exec(compile(updated, str(target), "exec"), namespace)
+            self.assertIn("combine_two_existing_local_operations", namespace["TOOL_HANDLERS"])
+            self.assertIs(namespace["TOOL_HANDLERS"]["combine_two_existing_local_operations"], namespace["combine_two_existing_local_operations"])
 
     def test_android_mechanism_extension_accepts_whitespace_after_prefix(self):
         self.assertEqual(
