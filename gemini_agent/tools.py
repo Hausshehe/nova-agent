@@ -259,6 +259,94 @@ def apply_capability_repair(capability: str, candidate: str) -> str:
     )
 
 
+
+def accept_verified_capability_repair(capability: str, verification: str) -> str:
+    """Persist acceptance of a repaired generated capability after verified execution."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    if not isinstance(verification, str) or not verification.strip():
+        raise ValueError("Verification evidence cannot be empty.")
+    name = capability.strip()
+    evidence = verification.strip()
+    handler = TOOL_HANDLERS.get(name)
+    generated = bool(
+        handler is not None
+        and (
+            getattr(handler, "__nova_generated_capability__", False)
+            or (
+                getattr(handler, "__code__", None) is not None
+                and any(
+                    marker in handler.__code__.co_names
+                    for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")
+                )
+            )
+        )
+    )
+    if not generated:
+        return (
+            f"Repair acceptance not recorded for {name}: capability is not a generated "
+            "capability."
+        )
+    if not re.search(
+        r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
+        evidence,
+        re.IGNORECASE,
+    ):
+        return (
+            f"Repair acceptance not recorded for {name}: verification evidence is not "
+            "explicitly VERIFIED; repair remains PENDING."
+        )
+
+    store_path = _extension_store_path()
+    if not store_path.exists():
+        return f"Repair acceptance not recorded for {name}: persisted repair metadata is unavailable."
+    try:
+        entries = json.loads(store_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"Repair acceptance not recorded for {name}: persisted metadata could not be read: {exc}"
+    if not isinstance(entries, list):
+        return f"Repair acceptance not recorded for {name}: persisted capability store is invalid."
+
+    entry = next(
+        (item for item in entries if isinstance(item, dict) and item.get("name") == name),
+        None,
+    )
+    if entry is None:
+        return f"Repair acceptance not recorded for {name}: persisted repair recipe is missing."
+
+    entry["repair_status"] = "ACCEPTED"
+    entry["repair_verification"] = evidence
+    entry["repair_verified_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+
+    try:
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=store_path.parent,
+            prefix=f".{store_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            json.dump(entries, temp_file, ensure_ascii=False, indent=2)
+            temp_file.write("\n")
+            temp_path = Path(temp_file.name)
+        os.replace(temp_path, store_path)
+    except (OSError, TypeError, ValueError) as exc:
+        try:
+            if "temp_path" in locals():
+                temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return f"Repair acceptance not recorded for {name}: metadata write failed: {exc}"
+
+    return (
+        f"Repair acceptance recorded: {name}\n"
+        "Repair status: ACCEPTED\n"
+        "Acceptance basis: independently verified capability execution.\n"
+        "Persisted repair recipe retained."
+    )
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -3911,6 +3999,18 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "accept_verified_capability_repair",
+        "description": "Persist acceptance of a repaired generated capability after independently verified execution.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING"},
+                "verification": {"type": "STRING", "description": "Bounded verification evidence produced by the capability execution."},
+            },
+            "required": ["capability", "verification"],
+        },
+    },
+    {
         "name": "apply_capability_repair",
         "description": "Apply a bounded repair transaction from a persisted verified capability recipe.",
         "parameters": {
@@ -4732,6 +4832,7 @@ GET_PROCESS_STATUS_DECLARATION = {
 }
 
 TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "accept_verified_capability_repair": accept_verified_capability_repair,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
