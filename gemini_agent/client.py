@@ -107,6 +107,21 @@ class GeminiClient:
                     if isinstance(part, dict) and isinstance(part.get("text"), str)
                 ).lower()
                 break
+        # A request referring to the newly generated capability without naming it
+        # must resolve to the actual generated wrapper, not an adjacent primitive.
+        if re.search(r"\\bnewly\\s+generated\\b", user_text, re.IGNORECASE) and re.search(
+            r"\\bcapabilit(?:y|ies)\\b", user_text, re.IGNORECASE
+        ):
+            generated_names = []
+            for name, handler in TOOL_HANDLERS.items():
+                code = getattr(handler, "__code__", None)
+                if code is not None and "_run_android_mechanism_extension" in code.co_names:
+                    generated_names.append(name)
+                elif code is not None and "_run_extension_primitive" in code.co_names:
+                    generated_names.append(name)
+            if generated_names:
+                return generated_names[-1]
+
         if "self-test" in user_text or "self test" in user_text:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
@@ -397,8 +412,7 @@ class GeminiClient:
                             excerpts.append(excerpt)
                         break
             if excerpts:
-                context.append("Relevant gemini_agent/tools.py excerpts:")
-                context.extend(excerpts)
+                context.append("Relevant gemini_agent/tools.py excerpts:")                context.extend(excerpts)
 
             # Give the model exact, copyable integration anchors. The model must
             # not have to reconstruct whitespace or guess where a declaration or
@@ -798,7 +812,6 @@ class GeminiClient:
                         },
                     }]
                     native_tool_calls = False
-
             # Explicit disk-usage requests must use the user's path.
             if requested_tool == "get_hostname" and loop_index == 0:
                 tool_calls = [{
@@ -1197,8 +1210,7 @@ class GeminiClient:
                     native_tool_calls = False
 
             if requested_tool == "get_process_working_directory" and loop_index == 0:
-                user_text = ""
-                for item in reversed(payload["messages"]):
+                user_text = ""                for item in reversed(payload["messages"]):
                     if item.get("role") == "user":
                         user_text = item.get("content", "")
                         break
@@ -1597,8 +1609,7 @@ class GeminiClient:
                                 "path": match.group(1).strip(),
                                 "destination": match.group(2).strip(),
                             }),
-                        },
-                    }]
+                        },                    }]
                     native_tool_calls = False
 
             if tool_calls:
