@@ -157,7 +157,14 @@ class GeminiClient:
             return "self_test"
         if any(phrase in user_text for phrase in ("discover android mechanisms", "discover android mechanism", "find android mechanisms")):
             return "discover_android_mechanisms"
-        if any(phrase in user_text for phrase in ("execute validated android mechanism", "execute the validated android mechanism", "run the validated android mechanism")):
+        if any(phrase in user_text for phrase in (
+            "execute validated android mechanism",
+            "execute the validated android mechanism",
+            "run the validated android mechanism",
+            "android mechanism execution capability",
+            "android mechanism execution tool",
+            "use the android mechanism execution capability",
+        )):
             return "execute_validated_android_mechanism"
         if any(phrase in user_text for phrase in ("execute validated android ui mechanism", "execute the validated android ui mechanism", "run the validated android ui mechanism")):
             return "execute_validated_android_ui_mechanism"
@@ -600,8 +607,37 @@ class GeminiClient:
         if requested_tool == "execute_validated_android_mechanism":
             mechanism = self._extract_mechanism(request_text)
             if not mechanism:
-                return "Mechanism execution requires an explicit mechanism such as intent:IMAGE_CAPTURE."
-            return str(self.tool_handlers["execute_validated_android_mechanism"](request=request_text, mechanism=mechanism))
+                try:
+                    discovery = str(
+                        self.tool_handlers["discover_android_mechanisms"](
+                            request=request_text
+                        )
+                    )
+                    candidates = re.findall(r"(?m)^intent:([^\s]+)$", discovery)
+                    for action in candidates:
+                        candidate = f"intent:{action}"
+                        validation = str(
+                            self.tool_handlers["validate_android_mechanism"](
+                                request=request_text,
+                                mechanism=candidate,
+                            )
+                        )
+                        if "Status: VIABLE" in validation:
+                            mechanism = candidate
+                            break
+                except (RuntimeError, ValueError, TypeError):
+                    mechanism = ""
+            if not mechanism:
+                return (
+                    "Mechanism execution could not select a viable discovered mechanism. "
+                    "No Android mechanism was executed."
+                )
+            return str(
+                self.tool_handlers["execute_validated_android_mechanism"](
+                    request=request_text,
+                    mechanism=mechanism,
+                )
+            )
         if requested_tool == "validate_android_mechanism":
             return str(self.tool_handlers["validate_android_mechanism"](request=request_text, mechanism=self._extract_mechanism(request_text)))
         if requested_tool == "resolve_android_intent":
