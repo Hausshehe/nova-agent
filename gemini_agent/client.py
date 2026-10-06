@@ -2111,6 +2111,24 @@ class GeminiClient:
                 })
                 return str(tool_result)
         requested_tool = self._requested_local_tool(contents)
+        # Resolve explicitly named generated capabilities from the live client
+        # registry before any provider round-trip. This keeps execution local and
+        # prevents provider-side argument generation from reinterpreting a repair
+        # verification request.
+        lower_prompt = prompt_text.lower()
+        if re.search(r"\\b(?:execute|run|use|verify|test)\\b", lower_prompt) and re.search(r"\\bcapabilit(?:y|ies)\\b", lower_prompt):
+            generated_names = []
+            for name, handler in self.tool_handlers.items():
+                if getattr(handler, "__nova_generated_capability__", False):
+                    generated_names.append(name)
+                    continue
+                code = getattr(handler, "__code__", None)
+                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
+                    generated_names.append(name)
+            for name in sorted(generated_names, key=len, reverse=True):
+                if re.search(rf"\\b{re.escape(name)}\\b", lower_prompt):
+                    requested_tool = name
+                    break
         normalized_prompt = str(prompt).upper()
         if (
             requested_tool == "resolve_android_intent"
