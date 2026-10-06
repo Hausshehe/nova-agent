@@ -2557,6 +2557,21 @@ class RecoverCommandToolTests(unittest.TestCase):
         self.assertIn("Postcondition: VERIFIED: expected text found: expected-value", result)
         run.assert_called_once_with("pwd")
 
+    def test_recover_command_retries_when_postcondition_fails(self):
+        with patch(
+            "gemini_agent.tools.run_command",
+            side_effect=[
+                "Exit code: 0\nstdout:\nwrong output",
+                "Exit code: 0\nstdout:\nPython 3.14.6",
+            ],
+        ) as run:
+            result = recover_command("python --version", expected="Python")
+        self.assertIn("retried once", result)
+        self.assertIn("Attempts: 2", result)
+        self.assertIn("Postcondition: VERIFIED: expected text found: Python", result)
+        self.assertIn("Outcome: VERIFIED", result)
+        self.assertEqual(run.call_count, 2)
+
     def test_recover_command_rejects_success_without_expected_postcondition(self):
         with patch("gemini_agent.tools.run_command", return_value="Exit code: 0\nstdout:\nother-value") as run:
             result = recover_command("pwd", expected="expected-value")
