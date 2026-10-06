@@ -120,6 +120,7 @@ class CloudflareClientTests(unittest.TestCase):
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
             {"camera_shutter": generated_camera_capability},
+            clear=True,
         ):
             client = GeminiClient()
             client.tool_declarations.append({
