@@ -255,6 +255,30 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "hello after retry")
         self.assertEqual(open_url.call_count, 2)
 
+    def test_normal_decision_policy_exposes_verified_experience_selection(self):
+        response = {"choices": [{"message": {"content": "selected"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as open_url:
+            GeminiClient().ask(
+                'Choose between strategy "fallback_probe" and strategy "retry_safe" '
+                'for recovering a failed network check.'
+            )
+        sent = json.loads(open_url.call_args.args[0].data)
+        system_messages = [
+            message["content"]
+            for message in sent["messages"]
+            if message.get("role") == "system"
+        ]
+        self.assertTrue(system_messages)
+        self.assertIn("use select_verified_strategy_tool", system_messages[0])
+        self.assertIn("Learned experience is preference only", system_messages[0])
+
     def test_uses_cloudflare_only(self):
         with patch.dict(
             os.environ,
