@@ -3,7 +3,7 @@
 import re
 import xml.etree.ElementTree as ET
 
-from gemini_agent.tools import run_root_command, validate_android_mechanism
+from gemini_agent.tools import _dump_bounded_ui_hierarchy, _read_bounded_root_file, run_root_command, validate_android_mechanism
 
 
 def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
@@ -35,14 +35,14 @@ def execute_validated_android_ui_mechanism(request: str, mechanism: str) -> str:
 
     dump_path = "/data/local/tmp/nova-ui-execution.xml"
     try:
-        dump_result = run_root_command(f"uiautomator dump {dump_path}")
+        dump_result = _dump_bounded_ui_hierarchy(dump_path)
         if not dump_result.startswith("Exit code: 0"):
             return (
                 "Android UI mechanism execution failed: UI hierarchy could not be captured.\n"
                 f"{dump_result}"
             )
 
-        xml_result = run_root_command(f"cat {dump_path}")
+        xml_text = _read_bounded_root_file(dump_path, 64 * 1024)
         xml_text = xml_result
         if "stdout:\n" in xml_text:
             xml_text = xml_text.split("stdout:\n", 1)[1]
