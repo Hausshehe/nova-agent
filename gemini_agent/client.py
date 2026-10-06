@@ -757,7 +757,7 @@ class GeminiClient:
             candidates = []
             if rank_match:
                 candidate_text = request_text[rank_match.end():]
-                candidate_match = re.search(r'candidates?\s*[:=]\s*(.+?)(?=\s+Do not|\s+Report|$)', candidate_text, re.IGNORECASE | re.DOTALL)
+                candidate_match = re.search(r'candidates?(?:\s*[:=]|\s+)\s*(.+?)(?=\s+Do not|\s+Report|$)', candidate_text, re.IGNORECASE | re.DOTALL)
                 if candidate_match:
                     candidates = [c.strip().rstrip(".") for c in candidate_match.group(1).split(",") if c.strip()]
                     candidates = list(dict.fromkeys(candidates))
