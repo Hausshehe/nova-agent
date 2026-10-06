@@ -842,6 +842,33 @@ class ReplanAndroidMechanismTests(unittest.TestCase):
             allow_recovery=False,
         )
 
+    def test_replan_android_mechanism_preserves_inconclusive_outcome(self):
+        from gemini_agent.tools import replan_android_mechanism
+        with patch(
+            "gemini_agent.tools.discover_android_mechanisms",
+            return_value=(
+                "Android mechanism discovery (read-only):\n"
+                "Discovered bounded UI mechanisms:\n"
+                "ui-text:ALT"
+            ),
+        ), patch(
+            "gemini_agent.tools.validate_android_mechanism",
+            return_value="Android mechanism validation (read-only):\nStatus: VIABLE",
+        ), patch(
+            "gemini_agent.tools.execute_android_mechanism",
+            return_value=(
+                "Android mechanism execution:\n"
+                "Post-action verification: INCONCLUSIVE: outcome could not be observed."
+            ),
+        ):
+            result = replan_android_mechanism(
+                "activate a visible clickable Android UI control",
+                "ui-text:CTRL",
+            )
+        self.assertIn("selected alternate viable mechanism, but its outcome is INCONCLUSIVE", result)
+        self.assertNotIn("postcondition failed", result.lower())
+        self.assertIn("Post-action verification: INCONCLUSIVE", result)
+
     def test_replan_android_mechanism_selects_untried_viable_alternative(self):
         from gemini_agent.tools import replan_android_mechanism
         with patch("gemini_agent.tools.discover_android_mechanisms", return_value=(
