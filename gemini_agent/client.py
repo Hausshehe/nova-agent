@@ -747,7 +747,7 @@ class GeminiClient:
             return str(self.tool_handlers["execute_validated_android_ui_mechanism"](request=prompt, mechanism=mechanism))
         if requested_tool == "record_capability_outcome":
             capability_match = re.search(
-                r"capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
+                r"\bfor\s+capability\s+[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?",
                 request_text,
                 re.IGNORECASE,
             )
