@@ -330,6 +330,12 @@ def discover_android_ui_actions() -> str:
                 f"candidate {index}. label={label!r} resource_id={candidate['resource_id']!r} "
                 f"clickable={candidate['clickable']!r} class={candidate['class']!r} bounds={candidate['bounds']!r}"
             )
+        lines.append("Discovered bounded UI mechanisms:")
+        for control in controls[:50]:
+            if control["resource_id"]:
+                lines.append(f"ui:{control['resource_id']}")
+            if control["text"]:
+                lines.append(f"ui-text:{control['text']}")
         lines.append("UI actions were discovered only; no interaction or device state change was performed.")
         return "Android UI action discovery (read-only):\n" + "\n".join(lines)
     finally:
@@ -375,6 +381,27 @@ def discover_android_mechanisms(request: str) -> str:
             intent_candidates.append(f"intent:{action}")
     if intent_candidates:
         results.append("Discovered bounded intent mechanisms:\n" + "\n".join(intent_candidates))
+
+    try:
+        ui_discovery = discover_android_ui_actions()
+    except (RuntimeError, ValueError) as exc:
+        results.append(f"Android UI mechanism discovery unavailable: {exc}")
+    else:
+        ui_mechanisms = []
+        in_section = False
+        for line in ui_discovery.splitlines():
+            stripped = line.strip()
+            if stripped == "Discovered bounded UI mechanisms:":
+                in_section = True
+                continue
+            if in_section and re.fullmatch(r"(?:ui|ui-text):.+", stripped):
+                ui_mechanisms.append(stripped)
+            elif in_section and stripped.startswith("UI actions were discovered only"):
+                break
+        if ui_mechanisms:
+            results.append("Discovered bounded UI mechanisms:\n" + "\n".join(ui_mechanisms[:50]))
+        else:
+            results.append("Discovered bounded UI mechanisms: none.")
 
     try:
         services = run_root_command("dumpsys -l")
@@ -501,7 +528,7 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
     try:
         discovered = discover_android_mechanisms(request)
         alternatives = re.findall(
-            r"(?m)^(intent|ui|ui-text):([^\s]+)$", discovered
+            r"(?m)^(intent|ui-text|ui):(.+)$", discovered
         )
     except (RuntimeError, ValueError) as exc:
         return f"Replan: mechanism discovery failed: {exc}"
