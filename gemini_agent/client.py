@@ -627,52 +627,36 @@ class GeminiClient:
                 })
 
         requested_tool = self._requested_local_tool(contents)
-        request_text = next(
-            (
-                item.get("content", "")
-                for item in reversed(messages)
-                if item.get("role") == "user"
-            ),
-            "",
-        )
-        unnamed_generated_capability_request = bool(
-            re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
-            and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
-        )
-        # An unnamed request for the newly generated capability is already
-        # an explicit local action. Execute the generated wrapper directly rather
-        # than asking Cloudflare to rediscover the same capability. This also makes
-        # generated-capability execution independent of transient provider output.
-        if unnamed_generated_capability_request and requested_tool:
-            handler = self.tool_handlers.get(requested_tool)
-            if handler is not None:
-                try:
-                    tool_result = handler()
-                except TypeError:
-                    tool_result = handler(request=request_text)
-                trace = {"name": requested_tool, "args": {}, "result": tool_result}
-                self.last_tool_calls.append(trace)
-                return str(tool_result)
-
-        if requested_tool == "inspect_android_ui":
-            user_text = request_text
-            selector_match = re.search(
-                r"\b(ui(?:-text)?):([^\s.,;]+)",
-                user_text,
-                re.IGNORECASE,
-            )
-            selector = (
-                f"{selector_match.group(1)}:{selector_match.group(2)}"
-                if selector_match
-                else ""
-            )
-            handler = self.tool_handlers["inspect_android_ui"]
-            try:
-                return str(handler(selector=selector))
-            except TypeError:
-                return str(handler())
-        if requested_tool == "get_foreground_android_component":
-            return str(self.tool_handlers["get_foreground_android_component"]())
+        # Resolve explicitly named generated capabilities from the live client
+        # registry before any provider round-trip. This keeps execution local and
+        # prevents provider-side argument generation from reinterpreting a repair
+        # verification request.
+        lower_prompt = prompt_text.lower()
+        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
+            generated_names = []
+            for name, handler in self.tool_handlers.items():
+                if getattr(handler, "__nova_generated_capability__", False):
+                    generated_names.append(name)
+                    continue
+                code = getattr(handler, "__code__", None)
+                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
+                    generated_names.append(name)
+            for name in sorted(generated_names, key=len, reverse=True):
+                if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
+                    requested_tool = name
+                    break
+        if requested_tool in self.tool_handlers and getattr(self.tool_handlers[requested_tool], "__nova_generated_capability__", False):
+            tool_result = self.tool_handlers[requested_tool]()
+            self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": tool_result})
+            return str(tool_result)
+        normalized_prompt = str(prompt).upper()
+        if (
+            requested_tool == "resolve_android_intent"
+            or "RESOLVE THE ANDROID IMAGE_CAPTURE INTENT" in normalized_prompt
+            or "RESOLVE ANDROID INTENT" in normalized_prompt
+        ):
+            action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized_prompt else "IMAGE_CAPTURE"
+            return str(self.tool_handlers["resolve_android_intent"](action=action))
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
         if requested_tool == "validate_android_mechanism":
