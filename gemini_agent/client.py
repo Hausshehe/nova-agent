@@ -667,32 +667,43 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if (
+            requested_tool != "accept_verified_capability_repair"
+            and re.search(r"\baccept\b", lower_prompt, re.IGNORECASE)
+            and re.search(r"\brepair(?:ed)?\b", lower_prompt, re.IGNORECASE)
+            and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt, re.IGNORECASE)
+        ):
+            generated_names = [
+                name for name, handler in self.tool_handlers.items()
+                if getattr(handler, "__nova_generated_capability__", False)
+            ]
+            for name in sorted(generated_names, key=len, reverse=True):
+                if re.search(rf"\b{re.escape(name)}\b", lower_prompt, re.IGNORECASE):
+                    acceptance = str(
+                        self.tool_handlers["accept_verified_capability_repair"](capability=name)
+                    )
+                    self.last_tool_calls.append({
+                        "name": "accept_verified_capability_repair",
+                        "args": {"capability": name},
+                        "result": acceptance,
+                    })
+                    return acceptance
         if requested_tool in self.tool_handlers and getattr(self.tool_handlers[requested_tool], "__nova_generated_capability__", False):
             tool_result = self.tool_handlers[requested_tool]()
             self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": tool_result})
             result_text = str(tool_result)
-            if "Post-action verification: VERIFIED" in result_text or re.search(
-                r"Verification\s*:\s*VERIFIED\b", result_text, re.IGNORECASE
+            recorder = self.tool_handlers.get("record_capability_repair_verification")
+            if recorder is not None and (
+                "Post-action verification:" in result_text
+                or re.search(r"Verification\s*:", result_text, re.IGNORECASE)
             ):
-                acceptance_handler = self.tool_handlers.get("accept_verified_capability_repair")
-                if acceptance_handler is not None:
-                    acceptance = str(
-                        acceptance_handler(
-                            requested_tool,
-                            result_text,
-                        )
-                    )
-                    self.last_tool_calls.append(
-                        {
-                            "name": "accept_verified_capability_repair",
-                            "args": {
-                                "capability": requested_tool,
-                                "verification": result_text,
-                            },
-                            "result": acceptance,
-                        }
-                    )
-                    result_text += "\\n" + acceptance
+                record_result = str(recorder(requested_tool, result_text))
+                self.last_tool_calls.append({
+                    "name": "record_capability_repair_verification",
+                    "args": {"capability": requested_tool, "verification": result_text},
+                    "result": record_result,
+                })
+                result_text += "\\n" + record_result
             return result_text
         normalized_prompt = str(prompt).upper()
         if (
