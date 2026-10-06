@@ -555,14 +555,6 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
             # A successful launch command is not proof of goal success. Replan
             # through the mechanism layer instead of duplicating recovery logic here.
             recovery = replan_android_mechanism(request, candidate)
-            if recovery.startswith("Replan: selected alternate viable mechanism."):
-                verification = re.search(
-                    r"Post-action verification: (.+)", recovery
-                ).group(1)
-            elif recovery.startswith("Replan: selected alternate viable mechanism,"):
-                verification = re.search(
-                    r"Post-action verification: (.+)", recovery
-                ).group(1)
     return (
         "Android mechanism execution:\\n"
         f"Requested capability: {request.strip()}\\n"
