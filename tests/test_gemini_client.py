@@ -386,25 +386,6 @@ class CloudflareClientTests(unittest.TestCase):
                 "choices": [{
                     "message": {
                         "tool_calls": [{
-                            "id": "seed-call",
-                            "type": "function",
-                            "function": {
-                                "name": "record_verified_experience_tool",
-                                "arguments": json.dumps({
-                                    "request": "verify a safe command result",
-                                    "strategy": "verify_command_result",
-                                    "verification": "Verification: VERIFIED: seed.",
-                                    "domain": "general",
-                                }),
-                            },
-                        }]
-                    }
-                }]
-            },
-            {
-                "choices": [{
-                    "message": {
-                        "tool_calls": [{
                             "id": "selected-call",
                             "type": "function",
                             "function": {
