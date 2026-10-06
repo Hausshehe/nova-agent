@@ -2438,6 +2438,44 @@ class GeminiClient:
                                     "command": command_match.group(1).strip(),
                                     "expected": expected_match.group(1).strip(),
                                 }
+                        # Satisfy required observation inputs for the selected strategy
+                        # before invoking it. The rule is schema-driven: when the selected
+                        # tool requires a "result" and the request supplies a bounded command,
+                        # execute that prerequisite observation once and pass its result into
+                        # the selected strategy. The selected strategy itself still executes once.
+                        if selected_strategy and local_name == selected_strategy:
+                            selected_declaration = next(
+                                (
+                                    declaration
+                                    for declaration in self.tool_declarations
+                                    if declaration.get("name") == local_name
+                                ),
+                                None,
+                            )
+                            required = set(
+                                (selected_declaration or {})
+                                .get("parameters", {})
+                                .get("required", [])
+                            )
+                            current_result = str(args.get("result", "")).strip()
+                            if "result" in required and (
+                                not current_result or "Exit code:" not in current_result
+                            ):
+                                command_match = re.search(
+                                    r'\busing\s+command\s+["\']([^"\']+)["\']',
+                                    request_text,
+                                    re.IGNORECASE,
+                                )
+                                if not command_match:
+                                    command_match = re.search(
+                                        r'\bcommand\s+["\']([^"\']+)["\']',
+                                        request_text,
+                                        re.IGNORECASE,
+                                    )
+                                if command_match:
+                                    args["result"] = self.tool_handlers["run_command"](
+                                        command=command_match.group(1).strip()
+                                    )
                         tool_result = handler(**args)
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
