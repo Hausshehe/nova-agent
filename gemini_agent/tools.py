@@ -217,20 +217,17 @@ def inspect_android_ui(selector: str = "") -> str:
         if len(matches) > 1:
             return (
                 "Android UI inspection (read-only):\n"
-                f"Selector {normalized!r} matched {len(matches)} enabled UI nodes; inspection is ambiguous.
-"
+                f"Selector {normalized!r} matched {len(matches)} enabled UI nodes; inspection is ambiguous.\n"
                 "No interaction or device state change was performed."
             )
 
         attributes = " ".join(
-            f'{key}={value!r}' for key, value in matches[0].attrib.items()
+            f"{key}={value!r}" for key, value in matches[0].attrib.items()
         )
         return (
             "Android UI inspection (read-only):\n"
-            f"Matched selector: {normalized}
-"
-            f"Node attributes: {attributes}
-"
+            f"Matched selector: {normalized}\n"
+            f"Node attributes: {attributes}\n"
             "No interaction or device state change was performed."
         )
     finally:
@@ -238,7 +235,6 @@ def inspect_android_ui(selector: str = "") -> str:
             run_root_command(f"rm -f {dump_path}")
         except (RuntimeError, ValueError):
             pass
-
 
 def discover_android_ui_actions() -> str:
     """Discover enabled clickable Android UI controls without interacting with the device."""
