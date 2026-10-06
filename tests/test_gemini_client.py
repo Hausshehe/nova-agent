@@ -81,6 +81,29 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "CAMERA OPENED")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_named_generated_capability_routes_without_cloudflare_argument_generation(self):
+        def generated_probe():
+            return "REPAIRED"
+
+        generated_probe.__nova_generated_capability__ = True
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch.dict(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {"generated_probe": generated_probe},
+            clear=False,
+        ):
+            client = GeminiClient()
+            client.tool_handlers["generated_probe"] = generated_probe
+            with patch("urllib.request.urlopen") as open_url:
+                answer = client.ask(
+                    "Independently execute the repaired generated_probe capability exactly once."
+                )
+        self.assertEqual(answer, "REPAIRED")
+        open_url.assert_not_called()
+
     def test_explicit_recover_command_preserves_expected_postcondition(self):
         with patch.dict(
             os.environ,
