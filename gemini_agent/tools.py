@@ -936,12 +936,16 @@ def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
     return str(execute_validated_android_mechanism(request=request, mechanism=mechanism))
 """
     helper_insert = helper_source if "def _run_extension_primitive" not in updated else ""
-    if handler_marker not in updated:
+    handler_insert_index = updated.rfind(handler_marker)
+    if handler_insert_index < 0:
         return "Extension not applied: implementation insertion anchor was not found."
-    updated = updated.replace(
-        handler_marker,
-        "\n" + function_source + helper_insert + "\n" + handler_marker,
-        1,
+    updated = (
+        updated[:handler_insert_index]
+        + "\n"
+        + function_source
+        + helper_insert
+        + "\n"
+        + updated[handler_insert_index:]
     )
 
     try:
