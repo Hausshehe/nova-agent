@@ -116,6 +116,27 @@ class AndroidUiExecutionTests(unittest.TestCase):
         self.assertEqual(run.call_args_list[0].args[0], "uiautomator dump /data/local/tmp/nova-ui-execution.xml")
         tap.assert_called_once_with(53, 887)
 
+    def test_diagnoses_inconclusive_ui_outcome_without_tapping_again(self):
+        with patch(
+            "gemini_agent.tools.run_root_command",
+            side_effect=[
+                "Exit code: 0\nstdout:\nUI dump complete",
+                "Exit code: 0\nstdout:\n",
+            ],
+        ), patch(
+            "gemini_agent.tools._read_bounded_root_file",
+            return_value='<hierarchy><node text="CTRL" enabled="true" /></hierarchy>',
+        ):
+            from gemini_agent.tools import diagnose_android_mechanism_outcome
+            result = diagnose_android_mechanism_outcome(
+                "activate CTRL",
+                "ui-text:CTRL",
+                "INCONCLUSIVE: target UI node remained unchanged",
+            )
+        self.assertIn("Android mechanism outcome diagnosis (read-only): INCONCLUSIVE", result)
+        self.assertIn("Recovery decision: OBSERVE_OR_REPLAN", result)
+        self.assertIn("No interaction or device state change was performed by diagnosis.", result)
+
     def test_reports_inconclusive_when_successful_tap_has_no_observable_ui_change(self):
         hierarchy = (
             '<hierarchy><node class="android.widget.Button" text="CTRL" '
