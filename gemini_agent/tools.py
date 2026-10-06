@@ -458,7 +458,7 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
 
     try:
         discovered = discover_android_mechanisms(request)
-        alternatives = re.findall(r"(?m)^intent:([^\\s]+)$", discovered)
+        alternatives = re.findall(r"(?m)^intent:([^\s]+)$", discovered)
     except (RuntimeError, ValueError) as exc:
         return f"Replan: mechanism discovery failed: {exc}"
 
@@ -478,8 +478,8 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
             foreground = get_foreground_android_component()
         except (RuntimeError, ValueError) as exc:
             return (
-                "Replan: alternate mechanism was viable but execution failed.\\n"
-                f"Mechanism: {alternative_mechanism}\\n"
+                "Replan: alternate mechanism was viable but execution failed.\n"
+                f"Mechanism: {alternative_mechanism}\n"
                 f"Execution error: {exc}"
             )
         matches = re.findall(
@@ -489,22 +489,22 @@ def replan_android_mechanism(request: str, failed_mechanism: str) -> str:
         expected_component = matches[-1] if matches else ""
         if expected_component and expected_component in foreground:
             return (
-                "Replan: selected alternate viable mechanism.\\n"
-                f"Mechanism: {alternative_mechanism}\\n"
-                "Validation: VIABLE\\n"
-                f"Result:\\n{result}\\n"
+                "Replan: selected alternate viable mechanism.\n"
+                f"Mechanism: {alternative_mechanism}\n"
+                "Validation: VIABLE\n"
+                f"Result:\n{result}\n"
                 "Post-action verification: VERIFIED: expected Android component is foreground: "
                 f"{expected_component}"
             )
         return (
-            "Replan: selected alternate viable mechanism, but its postcondition failed.\\n"
-            f"Mechanism: {alternative_mechanism}\\n"
-            f"Result:\\n{result}\\n"
-            "Post-action verification: FAILED: expected Android component was not foreground.\\n"
-            f"Observed:\\n{foreground}"
+            "Replan: selected alternate viable mechanism, but its postcondition failed.\n"
+            f"Mechanism: {alternative_mechanism}\n"
+            f"Result:\n{result}\n"
+            "Post-action verification: FAILED: expected Android component was not foreground.\n"
+            f"Observed:\n{foreground}"
         )
 
-    return "Replan: no untried viable alternative Android mechanism was found.\\nOutcome: FAILED"
+    return "Replan: no untried viable alternative Android mechanism was found.\nOutcome: FAILED"
 
 
 def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
@@ -527,7 +527,7 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
     validation = validate_android_mechanism(request, candidate)
     if "Status: VIABLE" not in validation:
         return (
-            "Android mechanism execution blocked: the mechanism did not validate as viable.\\n"
+            "Android mechanism execution blocked: the mechanism did not validate as viable.\n"
             + validation
         )
     result = send_android_intent(value)
@@ -550,19 +550,19 @@ def execute_validated_android_mechanism(request: str, mechanism: str) -> str:
             verification = (
                 "FAILED: intent launch returned successfully, but the expected "
                 "Android component did not become foreground. "
-                f"Expected: {expected_component}. Observed:\\n{foreground}"
+                f"Expected: {expected_component}. Observed:\n{foreground}"
             )
             # A successful launch command is not proof of goal success. Replan
             # through the mechanism layer instead of duplicating recovery logic here.
             recovery = replan_android_mechanism(request, candidate)
     return (
-        "Android mechanism execution:\\n"
-        f"Requested capability: {request.strip()}\\n"
-        f"Mechanism: {candidate}\\n"
-        "Validation: VIABLE\\n"
-        f"Result:\\n{result}\\n"
+        "Android mechanism execution:\n"
+        f"Requested capability: {request.strip()}\n"
+        f"Mechanism: {candidate}\n"
+        "Validation: VIABLE\n"
+        f"Result:\n{result}\n"
         f"Post-action verification: {verification}"
-        + (f"\\n{recovery}" if recovery else "")
+        + (f"\n{recovery}" if recovery else "")
     )
 
 def assess_capability_gap(request: str) -> str:
@@ -1077,7 +1077,7 @@ def apply_capability_extension(
 def _run_android_mechanism_extension(request: str, mechanism: str) -> str:
     validation = validate_android_mechanism(request, mechanism)
     if "Status: VIABLE" not in validation:
-        return "Extension capability blocked: Android mechanism is no longer viable.\\n" + validation
+        return "Extension capability blocked: Android mechanism is no longer viable.\n" + validation
     if mechanism.lower().startswith(("ui:", "ui-text:")):
         from gemini_agent.android_ui import execute_validated_android_ui_mechanism
         return str(execute_validated_android_ui_mechanism(request=request, mechanism=mechanism))
@@ -1869,7 +1869,7 @@ def get_bluetooth_status() -> str:
                 text=True,
                 check=False,
             )
-            stdout = (result.stdout or "").replace("\\n", "\n")
+            stdout = (result.stdout or "").replace("\n", "\n")
             output = stdout + "\n" + (getattr(result, "stderr", "") or "")
             if re.fullmatch(r"\s*1\s*", stdout):
                 return "Bluetooth: Enabled"
@@ -2758,7 +2758,7 @@ def get_file_info(path: str) -> str:
     kind = "directory" if target.is_dir() else "file" if target.is_file() else "other"
     size = target.stat().st_size
     relative = target.relative_to(_filesystem_root())
-    return f"Path: {relative}\\nType: {kind}\\nSize: {size} bytes"
+    return f"Path: {relative}\nType: {kind}\nSize: {size} bytes"
 
 
 def get_file_access_time(path: str) -> str:
