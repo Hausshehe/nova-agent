@@ -183,3 +183,22 @@ class VerifiedAndroidExperienceTests(unittest.TestCase):
             "['",
         )
         open_url.assert_not_called()
+
+
+class VerifiedStrategySelectionTests(unittest.TestCase):
+    def test_generic_verified_strategy_selection_uses_existing_learning(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = Path(temp_dir) / "experiences.json"
+            store.write_text(json.dumps([{"request": "recover a failed network check", "strategy": "retry_safe", "domain": "general", "status": "VERIFIED", "evidence": "Verification: VERIFIED"}]), encoding="utf-8")
+            with patch("gemini_agent.learning._experience_path", return_value=store):
+                from gemini_agent.learning import select_verified_strategy
+                result = select_verified_strategy("recover a failed network check", ["fallback_probe", "retry_safe"])
+        self.assertIn("Verified strategy selection: retry_safe", result)
+        self.assertIn("Safety boundary: selection is a preference only", result)
+
+    def test_client_routes_verified_strategy_selection_locally(self):
+        with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"}, clear=True), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask('Select verified strategy for request "recover a failed network check" candidates "fallback_probe, retry_safe". Do not execute any strategy.')
+        self.assertIn("Verified strategy selection:", result)
+        open_url.assert_not_called()
