@@ -66,18 +66,11 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_unnamed_newly_generated_capability_routes_to_generated_wrapper(self):
         response = {
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "id": "generated-call",
-                        "type": "function",
-                        "function": {
-                            "name": "camera_shutter",
-                            "arguments": "{}",
-                        },
-                    }]
-                }
-            }]
+            "choices": [{"message": {"tool_calls": [{
+                "id": "generated-call",
+                "type": "function",
+                "function": {"name": "camera_shutter", "arguments": "{}"},
+            }]}}]
         }
 
         def generated_camera_capability():
@@ -89,8 +82,7 @@ class CloudflareClientTests(unittest.TestCase):
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
-            "urllib.request.urlopen",
-            return_value=FakeResponse(response),
+            "urllib.request.urlopen", return_value=FakeResponse(response)
         ) as open_url, patch.dict(
             "gemini_agent.client.TOOL_HANDLERS",
             {"camera_shutter": generated_camera_capability},
@@ -1243,3 +1235,200 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_move_directory_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the move_directory tool to move archive to moved/archive.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["move_directory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "move_directory"}})
+
+    def test_copy_directory_fallback_executes_when_cloudflare_returns_no_tool_call(self):
+        first_response = {"choices": [{"message": {"content": None, "tool_calls": []}}]}
+        final_response = {"choices": [{"message": {"content": "Copied successfully."}}]}
+        calls = []
+
+        def copy_directory(path, destination):
+            calls.append((path, destination))
+            return f"Copied directory {path} to {destination}"
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(first_response), FakeResponse(final_response)],
+        ):
+            client = GeminiClient(tool_handlers={"copy_directory": copy_directory})
+            answer = client.ask(
+                "Use the copy_directory tool to copy copy-dir-test to copy-dir-test-copied."
+            )
+
+        self.assertEqual(answer, "Copied successfully.")
+        self.assertEqual(calls, [("copy-dir-test", "copy-dir-test-copied")])
+        self.assertEqual(client.last_tool_calls[0]["name"], "copy_directory")
+
+    def test_copy_directory_explicit_request_overrides_wrong_native_arguments(self):
+        first_response = {"choices": [{"message": {
+            "content": None,
+            "tool_calls": [{
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                    "name": "copy_directory",
+                    "arguments": {"path": ".", "destination": "copy-dir-test-copied"},
+                },
+            }],
+        }}]}
+        final_response = {"choices": [{"message": {"content": "Copied successfully."}}]}
+        calls = []
+
+        def copy_directory(path, destination):
+            calls.append((path, destination))
+            return f"Copied directory {path} to {destination}"
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(first_response), FakeResponse(final_response)],
+        ):
+            client = GeminiClient(tool_handlers={"copy_directory": copy_directory})
+            answer = client.ask(
+                "Use the copy_directory tool to copy copy-dir-test to copy-dir-test-copied."
+            )
+
+        self.assertEqual(answer, "Copied successfully.")
+        self.assertEqual(calls, [("copy-dir-test", "copy-dir-test-copied")])
+
+    def test_copy_directory_tool_is_selected(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the copy_directory tool to copy archive to copied/archive.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["copy_directory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "copy_directory"}})
+
+    def test_create_directory_alias_selects_make_directory(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the create_directory tool to create archive-test/nested.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["make_directory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "make_directory"}})
+
+    def test_edit_text_file_alias_selects_edit_file(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the edit_text_file tool to edit notes.txt.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["edit_file"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "edit_file"}})
+
+    def test_delete_directory_alias_selects_remove_directory(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the delete_directory tool to delete archive-test/nested.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["remove_directory"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "remove_directory"}})
+
+    def test_read_text_file_alias_selects_read_file(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the read_text_file tool to read README.md.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["read_file"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "read_file"}})
+
+    def test_list_directory_recursive_explicit_selection(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Use the list_directory_recursive tool to inspect the current directory.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual([t["function"]["name"] for t in sent["tools"]], ["list_directory_recursive"])
+        self.assertEqual(sent["tool_choice"], {"type": "function", "function": {"name": "list_directory_recursive"}})
+
+    def test_filesystem_request_requires_tool(self):
+        response = {"choices": [{"message": {"content": "ok"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", return_value=FakeResponse(response)) as open_url:
+            GeminiClient().ask("Please read this file.")
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(sent["tool_choice"], "required")
+
+    def test_accepts_decoded_tool_arguments(self):
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": {"expression": "12 * 7"},
+                        },
+                    }],
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "84"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ):
+            self.assertEqual(GeminiClient().ask("Calculate 12 * 7."), "84")
+
+    def test_cloudflare_http_error(self):
+        error = urllib.error.HTTPError(
+            "https://example.test", 400, "bad request", {},
+            io.BytesIO(b'{"error":{"message":"bad"}}'),
+        )
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, r"Cloudflare API error \(400\)"):
+                GeminiClient().ask("Hello")
+
+
+if __name__ == "__main__":
+    unittest.main()
