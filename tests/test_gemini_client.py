@@ -997,6 +997,35 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("diagnosed calculator", result)
         self.assertEqual(client.last_tool_calls[0]["name"], "diagnose_capability_failure")
         open_url.assert_not_called()
+    def test_explicit_repair_candidate_selection_is_read_only_and_deterministic(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.client.TOOL_HANDLERS",
+            {
+                **__import__("gemini_agent.tools", fromlist=["TOOL_HANDLERS"]).TOOL_HANDLERS,
+                "select_capability_repair_candidate": lambda capability, diagnosis: (
+                    f"selected {capability}: {diagnosis}"
+                ),
+            },
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Select a repair candidate for the existing calculator capability after "
+                "this read-only diagnosis: the calculator is locally registered, its "
+                "handler is present and callable, its implementation class is LOCAL, "
+                "and the recovery decision is OBSERVE_AND_ANALYZE. Treat the supplied "
+                "failure evidence as genuinely FAILED: the calculator returned an "
+                "incorrect result for a valid arithmetic request. Use read-only evidence "
+                "only. Do not execute the calculator. Do not modify code, files, or "
+                "device state."
+            )
+        self.assertIn("selected calculator", result)
+        self.assertEqual(client.last_tool_calls[0]["name"], "select_capability_repair_candidate")
+        open_url.assert_not_called()
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
