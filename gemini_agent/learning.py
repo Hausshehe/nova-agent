@@ -94,8 +94,8 @@ def record_verified_failure(request: str, strategy: str, failure: str, domain: s
         raise ValueError("Failure evidence cannot be empty.")
     if not isinstance(domain, str) or not domain.strip():
         raise ValueError("Experience domain cannot be empty.")
-    if not re.search(r"(?:Postcondition|Verification|Post-action verification|Outcome)\s*:\s*FAILED\b", failure, re.IGNORECASE):
-        return "Failure not learned: failure is not explicitly VERIFIED."
+    if not re.search(r"(?:Postcondition|Verification|Post-action verification|Outcome)\s*:\s*FAILED\b|\bTool error\s*:", failure, re.IGNORECASE):
+        return "Failure not learned: failure is not explicitly FAILED."
     event = {
         "request": request.strip()[:_MAX_TEXT],
         "strategy": strategy.strip()[:_MAX_TEXT],
