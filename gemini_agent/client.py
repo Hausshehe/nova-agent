@@ -2964,7 +2964,9 @@ class GeminiClient:
                         )
                         self.goal_state.progress_status = observation.status
                         self.goal_state.progress_reason = observation.reason
-                        completion_evidence = "\n".join(self.goal_state.evidence)
+                        completion_evidence = "\n".join(
+                            [*self.goal_state.evidence, f"Observed tool: {local_name}"]
+                        )
                         completion = verify_goal_completion(
                             self.goal_state.goal,
                             self.goal_state.success_condition,
