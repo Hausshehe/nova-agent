@@ -628,6 +628,53 @@ class CloudflareClientTests(unittest.TestCase):
             domain="general",
         )
 
+    def test_malformed_run_command_arguments_still_reach_bounded_recovery(self):
+        tool_response = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "malformed-run-command",
+                        "type": "function",
+                        "function": {
+                            "name": "run_command",
+                            "arguments": "not-json",
+                        },
+                    }]
+                }
+            }]
+        }
+        final_response = {"choices": [{"message": {"content": "recovery complete"}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+        ), patch(
+            "gemini_agent.tools.run_command",
+            side_effect=ValueError("Command is not allowed: dumpsys"),
+        ) as run_command:
+            client = GeminiClient()
+            client.tool_handlers["run_command"] = run_command
+            client.tool_handlers["diagnose_command_failure"] = (
+                lambda command, error: "Diagnosis: bounded failure."
+            )
+            client.tool_handlers["recover_command"] = (
+                lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded."
+            )
+            result = client.ask(
+                'Use run_command with command "dumpsys -l" and expected text "activity".'
+            )
+
+        self.assertEqual(result, "recovery complete")
+        run_command.assert_not_called()
+        trace = client.last_tool_calls[-1]
+        self.assertEqual(trace["name"], "run_command")
+        self.assertIn("Automatic tool recovery:", trace["result"])
+        self.assertIn("Command is not allowed: dumpsys", trace["result"])
+        self.assertIn("Outcome: VERIFIED", trace["result"])
+
     def test_compound_run_command_recovery_learning_executes_explicit_command_locally(self):
         request = (
             'First record a verified experience for request "recover a failed Android diagnostic check" '
