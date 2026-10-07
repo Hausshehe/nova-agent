@@ -67,11 +67,14 @@ def verify_goal_completion(
     # The goal can establish the subject being checked, while the evidence
     # must supply the observed state. This keeps completion generic without
     # requiring tool output to repeat the goal wording verbatim.
-    contextual_evidence_terms = evidence_terms | goal_terms
-    if condition_terms and condition_terms.issubset(contextual_evidence_terms) and evidence_terms & condition_terms:
+    required_evidence_terms = condition_terms - goal_terms
+    if (
+        required_evidence_terms
+        and required_evidence_terms.issubset(evidence_terms)
+    ):
         return GoalCompletionObservation(
             "VERIFIED",
-            "Observed evidence, together with the goal subject, establishes every substantive success-condition term.",
+            "Observed evidence establishes every success-condition term not already supplied by the goal subject.",
         )
 
     return GoalCompletionObservation(
