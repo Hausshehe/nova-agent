@@ -52,6 +52,15 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "INCONCLUSIVE")
 
+    def test_ordered_goal_verifies_when_both_sides_are_observed(self):
+        result = verify_goal_completion(
+            "attempt the unavailable command and report the current date",
+            "the current date is successfully reported after the unavailable command attempt",
+            "Goal step attempted: run_command nova-missing-command\n"
+            "2026-10-08T00:17:34+03:00",
+        )
+        self.assertEqual(result.status, "VERIFIED")
+
     def test_explicit_failure_fails_goal(self):
         result = verify_goal_completion(
             "check the device battery",
