@@ -3044,10 +3044,15 @@ class GeminiClient:
 
                     if self.goal_state is not None:
                         self.goal_state.add_evidence(str(tool_result))
+                        bounded_observation_evidence = (
+                            self.goal_state.evidence[-1]
+                            if self.goal_state.evidence
+                            else str(tool_result)[:512]
+                        )
                         observation = observe_goal_progress(
                             self.goal_state.goal,
                             self.goal_state.success_condition,
-                            str(tool_result),
+                            bounded_observation_evidence,
                         )
                         self.goal_state.progress_status = observation.status
                         self.goal_state.progress_reason = observation.reason
