@@ -2550,7 +2550,7 @@ class GeminiClient:
                             )
                             expected = ""
                             expected_match = re.search(
-                                r"expected(?:\\s+text|\\s+postcondition)?(?:\\s+is|\\s*[:=])?\\s*[\\"\']([^\\"\']+)[\\"\']",
+                                r"expected(?:\s+text|\s+postcondition)?(?:\s+is|\s*[:=])?\s*['\"]([^'\"]+)['\"]",
                                 request_text,
                                 re.IGNORECASE,
                             )
