@@ -2219,6 +2219,32 @@ _MAX_COMMAND_OUTPUT_BYTES = 4096
 _ROOT_COMMAND_TIMEOUT_SECONDS = 5
 _ROOT_COMMAND_OUTPUT_BYTES = 4096
 
+
+def _is_safe_python_exit_probe(arguments: tuple[str, ...]) -> bool:
+    """Allow only a bounded Python probe that can terminate without side effects."""
+    if len(arguments) != 2 or arguments[0] != "-c":
+        return False
+    source = arguments[1]
+    try:
+        tree = ast.parse(source, mode="exec")
+    except SyntaxError:
+        return False
+    if len(tree.body) != 2:
+        return False
+    import_node, exit_node = tree.body
+    if not isinstance(import_node, ast.Import):
+        return False
+    if len(import_node.names) != 1 or import_node.names[0].name != "sys" or import_node.names[0].asname is not None:
+        return False
+    if not isinstance(exit_node, ast.Expr) or not isinstance(exit_node.value, ast.Call):
+        return False
+    call = exit_node.value
+    if not isinstance(call.func, ast.Attribute) or not isinstance(call.func.value, ast.Name):
+        return False
+    if call.func.value.id != "sys" or call.func.attr != "exit" or len(call.args) != 1 or call.keywords:
+        return False
+    return isinstance(call.args[0], ast.Constant) and type(call.args[0].value) is int
+
 _ROOT_DIAGNOSTIC_PATTERNS = (
     re.compile(r"^command\s+-v\s+[^\s]+$"),
     re.compile(r"^which\s+[^\s]+$"),
@@ -2323,7 +2349,8 @@ def run_command(command: str) -> str:
             raise ValueError(f"Executable path is not the discovered path: {parts[0]}")
     arguments = tuple(parts[1:])
     if arguments not in _RUN_COMMAND_ALLOWED[executable]:
-        raise ValueError(f"Arguments are not allowed for {executable}.")
+        if not (executable in {"python", "python3"} and _is_safe_python_exit_probe(arguments)):
+            raise ValueError(f"Arguments are not allowed for {executable}.")
     try:
         completed = subprocess.run(
             parts,
