@@ -80,6 +80,8 @@ def verify_goal_completion(
             or stripped_line.startswith("Success condition:")
             or stripped_line.startswith("The runtime state is ")
             or stripped_line.startswith("Any tool outcome must be observed as goal evidence;")
+            or stripped_line.startswith("Observed tool:")
+            or stripped_line.startswith("Observed recovery for:")
         ):
             continue
         evidence_lines.append(line)
