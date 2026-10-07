@@ -85,7 +85,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
             {
                 "choices": [{
                     "message": {
-                        "content": "Goal steps completed.",
+                        "content": "Goal steps completed: nova-missing-command was attempted.",
                     }
                 }]
             },
