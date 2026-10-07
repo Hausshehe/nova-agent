@@ -3062,8 +3062,7 @@ class GeminiClient:
                             + "\\nRuntime goal status: "
                             + self.goal_state.status
                         )
-                        if self.goal_state.status == "VERIFIED":
-                            return str(tool_result)
+                        goal_verified = self.goal_state.status == "VERIFIED"
 
 
                     trace = {"name": local_name, "args": args, "result": tool_result}
@@ -3088,6 +3087,9 @@ class GeminiClient:
                     if "expression" in args:
                         trace["expression"] = str(args["expression"])
                     self.last_tool_calls.append(trace)
+
+                    if self.goal_state is not None and self.goal_state.status == "VERIFIED":
+                        return str(tool_result)
 
                     payload["messages"].append({
                         "role": "tool",
