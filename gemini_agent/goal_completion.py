@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 _MAX_TEXT = 512
+_MAX_EVIDENCE = 4096
 
 _STOP_WORDS = {
     "a", "an", "and", "are", "be", "been", "being", "by", "current", "for",
@@ -59,7 +60,11 @@ def verify_goal_completion(
     ):
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{label} cannot be empty.")
-        if len(value.strip()) > _MAX_TEXT:
+        if label == "Evidence":
+            limit = _MAX_EVIDENCE
+        else:
+            limit = _MAX_TEXT
+        if len(value.strip()) > limit:
             raise ValueError(f"{label} is too long.")
 
     normalized = evidence.strip()
