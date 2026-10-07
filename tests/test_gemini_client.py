@@ -694,7 +694,7 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertGreaterEqual(record.call_count, 2)
         record.assert_any_call(
             "recover a failed Android diagnostic check",
-            "run_command",
+            "recover_command",
             "Outcome: VERIFIED\nRecovery succeeded.",
             domain="general",
         )
