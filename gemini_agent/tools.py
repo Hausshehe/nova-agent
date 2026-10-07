@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
 from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
+from gemini_agent.goal_contract import establish_goal_contract
 
 
 _OPERATORS = {
@@ -1264,6 +1265,11 @@ def recover_android_mechanism(
         recovery = replan_android_mechanism(request, mechanism)
         return diagnosis + "\nRecovery action:\n" + recovery
     return diagnosis + "\nRecovery action: NONE."
+
+def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
+    """Establish an explicit bounded goal and completion condition without executing anything."""
+    return establish_goal_contract(goal, success_condition)
+
 
 def record_verified_experience_tool(request: str, strategy: str, verification: str, domain: str = "general") -> str:
     """Persist a verified experience through the generic learning layer."""
@@ -4242,6 +4248,14 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "establish_goal_contract",
+        "description": "Establish the explicit goal and success condition for a task. This records the completion contract only and performs no action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING", "description": "The user's intended outcome."},
+            "success_condition": {"type": "STRING", "description": "The observable condition that proves the goal itself is complete."},
+        }, "required": ["goal", "success_condition"]},
+    },
+    {
         "name": "autonomously_repair_capability",
         "description": "Run one bounded generic self-repair workflow from failure diagnosis through repair, independent verification, persisted evidence analysis, and acceptance or safe stop. The workflow executes the repaired capability at most once.",
         "parameters": {
@@ -5393,6 +5407,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "discover_android_ui_actions": discover_android_ui_actions,
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
+    "establish_goal_contract": establish_goal_contract_tool,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
