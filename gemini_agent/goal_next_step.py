@@ -100,7 +100,7 @@ def select_goal_next_step(
             r"\b(?:failed|failure|error|blocked|recovery)\b",
             evidence,
             re.I,
-        ) and re.search(r"\b(?:recover|retry|diagnos|repair|replan)\b", candidate, re.I):
+        ) and re.search(r"(?:recover|retry|diagnos|repair|replan)", candidate, re.I):
             score -= 3
         scored.append((score, -index, candidate))
     best_score, _, best = max(scored)
