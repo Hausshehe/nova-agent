@@ -28,9 +28,22 @@ class GoalCompletionObservation:
 def _terms(value: str) -> set[str]:
     return {
         token
-        for token in re.findall(r"[a-z0-9_]+", value.lower())
+        for token in re.findall(r"[a-z0-9_]+", value.lower().replace("_", " "))
         if token not in _STOP_WORDS and len(token) > 2
     }
+
+
+def _evidence_matches_clause(clause_terms: set[str], evidence_terms: set[str]) -> bool:
+    if clause_terms & evidence_terms:
+        return True
+    for clause_term in clause_terms:
+        for evidence_term in evidence_terms:
+            if len(clause_term) >= 4 and len(evidence_term) >= 4 and (
+                clause_term.startswith(evidence_term)
+                or evidence_term.startswith(clause_term)
+            ):
+                return True
+    return False
 
 
 def verify_goal_completion(
@@ -77,8 +90,7 @@ def verify_goal_completion(
         clause_terms = _terms(clause)
         if not clause_terms:
             continue
-        observed_clause_terms = clause_terms & evidence_terms
-        if not observed_clause_terms:
+        if not _evidence_matches_clause(clause_terms, evidence_terms):
             return GoalCompletionObservation(
                 "INCONCLUSIVE",
                 "At least one success-condition clause has no observed evidence beyond wording already present in the goal.",
