@@ -1,4 +1,4 @@
-""""Bounded next-step selection for Nova's 178 goal loop."""
+"""Bounded next-step selection for Nova's 178 goal loop."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class GoalNextStep:
 
 def _terms(value: str) -> set[str]:
     return {
-        token for token in re.findall(r"[a-z0-9_]+", value.lower())
+        token for token in re.findall(r"[a-z0-9]+", value.lower().replace("_", " "))
         if token not in _STOP_WORDS and len(token) > 2
     }
 
