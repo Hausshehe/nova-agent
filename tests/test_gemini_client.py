@@ -163,9 +163,16 @@ class CloudflareClientTests(unittest.TestCase):
                 "recover_command": lambda command, expected: "Outcome: FAILED\\nAttempts: 2",
             })
             answer = client.ask(
-                'Execute command "python -c "import sys; sys.exit(1)"". '
-                'If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
+                'Use run_command to execute the safe command "python -c "import sys; sys.exit(1)"". '
+                'If that execution returns a nonzero exit code, automatically diagnose the failed run_command '
+                'outcome and then hand it to the existing bounded recover_command path. '
+                'Do not call recover_command as the initial execution strategy. '
+                'Do not modify device state. Expected postcondition is "Python".'
             )
+        self.assertEqual(
+            client.last_tool_calls[0]["args"]["command"],
+            "python -c " + '"import sys; sys.exit(1)"',
+        )
         self.assertEqual(
             client.last_tool_calls[-1]["result"],
             "Automatic command recovery:\\nDiagnosis: transient command failure.\\nOutcome: FAILED\\nAttempts: 2",
