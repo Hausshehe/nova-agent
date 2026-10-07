@@ -3045,6 +3045,20 @@ class GeminiClient:
                 if isinstance(forced, dict):
                     forced_function = forced.get("function") or {}
                     forced_cloud_name = str(forced_function.get("name", "")).strip()
+                if not forced_cloud_name:
+                    for trace in reversed(self.last_tool_calls):
+                        if trace.get("name") == "select_goal_next_step":
+                            match = re.search(
+                                r"Next step:\s*([A-Za-z_][A-Za-z0-9_]*)",
+                                str(trace.get("result", "")),
+                            )
+                            if match:
+                                selected_local_name = match.group(1)
+                                forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                                    selected_local_name,
+                                    selected_local_name,
+                                )
+                            break
                 if not forced_cloud_name and len(payload.get("tools", [])) == 1:
                     forced_cloud_name = str(
                         payload["tools"][0].get("function", {}).get("name", "")
