@@ -235,6 +235,28 @@ class CloudflareClientTests(unittest.TestCase):
             domain="general",
         )
 
+    def test_failed_strategy_outcome_is_automatically_learned_for_future_avoidance(self):
+        client = object.__new__(GeminiClient)
+        client.tool_handlers = {
+            "diagnose_command_failure": lambda command, error: "Diagnosis: bounded failure.",
+            "recover_command": lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded.",
+        }
+        with patch("gemini_agent.learning.record_verified_failure", return_value="Verified failed experience learned.") as record:
+            result = client._coordinate_tool_failure(
+                local_name="run_command",
+                args={"command": "dumpsys -l"},
+                tool_result="Tool error: Command is not allowed: dumpsys\nOutcome: FAILED",
+                request_text="Recover a failed Android diagnostic check.",
+            )
+        self.assertIn("Failure learning:", result)
+        self.assertIn("Verified failed experience learned.", result)
+        record.assert_called_once_with(
+            "Recover a failed Android diagnostic check.",
+            "run_command",
+            "Tool error: Command is not allowed: dumpsys\nOutcome: FAILED",
+            domain="general",
+        )
+
     def test_generic_failed_tool_stops_safely_without_unbounded_recovery(self):
         client = object.__new__(GeminiClient)
         client.tool_handlers = {}
