@@ -52,6 +52,65 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertEqual(snapshot["progress_status"], "PROGRESS")
         self.assertEqual(len(snapshot["evidence"]), 1)
 
+    def test_active_goal_selects_and_executes_one_bounded_next_step(self):
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "goal-next-step",
+                            "type": "function",
+                            "function": {
+                                "name": "get_system_battery_status",
+                                "arguments": "{}",
+                            },
+                        }]
+                    }
+                }]
+            },
+            {
+                "choices": [{"message": {"content": "Battery goal verified."}}],
+            },
+        ]
+        calls = {"count": 0}
+
+        def battery():
+            calls["count"] += 1
+            return "Level: 82% Status: Charging Power source: Battery"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            response = _FakeResponse(responses[calls["count"]])
+            return response
+
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=urlopen,
+        ):
+            client = GeminiClient(tool_handlers={"get_system_battery_status": battery})
+            result = client.ask(
+                'Establish a goal contract for "check the device battery" with success condition '
+                '"the current battery status is successfully reported". '
+                "Pursue this goal autonomously. Do not ask me to name a tool."
+            )
+
+        self.assertEqual(calls["count"], 1)
+        self.assertIn("Goal progress observation: PROGRESS", result)
+        self.assertIn("Goal completion verification: VERIFIED", result)
+        self.assertIsNotNone(client.goal_state)
+        self.assertEqual(client.goal_state.status, "VERIFIED")
+        self.assertTrue(
+            any(call["name"] == "select_goal_next_step" for call in client.last_tool_calls)
+        )
+
+
     def test_goal_contract_reaches_verified_completion_from_full_evidence(self):
         response = {"choices": [{"message": {"content": "observed"}}]}
         with patch.dict(
