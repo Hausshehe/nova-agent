@@ -288,7 +288,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
 
         def current_datetime():
             calls["datetime"] += 1
-            return "2026-10-07T20:00:00+03:00"
+            return "Current date/time: 2026-10-07T20:00:00+03:00"
 
         def urlopen(_request, timeout=180):
             del timeout
