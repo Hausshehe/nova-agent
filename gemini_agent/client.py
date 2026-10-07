@@ -2690,16 +2690,27 @@ class GeminiClient:
                         )
 
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                        if (
-                            local_name == "run_command"
-                            and str(args.get("command", "")).strip()
-                        ):
-                            tool_result = self._coordinate_tool_failure(
-                                local_name="run_command",
-                                args=args,
-                                tool_result=f"Tool error: {exc}",
-                                request_text=request_text,
-                            )
+                        if local_name == "run_command":
+                            recovery_args = dict(args)
+                            if not str(recovery_args.get("command", "")).strip():
+                                command_match = re.search(
+                                    r'\b(?:using\s+)?command\s+["\']([^"\']+)["\']',
+                                    request_text,
+                                    re.IGNORECASE,
+                                )
+                                if command_match:
+                                    recovery_args["command"] = command_match.group(1).strip()
+                            if str(recovery_args.get("command", "")).strip():
+                                args = recovery_args
+                                tool_result = self._coordinate_tool_failure(
+                                    local_name="run_command",
+                                    args=recovery_args,
+                                    tool_result=f"Tool error: {exc}",
+                                    request_text=request_text,
+                                )
+                            else:
+                                args = {}
+                                tool_result = f"Tool error: {exc}"
                         else:
                             args = {}
                             tool_result = f"Tool error: {exc}"
