@@ -686,8 +686,8 @@ class GeminiClient:
         """Classify one failed tool outcome and hand it to an existing bounded recovery path."""
         result = str(tool_result)
         failed = bool(
-            re.search(r"\\bExit code:\\s*[1-9]\\d*\\b", result)
-            or re.search(r"\\b(?:Tool error|Outcome):\\s*(?:FAILED|failure)\\b", result, re.IGNORECASE)
+            re.search(r"\bExit code:\s*[1-9]\d*\b", result)
+            or re.search(r"\b(?:Tool error|Outcome):\s*(?:FAILED|failure)\b", result, re.IGNORECASE)
         )
         if not failed:
             return result
@@ -696,18 +696,18 @@ class GeminiClient:
             diagnosis = self.tool_handlers["diagnose_command_failure"](command=command, error=result)
             expected = ""
             expected_match = re.search(
-                r"expected(?:\\s+text|\\s+postcondition)?(?:\\s+is|\\s*[:=])?\\s*['\\\"]([^'\\\"]+)['\\\"]",
+                r"expected(?:\s+text|\s+postcondition)?(?:\s+is|\s*[:=])?\s*['\"]([^'\"]+)['\"]",
                 request_text,
                 re.IGNORECASE,
             )
             if expected_match:
                 expected = expected_match.group(1).strip()
             recovery = str(self.tool_handlers["recover_command"](command=command, expected=expected))
-            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\\n{recovery}"
+            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\n{recovery}"
             return (
-                "Automatic tool recovery:\\n"
-                f"Failed tool: {local_name}\\n"
-                f"Original tool result:\\n{result}\\n"
+                "Automatic tool recovery:\n"
+                f"Failed tool: {local_name}\n"
+                f"Original tool result:\n{result}\n"
                 f"{diagnostic_report}"
             )
         if local_name in {"execute_android_mechanism", "execute_validated_android_mechanism"}:
@@ -717,19 +717,20 @@ class GeminiClient:
                     request=request_text, mechanism=mechanism, verification=result
                 ))
                 return (
-                    "Automatic tool recovery:\\n"
-                    f"Failed tool: {local_name}\\n"
-                    f"Original tool result:\\n{result}\\n"
+                    "Automatic tool recovery:\n"
+                    f"Failed tool: {local_name}\n"
+                    f"Original tool result:\n{result}\n"
                     f"{recovery}"
                 )
         return (
-            "Automatic tool recovery:\\n"
-            f"Failed tool: {local_name}\\n"
-            f"Original tool result:\\n{result}\\n"
-            "Recovery: no bounded recovery path is registered for this tool.\\n"
-            "Outcome: FAILED\\n"
+            "Automatic tool recovery:\n"
+            f"Failed tool: {local_name}\n"
+            f"Original tool result:\n{result}\n"
+            "Recovery: no bounded recovery path is registered for this tool.\n"
+            "Outcome: FAILED\n"
             "Action: stop safely."
         )
+
 
     def _generate_cloudflare(
         self,
