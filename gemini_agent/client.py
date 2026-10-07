@@ -841,6 +841,7 @@ class GeminiClient:
                 break
         prompt = request_text
         prompt_text = request_text
+        goal_replan_notes: list[str] = []
 
         # Verified experience is part of Nova's normal decision loop. When a task
         # presents multiple candidate strategies, deterministically apply the existing
@@ -3214,7 +3215,11 @@ class GeminiClient:
                     self.last_tool_calls.append(trace)
 
                     if self.goal_state is not None and self.goal_state.status == "VERIFIED":
-                        return str(tool_result)
+                        final_result = str(tool_result)
+                        for note in goal_replan_notes:
+                            if note not in final_result:
+                                final_result += "\n" + note
+                        return final_result
 
                     payload["messages"].append({
                         "role": "tool",
@@ -3275,14 +3280,16 @@ class GeminiClient:
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
                                 if goal_replan_pending:
+                                    replan_note = (
+                                        "Goal replan: "
+                                        f"Selected alternative step {next_action} after the failed step."
+                                    )
+                                    goal_replan_notes.append(replan_note)
                                     tool_result = str(tool_result).replace(
                                         "Runtime goal status: FAILED",
                                         "Runtime goal status: ACTIVE",
                                     )
-                                    tool_result += (
-                                        "\nGoal replan: "
-                                        f"Selected alternative step {next_action} after the failed step."
-                                    )
+                                    tool_result += "\n" + replan_note
                                 self.last_tool_calls.append({
                                     "name": "select_goal_next_step",
                                     "args": {
