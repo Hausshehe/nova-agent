@@ -9,6 +9,7 @@ import urllib.request
 from collections.abc import Callable
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
+from gemini_agent.goal_state import GoalState, start_goal_state
 from gemini_agent.tools import analyze_capability_history, autonomously_repair_capability, plan_capability_extension, send_android_keyevent, send_android_intent, resolve_android_intent, discover_android_ui_actions, rank_android_mechanism_candidates, validate_android_mechanism, select_capability_repair_candidate, apply_capability_repair, execute_validated_android_mechanism, execute_android_mechanism, recover_android_mechanism, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RECOVER_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_WIFI_STATUS_DECLARATION, GET_BLUETOOTH_STATUS_DECLARATION, GET_AIRPLANE_MODE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_BRIGHTNESS_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_CPU_USAGE_DECLARATION, GET_SYSTEM_MEMORY_USAGE_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, LIST_PROCESSES_DECLARATION, RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
@@ -43,6 +44,7 @@ class GeminiClient:
 
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
+        self.goal_state: GoalState | None = None
 
     @staticmethod
     def _schema(parameters: dict) -> dict:
@@ -970,6 +972,37 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "establish_goal_contract":
+            goal_match = re.search(r"\bfor\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE)
+            success_match = re.search(
+                r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']",
+                request_text,
+                re.IGNORECASE,
+            )
+            if not goal_match or not success_match:
+                return "Establishing a goal contract requires a quoted goal and quoted success condition."
+            goal = goal_match.group(1).strip()
+            success_condition = success_match.group(1).strip()
+            result = str(
+                self.tool_handlers["establish_goal_contract"](
+                    goal=goal,
+                    success_condition=success_condition,
+                )
+            )
+            self.goal_state = start_goal_state(goal, success_condition)
+            result += (
+                "\nRuntime goal state: ACTIVE\n"
+                "Runtime evidence: 0 entries\n"
+                "Runtime state changed: Yes\n"
+                "Action executed: No"
+            )
+            self.last_tool_calls.append({
+                "name": requested_tool,
+                "args": {"goal": goal, "success_condition": success_condition},
+                "result": result,
+            })
+            return result
+
         if requested_tool == "select_verified_strategy_tool":
             request_match = re.search(r'(?:for|request)\s+(?:strategy\s+)?["\']([^"\']+)["\']', request_text, re.IGNORECASE)
             candidates_match = re.search(r'candidates?\s*(?::|=)?\s*(.+?)(?=\s+Do not|\s+Report|$)', request_text, re.IGNORECASE | re.DOTALL)
@@ -2748,6 +2781,9 @@ class GeminiClient:
                             args = {}
                             tool_result = f"Tool error: {exc}"
 
+                    if self.goal_state is not None:
+                        self.goal_state.add_evidence(str(tool_result))
+
                     trace = {"name": local_name, "args": args, "result": tool_result}
                     if (
                         selected_strategy
@@ -2934,6 +2970,7 @@ class GeminiClient:
         ]
         self.last_tool_calls = []
         self.last_grounding_sources = []
+        self.goal_state = None
         prompt_text = str(prompt)
         if "recover_command" in prompt_text.lower() and "expected postcondition" in prompt_text.lower():
             quoted = re.findall(r"`([^`]+)`", prompt_text)
