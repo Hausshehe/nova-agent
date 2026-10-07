@@ -719,9 +719,18 @@ class GeminiClient:
             if expected_match:
                 expected = expected_match.group(1).strip()
             recovery = str(self.tool_handlers["recover_command"](command=command, expected=expected))
+            failure_learning = ""
+            if re.search(r"\b(?:Exit code:\s*[1-9]\d*|Tool error\s*:|Outcome\s*:\s*FAILED)\b", result, re.IGNORECASE):
+                from gemini_agent.learning import record_verified_failure
+                failure_learning = record_verified_failure(
+                    learning_request or request_text,
+                    local_name,
+                    result,
+                    domain="general",
+                )
             learning_result = ""
             if re.search(r"(?:Post-action verification|Verification|Postcondition)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
-                from gemini_agent.learning import record_verified_experience
+                from gemini_agent.learning import record_verified_experience, record_verified_failure
                 learning_result = record_verified_experience(
                     learning_request or request_text,
                     "recover_command",
@@ -743,9 +752,18 @@ class GeminiClient:
                 recovery = str(self.tool_handlers["recover_android_mechanism"](
                     request=request_text, mechanism=mechanism, verification=result
                 ))
+                failure_learning = ""
+                if re.search(r"\b(?:Exit code:\s*[1-9]\d*|Tool error\s*:|Outcome\s*:\s*FAILED)\b", result, re.IGNORECASE):
+                    from gemini_agent.learning import record_verified_failure
+                    failure_learning = record_verified_failure(
+                        learning_request or request_text,
+                        local_name,
+                        result,
+                        domain="general",
+                    )
                 learning_result = ""
-                if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
-                    from gemini_agent.learning import record_verified_experience
+                if re.search(r"(?:Post-action verification|Verification|Postcondition)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
+                    from gemini_agent.learning import record_verified_experience, record_verified_failure
                     learning_result = record_verified_experience(
                         learning_request or request_text,
                         "recover_android_mechanism",
@@ -2732,7 +2750,7 @@ class GeminiClient:
                             re.IGNORECASE,
                         )
                     ):
-                        from gemini_agent.learning import record_verified_experience
+                        from gemini_agent.learning import record_verified_experience, record_verified_failure
                         learning_result = record_verified_experience(
                             strategy_goal,
                             selected_strategy,
