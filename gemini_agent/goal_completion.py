@@ -70,7 +70,7 @@ def verify_goal_completion(
     # that establish that particular conjunct.
     clauses = [
         clause
-        for clause in re.split(r"\\band\\b", success_condition, flags=re.IGNORECASE)
+        for clause in re.split(r"\band\b", success_condition, flags=re.IGNORECASE)
         if clause.strip()
     ]
     for clause in clauses:
