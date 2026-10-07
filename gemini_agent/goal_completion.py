@@ -40,16 +40,22 @@ def _terms(value: str) -> set[str]:
 
 
 def _evidence_matches_clause(clause_terms: set[str], evidence_terms: set[str]) -> bool:
-    if clause_terms & evidence_terms:
-        return True
+    # Every substantive term in a conjunct must be supported. Matching one
+    # word is insufficient for compound conditions such as "date after command".
     for clause_term in clause_terms:
-        for evidence_term in evidence_terms:
-            if len(clause_term) >= 4 and len(evidence_term) >= 4 and (
+        if clause_term in evidence_terms:
+            continue
+        if not any(
+            len(clause_term) >= 4
+            and len(evidence_term) >= 4
+            and (
                 clause_term.startswith(evidence_term)
                 or evidence_term.startswith(clause_term)
-            ):
-                return True
-    return False
+            )
+            for evidence_term in evidence_terms
+        ):
+            return False
+    return True
 
 
 def verify_goal_completion(
