@@ -3135,6 +3135,12 @@ class GeminiClient:
                             completion_evidence = "\n".join(
                                 [*normalized_step_evidence, recovery_result, f"Observed recovery for: {local_name}"]
                             )
+                        if len(completion_evidence) > 4096:
+                            completion_evidence = (
+                                completion_evidence[:2048]
+                                + "\n...\n"
+                                + completion_evidence[-2044:]
+                            )
                         completion = verify_goal_completion(
                             self.goal_state.goal,
                             self.goal_state.success_condition,
