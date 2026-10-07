@@ -39,13 +39,19 @@ def _terms(value: str) -> set[str]:
     return terms
 
 
-def _evidence_matches_clause(clause_terms: set[str], evidence_terms: set[str]) -> bool:
-    # Every substantive term in a conjunct must be supported. Matching one
-    # word is insufficient for compound conditions such as "date after command".
+def _evidence_matches_clause(
+    clause_terms: set[str],
+    evidence_terms: set[str],
+    context_terms: set[str] | None = None,
+) -> bool:
+    """Match a clause using observed evidence plus goal context, but require observation."""
+    context_terms = context_terms or set()
+    observed = 0
     for clause_term in clause_terms:
         if clause_term in evidence_terms:
+            observed += 1
             continue
-        if not any(
+        if any(
             len(clause_term) >= 4
             and len(evidence_term) >= 4
             and (
@@ -54,8 +60,12 @@ def _evidence_matches_clause(clause_terms: set[str], evidence_terms: set[str]) -
             )
             for evidence_term in evidence_terms
         ):
-            return False
-    return True
+            observed += 1
+            continue
+        if clause_term in context_terms:
+            continue
+        return False
+    return observed > 0
 
 
 def verify_goal_completion(
@@ -130,7 +140,25 @@ def verify_goal_completion(
         clause_terms = _terms(clause)
         if not clause_terms:
             continue
-        if not _evidence_matches_clause(clause_terms, evidence_terms):
+        ordered_parts = re.split(
+            r"\b(?:after|before|then)\b",
+            clause,
+            flags=re.IGNORECASE,
+        )
+        if len(ordered_parts) > 1:
+            for part in ordered_parts:
+                part_terms = _terms(part)
+                if part_terms and not _evidence_matches_clause(
+                    part_terms,
+                    evidence_terms,
+                    goal_terms,
+                ):
+                    return GoalCompletionObservation(
+                        "INCONCLUSIVE",
+                        "At least one ordered success-condition requirement lacks its own observed evidence.",
+                    )
+            continue
+        if not _evidence_matches_clause(clause_terms, evidence_terms, goal_terms):
             return GoalCompletionObservation(
                 "INCONCLUSIVE",
                 "At least one success-condition clause has no observed evidence beyond wording already present in the goal.",
