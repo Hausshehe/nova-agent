@@ -3065,11 +3065,17 @@ class GeminiClient:
                         recovery_result = recovery_match.group(1).strip() if recovery_match else ""
                         if not recovery_result:
                             verified_match = re.search(
-                                r"((?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b.*?)(?=\\\\n|\\n|$)",
+                                r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
                                 goal_result,
                                 re.IGNORECASE,
                             )
-                            recovery_result = verified_match.group(1).strip() if verified_match else ""
+                            if verified_match:
+                                recovery_result = goal_result[verified_match.start():]
+                                recovery_result = re.split(
+                                    r"(?:\\\\n|\\n|\\r?\\n)",
+                                    recovery_result,
+                                    maxsplit=1,
+                                )[0].strip()
                         recovery_verified = bool(
                             raw_tool_failed
                             and recovery_result
