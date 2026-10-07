@@ -2061,6 +2061,45 @@ class GeminiClient:
                         }]
                         native_tool_calls = False
 
+            if not tool_calls and goal_continuation_action:
+                # Nova already selected this bounded continuation action locally.
+                # If the provider returns an empty response, preserve that decision
+                # instead of treating the provider omission as the end of the goal.
+                selected_local_name = goal_continuation_action
+                selected_handler = self.tool_handlers.get(selected_local_name)
+                selected_declaration = next(
+                    (
+                        declaration
+                        for declaration in self.tool_declarations
+                        if isinstance(declaration, dict)
+                        and declaration.get("name") == selected_local_name
+                    ),
+                    None,
+                )
+                selected_arguments = {}
+                if selected_local_name == "run_command":
+                    command = self._extract_goal_command(
+                        self.goal_state.goal if self.goal_state is not None else ""
+                    )
+                    if command:
+                        selected_arguments = {"command": command}
+                required = (
+                    selected_declaration.get("parameters", {}).get("required", [])
+                    if selected_declaration else []
+                )
+                if selected_handler is not None and (not required or selected_arguments):
+                    tool_calls = [{
+                        "id": f"nova-selected-continuation-{loop_index}",
+                        "type": "function",
+                        "function": {
+                            "name": self._CLOUD_TOOL_NAMES.get(
+                                selected_local_name, selected_local_name
+                            ),
+                            "arguments": json.dumps(selected_arguments),
+                        },
+                    }]
+                    native_tool_calls = False
+
             if not tool_calls:
                 content = message.get("content")
                 if isinstance(content, str):
