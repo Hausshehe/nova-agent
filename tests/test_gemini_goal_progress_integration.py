@@ -48,7 +48,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertIn("Goal progress observation: PROGRESS", result)
         self.assertIsNotNone(client.goal_state)
         snapshot = client.goal_state.snapshot()
-        self.assertEqual(snapshot["status"], "ACTIVE")
+        self.assertEqual(snapshot["status"], "VERIFIED")
         self.assertEqual(snapshot["progress_status"], "PROGRESS")
         self.assertEqual(len(snapshot["evidence"]), 1)
 
