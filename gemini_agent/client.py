@@ -101,6 +101,21 @@ class GeminiClient:
             raise ValueError("Tool arguments must be a JSON object.")
         return parsed
 
+    @staticmethod
+    def _extract_goal_command(goal: str) -> str:
+        """Extract a bounded explicitly named command from a goal."""
+        text = str(goal).strip()
+        if not text:
+            return ""
+        match = re.search(
+            r"\bcommand\s+['\"]([^'\"]+)['\"]",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
+        return ""
+
     _CLOUD_TOOL_NAMES = {
         "read_text_file": "read_file",
         "create_directory": "make_directory",
@@ -1908,13 +1923,25 @@ class GeminiClient:
                         if forced_declaration
                         else []
                     )
-                    if forced_handler is not None and not required:
+                    forced_arguments = {}
+                    if forced_local_name == "run_command" and required:
+                        goal_text = (
+                            self.goal_state.goal
+                            if self.goal_state is not None
+                            else ""
+                        )
+                        command = self._extract_goal_command(goal_text)
+                        if command:
+                            forced_arguments = {"command": command}
+                    if forced_handler is not None and (
+                        not required or forced_arguments
+                    ):
                         tool_calls = [{
                             "id": f"nova-continuation-{loop_index}",
                             "type": "function",
                             "function": {
                                 "name": forced_cloud_name,
-                                "arguments": "{}",
+                                "arguments": json.dumps(forced_arguments),
                             },
                         }]
                         native_tool_calls = False
