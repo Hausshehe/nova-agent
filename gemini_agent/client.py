@@ -1030,17 +1030,18 @@ class GeminiClient:
             })
             continuation = re.search(r"\b(?:then|after that|next)\b", request_text, re.IGNORECASE)
             if not continuation:
-                return result
-            continuation_text = request_text[continuation.end():].strip()
-            continuation_contents = [{"role": "user", "parts": [{"text": continuation_text}]}]
-            next_tool = self._requested_local_tool(continuation_contents)
-            if not next_tool:
                 # The goal contract is established, but no explicit next tool was
                 # requested. Leave routing open so the goal-directed execution bridge
                 # can select the next bounded capability.
                 requested_tool = None
             else:
-                requested_tool = next_tool
+                continuation_text = request_text[continuation.end():].strip()
+                continuation_contents = [{"role": "user", "parts": [{"text": continuation_text}]}]
+                next_tool = self._requested_local_tool(continuation_contents)
+                if not next_tool:
+                    requested_tool = None
+                else:
+                    requested_tool = next_tool
             continuation_handler = self.tool_handlers.get(requested_tool)
             if continuation_handler is not None:
                 import inspect
