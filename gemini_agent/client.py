@@ -1510,39 +1510,6 @@ class GeminiClient:
                         "args": seed_args,
                         "result": seed_result,
                     })
-            # An explicit command is authoritative. Probe it locally first only
-            # when it is outside the normal run_command allowlist. Successful
-            # commands continue through the existing provider round so existing
-            # composition semantics remain unchanged. A bounded rejection is
-            # handed directly to the existing failure coordinator.
-            if selected_strategy == "run_command":
-                command_match = re.search(
-                    r'\b(?:using\s+)?command\s+["\']([^"\']+)["\']',
-                    request_text,
-                    re.IGNORECASE,
-                )
-                if command_match:
-                    selected_args = {"command": command_match.group(1).strip()}
-                    try:
-                        self.tool_handlers["run_command"](**selected_args)
-                    except (RuntimeError, ValueError) as exc:
-                        selected_result = self._coordinate_tool_failure(
-                            local_name="run_command",
-                            args=selected_args,
-                            tool_result=f"Tool error: {exc}",
-                            request_text=request_text,
-                        )
-                        self.last_tool_calls.append({
-                            "name": "run_command",
-                            "args": selected_args,
-                            "result": selected_result,
-                        })
-                        return (
-                            f"{selection}\n"
-                            "Selected strategy execution:\n"
-                            f"{selected_result}"
-                        )
-
             declarations = [
                 d for d in self.tool_declarations
                 if d["name"] == selected_strategy
@@ -2723,8 +2690,20 @@ class GeminiClient:
                         )
 
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                        args = {}
-                        tool_result = f"Tool error: {exc}"
+                        if (
+                            local_name == "run_command"
+                            and selected_strategy == "run_command"
+                            and str(args.get("command", "")).strip()
+                        ):
+                            tool_result = self._coordinate_tool_failure(
+                                local_name="run_command",
+                                args=args,
+                                tool_result=f"Tool error: {exc}",
+                                request_text=request_text,
+                            )
+                        else:
+                            args = {}
+                            tool_result = f"Tool error: {exc}"
 
                     trace = {"name": local_name, "args": args, "result": tool_result}
                     if (
