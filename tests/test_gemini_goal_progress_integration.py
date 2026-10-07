@@ -190,6 +190,79 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertGreaterEqual(len(selected), 2)
         self.assertIn("current_datetime", selected[-1])
 
+
+    def test_active_goal_continues_after_verified_recovery(self):
+        responses = [
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "failed-command-step",
+                    "type": "function",
+                    "function": {"name": "run_command", "arguments": "{\"command\":\"probe\"}"},
+                }]}}]
+            },
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "datetime-after-recovery",
+                    "type": "function",
+                    "function": {"name": "current_datetime", "arguments": "{}"},
+                }]}}]
+            },
+        ]
+        calls = {"run": 0, "datetime": 0, "round": 0}
+
+        def run_command(command):
+            calls["run"] += 1
+            return "Tool error: command failed"
+
+        def diagnose_command_failure(command, error):
+            return "Diagnosis: bounded recovery is available."
+
+        def recover_command(command, expected):
+            return "Postcondition: VERIFIED: command result successfully reported"
+
+        def current_datetime():
+            calls["datetime"] += 1
+            return "2026-10-07T20:00:00+03:00"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            response = _FakeResponse(responses[calls["round"]])
+            calls["round"] += 1
+            return response
+
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=urlopen,
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "run_command": run_command,
+                    "diagnose_command_failure": diagnose_command_failure,
+                    "recover_command": recover_command,
+                    "current_datetime": current_datetime,
+                }
+            )
+            result = client.ask(
+                'Establish a goal contract for "check the command result and current date" with success condition '
+                '"the command result and current date are successfully reported". '
+                "Pursue this goal autonomously without asking me to name a tool."
+            )
+
+        self.assertEqual(calls["run"], 1)
+        self.assertEqual(calls["datetime"], 1)
+        self.assertEqual(calls["round"], 2)
+        self.assertEqual(client.goal_state.status, "VERIFIED")
+        self.assertIn("- run_command: FAILED", result)
+        self.assertIn("- current_datetime: VERIFIED", result)
+        self.assertNotIn("Runtime goal status: FAILED", result)
+
     def test_provider_omitting_forced_continuation_call_is_recovered_locally(self):
         responses = [
             {
