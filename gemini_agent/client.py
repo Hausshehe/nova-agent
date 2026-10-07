@@ -1787,7 +1787,7 @@ class GeminiClient:
             # For the autonomous run_command step, let the provider emit the
             # required argument normally instead of forcing a function call that
             # can trigger a provider-side empty-argument parser failure.
-            if goal_selected_action == "run_command":
+            if goal_selected_action == "run_command" or self._CLOUD_TOOL_NAMES.get(goal_selected_action) == "run_root_command":
                 payload["tool_choice"] = "auto"
             else:
                 payload["tool_choice"] = {
