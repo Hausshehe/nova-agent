@@ -3160,15 +3160,27 @@ class GeminiClient:
                                     ),
                                 })
                                 next_cloud_name = self._CLOUD_TOOL_NAMES.get(next_action, next_action)
-                                payload["tools"] = [
-                                    tool
-                                    for tool in payload.get("tools", self.tool_declarations)
-                                    if tool.get("function", {}).get("name") == next_cloud_name
-                                ]
-                                payload["tool_choice"] = {
-                                    "type": "function",
-                                    "function": {"name": next_cloud_name},
-                                }
+                                next_declaration = next(
+                                    (
+                                        declaration
+                                        for declaration in self.tool_declarations
+                                        if declaration.get("name") == next_action
+                                    ),
+                                    None,
+                                )
+                                if next_declaration is not None:
+                                    payload["tools"] = [{
+                                        "type": "function",
+                                        "function": {
+                                            "name": next_cloud_name,
+                                            "description": next_declaration["description"],
+                                            "parameters": self._schema(next_declaration["parameters"]),
+                                        },
+                                    }]
+                                    payload["tool_choice"] = {
+                                        "type": "function",
+                                        "function": {"name": next_cloud_name},
+                                    }
 
                     # Once a requested seed experience is recorded, the selected
                     # strategy becomes the only executable tool in this workflow.
