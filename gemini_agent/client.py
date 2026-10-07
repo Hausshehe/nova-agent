@@ -2929,6 +2929,7 @@ class GeminiClient:
                     raw_tool_result = ""
                     raw_tool_failed = False
                     goal_replan_pending = False
+                    goal_replan_step = ""
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
                         if local_name == "plan_capability_extension":
@@ -3227,6 +3228,21 @@ class GeminiClient:
                         "content": str(tool_result),
                     })
 
+                    # An unrecoverable-step replan is bounded to one alternative
+                    # action. If that action does not verify the goal, stop safely
+                    # instead of allowing the provider to wander into more rounds.
+                    if (
+                        goal_replan_step
+                        and local_name == goal_replan_step
+                        and self.goal_state is not None
+                        and self.goal_state.status != "VERIFIED"
+                    ):
+                        return (
+                            str(tool_result)
+                            + "\nGoal replan: Alternative step completed, but the "
+                            "goal was not verified. Stopping safely."
+                        )
+
                     # Goal-directed continuation: after each bounded step, reuse
                     # the existing selector against accumulated evidence and allow
                     # one different relevant capability to advance the same goal.
@@ -3285,6 +3301,7 @@ class GeminiClient:
                                         f"Selected alternative step {next_action} after the failed step."
                                     )
                                     goal_replan_notes.append(replan_note)
+                                    goal_replan_step = next_action
                                     tool_result = str(tool_result).replace(
                                         "Runtime goal status: FAILED",
                                         "Runtime goal status: ACTIVE",
