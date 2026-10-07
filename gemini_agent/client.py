@@ -704,7 +704,7 @@ class GeminiClient:
                 expected = expected_match.group(1).strip()
             recovery = str(self.tool_handlers["recover_command"](command=command, expected=expected))
             learning_result = ""
-            if re.search(r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b|\\bOutcome:\\s*VERIFIED\\b", recovery, re.IGNORECASE):
+            if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
                 from gemini_agent.learning import record_verified_experience
                 learning_result = record_verified_experience(
                     request_text,
@@ -728,7 +728,7 @@ class GeminiClient:
                     request=request_text, mechanism=mechanism, verification=result
                 ))
                 learning_result = ""
-                if re.search(r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b|\\bOutcome:\\s*VERIFIED\\b", recovery, re.IGNORECASE):
+                if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
                     from gemini_agent.learning import record_verified_experience
                     learning_result = record_verified_experience(
                         request_text,
