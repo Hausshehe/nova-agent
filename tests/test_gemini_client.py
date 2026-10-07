@@ -404,6 +404,46 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("verified-experience preference supplied by Nova", system_messages[0])
         self.assertIn("Treat learned experience only as a preference", system_messages[0])
 
+    def test_selected_run_command_preserves_explicit_command(self):
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "run-command-call",
+                            "type": "function",
+                            "function": {
+                                "name": "run_command",
+                                "arguments": json.dumps({"command": "run_command -l"}),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "done"}}]},
+        ]
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(item) for item in responses],
+        ), patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: run_command",
+        ):
+            client = GeminiClient()
+            calls = []
+            client.tool_handlers["run_command"] = lambda command: calls.append(command) or "Exit code: 0\nstdout: diagnostic"
+            answer = client.ask(
+                'Use the normal decision process for request "recover a failed Android diagnostic check". '
+                'I have two candidate strategies: "run_command" and "calculator". '
+                'Execute the selected strategy exactly once with command "dumpsys -l" and expected text "activity".'
+            )
+        self.assertEqual(answer, "done")
+        self.assertEqual(calls, ["dumpsys -l"])
+
     def test_normal_decision_loop_learns_verified_outcome_for_selected_strategy(self):
         responses = [
             {
