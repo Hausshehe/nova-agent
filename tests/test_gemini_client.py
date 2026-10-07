@@ -154,7 +154,7 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[FakeResponse(response)],
+            side_effect=[FakeResponse(response), FakeResponse(followup)],
         ):
             client = GeminiClient(tool_handlers={
                 "run_command": lambda command: "Exit code: 1\\nstderr: failed",
