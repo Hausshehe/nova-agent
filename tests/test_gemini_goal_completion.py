@@ -42,7 +42,7 @@ class GoalCompletionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_goal_completion("", "reported", "reported")
         with self.assertRaises(ValueError):
-            verify_goal_completion("goal", "reported", "x" * 513)
+            verify_goal_completion("goal", "reported", "x" * 4097)
 
 
 if __name__ == "__main__":
