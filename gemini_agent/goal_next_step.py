@@ -71,15 +71,25 @@ def select_goal_next_step(
     if goal_status == "FAILED":
         return GoalNextStep("STOP", "The goal is failed; no bounded next action is justified from the supplied state.")
 
-    target_terms = _terms(goal) | _terms(success_condition)
+    goal_terms = _terms(goal)
+    condition_terms = _terms(success_condition)
     observed_terms = _terms(evidence)
-    remaining_condition_terms = _terms(success_condition) - observed_terms
-    if remaining_condition_terms:
-        target_terms = _terms(goal) | remaining_condition_terms
+    remaining_condition_terms = condition_terms - observed_terms
+    remaining_goal_terms = goal_terms - observed_terms
+    target_terms = remaining_condition_terms | remaining_goal_terms
 
     scored = []
     for index, candidate in enumerate(clean):
-        score = len(_terms(candidate) & target_terms)
+        candidate_terms = _terms(candidate)
+        score = len(candidate_terms & target_terms)
+        # Treat bounded lexical extensions such as "datetime" -> "date"
+        # as related evidence without introducing domain-specific aliases.
+        for candidate_term in candidate_terms:
+            for target_term in target_terms:
+                if len(target_term) >= 4 and len(candidate_term) >= 4 and (
+                    candidate_term.startswith(target_term) or target_term.startswith(candidate_term)
+                ):
+                    score += 1
         if progress_status == "BLOCKED" and re.search(r"recover|retry|diagnos|repair|replan", candidate, re.I):
             score += 3
         scored.append((score, -index, candidate))
