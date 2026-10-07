@@ -2631,6 +2631,18 @@ class GeminiClient:
                                     "command": command_match.group(1).strip(),
                                     "expected": expected_match.group(1).strip(),
                                 }
+                        # Preserve explicit command arguments from the user's goal when
+                        # the selected executable strategy is run_command. Provider-generated
+                        # arguments are advisory here: they must not reinterpret a concrete
+                        # command such as "dumpsys -l" as "run_command -l".
+                        if selected_strategy and local_name == selected_strategy == "run_command":
+                            command_match = re.search(
+                                r'\b(?:using\s+)?command\s+["\\\']([^"\\\']+)["\\\']',
+                                request_text,
+                                re.IGNORECASE,
+                            )
+                            if command_match:
+                                args = {"command": command_match.group(1).strip()}
                         # Satisfy required observation inputs for the selected strategy
                         # before invoking it. The rule is schema-driven: when the selected
                         # tool requires a "result" and the request supplies a bounded command,
