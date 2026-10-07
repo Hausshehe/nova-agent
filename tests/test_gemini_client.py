@@ -231,7 +231,7 @@ class CloudflareClientTests(unittest.TestCase):
         record.assert_called_once_with(
             "Recover the failed network check.",
             "recover_command",
-            "Outcome: VERIFIED\nRecovery succeeded.",
+            "Outcome: VERIFIED\nRecovery succeeded.\nPostcondition: VERIFIED: expected text found: activity",
             domain="general",
         )
 
