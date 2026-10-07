@@ -755,15 +755,15 @@ class GeminiClient:
                     recovery,
                     domain="general",
                 )
-            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\\n{recovery}"
+            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\n{recovery}"
             if failure_learning:
-                diagnostic_report = f"{diagnostic_report}\\nFailure learning:\\n{failure_learning}"
+                diagnostic_report = f"{diagnostic_report}\nFailure learning:\n{failure_learning}"
             if learning_result:
-                diagnostic_report = f"{diagnostic_report}\\nRecovery learning:\\n{learning_result}"
+                diagnostic_report = f"{diagnostic_report}\nRecovery learning:\n{learning_result}"
             return (
-                "Automatic tool recovery:\\n"
-                f"Failed tool: {local_name}\\n"
-                f"Original tool result:\\n{result}\\n"
+                "Automatic tool recovery:\n"
+                f"Failed tool: {local_name}\n"
+                f"Original tool result:\n{result}\n"
                 f"{diagnostic_report}"
             )
         if local_name in {"execute_android_mechanism", "execute_validated_android_mechanism"}:
@@ -792,11 +792,11 @@ class GeminiClient:
                     )
                 recovery_report = recovery
                 if learning_result:
-                    recovery_report = f"{recovery_report}\\nRecovery learning:\\n{learning_result}"
+                    recovery_report = f"{recovery_report}\nRecovery learning:\n{learning_result}"
                 return (
-                    "Automatic tool recovery:\\n"
+                    "Automatic tool recovery:\n"
                     f"Failed tool: {local_name}\n"
-                    f"Original tool result:\\n{result}\n"
+                    f"Original tool result:\n{result}\n"
                     f"{recovery_report}"
                 )
         return (
@@ -1100,9 +1100,9 @@ class GeminiClient:
             messages.append({
                 "role": "system",
                 "content": (
-                    "Runtime goal contract established for this turn.\\n"
-                    f"Goal: {goal}\\n"
-                    f"Success condition: {success_condition}\\n"
+                    "Runtime goal contract established for this turn.\n"
+                    f"Goal: {goal}\n"
+                    f"Success condition: {success_condition}\n"
                     "The runtime state is ACTIVE. Any tool outcome must be observed as goal evidence; "
                     "do not claim final completion unless a later bounded completion verifier explicitly proves it."
                 ),
@@ -1145,8 +1145,8 @@ class GeminiClient:
                 )
                 if goal_selection.action == "STOP":
                     return (
-                        "Goal-directed next step: STOP\\n"
-                        f"Reason: {goal_selection.reason}\\n"
+                        "Goal-directed next step: STOP\n"
+                        f"Reason: {goal_selection.reason}\n"
                         "No goal-directed action was executed."
                     )
                 if goal_selection.action in self.tool_handlers:
@@ -1162,14 +1162,14 @@ class GeminiClient:
                             "candidates": goal_candidates,
                         },
                         "result": (
-                            f"Next step: {goal_selection.action}\\n"
+                            f"Next step: {goal_selection.action}\n"
                             f"Reason: {goal_selection.reason}"
                         ),
                     })
                     messages[0]["content"] = str(messages[0]["content"]) + (
-                        "\\n\\nGoal-directed next-step selection:\\n"
-                        f"Selected action: {goal_selected_action}\\n"
-                        f"Reason: {goal_selection.reason}\\n"
+                        "\n\nGoal-directed next-step selection:\n"
+                        f"Selected action: {goal_selected_action}\n"
+                        f"Reason: {goal_selection.reason}\n"
                         "Execute this selected action once, observe its result, and do not claim "
                         "goal completion unless the bounded completion verifier establishes it."
                     )
@@ -1387,7 +1387,7 @@ class GeminiClient:
                     "args": {"capability": requested_tool, "verification": result_text},
                     "result": record_result,
                 })
-                result_text += "\\n" + record_result
+                result_text += "\n" + record_result
             return result_text
         if requested_tool == "analyze_capability_history":
             match = re.search(
