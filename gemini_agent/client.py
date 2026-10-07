@@ -1817,6 +1817,18 @@ class GeminiClient:
             f"{self.cloudflare_account_id}/ai/v1/chat/completions"
         )
 
+        # Final autonomous-goal guard: root diagnostic commands require provider-generated
+        # arguments, so never let an earlier routing branch replace the non-forced choice.
+        autonomous_goal = bool(
+            self.goal_state is not None
+            and re.search(r"\bautonomously\b", request_text, re.IGNORECASE)
+        )
+        if autonomous_goal and any(
+            tool.get("function", {}).get("name") == "run_root_command"
+            for tool in payload.get("tools", [])
+        ):
+            payload["tool_choice"] = "auto"
+
         for loop_index in range(3):
             request = urllib.request.Request(
                 url,
