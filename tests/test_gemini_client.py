@@ -683,9 +683,14 @@ class CloudflareClientTests(unittest.TestCase):
             result = client.ask(request)
 
         run_command.assert_called_once_with(command="dumpsys -l")
-        self.assertIn("Selected strategy execution:", result)
-        self.assertIn("Outcome: VERIFIED", result)
-        self.assertIn("Recovery learning:", result)
+        self.assertEqual(result, "recovery complete")
+        trace = next(
+            item for item in client.last_tool_calls
+            if item.get("name") == "run_command"
+        )
+        self.assertIn("Automatic tool recovery:", trace["result"])
+        self.assertIn("Outcome: VERIFIED", trace["result"])
+        self.assertIn("Recovery learning:", trace["result"])
         self.assertGreaterEqual(record.call_count, 2)
         record.assert_any_call(
             "recover a failed Android diagnostic check",
