@@ -183,6 +183,31 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Attempts: 2", recovery_report)
         self.assertEqual(recovery_report.count("Diagnosis: transient command failure."), 1)
 
+    def test_verified_recovery_outcome_is_automatically_learned(self):
+        client = object.__new__(GeminiClient)
+        client.tool_handlers = {
+            "diagnose_command_failure": lambda command, error: "Diagnosis: bounded failure.",
+            "recover_command": lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded.",
+        }
+        with patch(
+            "gemini_agent.learning.record_verified_experience",
+            return_value="Verified experience learned.",
+        ) as record:
+            result = client._coordinate_tool_failure(
+                local_name="run_command",
+                args={"command": "python --version"},
+                tool_result="Exit code: 1\nstderr: transient",
+                request_text="Recover the failed network check.",
+            )
+        self.assertIn("Recovery learning:", result)
+        self.assertIn("Verified experience learned.", result)
+        record.assert_called_once_with(
+            "Recover the failed network check.",
+            "recover_command",
+            "Outcome: VERIFIED\nRecovery succeeded.",
+            domain="general",
+        )
+
     def test_generic_failed_tool_stops_safely_without_unbounded_recovery(self):
         client = object.__new__(GeminiClient)
         client.tool_handlers = {}
