@@ -27,11 +27,16 @@ class GoalCompletionObservation:
 
 
 def _terms(value: str) -> set[str]:
-    return {
+    terms = {
         token
         for token in re.findall(r"[a-z0-9_]+", value.lower().replace("_", " "))
         if token not in _STOP_WORDS and len(token) > 2
     }
+    # ISO-8601 date/datetime output is substantive evidence even when the
+    # tool result contains only the timestamp and no literal "date" word.
+    if re.search(r"\b\d{4}-\d{2}-\d{2}(?:[tT ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[zZ]|[+-]\d{2}:?\d{2})?)?\b", value):
+        terms.add("date")
+    return terms
 
 
 def _evidence_matches_clause(clause_terms: set[str], evidence_terms: set[str]) -> bool:
