@@ -951,6 +951,13 @@ class GeminiClient:
         )
 
         requested_tool = self._requested_local_tool(contents)
+        # Keep the goal-contract safety boundary deterministic even if local
+        # routing heuristics do not recognize the phrasing of this explicit request.
+        if (
+            not requested_tool
+            and re.search(r"\bestablish\s+(?:a\s+)?goal\s+contract\b", request_text, re.IGNORECASE)
+        ):
+            requested_tool = "establish_goal_contract"
         # A compound strategy-selection workflow must stay in the normal decision
         # loop. Do not let a nested strategy name such as verify_command_result
         # hijack the whole request into a single local verifier call.
