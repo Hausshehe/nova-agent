@@ -2692,7 +2692,6 @@ class GeminiClient:
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         if (
                             local_name == "run_command"
-                            and selected_strategy == "run_command"
                             and str(args.get("command", "")).strip()
                         ):
                             tool_result = self._coordinate_tool_failure(
