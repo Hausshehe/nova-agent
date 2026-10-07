@@ -181,6 +181,13 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
+            "select the goal next step",
+            "select a goal next step",
+            "choose the next step for the goal",
+            "choose a goal-directed next step",
+        )):
+            return "select_goal_next_step"
+        if any(phrase in user_text for phrase in (
             "establish a goal contract",
             "establish goal contract",
             "set the goal contract",
@@ -974,6 +981,24 @@ class GeminiClient:
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
+        if requested_tool == "select_goal_next_step":
+            goal_match = re.search(r"\bgoal\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE)
+            success_match = re.search(r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE)
+            status_match = re.search(r"\bgoal\s+status\s*[:=]\s*(ACTIVE|VERIFIED|FAILED)", request_text, re.IGNORECASE)
+            progress_match = re.search(r"\bprogress\s+status\s*[:=]\s*(PROGRESS|BLOCKED|INCONCLUSIVE)", request_text, re.IGNORECASE)
+            reason_match = re.search(r"\bprogress\s+reason\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE)
+            candidates_match = re.search(r"\bcandidates?\s*[:=]\s*(.+?)(?=\s+Report|\s*$)", request_text, re.IGNORECASE | re.DOTALL)
+            if not all((goal_match, success_match, status_match, progress_match, reason_match, candidates_match)):
+                return "Selecting a goal next step requires a goal, success condition, goal status, progress status, progress reason, and candidates."
+            candidates = [item.strip().strip("\"'") for item in candidates_match.group(1).split(",") if item.strip()]
+            result = str(self.tool_handlers[requested_tool](
+                goal=goal_match.group(1).strip(), success_condition=success_match.group(1).strip(),
+                goal_status=status_match.group(1).upper(), progress_status=progress_match.group(1).upper(),
+                progress_reason=reason_match.group(1).strip(), candidates=candidates,
+            ))
+            self.last_tool_calls.append({"name": requested_tool, "args": {"goal": goal_match.group(1).strip(), "success_condition": success_match.group(1).strip(), "goal_status": status_match.group(1).upper(), "progress_status": progress_match.group(1).upper(), "progress_reason": reason_match.group(1).strip(), "candidates": candidates}, "result": result})
+            return result
+
         if requested_tool == "establish_goal_contract":
             goal_match = re.search(r"\bfor\s+[\"']([^\"']+)[\"']", request_text, re.IGNORECASE)
             success_match = re.search(
