@@ -1899,6 +1899,16 @@ class GeminiClient:
                                 )
                             break
 
+                if (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and not forced_cloud_name
+                    and len(tools) == 1
+                ):
+                    forced_cloud_name = str(
+                        tools[0].get("function", {}).get("name", "")
+                    ).strip()
+
                 if forced_cloud_name:
                     forced_local_name = next(
                         (
