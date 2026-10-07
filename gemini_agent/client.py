@@ -3067,19 +3067,19 @@ class GeminiClient:
                         )
                         tool_result = (
                             str(tool_result)
-                            + "\\nGoal progress observation: "
+                            + "\nGoal progress observation: "
                             + observation.status
-                            + "\\nGoal progress reason: "
+                            + "\nGoal progress reason: "
                             + observation.reason
-                            + "\\nGoal completion verification: "
+                            + "\nGoal completion verification: "
                             + completion.status
-                            + "\\nGoal completion reason: "
+                            + "\nGoal completion reason: "
                             + completion.reason
-                            + "\\nRuntime goal status: "
+                            + "\nRuntime goal status: "
                             + self.goal_state.status
-                            + "\\nGoal steps:"
+                            + "\nGoal steps:"
                             + "".join(
-                                f"\\n- {step['action']}: {step['status']} | {step['evidence']}"
+                                f"\n- {step['action']}: {step['status']} | {step['evidence']}"
                                 for step in self.goal_state.steps
                             )
                         )
