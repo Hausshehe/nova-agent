@@ -173,10 +173,14 @@ class CloudflareClientTests(unittest.TestCase):
             client.last_tool_calls[0]["args"]["command"],
             "python -c " + '"import sys; sys.exit(1)"',
         )
-        self.assertEqual(
-            client.last_tool_calls[-1]["result"],
-            "Automatic command recovery:\\nDiagnosis: transient command failure.\\nOutcome: FAILED\\nAttempts: 2",
-        )
+        recovery_report = client.last_tool_calls[-1]["result"]
+        self.assertIn("Automatic command recovery:", recovery_report)
+        self.assertIn("Original command failure:", recovery_report)
+        self.assertIn("Exit code: 1", recovery_report)
+        self.assertIn("Diagnosis: transient command failure.", recovery_report)
+        self.assertIn("Outcome: FAILED", recovery_report)
+        self.assertIn("Attempts: 2", recovery_report)
+        self.assertEqual(recovery_report.count("Diagnosis: transient command failure."), 1)
     def test_compound_run_command_request_routes_execution_before_recovery_mentions(self):
         request = (
             'Use run_command to execute the safe command "python -c \\"import sys; sys.exit(1)\\"". '
