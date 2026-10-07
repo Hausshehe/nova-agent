@@ -174,6 +174,9 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertEqual(calls["datetime"], 1)
         self.assertEqual(calls["round"], 2)
         self.assertIn("Goal completion verification: VERIFIED", result)
+        self.assertIn("Goal steps:", result)
+        self.assertIn("- get_system_battery_status: VERIFIED", result)
+        self.assertIn("- current_datetime: VERIFIED", result)
         self.assertEqual(client.goal_state.status, "VERIFIED")
         self.assertEqual(
             [step["action"] for step in client.goal_state.snapshot()["steps"]],
