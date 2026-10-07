@@ -7,6 +7,7 @@ class GoalStateTests(unittest.TestCase):
     def test_starts_active_without_completion_claim(self):
         state = start_goal_state("Check battery", "Battery status is reported")
         self.assertEqual(state.status, "ACTIVE")
+        self.assertEqual(state.snapshot()["progress_status"], "INCONCLUSIVE")
         self.assertEqual(state.snapshot()["evidence"], [])
 
     def test_bounded_evidence_history(self):
