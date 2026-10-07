@@ -1802,11 +1802,7 @@ class GeminiClient:
             }
         elif requested_tool:
             cloud_requested_name = self._CLOUD_TOOL_NAMES.get(requested_tool, requested_tool)
-            autonomous_goal_request = bool(
-                re.search(r"\bautonomously\b", request_text, re.IGNORECASE)
-                and re.search(r"\bestablish\s+(?:a\s+)?goal\s+contract\b", request_text, re.IGNORECASE)
-            )
-            if autonomous_goal_request and cloud_requested_name == "run_root_command":
+            if cloud_requested_name == "run_root_command":
                 payload["tool_choice"] = "auto"
             else:
                 payload["tool_choice"] = {
