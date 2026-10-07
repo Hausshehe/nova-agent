@@ -738,6 +738,8 @@ class GeminiClient:
                     domain="general",
                 )
             diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\\n{recovery}"
+            if failure_learning:
+                diagnostic_report = f"{diagnostic_report}\\nFailure learning:\\n{failure_learning}"
             if learning_result:
                 diagnostic_report = f"{diagnostic_report}\\nRecovery learning:\\n{learning_result}"
             return (
