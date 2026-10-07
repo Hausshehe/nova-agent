@@ -1002,7 +1002,7 @@ class GeminiClient:
                 "args": {"goal": goal, "success_condition": success_condition},
                 "result": result,
             })
-            continuation = re.search(r"\\b(?:then|after that|next)\\b", request_text, re.IGNORECASE)
+            continuation = re.search(r"\b(?:then|after that|next)\b", request_text, re.IGNORECASE)
             if not continuation:
                 return result
             continuation_text = request_text[continuation.end():].strip()
@@ -1011,6 +1011,28 @@ class GeminiClient:
             if not next_tool:
                 return result
             requested_tool = next_tool
+            continuation_handler = self.tool_handlers.get(requested_tool)
+            if continuation_handler is not None:
+                import inspect
+                parameters = inspect.signature(continuation_handler).parameters
+                required = [
+                    parameter for parameter in parameters.values()
+                    if parameter.default is inspect.Parameter.empty
+                    and parameter.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+                ]
+                if not required:
+                    continuation_result = str(continuation_handler())
+                    self.goal_state.add_evidence(continuation_result)
+                    observation = observe_goal_progress(goal, success_condition, continuation_result)
+                    self.goal_state.progress_status = observation.status
+                    self.goal_state.progress_reason = observation.reason
+                    return (
+                        result
+                        + "\nGoal progress observation: " + observation.status
+                        + "\nGoal progress reason: " + observation.reason
+                        + "\nObserved tool: " + requested_tool
+                        + "\nObserved result: " + continuation_result
+                    )
             messages.append({
                 "role": "system",
                 "content": (
