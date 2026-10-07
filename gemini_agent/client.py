@@ -703,11 +703,22 @@ class GeminiClient:
             if expected_match:
                 expected = expected_match.group(1).strip()
             recovery = str(self.tool_handlers["recover_command"](command=command, expected=expected))
-            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\n{recovery}"
+            learning_result = ""
+            if re.search(r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b|\\bOutcome:\\s*VERIFIED\\b", recovery, re.IGNORECASE):
+                from gemini_agent.learning import record_verified_experience
+                learning_result = record_verified_experience(
+                    request_text,
+                    "recover_command",
+                    recovery,
+                    domain="general",
+                )
+            diagnostic_report = recovery if diagnosis in recovery else f"{diagnosis}\\n{recovery}"
+            if learning_result:
+                diagnostic_report = f"{diagnostic_report}\\nRecovery learning:\\n{learning_result}"
             return (
-                "Automatic tool recovery:\n"
-                f"Failed tool: {local_name}\n"
-                f"Original tool result:\n{result}\n"
+                "Automatic tool recovery:\\n"
+                f"Failed tool: {local_name}\\n"
+                f"Original tool result:\\n{result}\\n"
                 f"{diagnostic_report}"
             )
         if local_name in {"execute_android_mechanism", "execute_validated_android_mechanism"}:
@@ -716,11 +727,23 @@ class GeminiClient:
                 recovery = str(self.tool_handlers["recover_android_mechanism"](
                     request=request_text, mechanism=mechanism, verification=result
                 ))
+                learning_result = ""
+                if re.search(r"(?:Post-action verification|Verification)\\s*:\\s*VERIFIED\\b|\\bOutcome:\\s*VERIFIED\\b", recovery, re.IGNORECASE):
+                    from gemini_agent.learning import record_verified_experience
+                    learning_result = record_verified_experience(
+                        request_text,
+                        "recover_android_mechanism",
+                        recovery,
+                        domain="general",
+                    )
+                recovery_report = recovery
+                if learning_result:
+                    recovery_report = f"{recovery_report}\\nRecovery learning:\\n{learning_result}"
                 return (
-                    "Automatic tool recovery:\n"
+                    "Automatic tool recovery:\\n"
                     f"Failed tool: {local_name}\n"
-                    f"Original tool result:\n{result}\n"
-                    f"{recovery}"
+                    f"Original tool result:\\n{result}\n"
+                    f"{recovery_report}"
                 )
         return (
             "Automatic tool recovery:\n"
