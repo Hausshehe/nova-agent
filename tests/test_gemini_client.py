@@ -44,6 +44,32 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_goal_contract_initializes_runtime_goal_state_without_execution(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            answer = client.ask(
+                'Establish a goal contract for "check the device battery" with success condition '
+                '"the current battery status is successfully reported". Do not execute any action '
+                'or modify device state.'
+            )
+        self.assertIn("Runtime goal state: ACTIVE", answer)
+        self.assertIn("Runtime evidence: 0 entries", answer)
+        self.assertEqual(
+            client.goal_state.snapshot(),
+            {
+                "goal": "check the device battery",
+                "success_condition": "the current battery status is successfully reported",
+                "status": "ACTIVE",
+                "evidence": [],
+            },
+        )
+        self.assertIn("Action executed: No", answer)
+        open_url.assert_not_called()
+
     def test_whitespace_only_tool_arguments_are_treated_as_empty(self):
         self.assertEqual(GeminiClient._parse_tool_arguments("   \n\t"), {})
 
