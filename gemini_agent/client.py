@@ -1801,10 +1801,18 @@ class GeminiClient:
                 "function": {"name": selected_cloud_name},
             }
         elif requested_tool:
-            payload["tool_choice"] = {
-                "type": "function",
-                "function": {"name": self._CLOUD_TOOL_NAMES.get(requested_tool, requested_tool)},
-            }
+            cloud_requested_name = self._CLOUD_TOOL_NAMES.get(requested_tool, requested_tool)
+            autonomous_goal_request = bool(
+                re.search(r"\bautonomously\b", request_text, re.IGNORECASE)
+                and re.search(r"\bestablish\s+(?:a\s+)?goal\s+contract\b", request_text, re.IGNORECASE)
+            )
+            if autonomous_goal_request and cloud_requested_name == "run_root_command":
+                payload["tool_choice"] = "auto"
+            else:
+                payload["tool_choice"] = {
+                    "type": "function",
+                    "function": {"name": cloud_requested_name},
+                }
         elif self._requires_local_tool(contents):
             payload["tool_choice"] = "required"
 
