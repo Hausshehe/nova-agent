@@ -166,7 +166,6 @@ class CloudflareClientTests(unittest.TestCase):
                 'If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
             )
         self.assertIn("Automatic command recovery:", answer)
-                'Execute command "python --version". If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
         self.assertIn("Outcome: FAILED", answer)
         self.assertEqual(
             client.last_tool_calls[-1]["result"],
