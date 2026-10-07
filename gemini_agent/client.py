@@ -1867,22 +1867,34 @@ class GeminiClient:
                 # command is a bounded continuation action even when Cloudflare
                 # omits the selected tool call and does not echo tool_choice.
                 # Execute it at most once per goal step; never invent arguments.
-                if (
-                    self.goal_state is not None
-                    and re.search(
-                        r"\b(?:command|attempt)\b",
-                        self.goal_state.success_condition,
-                        re.IGNORECASE,
+                goal_for_fallback = self.goal_state.goal if self.goal_state is not None else request_text
+                success_for_fallback = (
+                    self.goal_state.success_condition
+                    if self.goal_state is not None
+                    else (
+                        success_match.group(1).strip()
+                        if (success_match := re.search(
+                            r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']",
+                            request_text,
+                            re.IGNORECASE,
+                        ))
+                        else ""
                     )
-                    and self.tool_handlers.get("run_command") is not None
-                    and not any(
+                )
+                already_attempted = (
+                    any(
                         step.get("action") == "run_command"
                         for step in self.goal_state.steps
                     )
+                    if self.goal_state is not None
+                    else any(trace.get("name") == "run_command" for trace in self.last_tool_calls)
+                )
+                if (
+                    re.search(r"\b(?:command|attempt)\b", success_for_fallback, re.IGNORECASE)
+                    and self.tool_handlers.get("run_command") is not None
+                    and not already_attempted
                 ):
-                    explicit_command = self._extract_goal_command(
-                        self.goal_state.goal
-                    )
+                    explicit_command = self._extract_goal_command(goal_for_fallback)
                     if explicit_command:
                         tool_calls = [{
                             "id": f"nova-goal-command-{loop_index}",
