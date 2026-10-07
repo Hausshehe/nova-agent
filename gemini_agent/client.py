@@ -3063,6 +3063,13 @@ class GeminiClient:
                             re.IGNORECASE | re.DOTALL,
                         )
                         recovery_result = recovery_match.group(1).strip() if recovery_match else ""
+                        if not recovery_result:
+                            verified_match = re.search(
+                                r"((?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b[^\n]*)",
+                                goal_result,
+                                re.IGNORECASE,
+                            )
+                            recovery_result = verified_match.group(1).strip() if verified_match else ""
                         recovery_verified = bool(
                             raw_tool_failed
                             and recovery_result
