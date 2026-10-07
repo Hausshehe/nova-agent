@@ -842,6 +842,7 @@ class GeminiClient:
         prompt = request_text
         prompt_text = request_text
         goal_replan_notes: list[str] = []
+        goal_replan_step = ""
 
         # Verified experience is part of Nova's normal decision loop. When a task
         # presents multiple candidate strategies, deterministically apply the existing
@@ -2929,7 +2930,6 @@ class GeminiClient:
                     raw_tool_result = ""
                     raw_tool_failed = False
                     goal_replan_pending = False
-                    goal_replan_step = ""
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
                         if local_name == "plan_capability_extension":
