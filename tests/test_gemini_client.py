@@ -64,6 +64,8 @@ class CloudflareClientTests(unittest.TestCase):
                 "goal": "check the device battery",
                 "success_condition": "the current battery status is successfully reported",
                 "status": "ACTIVE",
+                "progress_status": "INCONCLUSIVE",
+                "progress_reason": "No goal-progress observation has been recorded.",
                 "evidence": [],
             },
         )
