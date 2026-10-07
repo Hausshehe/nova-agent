@@ -214,7 +214,7 @@ class CloudflareClientTests(unittest.TestCase):
         client = object.__new__(GeminiClient)
         client.tool_handlers = {
             "diagnose_command_failure": lambda command, error: "Diagnosis: bounded failure.",
-            "recover_command": lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded.",
+            "recover_command": lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded.\nPostcondition: VERIFIED: expected text found: activity",
         }
         with patch(
             "gemini_agent.learning.record_verified_experience",
