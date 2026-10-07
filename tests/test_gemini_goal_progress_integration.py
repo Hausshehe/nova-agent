@@ -332,16 +332,20 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         responses = [
             {
                 "choices": [{"message": {"tool_calls": [{
-                    "id": "failed-step",
+                    "id": "date-step",
                     "type": "function",
-                    "function": {"name": "run_command", "arguments": "{\"command\":\"unavailable\"}"},
+                    "function": {"name": "current_datetime", "arguments": "{}"},
                 }]}}]
             },
             {
                 "choices": [{"message": {"content": "", "tool_calls": []}}]
             },
         ]
-        calls = {"run": 0, "round": 0}
+        calls = {"run": 0, "datetime": 0, "round": 0}
+
+        def current_datetime():
+            calls["datetime"] += 1
+            return "Current date/time: 2026-10-07T20:00:00+03:00"
 
         def run_command(command):
             calls["run"] += 1
@@ -359,15 +363,21 @@ class GoalProgressIntegrationTests(unittest.TestCase):
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch("urllib.request.urlopen", side_effect=urlopen):
-            client = GeminiClient(tool_handlers={"run_command": run_command})
+            client = GeminiClient(
+                tool_handlers={
+                    "current_datetime": current_datetime,
+                    "run_command": run_command,
+                }
+            )
             result = client.ask(
-                'Establish a goal contract for "attempt command \'nova-missing-command\' and report the current date" '
+                'Establish a goal contract for "report the current date and attempt command \'nova-missing-command\'" '
                 'with success condition "the current date is successfully reported after the command attempt". '
                 "Pursue this goal autonomously without asking me to name a tool."
             )
 
+        self.assertEqual(calls["datetime"], 1)
         self.assertEqual(calls["run"], 1)
-        self.assertEqual(calls["round"], 1)
+        self.assertEqual(calls["round"], 2)
         self.assertIn("nova-missing-command", result)
 
     def test_provider_omitting_forced_continuation_call_is_recovered_locally(self):
