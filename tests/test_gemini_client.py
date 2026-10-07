@@ -67,6 +67,7 @@ class CloudflareClientTests(unittest.TestCase):
                 "progress_status": "INCONCLUSIVE",
                 "progress_reason": "No goal-progress observation has been recorded.",
                 "evidence": [],
+                "steps": [],
             },
         )
         self.assertIn("Action executed: No", answer)
