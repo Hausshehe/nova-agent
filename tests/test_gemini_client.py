@@ -138,6 +138,7 @@ class CloudflareClientTests(unittest.TestCase):
         open_url.assert_not_called()
 
     def test_failed_command_enters_automatic_diagnosis_and_recovery(self):
+        followup = {"choices": [{"message": {"content": "recovery complete"}}]}
         response = {
             "choices": [{"message": {"tool_calls": [{
                 "id": "failed-command",
