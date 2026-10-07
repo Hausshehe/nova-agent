@@ -1868,15 +1868,18 @@ class GeminiClient:
                 # omits the selected tool call and does not echo tool_choice.
                 # Execute it at most once per goal step; never invent arguments.
                 goal_for_fallback = self.goal_state.goal if self.goal_state is not None else request_text
-                success_match = re.search(
-                    r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']",
-                    request_text,
-                    re.IGNORECASE,
-                )
                 success_for_fallback = (
                     self.goal_state.success_condition
                     if self.goal_state is not None
-                    else (success_match.group(1).strip() if success_match else request_text)
+                    else (
+                        success_match.group(1).strip()
+                        if (success_match := re.search(
+                            r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']",
+                            request_text,
+                            re.IGNORECASE,
+                        ))
+                        else ""
+                    )
                 )
                 already_attempted = (
                     any(
