@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
 from gemini_agent.goal_contract import establish_goal_contract
+from gemini_agent.goal_next_step import select_goal_next_step
 
 
 _OPERATORS = {
@@ -1269,6 +1270,12 @@ def recover_android_mechanism(
 def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     """Establish an explicit bounded goal and completion condition without executing anything."""
     return establish_goal_contract(goal, success_condition)
+
+
+def select_goal_next_step_tool(goal: str, success_condition: str, goal_status: str, progress_status: str, progress_reason: str, candidates: list[str]) -> str:
+    """Select one bounded goal-relevant next action without executing it."""
+    result = select_goal_next_step(goal, success_condition, goal_status, progress_status, progress_reason, candidates)
+    return f"Next step: {result.action}\nReason: {result.reason}"
 
 
 def record_verified_experience_tool(request: str, strategy: str, verification: str, domain: str = "general") -> str:
@@ -4256,6 +4263,15 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition"]},
     },
     {
+        "name": "select_goal_next_step",
+        "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING"}, "success_condition": {"type": "STRING"},
+            "goal_status": {"type": "STRING"}, "progress_status": {"type": "STRING"},
+            "progress_reason": {"type": "STRING"}, "candidates": {"type": "ARRAY", "items": {"type": "STRING"}},
+        }, "required": ["goal", "success_condition", "goal_status", "progress_status", "progress_reason", "candidates"]},
+    },
+    {
         "name": "autonomously_repair_capability",
         "description": "Run one bounded generic self-repair workflow from failure diagnosis through repair, independent verification, persisted evidence analysis, and acceptance or safe stop. The workflow executes the repaired capability at most once.",
         "parameters": {
@@ -5408,6 +5424,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
     "establish_goal_contract": establish_goal_contract_tool,
+    "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
     "current_datetime": current_datetime,
     "get_hostname": get_hostname,
