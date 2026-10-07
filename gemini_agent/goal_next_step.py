@@ -93,6 +93,14 @@ def select_goal_next_step(
                     score += 1
         if progress_status == "BLOCKED" and re.search(r"recover|retry|diagnos|repair|replan", candidate, re.I):
             score += 3
+        # Verification-only actions must not outrank a still-unattempted primary
+        # action merely because both share a broad term such as "command".
+        # Verification is useful after execution evidence exists, not as a
+        # substitute for the action required by the goal.
+        if progress_status != "BLOCKED" and not observed_terms and re.search(
+            r"\bverify(?:_|\b)|\bverification\b", candidate, re.I
+        ):
+            score -= 3
         # Recovery actions are justified by an observed blocked/failure state,
         # not merely by the fact that the goal mentions recovery-related words.
         # Prefer attempting the primary action while the goal is still unblocked.
