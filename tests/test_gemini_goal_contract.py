@@ -1,6 +1,8 @@
 import unittest
 
 from gemini_agent.goal_contract import GoalContract, establish_goal_contract
+from gemini_agent.client import GeminiClient
+from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
 
 
 class GoalContractTests(unittest.TestCase):
@@ -24,3 +26,18 @@ class GoalContractTests(unittest.TestCase):
         self.assertIn("Status: ACTIVE", result)
         self.assertIn("no action was executed", result)
         self.assertNotIn("VERIFIED", result)
+
+    def test_client_routes_explicit_goal_contract_requests_locally(self):
+        contents = [{
+            "role": "user",
+            "parts": [{"text": "Establish a goal contract for checking battery with success condition battery status is reported."}],
+        }]
+        self.assertEqual(
+            GeminiClient._requested_local_tool(contents),
+            "establish_goal_contract",
+        )
+
+    def test_goal_contract_is_registered_once(self):
+        self.assertIn("establish_goal_contract", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("establish_goal_contract"), 1)
