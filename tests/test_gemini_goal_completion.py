@@ -26,6 +26,15 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "INCONCLUSIVE")
 
+    def test_verification_tool_metadata_cannot_complete_goal(self):
+        result = verify_goal_completion(
+            "attempt the unavailable command and report the current date",
+            "the current date is successfully reported after the unavailable command attempt",
+            "Verification: VERIFIED: expected text found: Goal contract established.\n"
+            "Observed tool: verify_command_result",
+        )
+        self.assertEqual(result.status, "INCONCLUSIVE")
+
     def test_explicit_failure_fails_goal(self):
         result = verify_goal_completion(
             "check the device battery",
