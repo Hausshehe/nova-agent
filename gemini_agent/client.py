@@ -2018,6 +2018,39 @@ class GeminiClient:
                         native_tool_calls = False
 
             if not tool_calls:
+                # Last bounded guard for provider omissions: if the active goal
+                # explicitly names a command and run_command has not executed yet,
+                # execute that exact command locally. This is deliberately placed
+                # after provider/content parsing so it is a true final fallback,
+                # not another competing planner.
+                if (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and self.tool_handlers.get("run_command") is not None
+                    and not any(
+                        step.get("action") == "run_command"
+                        for step in self.goal_state.steps
+                    )
+                ):
+                    explicit_command = self._extract_goal_command(
+                        self.goal_state.goal
+                    )
+                    if explicit_command:
+                        tool_calls = [{
+                            "id": f"nova-goal-command-final-{loop_index}",
+                            "type": "function",
+                            "function": {
+                                "name": self._CLOUD_TOOL_NAMES.get(
+                                    "run_command", "run_command"
+                                ),
+                                "arguments": json.dumps(
+                                    {"command": explicit_command}
+                                ),
+                            },
+                        }]
+                        native_tool_calls = False
+
+            if not tool_calls:
                 content = message.get("content")
                 if isinstance(content, str):
                     lines = content.strip().splitlines()
