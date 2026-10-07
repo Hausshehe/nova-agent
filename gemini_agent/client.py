@@ -101,21 +101,6 @@ class GeminiClient:
             raise ValueError("Tool arguments must be a JSON object.")
         return parsed
 
-    @staticmethod
-    def _extract_goal_command(goal: str) -> str:
-        """Extract a bounded explicitly named command from a goal."""
-        text = str(goal).strip()
-        if not text:
-            return ""
-        match = re.search(
-            r"\bcommand\s+['\"]([^'\"]+)['\"]",
-            text,
-            re.IGNORECASE,
-        )
-        if match:
-            return match.group(1).strip()
-        return ""
-
     _CLOUD_TOOL_NAMES = {
         "read_text_file": "read_file",
         "create_directory": "make_directory",
@@ -858,7 +843,6 @@ class GeminiClient:
         prompt_text = request_text
         goal_replan_notes: list[str] = []
         goal_replan_step = ""
-        goal_continuation_action = ""
 
         # Verified experience is part of Nova's normal decision loop. When a task
         # presents multiple candidate strategies, deterministically apply the existing
@@ -1863,54 +1847,6 @@ class GeminiClient:
             native_tool_calls = bool(tool_calls)
 
             if not tool_calls:
-                # If the active goal explicitly names a concrete command, that
-                # command is a bounded continuation action even when Cloudflare
-                # omits the selected tool call and does not echo tool_choice.
-                # Execute it at most once per goal step; never invent arguments.
-                goal_for_fallback = self.goal_state.goal if self.goal_state is not None else request_text
-                success_for_fallback = (
-                    self.goal_state.success_condition
-                    if self.goal_state is not None
-                    else (
-                        success_match.group(1).strip()
-                        if (success_match := re.search(
-                            r"\bsuccess\s+condition\s+[\"']([^\"']+)[\"']",
-                            request_text,
-                            re.IGNORECASE,
-                        ))
-                        else ""
-                    )
-                )
-                already_attempted = (
-                    any(
-                        step.get("action") == "run_command"
-                        for step in self.goal_state.steps
-                    )
-                    if self.goal_state is not None
-                    else any(trace.get("name") == "run_command" for trace in self.last_tool_calls)
-                )
-                if (
-                    re.search(r"\b(?:command|attempt)\b", success_for_fallback, re.IGNORECASE)
-                    and self.tool_handlers.get("run_command") is not None
-                    and not already_attempted
-                ):
-                    explicit_command = self._extract_goal_command(goal_for_fallback)
-                    if explicit_command:
-                        tool_calls = [{
-                            "id": f"nova-goal-command-{loop_index}",
-                            "type": "function",
-                            "function": {
-                                "name": self._CLOUD_TOOL_NAMES.get(
-                                    "run_command", "run_command"
-                                ),
-                                "arguments": json.dumps(
-                                    {"command": explicit_command}
-                                ),
-                            },
-                        }]
-                        native_tool_calls = False
-
-            if not tool_calls:
                 # Some providers acknowledge a forced continuation tool in
                 # reasoning but omit the actual tool call. When Nova itself
                 # selected a bounded no-argument tool, execute that selected
@@ -1948,41 +1884,6 @@ class GeminiClient:
                                 )
                             break
 
-                if (
-                    self.goal_state is not None
-                    and self.goal_state.status == "ACTIVE"
-                    and not forced_cloud_name
-                ):
-                    offered_tools = payload.get("tools", [])
-                    if len(offered_tools) == 1:
-                        forced_cloud_name = str(
-                            offered_tools[0].get("function", {}).get("name", "")
-                        ).strip()
-                    else:
-                        explicit_command = self._extract_goal_command(
-                            self.goal_state.goal
-                        )
-                        if explicit_command:
-                            for offered in offered_tools:
-                                offered_name = str(
-                                    offered.get("function", {}).get("name", "")
-                                ).strip()
-                                offered_local = next(
-                                    (
-                                        name
-                                        for name, cloud_name in self._CLOUD_TOOL_NAMES.items()
-                                        if cloud_name == offered_name
-                                    ),
-                                    offered_name,
-                                )
-                                if offered_local == "run_command":
-                                    forced_cloud_name = offered_name
-                                    break
-                            if not forced_cloud_name and self.tool_handlers.get("run_command"):
-                                forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
-                                    "run_command", "run_command"
-                                )
-
                 if forced_cloud_name:
                     forced_local_name = next(
                         (
@@ -2007,108 +1908,16 @@ class GeminiClient:
                         if forced_declaration
                         else []
                     )
-                    forced_arguments = {}
-                    if forced_local_name == "run_command":
-                        goal_text = (
-                            self.goal_state.goal
-                            if self.goal_state is not None
-                            else ""
-                        )
-                        command = self._extract_goal_command(goal_text)
-                        if command:
-                            forced_arguments = {"command": command}
-                    if forced_handler is not None and (
-                        (not required or forced_arguments)
-                        or (
-                            forced_local_name == "run_command"
-                            and bool(forced_arguments)
-                        )
-                    ):
+                    if forced_handler is not None and not required:
                         tool_calls = [{
                             "id": f"nova-continuation-{loop_index}",
                             "type": "function",
                             "function": {
                                 "name": forced_cloud_name,
-                                "arguments": json.dumps(forced_arguments),
+                                "arguments": "{}",
                             },
                         }]
                         native_tool_calls = False
-
-            if not tool_calls:
-                # Last bounded guard for provider omissions: if the active goal
-                # explicitly names a command and run_command has not executed yet,
-                # execute that exact command locally. This is deliberately placed
-                # after provider/content parsing so it is a true final fallback,
-                # not another competing planner.
-                if (
-                    self.goal_state is not None
-                    and re.search(
-                        r"\b(?:command|attempt)\b",
-                        self.goal_state.success_condition,
-                        re.IGNORECASE,
-                    )
-                    and self.tool_handlers.get("run_command") is not None
-                    and not any(
-                        step.get("action") == "run_command"
-                        for step in self.goal_state.steps
-                    )
-                ):
-                    explicit_command = self._extract_goal_command(
-                        self.goal_state.goal
-                    )
-                    if explicit_command:
-                        tool_calls = [{
-                            "id": f"nova-goal-command-final-{loop_index}",
-                            "type": "function",
-                            "function": {
-                                "name": self._CLOUD_TOOL_NAMES.get(
-                                    "run_command", "run_command"
-                                ),
-                                "arguments": json.dumps(
-                                    {"command": explicit_command}
-                                ),
-                            },
-                        }]
-                        native_tool_calls = False
-
-            if not tool_calls and goal_continuation_action:
-                # Nova already selected this bounded continuation action locally.
-                # If the provider returns an empty response, preserve that decision
-                # instead of treating the provider omission as the end of the goal.
-                selected_local_name = goal_continuation_action
-                selected_handler = self.tool_handlers.get(selected_local_name)
-                selected_declaration = next(
-                    (
-                        declaration
-                        for declaration in self.tool_declarations
-                        if isinstance(declaration, dict)
-                        and declaration.get("name") == selected_local_name
-                    ),
-                    None,
-                )
-                selected_arguments = {}
-                if selected_local_name == "run_command":
-                    command = self._extract_goal_command(
-                        self.goal_state.goal if self.goal_state is not None else ""
-                    )
-                    if command:
-                        selected_arguments = {"command": command}
-                required = (
-                    selected_declaration.get("parameters", {}).get("required", [])
-                    if selected_declaration else []
-                )
-                if selected_handler is not None and (not required or selected_arguments):
-                    tool_calls = [{
-                        "id": f"nova-selected-continuation-{loop_index}",
-                        "type": "function",
-                        "function": {
-                            "name": self._CLOUD_TOOL_NAMES.get(
-                                selected_local_name, selected_local_name
-                            ),
-                            "arguments": json.dumps(selected_arguments),
-                        },
-                    }]
-                    native_tool_calls = False
 
             if not tool_calls:
                 content = message.get("content")
@@ -3076,85 +2885,6 @@ class GeminiClient:
                         },                    }]
                     native_tool_calls = False
 
-            # If the provider omits a forced continuation tool call, Nova may
-            # execute the already-selected bounded local step instead of treating the
-            # empty response as a terminal provider error. Required arguments are filled
-            # only from an explicitly named command in the active goal.
-            if (
-                not tool_calls
-                and self.goal_state is not None
-                and self.goal_state.status == "ACTIVE"
-                and re.search(
-                    r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                    request_text,
-                    re.IGNORECASE | re.DOTALL,
-                )
-            ):
-                forced = payload.get("tool_choice")
-                forced_cloud_name = ""
-                if isinstance(forced, dict):
-                    forced_function = forced.get("function") or {}
-                    forced_cloud_name = str(forced_function.get("name", "")).strip()
-                if not forced_cloud_name and goal_continuation_action:
-                    forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
-                        goal_continuation_action,
-                        goal_continuation_action,
-                    )
-                if not forced_cloud_name:
-                    for trace in reversed(self.last_tool_calls):
-                        if trace.get("name") == "select_goal_next_step":
-                            match = re.search(
-                                r"Next step:\s*([A-Za-z_][A-Za-z0-9_]*)",
-                                str(trace.get("result", "")),
-                            )
-                            if match:
-                                selected_local_name = match.group(1)
-                                forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
-                                    selected_local_name,
-                                    selected_local_name,
-                                )
-                            break
-                if not forced_cloud_name and len(payload.get("tools", [])) == 1:
-                    forced_cloud_name = str(
-                        payload["tools"][0].get("function", {}).get("name", "")
-                    ).strip()
-                if forced_cloud_name:
-                    forced_local_name = next(
-                        (
-                            name
-                            for name, cloud_name in self._CLOUD_TOOL_NAMES.items()
-                            if cloud_name == forced_cloud_name
-                        ),
-                        forced_cloud_name,
-                    )
-                    forced_handler = self.tool_handlers.get(forced_local_name)
-                    forced_declaration = next(
-                        (
-                            declaration
-                            for declaration in self.tool_declarations
-                            if declaration.get("name") == forced_local_name
-                        ),
-                        None,
-                    )
-                    required = set(
-                        (forced_declaration or {}).get("parameters", {}).get("required", [])
-                    )
-                    forced_arguments = {}
-                    if forced_local_name == "run_command" and required:
-                        command = self._extract_goal_command(self.goal_state.goal)
-                        if command:
-                            forced_arguments = {"command": command}
-                    if forced_handler is not None and (not required or forced_arguments):
-                        tool_calls = [{
-                            "id": f"nova-forced-{forced_local_name}",
-                            "type": "function",
-                            "function": {
-                                "name": forced_cloud_name,
-                                "arguments": json.dumps(forced_arguments),
-                            },
-                        }]
-                        native_tool_calls = False
-
             if tool_calls:
                 # Cloudflare's OpenAI-compatible endpoint requires function
                 # arguments to be a JSON string. Normalize every tool-call
@@ -3565,7 +3295,6 @@ class GeminiClient:
                             )
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
-                                goal_continuation_action = next_action
                                 if goal_replan_pending:
                                     replan_note = (
                                         "Goal replan: "
@@ -3715,15 +3444,7 @@ class GeminiClient:
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
-                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "self_test", "discover_camera_control", "resolve_android_intent", "send_android_keyevent", "send_android_intent", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0 and not (
-                    self.goal_state is not None
-                    and self.goal_state.status == "ACTIVE"
-                    and re.search(
-                        r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                        request_text,
-                        re.IGNORECASE | re.DOTALL,
-                    )
-                ):
+                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "self_test", "discover_camera_control", "resolve_android_intent", "send_android_keyevent", "send_android_intent", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0:
                     return str(tool_result)
 
                 # Tool execution is Nova's responsibility. For an explicit
@@ -3757,15 +3478,7 @@ class GeminiClient:
                             "type": "function",
                             "function": {"name": selected_cloud_name},
                         }
-                elif requested_tool and not (
-                    self.goal_state is not None
-                    and self.goal_state.status == "ACTIVE"
-                    and re.search(
-                        r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                        request_text,
-                        re.IGNORECASE | re.DOTALL,
-                    )
-                ):
+                elif requested_tool:
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
                 else:
