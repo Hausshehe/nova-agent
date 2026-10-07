@@ -40,7 +40,7 @@ def record_verified_experience(request: str, strategy: str, verification: str, d
         raise ValueError("Verification evidence cannot be empty.")
     if not isinstance(domain, str) or not domain.strip():
         raise ValueError("Experience domain cannot be empty.")
-    if not re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b", verification, re.IGNORECASE):
+    if not re.search(r"(?:Post-action verification|Verification|Postcondition)\s*:\s*VERIFIED\b", verification, re.IGNORECASE):
         return "Experience not learned: verification is not explicitly VERIFIED."
     event = {
         "request": request.strip()[:_MAX_TEXT],
