@@ -643,14 +643,13 @@ class CloudflareClientTests(unittest.TestCase):
                 }
             }]
         }
-        final_response = {"choices": [{"message": {"content": "recovery complete"}}]}
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
             clear=True,
         ), patch(
             "urllib.request.urlopen",
-            side_effect=[FakeResponse(tool_response), FakeResponse(final_response)],
+            side_effect=[FakeResponse(tool_response)],
         ), patch(
             "gemini_agent.tools.run_command",
             side_effect=ValueError("Command is not allowed: dumpsys"),
@@ -667,7 +666,7 @@ class CloudflareClientTests(unittest.TestCase):
                 'Use run_command with command "dumpsys -l" and expected text "activity".'
             )
 
-        self.assertEqual(result, "recovery complete")
+        self.assertIn("Automatic tool recovery:", result)
         run_command.assert_not_called()
         trace = client.last_tool_calls[-1]
         self.assertEqual(trace["name"], "run_command")
