@@ -1133,6 +1133,7 @@ class GeminiClient:
                     self.goal_state.progress_status,
                     self.goal_state.progress_reason,
                     goal_candidates,
+                    "\n".join(self.goal_state.evidence),
                 )
                 if goal_selection.action == "STOP":
                     return (
@@ -2963,10 +2964,11 @@ class GeminiClient:
                         )
                         self.goal_state.progress_status = observation.status
                         self.goal_state.progress_reason = observation.reason
+                        completion_evidence = "\n".join(self.goal_state.evidence)
                         completion = verify_goal_completion(
                             self.goal_state.goal,
                             self.goal_state.success_condition,
-                            str(tool_result),
+                            completion_evidence,
                         )
                         if completion.status == "VERIFIED":
                             self.goal_state.status = "VERIFIED"
@@ -3017,6 +3019,79 @@ class GeminiClient:
                         "tool_call_id": tool_call.get("id", ""),
                         "content": str(tool_result),
                     })
+
+                    # Goal-directed continuation: after each bounded step, reuse
+                    # the existing selector against accumulated evidence and allow
+                    # one different relevant capability to advance the same goal.
+                    if (
+                        self.goal_state is not None
+                        and self.goal_state.status == "ACTIVE"
+                        and not strategy_candidates
+                        and re.search(
+                            r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                            request_text,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                    ):
+                        from gemini_agent.goal_next_step import select_goal_next_step
+                        executed_names = {
+                            str(call.get("name", "")).strip()
+                            for call in self.last_tool_calls
+                            if str(call.get("name", "")).strip()
+                            not in {"select_goal_next_step", "establish_goal_contract"}
+                        }
+                        continuation_declarations = self._relevant_tool_declarations(contents)
+                        continuation_candidates = [
+                            str(declaration.get("name", "")).strip()
+                            for declaration in continuation_declarations
+                            if (
+                                isinstance(declaration, dict)
+                                and str(declaration.get("name", "")).strip()
+                                and str(declaration.get("name", "")).strip() not in executed_names
+                                and str(declaration.get("name", "")).strip() not in {
+                                    "establish_goal_contract", "select_goal_next_step",
+                                    "self_test", "capability_inventory", "assess_capability_gap",
+                                }
+                            )
+                        ]
+                        if continuation_candidates:
+                            continuation_selection = select_goal_next_step(
+                                self.goal_state.goal,
+                                self.goal_state.success_condition,
+                                self.goal_state.status,
+                                self.goal_state.progress_status,
+                                self.goal_state.progress_reason,
+                                continuation_candidates,
+                                "\n".join(self.goal_state.evidence),
+                            )
+                            if continuation_selection.action in self.tool_handlers:
+                                next_action = continuation_selection.action
+                                self.last_tool_calls.append({
+                                    "name": "select_goal_next_step",
+                                    "args": {
+                                        "goal": self.goal_state.goal,
+                                        "success_condition": self.goal_state.success_condition,
+                                        "goal_status": self.goal_state.status,
+                                        "progress_status": self.goal_state.progress_status,
+                                        "progress_reason": self.goal_state.progress_reason,
+                                        "candidates": continuation_candidates,
+                                        "evidence": "\n".join(self.goal_state.evidence),
+                                    },
+                                    "result": (
+                                        f"Next step: {next_action}\n"
+                                        f"Reason: {continuation_selection.reason}"
+                                    ),
+                                })
+                                next_cloud_name = self._CLOUD_TOOL_NAMES.get(next_action, next_action)
+                                payload["tools"] = [
+                                    tool
+                                    for tool in payload.get("tools", self.tool_declarations)
+                                    if tool.get("function", {}).get("name") == next_cloud_name
+                                ]
+                                payload["tool_choice"] = {
+                                    "type": "function",
+                                    "function": {"name": next_cloud_name},
+                                }
 
                     # Once a requested seed experience is recorded, the selected
                     # strategy becomes the only executable tool in this workflow.
