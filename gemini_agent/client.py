@@ -1123,7 +1123,10 @@ class GeminiClient:
                 re.IGNORECASE | re.DOTALL,
             )
         ):
-            goal_declarations = self._relevant_tool_declarations(contents)
+            # Long-horizon goal selection must see the full registered action set.
+            # Relevance filtering can hide a prerequisite action whose name is not
+            # lexically identical to the success-condition wording.
+            goal_declarations = self.tool_declarations
             goal_candidates = [
                 str(declaration.get("name", "")).strip()
                 for declaration in goal_declarations
