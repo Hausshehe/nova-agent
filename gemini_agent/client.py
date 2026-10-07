@@ -3077,6 +3077,11 @@ class GeminiClient:
                             + completion.reason
                             + "\\nRuntime goal status: "
                             + self.goal_state.status
+                            + "\\nGoal steps:"
+                            + "".join(
+                                f"\\n- {step['action']}: {step['status']} | {step['evidence']}"
+                                for step in self.goal_state.steps
+                            )
                         )
                         goal_verified = self.goal_state.status == "VERIFIED"
 
