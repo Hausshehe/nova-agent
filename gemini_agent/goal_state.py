@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 _MAX_TEXT = 512
 _MAX_EVIDENCE = 8
+_MAX_STEPS = 16
 
 
 @dataclass
@@ -19,6 +20,7 @@ class GoalState:
     progress_status: str = "INCONCLUSIVE"
     progress_reason: str = "No goal-progress observation has been recorded."
     evidence: list[str] = field(default_factory=list)
+    steps: list[dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.goal, str) or not self.goal.strip():
@@ -40,6 +42,21 @@ class GoalState:
         self.evidence.append(evidence.strip()[:_MAX_TEXT])
         del self.evidence[:-_MAX_EVIDENCE]
 
+    def record_step(self, action: str, status: str, evidence: str) -> None:
+        """Record one bounded goal step and its observed outcome."""
+        if not isinstance(action, str) or not action.strip():
+            raise ValueError("Step action cannot be empty.")
+        if status not in {"VERIFIED", "FAILED", "INCONCLUSIVE"}:
+            raise ValueError("Step status is invalid.")
+        if not isinstance(evidence, str) or not evidence.strip():
+            raise ValueError("Step evidence cannot be empty.")
+        self.steps.append({
+            "action": action.strip()[:_MAX_TEXT],
+            "status": status,
+            "evidence": evidence.strip()[:_MAX_TEXT],
+        })
+        del self.steps[:-_MAX_STEPS]
+
     def snapshot(self) -> dict[str, object]:
         return {
             "goal": self.goal.strip(),
@@ -48,6 +65,7 @@ class GoalState:
             "progress_status": self.progress_status,
             "progress_reason": self.progress_reason,
             "evidence": list(self.evidence),
+            "steps": [dict(step) for step in self.steps],
         }
 
 
