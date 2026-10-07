@@ -78,8 +78,7 @@ def verify_goal_completion(
         if not clause_terms:
             continue
         observed_clause_terms = clause_terms & evidence_terms
-        observed_state_terms = observed_clause_terms - goal_terms
-        if not observed_state_terms:
+        if not observed_clause_terms:
             return GoalCompletionObservation(
                 "INCONCLUSIVE",
                 "At least one success-condition clause has no observed evidence beyond wording already present in the goal.",
