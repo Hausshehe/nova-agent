@@ -241,7 +241,10 @@ class GoalProgressIntegrationTests(unittest.TestCase):
 
         self.assertEqual(calls["battery"], 1)
         self.assertEqual(calls["datetime"], 1)
-        self.assertIn("current_datetime", result)
+        self.assertEqual(calls["datetime"], 1)
+        self.assertTrue(
+            any(call["name"] == "current_datetime" for call in client.last_tool_calls)
+        )
         self.assertEqual(client.goal_state.status, "VERIFIED")
 
 
