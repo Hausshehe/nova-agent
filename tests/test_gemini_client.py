@@ -177,6 +177,18 @@ class CloudflareClientTests(unittest.TestCase):
             client.last_tool_calls[-1]["result"],
             "Automatic command recovery:\\nDiagnosis: transient command failure.\\nOutcome: FAILED\\nAttempts: 2",
         )
+    def test_compound_run_command_request_routes_execution_before_recovery_mentions(self):
+        request = (
+            'Use run_command to execute the safe command "python -c \\"import sys; sys.exit(1)\\"". '
+            'If that execution returns a nonzero exit code, automatically diagnose the failed '
+            'run_command outcome and then hand it to the existing bounded recover_command path. '
+            'Do not call recover_command as the initial execution strategy. Do not modify device state.'
+        )
+        selected = GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ])
+        self.assertEqual(selected, "run_command")
+
     def test_explicit_recover_command_preserves_expected_postcondition(self):
         with patch.dict(
             os.environ,
