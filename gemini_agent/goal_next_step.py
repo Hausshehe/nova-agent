@@ -87,7 +87,10 @@ def select_goal_next_step(
         for candidate_term in candidate_terms:
             for target_term in target_terms:
                 if len(target_term) >= 4 and len(candidate_term) >= 4 and (
-                    candidate_term.startswith(target_term) or target_term.startswith(candidate_term)
+                    candidate_term.startswith(target_term)
+                    or target_term.startswith(candidate_term)
+                    or target_term in candidate_term
+                    or candidate_term in target_term
                 ):
                     score += 1
         if progress_status == "BLOCKED" and re.search(r"recover|retry|diagnos|repair|replan", candidate, re.I):
