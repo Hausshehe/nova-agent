@@ -1837,6 +1837,58 @@ class GeminiClient:
             native_tool_calls = bool(tool_calls)
 
             if not tool_calls:
+                # Some providers acknowledge a forced continuation tool in
+                # reasoning but omit the actual tool call. When Nova itself
+                # selected a bounded no-argument tool, execute that selected
+                # action locally rather than losing the autonomous step.
+                forced = payload.get("tool_choice")
+                if (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and isinstance(forced, dict)
+                    and forced.get("type") == "function"
+                ):
+                    forced_cloud_name = str(
+                        forced.get("function", {}).get("name", "")
+                    ).strip()
+                    forced_local_name = next(
+                        (
+                            name
+                            for name, cloud_name in self._CLOUD_TOOL_NAMES.items()
+                            if cloud_name == forced_cloud_name
+                        ),
+                        forced_cloud_name,
+                    )
+                    forced_handler = self.tool_handlers.get(forced_local_name)
+                    forced_declaration = next(
+                        (
+                            declaration
+                            for declaration in self.tool_declarations
+                            if isinstance(declaration, dict)
+                            and declaration.get("function", {}).get("name")
+                            == forced_cloud_name
+                        ),
+                        None,
+                    )
+                    required = (
+                        forced_declaration.get("function", {})
+                        .get("parameters", {})
+                        .get("required", [])
+                        if forced_declaration
+                        else []
+                    )
+                    if forced_handler is not None and not required:
+                        tool_calls = [{
+                            "id": f"nova-continuation-{loop_index}",
+                            "type": "function",
+                            "function": {
+                                "name": forced_cloud_name,
+                                "arguments": "{}",
+                            },
+                        }]
+                        native_tool_calls = False
+
+            if not tool_calls:
                 content = message.get("content")
                 if isinstance(content, str):
                     lines = content.strip().splitlines()
