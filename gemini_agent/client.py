@@ -720,7 +720,7 @@ class GeminiClient:
                 expected = expected_match.group(1).strip()
             recovery = str(self.tool_handlers["recover_command"](command=command, expected=expected))
             failure_learning = ""
-            if re.search(r"\b(?:Exit code:\s*[1-9]\d*|Tool error\s*:|Outcome\s*:\s*FAILED)\b", result, re.IGNORECASE):
+            if re.search(r"\b(?:Exit code:\s*[1-9]\d*|Tool error\s*:|Outcome\s*:\s*FAILED)", result, re.IGNORECASE):
                 from gemini_agent.learning import record_verified_failure
                 failure_learning = record_verified_failure(
                     learning_request or request_text,
