@@ -1869,7 +1869,6 @@ class GeminiClient:
                 # Execute it at most once per goal step; never invent arguments.
                 if (
                     self.goal_state is not None
-                    and self.goal_state.status in {"ACTIVE", "VERIFIED"}
                     and re.search(
                         r"\b(?:command|attempt)\b",
                         self.goal_state.success_condition,
@@ -2031,7 +2030,6 @@ class GeminiClient:
                 # not another competing planner.
                 if (
                     self.goal_state is not None
-                    and self.goal_state.status in {"ACTIVE", "VERIFIED"}
                     and re.search(
                         r"\b(?:command|attempt)\b",
                         self.goal_state.success_condition,
