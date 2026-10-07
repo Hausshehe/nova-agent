@@ -3001,10 +3001,16 @@ class GeminiClient:
                                         command=command_match.group(1).strip()
                                     )
                         tool_result = handler(**args)
+                        raw_tool_result = str(tool_result)
+                        raw_tool_failed = bool(
+                            re.search(r"\bExit code:\s*[1-9]\d*\b", raw_tool_result)
+                            or re.search(r"\bTool error\s*:", raw_tool_result, re.IGNORECASE)
+                            or re.search(r"\bOutcome:\s*(?:FAILED|failure)\b", raw_tool_result, re.IGNORECASE)
+                        )
                         tool_result = self._coordinate_tool_failure(
                             local_name=local_name,
                             args=args,
-                            tool_result=str(tool_result),
+                            tool_result=raw_tool_result,
                             request_text=request_text,
                             learning_request=strategy_goal,
                         )
@@ -3045,9 +3051,34 @@ class GeminiClient:
                         )
                         self.goal_state.progress_status = observation.status
                         self.goal_state.progress_reason = observation.reason
+                        goal_result = str(tool_result)
+                        recovery_match = re.search(
+                            r"Recovery result:\s*(.*?)(?=\n(?:Diagnosis|Failure learning|Recovery learning):|$)",
+                            goal_result,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                        recovery_result = recovery_match.group(1).strip() if recovery_match else ""
+                        recovery_verified = bool(
+                            raw_tool_failed
+                            and recovery_result
+                            and re.search(
+                                r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
+                                recovery_result,
+                                re.IGNORECASE,
+                            )
+                        )
                         completion_evidence = "\n".join(
                             [*self.goal_state.evidence, f"Observed tool: {local_name}"]
                         )
+                        if recovery_verified:
+                            prior_evidence = [
+                                evidence
+                                for evidence in self.goal_state.evidence
+                                if evidence != str(tool_result)
+                            ]
+                            completion_evidence = "\n".join(
+                                [*prior_evidence, recovery_result, f"Observed recovery for: {local_name}"]
+                            )
                         completion = verify_goal_completion(
                             self.goal_state.goal,
                             self.goal_state.success_condition,
@@ -3055,11 +3086,11 @@ class GeminiClient:
                         )
                         if completion.status == "VERIFIED":
                             self.goal_state.status = "VERIFIED"
-                        elif completion.status == "FAILED":
+                        elif completion.status == "FAILED" and not recovery_verified:
                             self.goal_state.status = "FAILED"
                         step_status = (
-                            "VERIFIED" if completion.status == "VERIFIED"
-                            else "FAILED" if completion.status == "FAILED"
+                            "FAILED" if raw_tool_failed
+                            else "VERIFIED" if completion.status == "VERIFIED"
                             else "EXECUTED"
                         )
                         self.goal_state.record_step(
