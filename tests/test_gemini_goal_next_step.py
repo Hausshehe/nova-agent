@@ -4,7 +4,18 @@ from gemini_agent.goal_next_step import select_goal_next_step
 
 
 class GoalNextStepTests(unittest.TestCase):
-    def test_ordered_success_condition_prioritizes_prerequisite_step(self):\n        result = select_goal_next_step(\n            "attempt the unavailable command and report the current date",\n            "the current date is successfully reported after the unavailable command attempt",\n            "ACTIVE",\n            "INCONCLUSIVE",\n            "No goal-progress observation has been recorded.",\n            ["current_datetime", "run_command"],\n        )\n        self.assertEqual(result.action, "run_command")\n\n    def test_selects_goal_relevant_candidate(self):
+    def test_ordered_success_condition_prioritizes_prerequisite_step(self):
+        result = select_goal_next_step(
+            "attempt the unavailable command and report the current date",
+            "the current date is successfully reported after the unavailable command attempt",
+            "ACTIVE",
+            "INCONCLUSIVE",
+            "No goal-progress observation has been recorded.",
+            ["current_datetime", "run_command"],
+        )
+        self.assertEqual(result.action, "run_command")
+
+    def test_selects_goal_relevant_candidate(self):
         result = select_goal_next_step(
             "check the device battery",
             "the current battery status is successfully reported",
