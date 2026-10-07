@@ -67,7 +67,21 @@ class GoalProgressIntegrationTests(unittest.TestCase):
                         }]
                     }
                 }]
-            }
+            },
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "ordered-date-step",
+                            "type": "function",
+                            "function": {
+                                "name": "current_datetime",
+                                "arguments": {},
+                            },
+                        }]
+                    }
+                }]
+            },
         ]
         calls = {"run": 0}
 
