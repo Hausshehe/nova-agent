@@ -102,6 +102,10 @@ class GoalProgressIntegrationTests(unittest.TestCase):
             request_body = json.loads(_request.data.decode())
             if calls["run"] == 0:
                 self.assertEqual(request_body.get("tool_choice"), "auto")
+                self.assertEqual(
+                    [tool["function"]["name"] for tool in request_body.get("tools", [])],
+                    ["run_command"],
+                )
             return _FakeResponse(responses.pop(0))
 
         with patch.dict(
