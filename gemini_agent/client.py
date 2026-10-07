@@ -1862,6 +1862,38 @@ class GeminiClient:
             native_tool_calls = bool(tool_calls)
 
             if not tool_calls:
+                # If the active goal explicitly names a concrete command, that
+                # command is a bounded continuation action even when Cloudflare
+                # omits the selected tool call and does not echo tool_choice.
+                # Execute it at most once per goal step; never invent arguments.
+                if (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and self.tool_handlers.get("run_command") is not None
+                    and not any(
+                        step.get("action") == "run_command"
+                        for step in self.goal_state.steps
+                    )
+                ):
+                    explicit_command = self._extract_goal_command(
+                        self.goal_state.goal
+                    )
+                    if explicit_command:
+                        tool_calls = [{
+                            "id": f"nova-goal-command-{loop_index}",
+                            "type": "function",
+                            "function": {
+                                "name": self._CLOUD_TOOL_NAMES.get(
+                                    "run_command", "run_command"
+                                ),
+                                "arguments": json.dumps(
+                                    {"command": explicit_command}
+                                ),
+                            },
+                        }]
+                        native_tool_calls = False
+
+            if not tool_calls:
                 # Some providers acknowledge a forced continuation tool in
                 # reasoning but omit the actual tool call. When Nova itself
                 # selected a bounded no-argument tool, execute that selected
