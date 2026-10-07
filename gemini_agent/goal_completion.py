@@ -64,17 +64,30 @@ def verify_goal_completion(
     condition_terms = _terms(success_condition)
     goal_terms = _terms(goal)
     evidence_terms = _terms(normalized)
-    # The goal can establish the subject being checked, while the evidence
-    # must supply the observed state. This keeps completion generic without
-    # requiring tool output to repeat the goal wording verbatim.
-    required_evidence_terms = condition_terms - goal_terms
-    if (
-        required_evidence_terms
-        and required_evidence_terms.issubset(evidence_terms)
-    ):
+    # Verify each conjunct of the success condition independently. The goal
+    # may supply contextual wording, but a conjunct cannot be completed solely
+    # because its terms already appeared in the goal. It needs observed terms
+    # that establish that particular conjunct.
+    clauses = [
+        clause
+        for clause in re.split(r"\\band\\b", success_condition, flags=re.IGNORECASE)
+        if clause.strip()
+    ]
+    for clause in clauses:
+        clause_terms = _terms(clause)
+        if not clause_terms:
+            continue
+        observed_clause_terms = clause_terms & evidence_terms
+        observed_state_terms = observed_clause_terms - goal_terms
+        if not observed_state_terms:
+            return GoalCompletionObservation(
+                "INCONCLUSIVE",
+                "At least one success-condition clause has no observed evidence beyond wording already present in the goal.",
+            )
+    if condition_terms and condition_terms & evidence_terms:
         return GoalCompletionObservation(
             "VERIFIED",
-            "Observed evidence establishes every success-condition term not already supplied by the goal subject.",
+            "Observed evidence establishes every success-condition clause with evidence beyond the goal wording.",
         )
 
     return GoalCompletionObservation(
