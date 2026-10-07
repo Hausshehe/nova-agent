@@ -1714,6 +1714,12 @@ class GeminiClient:
                 d for d in self.tool_declarations
                 if d["name"] == selected_strategy
             ]
+        if goal_selected_action:
+            declarations = [
+                d for d in self.tool_declarations
+                if d["name"] == goal_selected_action
+            ]
+
         tools = [{
             "type": "function",
             "function": {
@@ -1722,12 +1728,6 @@ class GeminiClient:
                 "parameters": self._schema(d["parameters"]),
             },
         } for d in declarations]
-
-        if goal_selected_action:
-            declarations = [
-                d for d in self.tool_declarations
-                if d["name"] == goal_selected_action
-            ]
 
         payload = {
             "model": self.cloudflare_model,
