@@ -26,6 +26,18 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "recover_command")
 
+    def test_uses_accumulated_evidence_to_select_remaining_step(self):
+        result = select_goal_next_step(
+            "check the battery and current date",
+            "the battery status and current date are successfully reported",
+            "ACTIVE",
+            "PROGRESS",
+            "Battery evidence provides partial progress.",
+            ["get_system_battery_status", "current_datetime"],
+            "Level: 82% Status: Charging Power source: Battery",
+        )
+        self.assertEqual(result.action, "current_datetime")
+
     def test_verified_goal_stops(self):
         result = select_goal_next_step(
             "check the device battery",
