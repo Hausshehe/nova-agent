@@ -1842,6 +1842,7 @@ class GeminiClient:
                 # selected a bounded no-argument tool, execute that selected
                 # action locally rather than losing the autonomous step.
                 forced = payload.get("tool_choice")
+                forced_cloud_name = ""
                 if (
                     self.goal_state is not None
                     and self.goal_state.status == "ACTIVE"
@@ -1851,6 +1852,29 @@ class GeminiClient:
                     forced_cloud_name = str(
                         forced.get("function", {}).get("name", "")
                     ).strip()
+
+                # Do not depend on the provider echoing Nova's tool_choice back
+                # correctly. The local continuation decision is already recorded
+                # in the trace, so it is authoritative for this bounded step.
+                if (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and not forced_cloud_name
+                ):
+                    for trace in reversed(self.last_tool_calls):
+                        if trace.get("name") == "select_goal_next_step":
+                            match = re.search(
+                                r"Next step:\s*([A-Za-z_][A-Za-z0-9_]*)",
+                                str(trace.get("result", "")),
+                            )
+                            if match:
+                                selected_local_name = match.group(1)
+                                forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                                    selected_local_name, selected_local_name
+                                )
+                            break
+
+                if forced_cloud_name:
                     forced_local_name = next(
                         (
                             name
@@ -1865,15 +1889,12 @@ class GeminiClient:
                             declaration
                             for declaration in self.tool_declarations
                             if isinstance(declaration, dict)
-                            and declaration.get("function", {}).get("name")
-                            == forced_cloud_name
+                            and declaration.get("name") == forced_local_name
                         ),
                         None,
                     )
                     required = (
-                        forced_declaration.get("function", {})
-                        .get("parameters", {})
-                        .get("required", [])
+                        forced_declaration.get("parameters", {}).get("required", [])
                         if forced_declaration
                         else []
                     )
