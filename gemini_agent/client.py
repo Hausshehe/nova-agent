@@ -3701,7 +3701,15 @@ class GeminiClient:
                             "type": "function",
                             "function": {"name": selected_cloud_name},
                         }
-                elif requested_tool:
+                elif requested_tool and not (
+                    self.goal_state is not None
+                    and self.goal_state.status == "ACTIVE"
+                    and re.search(
+                        r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                        request_text,
+                        re.IGNORECASE | re.DOTALL,
+                    )
+                ):
                     payload.pop("tools", None)
                     payload.pop("tool_choice", None)
                 else:
