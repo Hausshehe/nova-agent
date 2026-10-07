@@ -1037,19 +1037,23 @@ class GeminiClient:
                 "args": {"goal": goal, "success_condition": success_condition},
                 "result": result,
             })
-            continuation = re.search(r"\b(?:then|after that|next)\b", request_text, re.IGNORECASE)
-            if not continuation:
-                autonomous_pursuit = bool(
-                    re.search(
-                        r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                        request_text,
-                        re.IGNORECASE | re.DOTALL,
-                    )
+            autonomous_pursuit = bool(
+                re.search(
+                    r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                    request_text,
+                    re.IGNORECASE | re.DOTALL,
                 )
+            )
+            continuation = re.search(r"\b(?:then|after that|next)\b", request_text, re.IGNORECASE)
+            if autonomous_pursuit:
+                # In autonomous goals, words such as "then" may occur inside the
+                # quoted goal/success condition. Do not mistake that natural-language
+                # ordering for an explicit local tool request; the goal bridge owns
+                # step selection.
+                requested_tool = None
+            elif not continuation:
                 if not autonomous_pursuit:
                     return result
-                # The goal contract is established and autonomous pursuit was
-                # explicitly requested. Leave routing open for the bounded bridge.
                 requested_tool = None
             else:
                 continuation_text = request_text[continuation.end():].strip()
