@@ -82,6 +82,13 @@ class GoalProgressIntegrationTests(unittest.TestCase):
                     }
                 }]
             },
+            {
+                "choices": [{
+                    "message": {
+                        "content": "Goal steps completed.",
+                    }
+                }]
+            },
         ]
         calls = {"run": 0}
 
