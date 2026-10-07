@@ -3063,6 +3063,12 @@ class GeminiClient:
                             re.IGNORECASE | re.DOTALL,
                         )
                         recovery_result = recovery_match.group(1).strip() if recovery_match else ""
+                        if recovery_result:
+                            recovery_result = re.split(
+                                r"(?:\\\\n|\\n|\\r?\\n)",
+                                recovery_result,
+                                maxsplit=1,
+                            )[0].strip()
                         if not recovery_result:
                             verified_match = re.search(
                                 r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
