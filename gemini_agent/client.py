@@ -3171,7 +3171,7 @@ class GeminiClient:
                         executed_names = {
                             step["action"]
                             for step in self.goal_state.steps
-                            if step.get("status") in {"EXECUTED", "VERIFIED"}
+                            if step.get("status") in {"EXECUTED", "VERIFIED", "FAILED"}
                         }
                         continuation_declarations = self.tool_declarations
                         continuation_candidates = [
