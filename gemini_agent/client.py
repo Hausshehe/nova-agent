@@ -3065,7 +3065,7 @@ class GeminiClient:
                         recovery_result = recovery_match.group(1).strip() if recovery_match else ""
                         if not recovery_result:
                             verified_match = re.search(
-                                r"((?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b[^\n\\]*(?:\\n)?[^\n]*)",
+                                r"((?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b.*?)(?=\\\\n|\\n|$)",
                                 goal_result,
                                 re.IGNORECASE,
                             )
