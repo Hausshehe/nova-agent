@@ -1037,9 +1037,17 @@ class GeminiClient:
             })
             continuation = re.search(r"\b(?:then|after that|next)\b", request_text, re.IGNORECASE)
             if not continuation:
-                # The goal contract is established, but no explicit next tool was
-                # requested. Leave routing open so the goal-directed execution bridge
-                # can select the next bounded capability.
+                autonomous_pursuit = bool(
+                    re.search(
+                        r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                        request_text,
+                        re.IGNORECASE | re.DOTALL,
+                    )
+                )
+                if not autonomous_pursuit:
+                    return result
+                # The goal contract is established and autonomous pursuit was
+                # explicitly requested. Leave routing open for the bounded bridge.
                 requested_tool = None
             else:
                 continuation_text = request_text[continuation.end():].strip()
