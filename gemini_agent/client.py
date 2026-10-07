@@ -1080,6 +1080,62 @@ class GeminiClient:
                 ),
             })
 
+        # Goal-directed execution bridge: use the existing bounded next-step selector
+        # to choose one relevant registered capability when a runtime goal is active.
+        goal_selected_action = ""
+        if self.goal_state is not None and not requested_tool and not strategy_candidates:
+            goal_declarations = self._relevant_tool_declarations(contents)
+            goal_candidates = [
+                str(declaration.get("name", "")).strip()
+                for declaration in goal_declarations
+                if isinstance(declaration, dict)
+                and str(declaration.get("name", "")).strip()
+                not in {
+                    "establish_goal_contract", "select_goal_next_step",
+                    "self_test", "capability_inventory", "assess_capability_gap",
+                }
+            ]
+            if goal_candidates:
+                from gemini_agent.goal_next_step import select_goal_next_step
+                goal_selection = select_goal_next_step(
+                    self.goal_state.goal,
+                    self.goal_state.success_condition,
+                    self.goal_state.status,
+                    self.goal_state.progress_status,
+                    self.goal_state.progress_reason,
+                    goal_candidates,
+                )
+                if goal_selection.action == "STOP":
+                    return (
+                        "Goal-directed next step: STOP\\n"
+                        f"Reason: {goal_selection.reason}\\n"
+                        "No goal-directed action was executed."
+                    )
+                if goal_selection.action in self.tool_handlers:
+                    goal_selected_action = goal_selection.action
+                    self.last_tool_calls.append({
+                        "name": "select_goal_next_step",
+                        "args": {
+                            "goal": self.goal_state.goal,
+                            "success_condition": self.goal_state.success_condition,
+                            "goal_status": self.goal_state.status,
+                            "progress_status": self.goal_state.progress_status,
+                            "progress_reason": self.goal_state.progress_reason,
+                            "candidates": goal_candidates,
+                        },
+                        "result": (
+                            f"Next step: {goal_selection.action}\\n"
+                            f"Reason: {goal_selection.reason}"
+                        ),
+                    })
+                    messages[0]["content"] = str(messages[0]["content"]) + (
+                        "\\n\\nGoal-directed next-step selection:\\n"
+                        f"Selected action: {goal_selected_action}\\n"
+                        f"Reason: {goal_selection.reason}\\n"
+                        "Execute this selected action once, observe its result, and do not claim "
+                        "goal completion unless the bounded completion verifier establishes it."
+                    )
+
         if requested_tool == "select_verified_strategy_tool":
             request_match = re.search(r'(?:for|request)\s+(?:strategy\s+)?["\']([^"\']+)["\']', request_text, re.IGNORECASE)
             candidates_match = re.search(r'candidates?\s*(?::|=)?\s*(.+?)(?=\s+Do not|\s+Report|$)', request_text, re.IGNORECASE | re.DOTALL)
@@ -1663,6 +1719,12 @@ class GeminiClient:
             },
         } for d in declarations]
 
+        if goal_selected_action:
+            declarations = [
+                d for d in self.tool_declarations
+                if d["name"] == goal_selected_action
+            ]
+
         payload = {
             "model": self.cloudflare_model,
             "messages": messages,
@@ -1673,6 +1735,11 @@ class GeminiClient:
             payload["tool_choice"] = {
                 "type": "function",
                 "function": {"name": "apply_capability_extension"},
+            }
+        elif goal_selected_action:
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": self._CLOUD_TOOL_NAMES.get(goal_selected_action, goal_selected_action)},
             }
         elif strategy_candidates and selected_strategy:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(selected_strategy, selected_strategy)
@@ -2867,6 +2934,15 @@ class GeminiClient:
                         )
                         self.goal_state.progress_status = observation.status
                         self.goal_state.progress_reason = observation.reason
+                        completion = verify_goal_completion(
+                            self.goal_state.goal,
+                            self.goal_state.success_condition,
+                            str(tool_result),
+                        )
+                        if completion.status == "VERIFIED":
+                            self.goal_state.status = "VERIFIED"
+                        elif completion.status == "FAILED":
+                            self.goal_state.status = "FAILED"
                         tool_result = (
                             str(tool_result)
                             + "\\nGoal progress observation: "
@@ -2877,7 +2953,12 @@ class GeminiClient:
                             + completion.status
                             + "\\nGoal completion reason: "
                             + completion.reason
+                            + "\\nRuntime goal status: "
+                            + self.goal_state.status
                         )
+                        if goal_selected_action and self.goal_state.status == "VERIFIED":
+                            return str(tool_result)
+
 
                     trace = {"name": local_name, "args": args, "result": tool_result}
                     if (
