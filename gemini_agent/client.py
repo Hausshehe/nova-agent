@@ -3026,6 +3026,66 @@ class GeminiClient:
                         },                    }]
                     native_tool_calls = False
 
+            # If the provider omits a forced continuation tool call, Nova may
+            # execute the already-selected bounded local step instead of treating the
+            # empty response as a terminal provider error. Required arguments are filled
+            # only from an explicitly named command in the active goal.
+            if (
+                not tool_calls
+                and self.goal_state is not None
+                and self.goal_state.status == "ACTIVE"
+                and re.search(
+                    r"\\b(?:pursue|continue|work\\s+toward|achieve)\\b.*\\b(?:goal|autonomously|automatically)\\b|\\bautonomously\\b",
+                    request_text,
+                    re.IGNORECASE | re.DOTALL,
+                )
+            ):
+                forced = payload.get("tool_choice")
+                forced_cloud_name = ""
+                if isinstance(forced, dict):
+                    forced_function = forced.get("function") or {}
+                    forced_cloud_name = str(forced_function.get("name", "")).strip()
+                if not forced_cloud_name and len(payload.get("tools", [])) == 1:
+                    forced_cloud_name = str(
+                        payload["tools"][0].get("function", {}).get("name", "")
+                    ).strip()
+                if forced_cloud_name:
+                    forced_local_name = next(
+                        (
+                            name
+                            for name, cloud_name in self._CLOUD_TOOL_NAMES.items()
+                            if cloud_name == forced_cloud_name
+                        ),
+                        forced_cloud_name,
+                    )
+                    forced_handler = self.tool_handlers.get(forced_local_name)
+                    forced_declaration = next(
+                        (
+                            declaration
+                            for declaration in self.tool_declarations
+                            if declaration.get("name") == forced_local_name
+                        ),
+                        None,
+                    )
+                    required = set(
+                        (forced_declaration or {}).get("parameters", {}).get("required", [])
+                    )
+                    forced_arguments = {}
+                    if forced_local_name == "run_command" and required:
+                        command = self._extract_goal_command(self.goal_state.goal)
+                        if command:
+                            forced_arguments = {"command": command}
+                    if forced_handler is not None and (not required or forced_arguments):
+                        tool_calls = [{
+                            "id": f"nova-forced-{forced_local_name}",
+                            "type": "function",
+                            "function": {
+                                "name": forced_cloud_name,
+                                "arguments": json.dumps(forced_arguments),
+                            },
+                        }]
+                        native_tool_calls = False
+
             if tool_calls:
                 # Cloudflare's OpenAI-compatible endpoint requires function
                 # arguments to be a JSON string. Normalize every tool-call
