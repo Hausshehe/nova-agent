@@ -36,13 +36,25 @@ def select_goal_next_step(
     progress_status: str,
     progress_reason: str,
     candidates: list[str],
+    evidence: str = "",
 ) -> GoalNextStep:
     """Select one bounded next action without executing it."""
-    for value, label in ((goal, "Goal"), (success_condition, "Success condition"), (progress_reason, "Progress reason")):
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{label} cannot be empty.")
+    for value, label in (
+        (goal, "Goal"),
+        (success_condition, "Success condition"),
+        (progress_reason, "Progress reason"),
+        (evidence, "Evidence"),
+    ):
+        if not isinstance(value, str):
+            raise ValueError(f"{label} must be text.")
         if len(value.strip()) > _MAX_TEXT:
             raise ValueError(f"{label} is too long.")
+    if not str(goal).strip():
+        raise ValueError("Goal cannot be empty.")
+    if not str(success_condition).strip():
+        raise ValueError("Success condition cannot be empty.")
+    if not str(progress_reason).strip():
+        raise ValueError("Progress reason cannot be empty.")
     if goal_status not in {"ACTIVE", "VERIFIED", "FAILED"}:
         raise ValueError("Goal status is invalid.")
     if progress_status not in {"PROGRESS", "BLOCKED", "INCONCLUSIVE"}:
@@ -58,7 +70,13 @@ def select_goal_next_step(
         return GoalNextStep("STOP", "The goal is already verified; no further action is justified.")
     if goal_status == "FAILED":
         return GoalNextStep("STOP", "The goal is failed; no bounded next action is justified from the supplied state.")
+
     target_terms = _terms(goal) | _terms(success_condition)
+    observed_terms = _terms(evidence)
+    remaining_condition_terms = _terms(success_condition) - observed_terms
+    if remaining_condition_terms:
+        target_terms = _terms(goal) | remaining_condition_terms
+
     scored = []
     for index, candidate in enumerate(clean):
         score = len(_terms(candidate) & target_terms)
@@ -67,5 +85,8 @@ def select_goal_next_step(
         scored.append((score, -index, candidate))
     best_score, _, best = max(scored)
     if best_score <= 0:
-        return GoalNextStep("STOP", "No candidate has a bounded semantic connection to the active goal.")
-    return GoalNextStep(best, f"Selected the candidate with the strongest bounded relevance to the active goal ({best_score} relevance points).")
+        return GoalNextStep("STOP", "No candidate has a bounded semantic connection to the remaining active goal.")
+    reason = "Selected the candidate with the strongest bounded relevance to the active goal"
+    if evidence.strip() and remaining_condition_terms:
+        reason += " and its remaining success-condition evidence"
+    return GoalNextStep(best, f"{reason} ({best_score} relevance points).")
