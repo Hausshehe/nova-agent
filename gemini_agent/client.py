@@ -1903,11 +1903,32 @@ class GeminiClient:
                     self.goal_state is not None
                     and self.goal_state.status == "ACTIVE"
                     and not forced_cloud_name
-                    and len(payload.get("tools", [])) == 1
                 ):
-                    forced_cloud_name = str(
-                        payload.get("tools", [])[0].get("function", {}).get("name", "")
-                    ).strip()
+                    offered_tools = payload.get("tools", [])
+                    if len(offered_tools) == 1:
+                        forced_cloud_name = str(
+                            offered_tools[0].get("function", {}).get("name", "")
+                        ).strip()
+                    else:
+                        explicit_command = self._extract_goal_command(
+                            self.goal_state.goal
+                        )
+                        if explicit_command:
+                            for offered in offered_tools:
+                                offered_name = str(
+                                    offered.get("function", {}).get("name", "")
+                                ).strip()
+                                offered_local = next(
+                                    (
+                                        name
+                                        for name, cloud_name in self._CLOUD_TOOL_NAMES.items()
+                                        if cloud_name == offered_name
+                                    ),
+                                    offered_name,
+                                )
+                                if offered_local == "run_command":
+                                    forced_cloud_name = offered_name
+                                    break
 
                 if forced_cloud_name:
                     forced_local_name = next(
