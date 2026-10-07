@@ -2539,6 +2539,28 @@ class GeminiClient:
                                         command=command_match.group(1).strip()
                                     )
                         tool_result = handler(**args)
+                        if local_name == "run_command" and (
+                            str(tool_result).startswith("Exit code:")
+                            and not str(tool_result).startswith("Exit code: 0")
+                        ):
+                            command = str(args.get("command", "")).strip()
+                            diagnosis = self.tool_handlers["diagnose_command_failure"](
+                                command=command,
+                                error=str(tool_result),
+                            )
+                            expected = ""
+                            expected_match = re.search(
+                                r"expected(?:\\s+text|\\s+postcondition)?(?:\\s+is|\\s*[:=])?\\s*[\\"\']([^\\"\']+)[\\"\']",
+                                request_text,
+                                re.IGNORECASE,
+                            )
+                            if expected_match:
+                                expected = expected_match.group(1).strip()
+                            recovery = self.tool_handlers["recover_command"](
+                                command=command,
+                                expected=expected,
+                            )
+                            tool_result = f"Automatic command recovery:\\n{diagnosis}\\n{recovery}"
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
                         tool_result = f"Tool error: {exc}"
