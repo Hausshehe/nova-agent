@@ -1079,6 +1079,14 @@ class GeminiClient:
                         self.goal_state.status = "VERIFIED"
                     elif completion.status == "FAILED":
                         self.goal_state.status = "FAILED"
+                    step_status = (
+                        "VERIFIED" if completion.status == "VERIFIED"
+                        else "FAILED" if completion.status == "FAILED"
+                        else "EXECUTED"
+                    )
+                    self.goal_state.record_step(
+                        requested_tool, step_status, continuation_result
+                    )
                     return (
                         result
                         + "\nGoal progress observation: " + observation.status
@@ -3049,6 +3057,14 @@ class GeminiClient:
                             self.goal_state.status = "VERIFIED"
                         elif completion.status == "FAILED":
                             self.goal_state.status = "FAILED"
+                        step_status = (
+                            "VERIFIED" if completion.status == "VERIFIED"
+                            else "FAILED" if completion.status == "FAILED"
+                            else "EXECUTED"
+                        )
+                        self.goal_state.record_step(
+                            local_name, step_status, str(tool_result)
+                        )
                         tool_result = (
                             str(tool_result)
                             + "\\nGoal progress observation: "
@@ -3112,10 +3128,9 @@ class GeminiClient:
                     ):
                         from gemini_agent.goal_next_step import select_goal_next_step
                         executed_names = {
-                            str(call.get("name", "")).strip()
-                            for call in self.last_tool_calls
-                            if str(call.get("name", "")).strip()
-                            not in {"select_goal_next_step", "establish_goal_contract"}
+                            step["action"]
+                            for step in self.goal_state.steps
+                            if step.get("status") in {"EXECUTED", "VERIFIED"}
                         }
                         continuation_declarations = self.tool_declarations
                         continuation_candidates = [
