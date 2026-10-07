@@ -1657,6 +1657,23 @@ class RunCommandToolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Arguments are not allowed"):
             run_command("git log")
 
+    def test_run_command_allows_bounded_python_exit_probe(self):
+        with patch(
+            "gemini_agent.tools.subprocess.run",
+            return_value=type("Result", (), {
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "",
+            })(),
+        ) as run:
+            result = run_command('python -c "import sys; sys.exit(1)"')
+        self.assertEqual(result, "Exit code: 1")
+        run.assert_called_once()
+
+    def test_run_command_rejects_unbounded_python_code(self):
+        with self.assertRaisesRegex(ValueError, "Arguments are not allowed"):
+            run_command('python -c "import os; os.system(\\"id\\")"')
+
     def test_run_command_is_registered(self):
         self.assertIs(TOOL_HANDLERS["run_command"], run_command)
         self.assertEqual(RUN_COMMAND_DECLARATION["name"], "run_command")
