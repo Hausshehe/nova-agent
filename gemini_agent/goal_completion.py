@@ -68,6 +68,28 @@ def verify_goal_completion(
             raise ValueError(f"{label} is too long.")
 
     normalized = evidence.strip()
+    # Runtime contract-establishment/management text is not outcome evidence.
+    # It can repeat the goal and success condition verbatim, which must never
+    # be enough to verify the goal.
+    evidence_lines = []
+    for line in normalized.splitlines():
+        stripped_line = line.strip()
+        if (
+            stripped_line.startswith("Runtime goal contract established for this turn.")
+            or stripped_line.startswith("Goal:")
+            or stripped_line.startswith("Success condition:")
+            or stripped_line.startswith("The runtime state is ")
+            or stripped_line.startswith("Any tool outcome must be observed as goal evidence;")
+        ):
+            continue
+        evidence_lines.append(line)
+    normalized = "\n".join(evidence_lines).strip()
+    if not normalized:
+        return GoalCompletionObservation(
+            "INCONCLUSIVE",
+            "Observed evidence contains only goal-management text, not a goal outcome.",
+        )
+
     if re.search(
         r"\b(?:Outcome|Verification|Postcondition|Post-action verification)\s*:\s*FAILED\b"
         r"|\bTool error\s*:",
