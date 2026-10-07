@@ -391,8 +391,8 @@ class CloudflareClientTests(unittest.TestCase):
             return_value=FakeResponse(response),
         ) as open_url:
             GeminiClient().ask(
-                'Choose between strategy "fallback_probe" and strategy "retry_safe" '
-                'for recovering a failed network check.'
+                'Choose between strategy "calculator" and strategy "run_command" '
+                'for calculating a value.'
             )
         sent = json.loads(open_url.call_args.args[0].data)
         system_messages = [
