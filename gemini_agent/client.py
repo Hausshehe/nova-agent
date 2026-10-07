@@ -1784,10 +1784,16 @@ class GeminiClient:
                 "function": {"name": "apply_capability_extension"},
             }
         elif goal_selected_action:
-            payload["tool_choice"] = {
-                "type": "function",
-                "function": {"name": self._CLOUD_TOOL_NAMES.get(goal_selected_action, goal_selected_action)},
-            }
+            # For the autonomous run_command step, let the provider emit the
+            # required argument normally instead of forcing a function call that
+            # can trigger a provider-side empty-argument parser failure.
+            if goal_selected_action == "run_command":
+                payload["tool_choice"] = "auto"
+            else:
+                payload["tool_choice"] = {
+                    "type": "function",
+                    "function": {"name": self._CLOUD_TOOL_NAMES.get(goal_selected_action, goal_selected_action)},
+                }
         elif strategy_candidates and selected_strategy:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(selected_strategy, selected_strategy)
             payload["tool_choice"] = {
