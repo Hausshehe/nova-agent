@@ -1959,7 +1959,7 @@ class GeminiClient:
                         else []
                     )
                     forced_arguments = {}
-                    if forced_local_name == "run_command" and required:
+                    if forced_local_name == "run_command":
                         goal_text = (
                             self.goal_state.goal
                             if self.goal_state is not None
@@ -1969,7 +1969,11 @@ class GeminiClient:
                         if command:
                             forced_arguments = {"command": command}
                     if forced_handler is not None and (
-                        not required or forced_arguments
+                        (not required or forced_arguments)
+                        or (
+                            forced_local_name == "run_command"
+                            and bool(forced_arguments)
+                        )
                     ):
                         tool_calls = [{
                             "id": f"nova-continuation-{loop_index}",
