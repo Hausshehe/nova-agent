@@ -1027,10 +1027,19 @@ class GeminiClient:
                     observation = observe_goal_progress(goal, success_condition, continuation_result)
                     self.goal_state.progress_status = observation.status
                     self.goal_state.progress_reason = observation.reason
+                    completion = verify_goal_completion(
+                        goal, success_condition, continuation_result
+                    )
+                    if completion.status == "VERIFIED":
+                        self.goal_state.status = "VERIFIED"
+                    elif completion.status == "FAILED":
+                        self.goal_state.status = "FAILED"
                     return (
                         result
                         + "\nGoal progress observation: " + observation.status
                         + "\nGoal progress reason: " + observation.reason
+                        + "\nGoal completion verification: " + completion.status
+                        + "\nGoal completion reason: " + completion.reason
                         + "\nObserved tool: " + requested_tool
                         + "\nObserved result: " + continuation_result
                     )
