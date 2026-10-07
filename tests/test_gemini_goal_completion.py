@@ -14,6 +14,18 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "VERIFIED")
 
+    def test_goal_contract_metadata_cannot_verify_goal(self):
+        result = verify_goal_completion(
+            "run the harmless Android diagnostic command dumpsys -l and report the current date",
+            "the recovered diagnostic command result and current date are successfully reported",
+            "Runtime goal contract established for this turn. "
+            "Goal: run the harmless Android diagnostic command dumpsys -l and report the current date. "
+            "Success condition: the recovered diagnostic command result and current date are successfully reported. "
+            "The runtime state is ACTIVE. "
+            "Any tool outcome must be observed as goal evidence; do not claim final completion unless a later bounded completion verifier explicitly proves it.",
+        )
+        self.assertEqual(result.status, "INCONCLUSIVE")
+
     def test_explicit_failure_fails_goal(self):
         result = verify_goal_completion(
             "check the device battery",
