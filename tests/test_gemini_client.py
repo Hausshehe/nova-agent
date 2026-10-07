@@ -145,7 +145,7 @@ class CloudflareClientTests(unittest.TestCase):
                 "type": "function",
                 "function": {
                     "name": "run_command",
-                    "arguments": json.dumps({"command": "python --version"}),
+                    "arguments": json.dumps({"command": "python -c \"import sys; sys.exit(1)\""}),
                 },
             }]}}]
         }
