@@ -15,6 +15,17 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "get_system_battery_status")
 
+    def test_unblocked_goal_prefers_primary_action_over_recovery(self):
+        result = select_goal_next_step(
+            "actually attempt the diagnostic command and report the current date",
+            "the diagnostic command has been attempted successfully and the current date is reported",
+            "ACTIVE",
+            "INCONCLUSIVE",
+            "No bounded evidence is available.",
+            ["recover_command", "run_command", "current_datetime"],
+        )
+        self.assertEqual(result.action, "run_command")
+
     def test_blocked_prefers_recovery_candidate(self):
         result = select_goal_next_step(
             "recover a failed battery check",
