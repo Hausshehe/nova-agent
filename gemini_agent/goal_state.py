@@ -16,6 +16,8 @@ class GoalState:
     goal: str
     success_condition: str
     status: str = "ACTIVE"
+    progress_status: str = "INCONCLUSIVE"
+    progress_reason: str = "No goal-progress observation has been recorded."
     evidence: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -25,6 +27,10 @@ class GoalState:
             raise ValueError("Success condition cannot be empty.")
         if self.status not in {"ACTIVE", "VERIFIED", "FAILED"}:
             raise ValueError("Goal status must be ACTIVE, VERIFIED, or FAILED.")
+        if self.progress_status not in {"PROGRESS", "BLOCKED", "INCONCLUSIVE"}:
+            raise ValueError("Goal progress status is invalid.")
+        if not isinstance(self.progress_reason, str) or not self.progress_reason.strip():
+            raise ValueError("Goal progress reason cannot be empty.")
         if len(self.goal.strip()) > _MAX_TEXT or len(self.success_condition.strip()) > _MAX_TEXT:
             raise ValueError("Goal contract text is too long.")
 
@@ -39,6 +45,8 @@ class GoalState:
             "goal": self.goal.strip(),
             "success_condition": self.success_condition.strip(),
             "status": self.status,
+            "progress_status": self.progress_status,
+            "progress_reason": self.progress_reason,
             "evidence": list(self.evidence),
         }
 
