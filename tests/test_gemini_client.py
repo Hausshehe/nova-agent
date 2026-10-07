@@ -628,6 +628,51 @@ class CloudflareClientTests(unittest.TestCase):
             domain="general",
         )
 
+    def test_compound_run_command_recovery_learning_executes_explicit_command_locally(self):
+        request = (
+            'First record a verified experience for request "recover a failed Android diagnostic check" '
+            'using strategy "run_command" with verification "Verification: VERIFIED: bounded recovery-learning seed." '
+            'Then use the normal decision process for request "recover a failed Android diagnostic check". '
+            'I have two candidate strategies: "run_command" and "calculator". '
+            'Use the verified-experience preference to select the preferred executable strategy. '
+            'Execute the selected strategy exactly once with command "dumpsys -l" and expected text "activity". '
+            'When it fails, use the generic tool-failure recovery coordinator and its existing bounded recovery path.'
+        )
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "gemini_agent.learning.select_verified_strategy",
+            return_value="Verified strategy selection: run_command",
+        ), patch(
+            "gemini_agent.learning.record_verified_experience",
+            return_value="Verified experience learned.",
+        ) as record, patch(
+            "gemini_agent.tools.run_command",
+            return_value="Exit code: 1",
+        ) as run_command, patch(
+            "gemini_agent.tools.diagnose_command_failure",
+            return_value="Diagnosis: bounded failure.",
+        ), patch(
+            "gemini_agent.tools.recover_command",
+            return_value="Outcome: VERIFIED\nRecovery succeeded.",
+        ):
+            client = GeminiClient()
+            result = client.ask(request)
+
+        run_command.assert_called_once_with(command="dumpsys -l")
+        self.assertIn("Selected strategy execution:", result)
+        self.assertIn("Outcome: VERIFIED", result)
+        self.assertIn("Recovery learning:", result)
+        self.assertGreaterEqual(record.call_count, 2)
+        record.assert_any_call(
+            "recover a failed Android diagnostic check",
+            "run_command",
+            "Outcome: VERIFIED\nRecovery succeeded.",
+            domain="general",
+        )
+
     def test_compound_verified_learning_request_stays_in_normal_decision_loop(self):
         request = (
             'First record a verified experience for request "verify a safe command result" '
