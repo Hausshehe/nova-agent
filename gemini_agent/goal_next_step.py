@@ -69,4 +69,3 @@ def select_goal_next_step(
     if best_score <= 0:
         return GoalNextStep("STOP", "No candidate has a bounded semantic connection to the active goal.")
     return GoalNextStep(best, f"Selected the candidate with the strongest bounded relevance to the active goal ({best_score} relevance points).")
-"
