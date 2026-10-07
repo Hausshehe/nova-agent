@@ -99,6 +99,9 @@ class GoalProgressIntegrationTests(unittest.TestCase):
 
         def urlopen(_request, timeout=180):
             del timeout
+            request_body = json.loads(_request.data.decode())
+            if calls["run"] == 0:
+                self.assertEqual(request_body.get("tool_choice"), "auto")
             return _FakeResponse(responses.pop(0))
 
         with patch.dict(
