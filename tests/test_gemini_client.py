@@ -137,6 +137,33 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "REPAIRED")
         open_url.assert_not_called()
 
+    def test_unregistered_strategy_is_blocked_before_provider_execution(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen") as open_url:
+            client = GeminiClient()
+            with patch(
+                "gemini_agent.learning.select_verified_strategy",
+                return_value=(
+                    "Verified strategy selection: retry_safe\\n"
+                    "Candidates: ['retry_safe', 'fallback_probe']\\n"
+                    "Selection basis: verified experience ranking changed the preferred candidate\\n"
+                    "Safety boundary: selection is a preference only; validation and execution verification remain authoritative.\\n"
+                    "No strategy execution or device state change was performed."
+                ),
+            ):
+                result = client.ask(
+                    'Use the normal decision process for request "recover a failed network check". '
+                    'I have two candidate strategies: "retry_safe" and "fallback_probe".'
+                )
+        self.assertIn("Verified strategy selection blocked before execution.", result)
+        self.assertIn("Selected strategy: retry_safe", result)
+        self.assertIn("no registered executable tool", result)
+        self.assertIn("STOPPED SAFELY", result)
+        open_url.assert_not_called()
+
     def test_failed_command_enters_automatic_diagnosis_and_recovery(self):
         followup = {"choices": [{"message": {"content": "recovery complete"}}]}
         response = {
