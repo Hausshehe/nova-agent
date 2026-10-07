@@ -371,7 +371,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
             )
             result = client.ask(
                 'Establish a goal contract for "report the current date and attempt command \'nova-missing-command\'" '
-                'with success condition "the current date is successfully reported after the command attempt". '
+                'with success condition "the current date and command attempt are successfully reported". '
                 "Pursue this goal autonomously without asking me to name a tool."
             )
 
