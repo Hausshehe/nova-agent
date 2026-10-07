@@ -2987,7 +2987,7 @@ class GeminiClient:
                             + "\\nRuntime goal status: "
                             + self.goal_state.status
                         )
-                        if goal_selected_action and self.goal_state.status == "VERIFIED":
+                        if self.goal_state.status == "VERIFIED":
                             return str(tool_result)
 
 
