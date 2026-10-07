@@ -315,7 +315,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
             )
             result = client.ask(
                 'Establish a goal contract for "attempt the environment-sensitive command and report the current date" '
-                'with success condition "the command result and current date are successfully reported". '
+                'with success condition "the current date is successfully reported". '
                 "Pursue this goal autonomously without asking me to name a tool."
             )
 
