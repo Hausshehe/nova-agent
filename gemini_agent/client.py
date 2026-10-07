@@ -700,7 +700,8 @@ class GeminiClient:
         result = str(tool_result)
         failed = bool(
             re.search(r"\bExit code:\s*[1-9]\d*\b", result)
-            or re.search(r"\b(?:Tool error|Outcome):\s*(?:FAILED|failure)\b", result, re.IGNORECASE)
+            or re.search(r"\bTool error\s*:", result, re.IGNORECASE)
+            or re.search(r"\bOutcome:\s*(?:FAILED|failure)\b", result, re.IGNORECASE)
         )
         if not failed:
             return result
