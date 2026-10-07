@@ -177,6 +177,13 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
+            "establish a goal contract",
+            "establish goal contract",
+            "set the goal contract",
+            "set goal contract",
+        )):
+            return "establish_goal_contract"
+        if any(phrase in user_text for phrase in (
             "learn from verified android experience",
             "record verified android experience",
             "persist verified android experience",
