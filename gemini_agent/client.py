@@ -3199,6 +3199,13 @@ class GeminiClient:
                             )
                         ]
                         if continuation_candidates:
+                            continuation_evidence = "\n".join(self.goal_state.evidence)
+                            if len(continuation_evidence) > 512:
+                                continuation_evidence = (
+                                    continuation_evidence[:256]
+                                    + "\n..."
+                                    + continuation_evidence[-253:]
+                                )
                             continuation_selection = select_goal_next_step(
                                 self.goal_state.goal,
                                 self.goal_state.success_condition,
@@ -3206,7 +3213,7 @@ class GeminiClient:
                                 self.goal_state.progress_status,
                                 self.goal_state.progress_reason,
                                 continuation_candidates,
-                                "\n".join(self.goal_state.evidence),
+                                continuation_evidence,
                             )
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
