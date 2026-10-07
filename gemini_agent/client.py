@@ -3035,7 +3035,7 @@ class GeminiClient:
                 and self.goal_state is not None
                 and self.goal_state.status == "ACTIVE"
                 and re.search(
-                    r"\\b(?:pursue|continue|work\\s+toward|achieve)\\b.*\\b(?:goal|autonomously|automatically)\\b|\\bautonomously\\b",
+                    r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
                     request_text,
                     re.IGNORECASE | re.DOTALL,
                 )
