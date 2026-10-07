@@ -26,6 +26,17 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "run_command")
 
+    def test_unblocked_goal_does_not_substitute_verification_for_primary_action(self):
+        result = select_goal_next_step(
+            "attempt the unavailable command and report the current date",
+            "the current date is successfully reported after the unavailable command attempt",
+            "ACTIVE",
+            "INCONCLUSIVE",
+            "No bounded evidence is available.",
+            ["verify_command_result", "run_command", "current_datetime"],
+        )
+        self.assertEqual(result.action, "run_command")
+
     def test_blocked_prefers_recovery_candidate(self):
         result = select_goal_next_step(
             "recover a failed battery check",
