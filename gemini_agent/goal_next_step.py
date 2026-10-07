@@ -93,6 +93,15 @@ def select_goal_next_step(
                     score += 1
         if progress_status == "BLOCKED" and re.search(r"recover|retry|diagnos|repair|replan", candidate, re.I):
             score += 3
+        # Recovery actions are justified by an observed blocked/failure state,
+        # not merely by the fact that the goal mentions recovery-related words.
+        # Prefer attempting the primary action while the goal is still unblocked.
+        if progress_status != "BLOCKED" and not re.search(
+            r"\b(?:failed|failure|error|blocked|recovery)\b",
+            evidence,
+            re.I,
+        ) and re.search(r"\b(?:recover|retry|diagnos|repair|replan)\b", candidate, re.I):
+            score -= 3
         scored.append((score, -index, candidate))
     best_score, _, best = max(scored)
     if best_score <= 0:
