@@ -638,20 +638,23 @@ class CloudflareClientTests(unittest.TestCase):
             'Execute the selected strategy exactly once with command "dumpsys -l" and expected text "activity". '
             'When it fails, use the generic tool-failure recovery coordinator and its existing bounded recovery path.'
         )
-        responses = [{
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "id": "run-command-call",
-                        "type": "function",
-                        "function": {
-                            "name": "run_command",
-                            "arguments": json.dumps({"command": "dumpsys -l"}),
-                        },
-                    }]
-                }
-            }]
-        }]
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "run-command-call",
+                            "type": "function",
+                            "function": {
+                                "name": "run_command",
+                                "arguments": json.dumps({"command": "dumpsys -l"}),
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "recovery complete"}}]},
+        ]
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
