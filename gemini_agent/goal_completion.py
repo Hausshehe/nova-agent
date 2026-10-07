@@ -113,16 +113,14 @@ def verify_goal_completion(
             "Observed evidence contains only goal-management text, not a goal outcome.",
         )
 
-    if re.search(
-        r"\b(?:Outcome|Verification|Postcondition|Post-action verification)\s*:\s*FAILED\b"
-        r"|\bTool error\s*:",
-        normalized,
-        re.IGNORECASE,
-    ):
-        return GoalCompletionObservation(
-            "FAILED",
-            "Observed evidence contains an explicit failure marker.",
+    failure_marker = bool(
+        re.search(
+            r"\b(?:Outcome|Verification|Postcondition|Post-action verification)\s*:\s*FAILED\b"
+            r"|\bTool error\s*:",
+            normalized,
+            re.IGNORECASE,
         )
+    )
 
     condition_terms = _terms(success_condition)
     goal_terms = _terms(goal)
@@ -136,6 +134,7 @@ def verify_goal_completion(
         for clause in re.split(r"\band\b", success_condition, flags=re.IGNORECASE)
         if clause.strip()
     ]
+    ordered_clause_seen = False
     for clause in clauses:
         clause_terms = _terms(clause)
         if not clause_terms:
@@ -146,6 +145,7 @@ def verify_goal_completion(
             flags=re.IGNORECASE,
         )
         if len(ordered_parts) > 1:
+            ordered_clause_seen = True
             for part in ordered_parts:
                 part_terms = _terms(part)
                 if part_terms and not _evidence_matches_clause(
@@ -153,16 +153,31 @@ def verify_goal_completion(
                     evidence_terms,
                     goal_terms,
                 ):
+                    if failure_marker:
+                        return GoalCompletionObservation(
+                            "INCONCLUSIVE",
+                            "An ordered success-condition requirement lacks observed evidence; an explicit failed prerequisite does not by itself fail the overall goal.",
+                        )
                     return GoalCompletionObservation(
                         "INCONCLUSIVE",
                         "At least one ordered success-condition requirement lacks its own observed evidence.",
                     )
             continue
         if not _evidence_matches_clause(clause_terms, evidence_terms, goal_terms):
+            if failure_marker:
+                return GoalCompletionObservation(
+                    "FAILED",
+                    "Observed evidence contains an explicit failure marker and the success-condition clause is not established.",
+                )
             return GoalCompletionObservation(
                 "INCONCLUSIVE",
                 "At least one success-condition clause has no observed evidence beyond wording already present in the goal.",
             )
+    if failure_marker and not ordered_clause_seen:
+        return GoalCompletionObservation(
+            "FAILED",
+            "Observed evidence contains an explicit failure marker.",
+        )
     if condition_terms and condition_terms & evidence_terms:
         return GoalCompletionObservation(
             "VERIFIED",
