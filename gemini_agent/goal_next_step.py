@@ -9,7 +9,7 @@ _MAX_TEXT = 512
 _MAX_CANDIDATES = 32
 _STOP_WORDS = {
     "a","an","and","are","be","been","being","by","current","for","from",
-    "is","of","on","reported","successfully","the","to","was","with",
+    "is","of","on","reported","successfully","the","to","was","with","get","status","system",
 }
 
 @dataclass(frozen=True)
