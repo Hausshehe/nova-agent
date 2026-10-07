@@ -104,7 +104,7 @@ class GoalProgressIntegrationTests(unittest.TestCase):
                 self.assertEqual(request_body.get("tool_choice"), "auto")
                 self.assertEqual(
                     [tool["function"]["name"] for tool in request_body.get("tools", [])],
-                    ["run_command"],
+                    ["run_root_command"],
                 )
             return _FakeResponse(responses.pop(0))
 
