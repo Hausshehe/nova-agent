@@ -676,6 +676,19 @@ class GeminiClient:
         )
         return "\n".join(context)
 
+    def _strategy_execution_name(self, strategy: str) -> str:
+        """Return the registered executable tool for a strategy, or an empty string."""
+        candidate = self._CLOUD_TOOL_NAMES.get(str(strategy).strip(), str(strategy).strip())
+        if not candidate or candidate not in self.tool_handlers:
+            return ""
+        if not any(
+            isinstance(declaration, dict) and declaration.get("name") == candidate
+            for declaration in self.tool_declarations
+        ):
+            return ""
+        return candidate
+
+
     def _coordinate_tool_failure(
         self,
         local_name: str,
@@ -846,6 +859,36 @@ class GeminiClient:
                 selection,
             )
             selected_strategy = selected_match.group(1).strip() if selected_match else ""
+            selected_execution_name = self._strategy_execution_name(selected_strategy)
+            if not selected_execution_name:
+                executable_candidates = [
+                    candidate
+                    for candidate in strategy_candidates
+                    if self._strategy_execution_name(candidate)
+                ]
+                if executable_candidates:
+                    strategy_candidates = executable_candidates
+                    selection = select_verified_strategy(goal, strategy_candidates)
+                    selected_match = re.search(
+                        r"(?m)^Verified strategy selection:\s*(.+)$",
+                        selection,
+                    )
+                    selected_strategy = selected_match.group(1).strip() if selected_match else ""
+                    selected_execution_name = self._strategy_execution_name(selected_strategy)
+                if not selected_execution_name:
+                    self.last_tool_calls.append({
+                        "name": "select_verified_strategy_tool",
+                        "args": {"request": goal, "candidates": strategy_candidates, "domain": "general"},
+                        "result": selection,
+                    })
+                    return (
+                        "Verified strategy selection blocked before execution.\n"
+                        f"Selected strategy: {selected_strategy or 'NONE'}\n"
+                        "Reason: the selected strategy has no registered executable tool.\n"
+                        "Safety boundary: verified experience is preference only; Nova will not "
+                        "send an unregistered strategy to the provider or invent an execution mechanism.\n"
+                        "Outcome: STOPPED SAFELY"
+                    )
             messages[0]["content"] = str(messages[0]["content"]) + (
                 "\n\nVerified strategy preference from Nova:\n" + selection +
                 "\nThis is preference only. Independently validate and verify any execution."
