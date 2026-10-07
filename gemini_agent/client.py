@@ -3088,6 +3088,10 @@ class GeminiClient:
                                 for evidence in self.goal_state.evidence
                                 if evidence != str(tool_result)
                             ]
+                            # Recovery reports may contain learning/meta text that repeats the
+                            # original goal wording. Only the bounded verified recovery evidence should
+                            # contribute to goal completion, otherwise metadata can falsely satisfy a
+                            # remaining success-condition clause.
                             completion_evidence = "\n".join(
                                 [*prior_evidence, recovery_result, f"Observed recovery for: {local_name}"]
                             )
