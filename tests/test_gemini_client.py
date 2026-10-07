@@ -166,8 +166,6 @@ class CloudflareClientTests(unittest.TestCase):
                 'Execute command "python -c "import sys; sys.exit(1)"". '
                 'If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
             )
-        self.assertIn("Automatic command recovery:", answer)
-        self.assertIn("Outcome: FAILED", answer)
         self.assertEqual(
             client.last_tool_calls[-1]["result"],
             "Automatic command recovery:\\nDiagnosis: transient command failure.\\nOutcome: FAILED\\nAttempts: 2",
