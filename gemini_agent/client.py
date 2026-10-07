@@ -1040,6 +1040,7 @@ class GeminiClient:
                         + "\nGoal progress reason: " + observation.reason
                         + "\nGoal completion verification: " + completion.status
                         + "\nGoal completion reason: " + completion.reason
+                        + "\nRuntime goal status: " + self.goal_state.status
                         + "\nObserved tool: " + requested_tool
                         + "\nObserved result: " + continuation_result
                     )
