@@ -2025,7 +2025,12 @@ class GeminiClient:
                 # not another competing planner.
                 if (
                     self.goal_state is not None
-                    and self.goal_state.status == "ACTIVE"
+                    and self.goal_state.status in {"ACTIVE", "VERIFIED"}
+                    and re.search(
+                        r"\b(?:command|attempt)\b",
+                        self.goal_state.success_condition,
+                        re.IGNORECASE,
+                    )
                     and self.tool_handlers.get("run_command") is not None
                     and not any(
                         step.get("action") == "run_command"
