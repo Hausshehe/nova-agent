@@ -3040,7 +3040,7 @@ class GeminiClient:
                             if str(call.get("name", "")).strip()
                             not in {"select_goal_next_step", "establish_goal_contract"}
                         }
-                        continuation_declarations = self._relevant_tool_declarations(contents)
+                        continuation_declarations = self.tool_declarations
                         continuation_candidates = [
                             str(declaration.get("name", "")).strip()
                             for declaration in continuation_declarations
