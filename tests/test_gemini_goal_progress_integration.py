@@ -52,6 +52,41 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertEqual(snapshot["progress_status"], "PROGRESS")
         self.assertEqual(len(snapshot["evidence"]), 1)
 
+    def test_goal_contract_reaches_verified_completion_from_full_evidence(self):
+        response = {"choices": [{"message": {"content": "observed"}}]}
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=_FakeResponse(response),
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "get_system_battery_status": lambda: (
+                        "Level: 82% Status: Charging "
+                        "Power source: Battery"
+                    ),
+                }
+            )
+            result = client.ask(
+                'Establish a goal contract for "check the device battery" with success condition '
+                '"the current battery status is successfully reported". Then use '
+                "get_system_battery_status to observe the current battery status."
+            )
+
+        self.assertIn("Goal completion verification: VERIFIED", result)
+        self.assertIn("Goal completion reason:", result)
+        self.assertIsNotNone(client.goal_state)
+        snapshot = client.goal_state.snapshot()
+        self.assertEqual(snapshot["status"], "VERIFIED")
+        self.assertEqual(snapshot["progress_status"], "PROGRESS")
+        self.assertEqual(len(snapshot["evidence"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
