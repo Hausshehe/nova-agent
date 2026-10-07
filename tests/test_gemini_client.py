@@ -659,6 +659,7 @@ class CloudflareClientTests(unittest.TestCase):
             return_value="Outcome: VERIFIED\nRecovery succeeded.",
         ):
             client = GeminiClient()
+            client.tool_handlers["run_command"] = run_command
             result = client.ask(request)
 
         run_command.assert_called_once_with(command="dumpsys -l")
