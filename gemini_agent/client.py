@@ -1784,15 +1784,38 @@ class GeminiClient:
                 "function": {"name": "apply_capability_extension"},
             }
         elif goal_selected_action:
-            # For the autonomous run_command step, let the provider emit the
-            # required argument normally instead of forcing a function call that
-            # can trigger a provider-side empty-argument parser failure.
-            if goal_selected_action == "run_command" or self._CLOUD_TOOL_NAMES.get(goal_selected_action) == "run_root_command":
+            selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                goal_selected_action, goal_selected_action
+            )
+            selected_declaration = next(
+                (
+                    declaration
+                    for declaration in self.tool_declarations
+                    if isinstance(declaration, dict)
+                    and declaration.get("name") == goal_selected_action
+                ),
+                None,
+            )
+            selected_required = (
+                selected_declaration.get("parameters", {}).get("required", [])
+                if selected_declaration
+                else []
+            )
+            # Autonomous required-argument tools need provider-generated arguments.
+            # Expose only Nova's selected action and let the provider emit the call
+            # normally. This prevents it from silently choosing a different goal
+            # step while avoiding the empty-argument parser path.
+            if selected_required:
+                payload["tools"] = [
+                    tool
+                    for tool in payload.get("tools", [])
+                    if tool.get("function", {}).get("name") == selected_cloud_name
+                ]
                 payload["tool_choice"] = "auto"
             else:
                 payload["tool_choice"] = {
                     "type": "function",
-                    "function": {"name": self._CLOUD_TOOL_NAMES.get(goal_selected_action, goal_selected_action)},
+                    "function": {"name": selected_cloud_name},
                 }
         elif strategy_candidates and selected_strategy:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(selected_strategy, selected_strategy)
