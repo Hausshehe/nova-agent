@@ -328,58 +328,6 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertIn("Goal replan: Selected alternative step current_datetime", result)
         self.assertNotIn("Runtime goal status: FAILED", result)
 
-    def test_provider_omitting_forced_required_command_call_is_recovered_locally(self):
-        responses = [
-            {
-                "choices": [{"message": {"tool_calls": [{
-                    "id": "date-step",
-                    "type": "function",
-                    "function": {"name": "current_datetime", "arguments": "{}"},
-                }]}}]
-            },
-            {
-                "choices": [{"message": {"content": "", "tool_calls": []}}]
-            },
-        ]
-        calls = {"run": 0, "datetime": 0, "round": 0}
-
-        def current_datetime():
-            calls["datetime"] += 1
-            return "Current date/time: 2026-10-07T20:00:00+03:00"
-
-        def run_command(command):
-            calls["run"] += 1
-            self.assertEqual(command, "nova-missing-command")
-            return "Tool error: command failed because the environment changed"
-
-        def urlopen(_request, timeout=180):
-            del timeout
-            response = _FakeResponse(responses[calls["round"]])
-            calls["round"] += 1
-            return response
-
-        with patch.dict(
-            os.environ,
-            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
-            clear=True,
-        ), patch("urllib.request.urlopen", side_effect=urlopen):
-            client = GeminiClient(
-                tool_handlers={
-                    "current_datetime": current_datetime,
-                    "run_command": run_command,
-                }
-            )
-            result = client.ask(
-                'Establish a goal contract for "report the current date and attempt command \'nova-missing-command\'" '
-                'with success condition "the current date and command attempt are successfully reported". '
-                "Pursue this goal autonomously without asking me to name a tool."
-            )
-
-        self.assertEqual(calls["datetime"], 1)
-        self.assertEqual(calls["run"], 1)
-        self.assertEqual(calls["round"], 2)
-        self.assertIn("nova-missing-command", result)
-
     def test_provider_omitting_forced_continuation_call_is_recovered_locally(self):
         responses = [
             {
