@@ -858,6 +858,7 @@ class GeminiClient:
         prompt_text = request_text
         goal_replan_notes: list[str] = []
         goal_replan_step = ""
+        goal_continuation_action = ""
 
         # Verified experience is part of Nova's normal decision loop. When a task
         # presents multiple candidate strategies, deterministically apply the existing
@@ -3045,6 +3046,11 @@ class GeminiClient:
                 if isinstance(forced, dict):
                     forced_function = forced.get("function") or {}
                     forced_cloud_name = str(forced_function.get("name", "")).strip()
+                if not forced_cloud_name and goal_continuation_action:
+                    forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                        goal_continuation_action,
+                        goal_continuation_action,
+                    )
                 if not forced_cloud_name:
                     for trace in reversed(self.last_tool_calls):
                         if trace.get("name") == "select_goal_next_step":
@@ -3510,6 +3516,7 @@ class GeminiClient:
                             )
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
+                                goal_continuation_action = next_action
                                 if goal_replan_pending:
                                     replan_note = (
                                         "Goal replan: "
