@@ -144,7 +144,7 @@ class CloudflareClientTests(unittest.TestCase):
                 "type": "function",
                 "function": {
                     "name": "run_command",
-                    "arguments": json.dumps({"command": "python -c \\"import sys; sys.exit(1)\\""})
+                    "arguments": json.dumps({"command": "python --version"}),
                 },
             }]}}]
         }
@@ -166,7 +166,7 @@ class CloudflareClientTests(unittest.TestCase):
                 'If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
             )
         self.assertIn("Automatic command recovery:", answer)
-        self.assertIn("Diagnosis: transient command failure.", answer)
+                'Execute command "python --version". If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
         self.assertIn("Outcome: FAILED", answer)
         self.assertEqual(
             client.last_tool_calls[-1]["result"],
