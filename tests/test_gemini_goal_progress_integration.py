@@ -111,6 +111,78 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         )
 
 
+    def test_active_goal_continues_to_a_distinct_next_step(self):
+        responses = [
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "battery-step",
+                    "type": "function",
+                    "function": {"name": "get_system_battery_status", "arguments": "{}"},
+                }]}}]
+            },
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "datetime-step",
+                    "type": "function",
+                    "function": {"name": "current_datetime", "arguments": "{}"},
+                }]}}]
+            },
+            {
+                "choices": [{"message": {"content": "Goal verified."}}],
+            },
+        ]
+        calls = {"battery": 0, "datetime": 0, "round": 0}
+
+        def battery():
+            calls["battery"] += 1
+            return "Level: 82% Status: Charging Power source: Battery"
+
+        def current_datetime():
+            calls["datetime"] += 1
+            return "2026-10-07T20:00:00+03:00"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            response = _FakeResponse(responses[calls["round"]])
+            calls["round"] += 1
+            return response
+
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=urlopen,
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "get_system_battery_status": battery,
+                    "current_datetime": current_datetime,
+                }
+            )
+            result = client.ask(
+                'Establish a goal contract for "check the battery and current date" with success condition '
+                '"the battery status and current date are successfully reported". '
+                "Pursue this goal autonomously without asking me to name a tool."
+            )
+
+        self.assertEqual(calls["battery"], 1)
+        self.assertEqual(calls["datetime"], 1)
+        self.assertEqual(calls["round"], 2)
+        self.assertIn("Goal completion verification: VERIFIED", result)
+        self.assertEqual(client.goal_state.status, "VERIFIED")
+        selected = [
+            call["result"]
+            for call in client.last_tool_calls
+            if call["name"] == "select_goal_next_step"
+        ]
+        self.assertGreaterEqual(len(selected), 2)
+        self.assertIn("current_datetime", selected[-1])
+
     def test_goal_contract_reaches_verified_completion_from_full_evidence(self):
         response = {"choices": [{"message": {"content": "observed"}}]}
         with patch.dict(
