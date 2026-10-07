@@ -671,7 +671,7 @@ class CloudflareClientTests(unittest.TestCase):
         trace = client.last_tool_calls[-1]
         self.assertEqual(trace["name"], "run_command")
         self.assertIn("Automatic tool recovery:", trace["result"])
-        self.assertIn("Command is not allowed: dumpsys", trace["result"])
+        self.assertIn("Tool error: Expecting value:", trace["result"])
         self.assertIn("Outcome: VERIFIED", trace["result"])
 
     def test_compound_run_command_recovery_learning_executes_explicit_command_locally(self):
