@@ -2603,37 +2603,12 @@ class GeminiClient:
                                         command=command_match.group(1).strip()
                                     )
                         tool_result = handler(**args)
-                        if local_name == "run_command" and (
-                            str(tool_result).startswith("Exit code:")
-                            and not str(tool_result).startswith("Exit code: 0")
-                        ):
-                            command = str(args.get("command", "")).strip()
-                            diagnosis = self.tool_handlers["diagnose_command_failure"](
-                                command=command,
-                                error=str(tool_result),
-                            )
-                            expected = ""
-                            expected_match = re.search(
-                                r"expected(?:\s+text|\s+postcondition)?(?:\s+is|\s*[:=])?\s*['\"]([^'\"]+)['\"]",
-                                request_text,
-                                re.IGNORECASE,
-                            )
-                            if expected_match:
-                                expected = expected_match.group(1).strip()
-                            recovery = str(self.tool_handlers["recover_command"](
-                                command=command,
-                                expected=expected,
-                            ))
-                            diagnostic_report = (
-                                recovery
-                                if diagnosis in recovery
-                                else f"{diagnosis}\n{recovery}"
-                            )
-                            tool_result = (
-                                "Automatic command recovery:\n"
-                                f"Original command failure:\n{tool_result}\n"
-                                f"{diagnostic_report}"
-                            )
+                        tool_result = self._coordinate_tool_failure(
+                            local_name=local_name,
+                            args=args,
+                            tool_result=str(tool_result),
+                            request_text=request_text,
+                        )
 
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
