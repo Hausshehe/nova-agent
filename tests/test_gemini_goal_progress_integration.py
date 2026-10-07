@@ -328,6 +328,48 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertIn("Goal replan: Selected alternative step current_datetime", result)
         self.assertNotIn("Runtime goal status: FAILED", result)
 
+    def test_provider_omitting_forced_required_command_call_is_recovered_locally(self):
+        responses = [
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "failed-step",
+                    "type": "function",
+                    "function": {"name": "run_command", "arguments": "{\"command\":\"unavailable\"}"},
+                }]}}]
+            },
+            {
+                "choices": [{"message": {"content": "", "tool_calls": []}}]
+            },
+        ]
+        calls = {"run": 0, "round": 0}
+
+        def run_command(command):
+            calls["run"] += 1
+            self.assertEqual(command, "nova-missing-command")
+            return "Tool error: command failed because the environment changed"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            response = _FakeResponse(responses[calls["round"]])
+            calls["round"] += 1
+            return response
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=urlopen):
+            client = GeminiClient(tool_handlers={"run_command": run_command})
+            result = client.ask(
+                'Establish a goal contract for "attempt command \'nova-missing-command\' and report the current date" '
+                'with success condition "the current date is successfully reported after the command attempt". '
+                "Pursue this goal autonomously without asking me to name a tool."
+            )
+
+        self.assertEqual(calls["run"], 1)
+        self.assertEqual(calls["round"], 1)
+        self.assertIn("nova-missing-command", result)
+
     def test_provider_omitting_forced_continuation_call_is_recovered_locally(self):
         responses = [
             {
