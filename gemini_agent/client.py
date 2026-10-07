@@ -1929,6 +1929,10 @@ class GeminiClient:
                                 if offered_local == "run_command":
                                     forced_cloud_name = offered_name
                                     break
+                            if not forced_cloud_name and self.tool_handlers.get("run_command"):
+                                forced_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                                    "run_command", "run_command"
+                                )
 
                 if forced_cloud_name:
                     forced_local_name = next(
