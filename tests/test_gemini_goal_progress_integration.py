@@ -263,6 +263,71 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertIn("- current_datetime: VERIFIED", result)
         self.assertNotIn("Runtime goal status: FAILED", result)
 
+    def test_active_goal_replans_after_unrecoverable_step_failure(self):
+        responses = [
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "failed-step",
+                    "type": "function",
+                    "function": {"name": "run_command", "arguments": "{\"command\":\"unavailable\"}"},
+                }]}}]
+            },
+            {
+                "choices": [{"message": {"tool_calls": [{
+                    "id": "alternative-step",
+                    "type": "function",
+                    "function": {"name": "current_datetime", "arguments": "{}"},
+                }]}}]
+            },
+        ]
+        calls = {"run": 0, "datetime": 0, "round": 0}
+
+        def run_command(command):
+            calls["run"] += 1
+            return "Tool error: command failed because the environment changed"
+
+        def current_datetime():
+            calls["datetime"] += 1
+            return "2026-10-07T20:00:00+03:00"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            response = _FakeResponse(responses[calls["round"]])
+            calls["round"] += 1
+            return response
+
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=urlopen,
+        ):
+            client = GeminiClient(
+                tool_handlers={
+                    "run_command": run_command,
+                    "current_datetime": current_datetime,
+                }
+            )
+            result = client.ask(
+                'Establish a goal contract for "attempt the environment-sensitive command and report the current date" '
+                'with success condition "the command result and current date are successfully reported". '
+                "Pursue this goal autonomously without asking me to name a tool."
+            )
+
+        self.assertEqual(calls["run"], 1)
+        self.assertEqual(calls["datetime"], 1)
+        self.assertEqual(calls["round"], 2)
+        self.assertEqual(client.goal_state.status, "VERIFIED")
+        self.assertIn("- run_command: FAILED", result)
+        self.assertIn("- current_datetime: VERIFIED", result)
+        self.assertIn("Goal replan: Selected alternative step current_datetime", result)
+        self.assertNotIn("Runtime goal status: FAILED", result)
+
     def test_provider_omitting_forced_continuation_call_is_recovered_locally(self):
         responses = [
             {
