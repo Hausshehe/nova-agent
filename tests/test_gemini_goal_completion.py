@@ -44,6 +44,14 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "INCONCLUSIVE")
 
+    def test_partial_ordered_goal_evidence_cannot_verify(self):
+        result = verify_goal_completion(
+            "attempt the unavailable command and report the current date",
+            "the current date is successfully reported after the unavailable command attempt",
+            "2026-10-08T00:17:34+03:00",
+        )
+        self.assertEqual(result.status, "INCONCLUSIVE")
+
     def test_explicit_failure_fails_goal(self):
         result = verify_goal_completion(
             "check the device battery",
