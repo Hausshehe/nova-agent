@@ -2609,6 +2609,7 @@ class GeminiClient:
                     if handler is None:
                         raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
 
+                    args = {}
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
                         if local_name == "plan_capability_extension":
