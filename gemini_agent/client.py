@@ -357,6 +357,15 @@ class GeminiClient:
             return "assess_capability_gap"
         if "find_executable" in user_text:
             return "find_executable"
+        # When a compound request explicitly says to execute run_command, that
+        # execution is the initial action. Later mentions of diagnosis/recovery are
+        # downstream handling instructions and must not hijack the initial route.
+        if "run_command" in user_text and re.search(
+            r"\b(?:use|execute|run)\s+run_command\b.*\b(?:execute|run)\b",
+            user_text,
+            re.IGNORECASE,
+        ):
+            return "run_command"
         if "diagnose_command_failure" in user_text:
             return "diagnose_command_failure"
         if "verify_command_result" in user_text:
