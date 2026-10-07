@@ -671,15 +671,15 @@ class CloudflareClientTests(unittest.TestCase):
         ) as record, patch(
             "gemini_agent.tools.run_command",
             side_effect=ValueError("Command is not allowed: dumpsys"),
-        ) as run_command, patch(
-            "gemini_agent.tools.diagnose_command_failure",
-            return_value="Diagnosis: bounded failure.",
-        ), patch(
-            "gemini_agent.tools.recover_command",
-            return_value="Outcome: VERIFIED\nRecovery succeeded.",
-        ):
+        ) as run_command:
             client = GeminiClient()
             client.tool_handlers["run_command"] = run_command
+            client.tool_handlers["diagnose_command_failure"] = (
+                lambda command, error: "Diagnosis: bounded failure."
+            )
+            client.tool_handlers["recover_command"] = (
+                lambda command, expected: "Outcome: VERIFIED\nRecovery succeeded."
+            )
             result = client.ask(request)
 
         run_command.assert_called_once_with(command="dumpsys -l")
