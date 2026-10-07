@@ -2565,11 +2565,21 @@ class GeminiClient:
                             )
                             if expected_match:
                                 expected = expected_match.group(1).strip()
-                            recovery = self.tool_handlers["recover_command"](
+                            recovery = str(self.tool_handlers["recover_command"](
                                 command=command,
                                 expected=expected,
+                            ))
+                            diagnostic_report = (
+                                recovery
+                                if diagnosis in recovery
+                                else f"{diagnosis}\n{recovery}"
                             )
-                            tool_result = f"Automatic command recovery:\\n{diagnosis}\\n{recovery}"
+                            tool_result = (
+                                "Automatic command recovery:\n"
+                                f"Original command failure:\n{tool_result}\n"
+                                f"{diagnostic_report}"
+                            )
+
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
                         args = {}
                         tool_result = f"Tool error: {exc}"
