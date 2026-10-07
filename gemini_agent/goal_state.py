@@ -46,7 +46,7 @@ class GoalState:
         """Record one bounded goal step and its observed outcome."""
         if not isinstance(action, str) or not action.strip():
             raise ValueError("Step action cannot be empty.")
-        if status not in {"VERIFIED", "FAILED", "INCONCLUSIVE"}:
+        if status not in {"EXECUTED", "VERIFIED", "FAILED"}:
             raise ValueError("Step status is invalid.")
         if not isinstance(evidence, str) or not evidence.strip():
             raise ValueError("Step evidence cannot be empty.")
