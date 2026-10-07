@@ -137,6 +137,41 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "REPAIRED")
         open_url.assert_not_called()
 
+    def test_failed_command_enters_automatic_diagnosis_and_recovery(self):
+        response = {
+            "choices": [{"message": {"tool_calls": [{
+                "id": "failed-command",
+                "type": "function",
+                "function": {
+                    "name": "run_command",
+                    "arguments": json.dumps({"command": "python -c \\"import sys; sys.exit(1)\\""})
+                },
+            }]}}]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(response)],
+        ):
+            client = GeminiClient(tool_handlers={
+                "run_command": lambda command: "Exit code: 1\\nstderr: failed",
+                "diagnose_command_failure": lambda command, error: "Diagnosis: transient command failure.",
+                "recover_command": lambda command, expected: "Outcome: FAILED\\nAttempts: 2",
+            })
+            answer = client.ask(
+                'Execute command "python -c "import sys; sys.exit(1)"". '
+                'If it fails, automatically diagnose and recover it. Expected postcondition is "Python".'
+            )
+        self.assertIn("Automatic command recovery:", answer)
+        self.assertIn("Diagnosis: transient command failure.", answer)
+        self.assertIn("Outcome: FAILED", answer)
+        self.assertEqual(
+            client.last_tool_calls[-1]["result"],
+            "Automatic command recovery:\\nDiagnosis: transient command failure.\\nOutcome: FAILED\\nAttempts: 2",
+        )
     def test_explicit_recover_command_preserves_expected_postcondition(self):
         with patch.dict(
             os.environ,
