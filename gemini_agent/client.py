@@ -1088,7 +1088,16 @@ class GeminiClient:
         # Goal-directed execution bridge: use the existing bounded next-step selector
         # to choose one relevant registered capability when a runtime goal is active.
         goal_selected_action = ""
-        if self.goal_state is not None and not requested_tool and not strategy_candidates:
+        if (
+            self.goal_state is not None
+            and not requested_tool
+            and not strategy_candidates
+            and re.search(
+                r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+        ):
             goal_declarations = self._relevant_tool_declarations(contents)
             goal_candidates = [
                 str(declaration.get("name", "")).strip()
