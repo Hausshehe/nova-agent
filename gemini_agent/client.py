@@ -695,8 +695,10 @@ class GeminiClient:
         args: dict,
         tool_result: str,
         request_text: str,
+        learning_request: str = "",
     ) -> str:
         """Classify one failed tool outcome and hand it to an existing bounded recovery path."""
+
         result = str(tool_result)
         failed = bool(
             re.search(r"\bExit code:\s*[1-9]\d*\b", result)
@@ -721,7 +723,7 @@ class GeminiClient:
             if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
                 from gemini_agent.learning import record_verified_experience
                 learning_result = record_verified_experience(
-                    request_text,
+                    learning_request or request_text,
                     "recover_command",
                     recovery,
                     domain="general",
@@ -745,7 +747,7 @@ class GeminiClient:
                 if re.search(r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b|\bOutcome:\s*VERIFIED\b", recovery, re.IGNORECASE):
                     from gemini_agent.learning import record_verified_experience
                     learning_result = record_verified_experience(
-                        request_text,
+                        learning_request or request_text,
                         "recover_android_mechanism",
                         recovery,
                         domain="general",
@@ -2688,6 +2690,7 @@ class GeminiClient:
                             args=args,
                             tool_result=str(tool_result),
                             request_text=request_text,
+                            learning_request=strategy_goal,
                         )
 
                     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
@@ -2708,6 +2711,7 @@ class GeminiClient:
                                     args=recovery_args,
                                     tool_result=f"Tool error: {exc}",
                                     request_text=request_text,
+                                    learning_request=strategy_goal,
                                 )
                             else:
                                 args = {}
