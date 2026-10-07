@@ -1510,11 +1510,11 @@ class GeminiClient:
                         "args": seed_args,
                         "result": seed_result,
                     })
-            # When the selected strategy is run_command and the user supplied an
-            # explicit command, execute that bounded command locally. This keeps
-            # compound decision workflows from asking the provider to reinterpret
-            # the entire request as command text. The existing failure coordinator
-            # remains authoritative for diagnosis, bounded recovery, and learning.
+            # An explicit command is authoritative. Probe it locally first only
+            # when it is outside the normal run_command allowlist. Successful
+            # commands continue through the existing provider round so existing
+            # composition semantics remain unchanged. A bounded rejection is
+            # handed directly to the existing failure coordinator.
             if selected_strategy == "run_command":
                 command_match = re.search(
                     r'\b(?:using\s+)?command\s+["\']([^"\']+)["\']',
@@ -1523,38 +1523,25 @@ class GeminiClient:
                 )
                 if command_match:
                     selected_args = {"command": command_match.group(1).strip()}
-                    selected_result = str(
+                    try:
                         self.tool_handlers["run_command"](**selected_args)
-                    )
-                    selected_result = self._coordinate_tool_failure(
-                        local_name="run_command",
-                        args=selected_args,
-                        tool_result=selected_result,
-                        request_text=request_text,
-                    )
-                    trace = {
-                        "name": "run_command",
-                        "args": selected_args,
-                        "result": selected_result,
-                    }
-                    if re.search(
-                        r'(?:Post-action verification|Verification)\s*:\s*VERIFIED\b',
-                        selected_result,
-                        re.IGNORECASE,
-                    ):
-                        from gemini_agent.learning import record_verified_experience
-                        trace["verified_experience_learning"] = record_verified_experience(
-                            strategy_goal,
-                            "run_command",
-                            selected_result,
-                            domain="general",
+                    except (RuntimeError, ValueError) as exc:
+                        selected_result = self._coordinate_tool_failure(
+                            local_name="run_command",
+                            args=selected_args,
+                            tool_result=f"Tool error: {exc}",
+                            request_text=request_text,
                         )
-                    self.last_tool_calls.append(trace)
-                    return (
-                        f"{selection}\n"
-                        "Selected strategy execution:\n"
-                        f"{selected_result}"
-                    )
+                        self.last_tool_calls.append({
+                            "name": "run_command",
+                            "args": selected_args,
+                            "result": selected_result,
+                        })
+                        return (
+                            f"{selection}\n"
+                            "Selected strategy execution:\n"
+                            f"{selected_result}"
+                        )
 
             declarations = [
                 d for d in self.tool_declarations
