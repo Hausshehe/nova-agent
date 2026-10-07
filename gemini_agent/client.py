@@ -1002,7 +1002,25 @@ class GeminiClient:
                 "args": {"goal": goal, "success_condition": success_condition},
                 "result": result,
             })
-            return result
+            continuation = re.search(r"\\b(?:then|after that|next)\\b", request_text, re.IGNORECASE)
+            if not continuation:
+                return result
+            continuation_text = request_text[continuation.end():].strip()
+            continuation_contents = [{"role": "user", "parts": [{"text": continuation_text}]}]
+            next_tool = self._requested_local_tool(continuation_contents)
+            if not next_tool:
+                return result
+            requested_tool = next_tool
+            messages.append({
+                "role": "system",
+                "content": (
+                    "Runtime goal contract established for this turn.\\n"
+                    f"Goal: {goal}\\n"
+                    f"Success condition: {success_condition}\\n"
+                    "The runtime state is ACTIVE. Any tool outcome must be observed as goal evidence; "
+                    "do not claim final completion unless a later bounded completion verifier explicitly proves it."
+                ),
+            })
 
         if requested_tool == "select_verified_strategy_tool":
             request_match = re.search(r'(?:for|request)\s+(?:strategy\s+)?["\']([^"\']+)["\']', request_text, re.IGNORECASE)
