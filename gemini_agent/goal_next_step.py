@@ -78,9 +78,20 @@ def select_goal_next_step(
     remaining_goal_terms = goal_terms - observed_terms
     target_terms = remaining_condition_terms | remaining_goal_terms
 
-    # When the success condition expresses an ordering dependency such as\n    # "X after Y", prefer the capability that can establish Y before the\n    # capability that can establish X. This keeps long-horizon execution from\n    # satisfying the later observation first and falsely completing the goal.\n    prerequisite_terms: set[str] = set()\n    after_match = re.search(r"\\bafter\\s+(.+)$", success_condition, re.IGNORECASE)\n    if after_match:\n        prerequisite_terms = _terms(after_match.group(1))\n\n    scored = []\n    for index, candidate in enumerate(clean):
+    # When the success condition expresses an ordering dependency such as
+    # "X after Y", prefer the capability that can establish Y before the
+    # capability that can establish X.
+    prerequisite_terms: set[str] = set()
+    after_match = re.search(r"\bafter\s+(.+)$", success_condition, re.IGNORECASE)
+    if after_match:
+        prerequisite_terms = _terms(after_match.group(1))
+
+    scored = []
+    for index, candidate in enumerate(clean):
         candidate_terms = _terms(candidate)
         score = len(candidate_terms & target_terms)
+        if prerequisite_terms and candidate_terms & prerequisite_terms:
+            score += 4
         # Treat bounded lexical extensions such as "datetime" -> "date"
         # as related evidence without introducing domain-specific aliases.
         for candidate_term in candidate_terms:
