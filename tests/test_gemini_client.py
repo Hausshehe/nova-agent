@@ -650,7 +650,7 @@ class CloudflareClientTests(unittest.TestCase):
             return_value="Verified experience learned.",
         ) as record, patch(
             "gemini_agent.tools.run_command",
-            return_value="Exit code: 1",
+            side_effect=ValueError("Command is not allowed: dumpsys"),
         ) as run_command, patch(
             "gemini_agent.tools.diagnose_command_failure",
             return_value="Diagnosis: bounded failure.",
