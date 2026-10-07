@@ -2927,6 +2927,7 @@ class GeminiClient:
                     args = {}
                     raw_tool_result = ""
                     raw_tool_failed = False
+                    goal_replan_pending = False
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
                         if local_name == "plan_capability_extension":
@@ -3116,7 +3117,12 @@ class GeminiClient:
                                     )[0].strip()
                                     if recovered_evidence:
                                         normalized_step_evidence.append(recovered_evidence)
-                                    continue
+                                # Failed attempts remain in the ledger, but an unresolved
+                                # historical failure is not proof that the overall goal is
+                                # impossible. Replanning may satisfy the same goal by another
+                                # path, so keep the failure out of completion evidence unless
+                                # it has verified recovery evidence.
+                                continue
                             normalized_step_evidence.append(step_evidence)
                         normalized_step_evidence.append(str(tool_result))
                         completion_evidence = "\n".join(
@@ -3149,7 +3155,12 @@ class GeminiClient:
                         if completion.status == "VERIFIED":
                             self.goal_state.status = "VERIFIED"
                         elif completion.status == "FAILED" and not recovery_verified:
-                            self.goal_state.status = "FAILED"
+                            # A failed step is not automatically a failed goal. Keep the
+                            # goal active when the autonomous loop can replan around a
+                            # changed/unavailable environment, while preserving the failed
+                            # step in the ledger.
+                            goal_replan_pending = bool(raw_tool_failed)
+                            self.goal_state.status = "ACTIVE" if goal_replan_pending else "FAILED"
                         step_status = (
                             "FAILED" if raw_tool_failed
                             else "VERIFIED" if completion.status == "VERIFIED"
@@ -3263,6 +3274,15 @@ class GeminiClient:
                             )
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
+                                if goal_replan_pending:
+                                    tool_result = str(tool_result).replace(
+                                        "Runtime goal status: FAILED",
+                                        "Runtime goal status: ACTIVE",
+                                    )
+                                    tool_result += (
+                                        "\nGoal replan: "
+                                        f"Selected alternative step {next_action} after the failed step."
+                                    )
                                 self.last_tool_calls.append({
                                     "name": "select_goal_next_step",
                                     "args": {
@@ -3301,6 +3321,12 @@ class GeminiClient:
                                         "type": "function",
                                         "function": {"name": next_cloud_name},
                                     }
+                            elif goal_replan_pending:
+                                self.goal_state.status = "FAILED"
+                                tool_result += (
+                                    "\nGoal replan: No viable alternative step was found; "
+                                    "goal cannot continue safely."
+                                )
 
                     # Once a requested seed experience is recorded, the selected
                     # strategy becomes the only executable tool in this workflow.
