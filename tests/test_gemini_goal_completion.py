@@ -26,6 +26,15 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "INCONCLUSIVE")
 
+    def test_iso_datetime_is_date_evidence(self):
+        result = verify_goal_completion(
+            "check the battery and current date",
+            "the battery status and current date are successfully reported",
+            "Level: 82% Status: Charging Power source: Battery\n"
+            "2026-10-07T20:00:00+03:00",
+        )
+        self.assertEqual(result.status, "VERIFIED")
+
     def test_verification_tool_metadata_cannot_complete_goal(self):
         result = verify_goal_completion(
             "attempt the unavailable command and report the current date",
