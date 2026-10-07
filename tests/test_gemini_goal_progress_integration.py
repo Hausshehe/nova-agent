@@ -52,6 +52,57 @@ class GoalProgressIntegrationTests(unittest.TestCase):
         self.assertEqual(snapshot["progress_status"], "PROGRESS")
         self.assertEqual(len(snapshot["evidence"]), 1)
 
+    def test_autonomous_goal_does_not_treat_ordering_word_as_direct_tool_request(self):
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "ordered-step",
+                            "type": "function",
+                            "function": {
+                                "name": "run_command",
+                                "arguments": {"command": "nova-missing-command"},
+                            },
+                        }]
+                    }
+                }]
+            }
+        ]
+        calls = {"run": 0}
+
+        def run_command(command):
+            calls["run"] += 1
+            self.assertEqual(command, "nova-missing-command")
+            return "Tool error: command not found"
+
+        def urlopen(_request, timeout=180):
+            del timeout
+            return _FakeResponse(responses.pop(0))
+
+        with patch.dict(
+            os.environ,
+            {
+                "CLOUDFLARE_API_TOKEN": "token",
+                "CLOUDFLARE_ACCOUNT_ID": "account",
+            },
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=urlopen):
+            client = GeminiClient(
+                tool_handlers={
+                    "run_command": run_command,
+                    "current_datetime": lambda: "Current date/time: 2026-10-08T00:00:00+03:00",
+                }
+            )
+            result = client.ask(
+                'Establish a goal contract for "attempt command nova-missing-command and then report the current date" '
+                'with success condition "the current date is successfully reported after the command attempt". '
+                "Pursue this goal autonomously."
+            )
+
+        self.assertEqual(calls["run"], 1)
+        self.assertIn("nova-missing-command", result)
+
     def test_active_goal_selects_and_executes_one_bounded_next_step(self):
         responses = [
             {
