@@ -116,6 +116,33 @@ class GeminiClient:
             filled["request"] = request_text
         return filled
 
+    def _recover_required_tool_arguments(
+        self, local_name: str, args: dict, request_text: str
+    ) -> dict:
+        """Recover unambiguous required arguments from the active execution context."""
+        recovered = dict(args)
+        declaration = next(
+            (
+                item for item in self.tool_declarations
+                if isinstance(item, dict) and item.get("name") == local_name
+            ),
+            None,
+        )
+        required = (
+            (declaration or {}).get("parameters", {}).get("required", [])
+            if declaration else []
+        )
+        for parameter in required:
+            if str(recovered.get(parameter, "")).strip():
+                continue
+            if parameter == "request" and str(request_text).strip():
+                recovered[parameter] = str(request_text).strip()
+            elif parameter == "goal" and self.goal_state is not None:
+                recovered[parameter] = self.goal_state.goal
+            elif parameter == "success_condition" and self.goal_state is not None:
+                recovered[parameter] = self.goal_state.success_condition
+        return recovered
+
     @staticmethod
     def _extract_mechanism(request_text: str) -> str:
         match = re.search(r"\b(intent|executable|service|ui-text|ui):[^\s,]+", request_text, re.IGNORECASE)
