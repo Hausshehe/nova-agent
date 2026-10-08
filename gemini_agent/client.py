@@ -181,7 +181,15 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
-            "select the goal next step",
+            "select the goal next step",        if any(phrase in user_text for phrase in (
+            "assess the autonomy boundary",
+            "assess autonomy boundary",
+            "decide whether to continue or escalate",
+            "decide whether autonomous continuation is justified",
+            "classify whether to stop, continue, investigate, recover, replan, or escalate",
+        )):
+            return "assess_autonomy_boundary"
+
             "select a goal next step",
             "choose the next step for the goal",
             "choose a goal-directed next step",
@@ -1502,7 +1510,26 @@ class GeminiClient:
             return str(self.tool_handlers["resolve_android_intent"](action=action))
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
-        if requested_tool == "diagnose_outcome_discrepancy":
+        if requested_tool == "diagnose_outcome_discrepancy":        if requested_tool == "assess_autonomy_boundary":
+            patterns = {
+                "goal": r'\\b(?:the )?goal\\s+"([^"]+)"',
+                "outcome_state": r'\\boutcome state\\s*[:=]?\\s*(ACHIEVED|VERIFIED|COMPLETE|COMPLETED|MISMATCH|FAILED|CONTRADICTED|PARTIAL_OR_UNCERTAIN|INCONCLUSIVE|MISMATCH_OR_UNKNOWN|UNKNOWN|UNKNOWN_MISMATCH)',
+                "uncertainty": r'\\buncertainty\\s*(?:is|was|:)?\\s*"([^"]+)"',
+                "observed_evidence": r'\\b(?:observed evidence|supplied observed evidence)\\s*(?:is|was|:)?\\s*"([^"]+)"',
+                "available_actions": r'\\bavailable actions\\s*(?:are|is|were|:)?\\s*"([^"]+)"',
+                "risk_constraints": r'\\brisk constraints\\s*(?:are|is|were|:)?\\s*"([^"]+)"',
+            }
+            extracted = {}
+            for key, pattern in patterns.items():
+                match = re.search(pattern, prompt, re.IGNORECASE | re.DOTALL)
+                if match:
+                    extracted[key] = match.group(1).strip() if key != "outcome_state" else match.group(1).upper()
+            required = tuple(patterns)
+            if all(key in extracted for key in required):
+                result = str(self.tool_handlers[requested_tool](**extracted))
+                self.last_tool_calls.append({"name": requested_tool, "args": extracted, "result": result})
+                return result
+
             patterns = {
                 "goal": r'\b(?:the )?goal\s+"([^"]+)"',
                 "success_condition": r'\bsuccess condition (?:was|is)\s+"([^"]+)"',
