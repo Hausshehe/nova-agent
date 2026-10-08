@@ -29,6 +29,7 @@ from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
+from gemini_agent.world_model import represent_entity_states
 
 
 _OPERATORS = {
@@ -4724,6 +4725,11 @@ def list_memory() -> str:
     raise RuntimeError("Persistent memory is not configured.")
 
 
+
+def represent_entity_states_tool(entities: str) -> str:
+    """Represent entities and their current states without changing reality."""
+    return represent_entity_states(entities)
+
 GET_BLUETOOTH_STATUS_DECLARATION = {
     "name": "get_bluetooth_status",
     "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
@@ -4805,6 +4811,13 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
+    {
+        "name": "represent_entity_states",
+        "description": "Represent bounded entities, types, current states, and confidence as an internal world-model snapshot without inferring relationships or changing state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
+        }, "required": ["entities"]},
+    },
     {
         "name": "select_goal_priority",
         "description": "Select which goal deserves attention from explicit user-priority, urgency, dependency, and resource-cost signals without executing, interrupting, or completing any goal. This is read-only.",
@@ -6123,6 +6136,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "manage_goal_interruption": manage_goal_interruption_tool,
     "resolve_goal_conflicts": resolve_goal_conflicts_tool,
     "verify_goal_portfolio": verify_goal_portfolio_tool,
+    "represent_entity_states": represent_entity_states_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
