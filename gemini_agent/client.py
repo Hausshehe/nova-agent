@@ -1501,6 +1501,22 @@ class GeminiClient:
             return str(self.tool_handlers["resolve_android_intent"](action=action))
         if requested_tool == "discover_android_ui_actions":
             return str(self.tool_handlers["discover_android_ui_actions"]())
+        if requested_tool == "diagnose_outcome_discrepancy":
+            patterns = {
+                "goal": r'\b(?:the )?goal\s+"([^"]+)"',
+                "success_condition": r'\bsuccess condition (?:was|is)\s+"([^"]+)"',
+                "expected_transition": r'\bexpected transition (?:was|is)\s+"([^"]+)"',
+                "failure_condition": r'\bfailure condition (?:was|is)\s+"([^"]+)"',
+                "observed_evidence": r'\b(?:supplied )?observed evidence (?:is|was)\s+"([^"]+)"',
+            }
+            extracted = {}
+            for key, pattern in patterns.items():
+                match = re.search(pattern, prompt, re.IGNORECASE | re.DOTALL)
+                if match:
+                    extracted[key] = match.group(1).strip()
+            required = tuple(patterns)
+            if all(key in extracted for key in required):
+                return str(self.tool_handlers["diagnose_outcome_discrepancy"](**extracted))
         if requested_tool == "get_foreground_android_component":
             result = str(self.tool_handlers["get_foreground_android_component"]())
             self.last_tool_calls.append({"name": requested_tool, "args": {}, "result": result})
