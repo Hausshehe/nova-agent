@@ -1605,6 +1605,59 @@ def verify_outcome_contract(
         "No action was executed and no device state was changed.",
     ])
 
+
+def diagnose_outcome_discrepancy(
+    goal: str,
+    success_condition: str,
+    expected_transition: str,
+    failure_condition: str,
+    observed_evidence: str,
+) -> str:
+    """Classify actual outcome state and bounded next decision from observed evidence only."""
+    values = (
+        (goal, "Goal"), (success_condition, "Success condition"),
+        (expected_transition, "Expected transition"),
+        (failure_condition, "Failure condition"), (observed_evidence, "Observed evidence"),
+    )
+    for value, label in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} cannot be empty.")
+    observed = observed_evidence.strip()
+    success = success_condition.strip()
+    failure = failure_condition.strip()
+    transition = expected_transition.strip()
+    if failure in observed:
+        status, decision, basis = (
+            "MISMATCH", "REPLAN",
+            "the observed evidence explicitly matches the contracted failure condition.",
+        )
+    elif success in observed:
+        status, decision, basis = (
+            "ACHIEVED", "STOP",
+            "the observed evidence explicitly establishes the contracted success condition.",
+        )
+    elif transition in observed:
+        status, decision, basis = (
+            "PARTIAL_OR_UNCERTAIN", "VERIFY",
+            "the expected transition is observed, but the full success condition is not established.",
+        )
+    else:
+        status, decision, basis = (
+            "MISMATCH_OR_UNKNOWN", "REPLAN_OR_VERIFY",
+            "the observed evidence does not establish the expected transition or either contracted outcome condition.",
+        )
+    return "\n".join([
+        "Outcome discrepancy diagnosis (read-only):",
+        f"Goal: {goal.strip()}",
+        f"Expected transition: {transition}",
+        f"Observed evidence: {observed}",
+        f"Outcome state: {status}",
+        f"Next decision: {decision}",
+        f"Evidence basis: {basis}",
+        "Tool execution success is not treated as outcome achievement.",
+        "No action was executed and no device state was changed.",
+    ])
+
 def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     """Establish an explicit bounded goal and completion condition without executing anything."""
     return establish_goal_contract(goal, success_condition)
@@ -4622,6 +4675,15 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition", "expected_transition", "observable_evidence", "failure_condition", "observed_evidence"]},
     },
     {
+        "name": "diagnose_outcome_discrepancy",
+        "description": "Diagnose whether observed reality matches the expected outcome and choose stop, verify, or replan without executing an action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING"}, "success_condition": {"type": "STRING"},
+            "expected_transition": {"type": "STRING"}, "failure_condition": {"type": "STRING"},
+            "observed_evidence": {"type": "STRING"},
+        }, "required": ["goal", "success_condition", "expected_transition", "failure_condition", "observed_evidence"]},
+    },
+    {
         "name": "select_goal_next_step",
         "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -5828,6 +5890,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
     "establish_outcome_contract": establish_outcome_contract_tool,
+    "diagnose_outcome_discrepancy": diagnose_outcome_discrepancy,
     "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
     "select_goal_next_step": select_goal_next_step_tool,
