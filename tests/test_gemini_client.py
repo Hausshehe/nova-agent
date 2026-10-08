@@ -44,6 +44,26 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_explicit_construction_request_enters_goal_orchestration(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch.object(GeminiClient, "_generate_cloudflare", return_value="orchestration-routed") as generate:
+            client = GeminiClient()
+            answer = client.ask(
+                "Create a minimal Android app from scratch. "
+                "You must determine the required files and execute the required actions. "
+                "Do not ask me to write or modify code manually. "
+                "Build the APK and verify the resulting artifact with evidence."
+            )
+        self.assertEqual(answer, "orchestration-routed")
+        routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
+        self.assertIn("[Nova orchestration directive]", routed_prompt)
+        self.assertIn("Establish a goal contract", routed_prompt)
+        self.assertIn("success condition", routed_prompt)
+        self.assertIn("autonomously pursue the goal", routed_prompt)
+
     def test_goal_contract_initializes_runtime_goal_state_without_execution(self):
         with patch.dict(
             os.environ,
