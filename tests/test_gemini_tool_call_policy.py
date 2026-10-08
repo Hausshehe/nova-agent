@@ -4,6 +4,15 @@ import unittest
 
 
 class CloudflareToolCallPolicyTests(unittest.TestCase):
+    def test_adaptive_investigation_has_a_bounded_sixteen_round_ceiling(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("max_tool_rounds = 16", source)
+        self.assertNotIn("max_tool_rounds = 8", source)
+
+
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
             Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
