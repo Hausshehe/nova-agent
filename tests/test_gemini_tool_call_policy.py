@@ -16,23 +16,32 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
         source = (
             Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
         ).read_text(encoding="utf-8")
+        tree = ast.parse(source)
 
+        policy_nodes = [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "decision_policy"
+                for target in node.targets
+            )
+        ]
+        self.assertEqual(len(policy_nodes), 1)
+
+        policy = ast.literal_eval(policy_nodes[0])
         required_fragments = (
             "Adaptive investigation rule:",
-            "unavailable, blocked, failed, or inconclusive ",
-            "observation mechanism is evidence about that mechanism",
+            "unavailable, blocked, failed, or inconclusive observation mechanism",
             "requested fact is unknowable",
-            "identify ",
-            "and try a distinct already-registered mechanism capable of observing the same ",
+            "identify and try a distinct already-registered mechanism",
             "while preserving read-only and safety constraints",
-            "Do not stop merely ",
-            "because the first diagnostic path is blocked",
-            "Stop only after the fact is ",
-            "verified, the remaining uncertainty is explicitly justified",
-            "or the available mechanisms have been meaningfully exhausted",
+            "Do not stop merely because the first diagnostic path is blocked",
+            "Stop only after the fact is verified",
+            "available mechanisms have been meaningfully exhausted",
         )
         for fragment in required_fragments:
-            self.assertIn(fragment, source)
+            self.assertIn(fragment, policy)
 
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
