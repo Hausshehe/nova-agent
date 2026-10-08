@@ -1148,7 +1148,7 @@ class GeminiClient:
 
         if requested_tool == "represent_entity_states":
             match = re.search(
-                r'(?:represents+(?:thes+)?entities?(?:s+ands+theirs+states)?|represents+entitys+states|builds+ans+entitys+ands+states+representation|creates+ans+entitys+ands+states+representation)(?:s+from|s+using|s+with)?s*:?s*"([^"]+)"',
+                r'(?:represent\s+(?:the\s+)?entities?(?:\s+and\s+their\s+states)?|represent\s+entity\s+states|build\s+an\s+entity\s+and\s+state\s+representation|create\s+an\s+entity\s+and\s+state\s+representation)(?:\s+from|\s+using|\s+with)?\s*:?\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
