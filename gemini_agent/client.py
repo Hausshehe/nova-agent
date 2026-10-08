@@ -190,6 +190,12 @@ class GeminiClient:
             return "assess_autonomy_boundary"
 
         if any(phrase in user_text for phrase in (
+            "build intent clarification",
+            "clarify the intent contract",
+            "generate clarification for the intent",
+        )):
+            return "build_intent_clarification"
+        if any(phrase in user_text for phrase in (
             "establish an intent contract",
             "establish intent contract",
             "intent contract",
@@ -1040,6 +1046,26 @@ class GeminiClient:
 
         requested_tool = self._requested_local_tool(contents)
         # Keep intent interpretation deterministic and provider-independent.
+        if requested_tool == "build_intent_clarification":
+            match = re.search(
+                r'build\\s+intent\\s+clarification\\s+for\\s+"([^"]+)".*?uncertainty\\s+is\\s+"([^"]+)".*?required\\s+evidence\\s+is\\s+"([^"]+)".*?clarification\\s+is\\s+"([^"]+)"',
+                request_text,
+                re.IGNORECASE,
+            )
+            if match:
+                args = {
+                    "request": match.group(1),
+                    "uncertainty": match.group(2),
+                    "required_evidence": match.group(3),
+                    "clarification_required": match.group(4),
+                }
+                result = self.tool_handlers["build_intent_clarification"](**args)
+                self.last_tool_calls.append({
+                    "name": "build_intent_clarification",
+                    "args": args,
+                    "result": result,
+                })
+                return result
         if requested_tool == "establish_intent_contract":
             match = re.search(
                 r'\bestablish\s+(?:an\s+)?intent\s+contract\s+for\s+"([^"]+)"',
