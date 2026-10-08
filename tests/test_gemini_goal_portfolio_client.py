@@ -206,5 +206,32 @@ class GoalPortfolioClientTests(unittest.TestCase):
         self.assertEqual(names.count("select_goal_priority"), 1)
 
 
+    def test_client_routes_temporal_states_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Represent temporal states for entities "battery | device | 82 percent | 100\\n'
+            'nova | agent | active | 90" with observations "battery | 82 percent | 2026-10-08T18:00:00+03:00 | 95\\n'
+            'nova | active | 2026-10-08T18:05:00+03:00 | 90". '
+            "Do not infer prior, current, or future states, and do not change device state."
+        )
+        self.assertIn("Temporal state representation (read-only):", result)
+        self.assertIn("Observation count: 2", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "represent_temporal_states")
+
+    def test_temporal_state_tool_is_registered_once(self):
+        self.assertIn("represent_temporal_states", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("represent_temporal_states"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
