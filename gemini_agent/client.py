@@ -213,6 +213,16 @@ class GeminiClient:
             return "represent_world_evidence"
 
         if any(phrase in user_text for phrase in (
+            "revise world beliefs",
+            "revise beliefs",
+            "update world beliefs",
+            "revise the beliefs",
+            "perform belief revision",
+            "perform world belief revision",
+        )):
+            return "revise_world_beliefs"
+
+        if any(phrase in user_text for phrase in (
             "represent temporal states",
             "represent temporal state",
             "represent states over time",
@@ -1171,6 +1181,37 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
             return "Resolving goal conflicts requires one or more goal entries using: goal_id | goal | conflict_key | constraint"
+
+        if requested_tool == "revise_world_beliefs":
+            entities_match = re.search(
+                r'(?:entities|entity\s+states?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            beliefs_match = re.search(
+                r'(?:beliefs|belief\s+records?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            evidence_match = re.search(
+                r'(?:evidence|revision\s+evidence)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if entities_match and beliefs_match and evidence_match:
+                args = {
+                    "entities": entities_match.group(1).replace("\\n", "\n"),
+                    "beliefs": beliefs_match.group(1).replace("\\n", "\n"),
+                    "evidence": evidence_match.group(1).replace("\\n", "\n"),
+                }
+                result = self.tool_handlers["revise_world_beliefs"](**args)
+                self.last_tool_calls.append({"name": "revise_world_beliefs", "args": args, "result": result})
+                return result
+            return (
+                "Belief revision requires entities using: entity_id | entity_type | state | confidence; "
+                "beliefs using: entity_id | claim | confidence; and evidence using: "
+                "entity_id | claim | source | confidence | SUPPORTS or CONTRADICTS"
+            )
 
         if requested_tool == "represent_temporal_states":
             entities_match = re.search(
