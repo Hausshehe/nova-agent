@@ -4698,7 +4698,7 @@ TOOL_DECLARATIONS = [
             },
             "required": ["capability"],
         },
-
+    },
     {
         "name": "assess_capability_evidence_quality",
         "description": "Assess the completeness, consistency, and recorded age of persisted capability verification evidence without executing the capability.",
@@ -4709,7 +4709,6 @@ TOOL_DECLARATIONS = [
             },
             "required": ["capability"],
         },
-    },
     },
     {
         "name": "assess_capability_gap",
