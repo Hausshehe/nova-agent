@@ -35,6 +35,7 @@ from gemini_agent.tools import (
     get_capability_outcome_history,
     discover_camera_control,
     discover_android_mechanisms,
+    discover_workspace_executables,
     resolve_android_intent,
     inspect_android_ui,
     discover_android_ui_actions,
@@ -423,6 +424,29 @@ class AndroidMechanismDiscoveryTests(unittest.TestCase):
         self.assertIn("ui:com.example:id/capture", result)
         self.assertIn("ui-text:Take Photo", result)
         self.assertIn("No action was performed", result)
+
+    def test_discover_workspace_executables_is_read_only(self):
+        with patch.dict(
+            os.environ,
+            {"PATH": os.environ.get("PATH", "")},
+            clear=False,
+        ), patch("gemini_agent.tools.os.listdir", return_value=["gradle", "javac", "not-executable"]), patch(
+            "gemini_agent.tools.os.path.isfile",
+            side_effect=lambda path: path.endswith(("/gradle", "/javac")),
+        ), patch(
+            "gemini_agent.tools.os.access",
+            return_value=True,
+        ):
+            result = discover_workspace_executables("build an unfamiliar artifact")
+        self.assertIn("Workspace executable discovery (read-only):", result)
+        self.assertIn("gradle:", result)
+        self.assertIn("javac:", result)
+        self.assertNotIn("not-executable:", result)
+        self.assertIn("No executable was launched", result)
+
+    def test_discover_workspace_executables_rejects_empty_request(self):
+        with self.assertRaises(ValueError):
+            discover_workspace_executables("")
 
     def test_discover_android_mechanisms_rejects_empty_request(self):
         with self.assertRaises(ValueError):
