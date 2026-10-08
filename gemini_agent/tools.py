@@ -218,6 +218,57 @@ def select_capability_by_evidence(candidates: str, requirement: str) -> str:
     lines.append("No capability execution, code modification, or device state change was performed.")
     return "\n".join(lines)
 
+
+def select_capability_by_evidence(candidates: str, requirement: str) -> str:
+    """Select the best supported capability from candidates using persisted evidence only."""
+    if not isinstance(candidates, str) or not candidates.strip():
+        raise ValueError("Candidates cannot be empty.")
+    if not isinstance(requirement, str) or not requirement.strip():
+        raise ValueError("Requirement cannot be empty.")
+    names=list(dict.fromkeys(line.strip() for line in candidates.splitlines() if line.strip()))
+    if not names:
+        raise ValueError("Candidates cannot be empty.")
+    ranks={"VERIFIED_SUPPORTED_DIRECT":4,"VERIFIED_SUPPORTED_INDIRECT":3,"AVAILABLE_BUT_UNVERIFIED":1,"UNAVAILABLE":0}
+    assessments=[]
+    for name in names:
+        readiness=assess_capability_readiness(name)
+        quality=assess_capability_evidence_quality(name)
+        provenance=assess_capability_evidence_provenance(name)
+        rm=re.search(r"Readiness:\s*([^\n]+)",readiness)
+        qm=re.search(r"Quality:\s*([^\n]+)",quality)
+        pm=re.search(r"Provenance:\s*([^\n]+)",provenance)
+        rv=rm.group(1).strip().upper() if rm else "UNKNOWN"
+        qv=qm.group(1).strip().upper() if qm else "UNKNOWN"
+        pv=pm.group(1).strip().upper() if pm else "UNKNOWN"
+        if rv=="VERIFIED" and qv=="SUPPORTED" and pv=="DIRECTLY_ALIGNED":
+            tier="VERIFIED_SUPPORTED_DIRECT"
+        elif rv=="VERIFIED" and qv=="SUPPORTED" and pv=="INDIRECT":
+            tier="VERIFIED_SUPPORTED_INDIRECT"
+        elif rv=="AVAILABLE_BUT_UNVERIFIED":
+            tier="AVAILABLE_BUT_UNVERIFIED"
+        else:
+            tier="UNAVAILABLE"
+        assessments.append((ranks[tier],name,tier,rv,qv,pv))
+    assessments.sort(key=lambda item:(-item[0],names.index(item[1])))
+    best=assessments[0]
+    if best[0] <= 0:
+        selected="NONE"; decision="NO_SUPPORTED_CANDIDATE"
+        basis="no candidate has sufficient verified evidence to justify selecting it."
+    else:
+        selected=best[1]; decision="SELECTED"
+        basis="selected the highest-evidence candidate: direct verified evidence outranks indirect verified evidence, which outranks merely available-but-unverified capability."
+    lines=[
+        "Capability selection by evidence (read-only):",
+        f"Requirement: {requirement.strip()}",
+        f"Selected capability: {selected}",
+        f"Decision: {decision}",
+        f"Basis: {basis}",
+        "Candidate assessments:",
+    ]
+    lines.extend(f"- {name}: tier={tier}; readiness={rv}; quality={qv}; provenance={pv}" for _,name,tier,rv,qv,pv in assessments)
+    lines.append("No capability execution, code modification, or device state change was performed.")
+    return "\n".join(lines)
+
 def select_capability_repair_candidate(capability: str, diagnosis: str) -> str:
     """Select a bounded repair candidate from read-only capability state."""
     if not isinstance(capability, str) or not capability.strip():
@@ -4580,6 +4631,14 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "select_capability_by_evidence",
+        "description": "Select the best-supported local capability from candidates using readiness, evidence quality, and provenance without executing any candidate.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "candidates": {"type": "STRING", "description": "Newline-separated capability names to compare."},
+            "requirement": {"type": "STRING", "description": "Requirement the selected capability must satisfy."},
+        }, "required": ["candidates", "requirement"]},
+    },
+    {
         "name": "autonomously_repair_capability",
         "description": "Run one bounded generic self-repair workflow from failure diagnosis through repair, independent verification, persisted evidence analysis, and acceptance or safe stop. The workflow executes the repaired capability at most once.",
         "parameters": {
@@ -5725,6 +5784,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "record_capability_outcome": record_capability_outcome,
     "get_capability_outcome_history": get_capability_outcome_history,
     "accept_verified_capability_repair": accept_verified_capability_repair,
+    "select_capability_by_evidence": select_capability_by_evidence,
     "select_capability_by_evidence": select_capability_by_evidence,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
