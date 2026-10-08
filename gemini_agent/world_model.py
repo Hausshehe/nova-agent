@@ -208,3 +208,112 @@ def represent_entity_relationships(entities: str, relationships: str) -> str:
         "No entity state, relationship, action, or device state was changed.",
     ])
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class EvidenceRecord:
+    """One explicit evidence record with bounded provenance."""
+
+    subject_id: str
+    claim: str
+    source: str
+    confidence: int = 100
+
+    def __post_init__(self) -> None:
+        for value, label in (
+            (self.subject_id, "Subject entity id"),
+            (self.claim, "Claim"),
+            (self.source, "Evidence source"),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{label} cannot be empty.")
+            if len(value.strip()) > _MAX_TEXT:
+                raise ValueError(f"{label} is too long.")
+        if isinstance(self.confidence, bool) or not isinstance(self.confidence, int):
+            raise ValueError("Confidence must be an integer from 0 to 100.")
+        if not 0 <= self.confidence <= 100:
+            raise ValueError("Confidence must be between 0 and 100.")
+
+    def snapshot(self) -> dict[str, object]:
+        return {
+            "subject_id": self.subject_id.strip(),
+            "claim": self.claim.strip(),
+            "source": self.source.strip(),
+            "confidence": self.confidence,
+        }
+
+
+def represent_world_evidence(entities: str, evidence: str) -> str:
+    """Represent explicit evidence and provenance for known entities only."""
+    if not isinstance(entities, str) or not entities.strip():
+        raise ValueError("Entities cannot be empty.")
+    if not isinstance(evidence, str) or not evidence.strip():
+        raise ValueError("Evidence cannot be empty.")
+
+    entity_entries = [line.strip() for line in entities.strip().splitlines() if line.strip()]
+    evidence_entries = [line.strip() for line in evidence.strip().splitlines() if line.strip()]
+    if not entity_entries:
+        raise ValueError("World model cannot be empty.")
+    if not evidence_entries:
+        raise ValueError("Evidence cannot be empty.")
+    if len(entity_entries) > _MAX_ENTITIES:
+        raise ValueError(f"World model cannot contain more than {_MAX_ENTITIES} entities.")
+    if len(evidence_entries) > _MAX_ENTITIES * 2:
+        raise ValueError(f"World model cannot contain more than {_MAX_ENTITIES * 2} evidence records.")
+
+    parsed_entities: list[EntityState] = []
+    for entry in entity_entries:
+        parts = [part.strip() for part in entry.split("|")]
+        if len(parts) != 4:
+            raise ValueError(
+                "Each entity must use: entity_id | entity_type | state | confidence"
+            )
+        try:
+            confidence = int(parts[3])
+        except ValueError as exc:
+            raise ValueError("Confidence must be an integer from 0 to 100.") from exc
+        parsed_entities.append(EntityState(parts[0], parts[1], parts[2], confidence))
+
+    model = WorldModel(tuple(parsed_entities))
+    entity_ids = {entity.entity_id.strip() for entity in model.entities}
+    parsed_evidence: list[EvidenceRecord] = []
+    seen: set[tuple[str, str, str, int]] = set()
+    for entry in evidence_entries:
+        parts = [part.strip() for part in entry.split("|")]
+        if len(parts) != 4:
+            raise ValueError(
+                "Each evidence record must use: entity_id | claim | source | confidence"
+            )
+        try:
+            confidence = int(parts[3])
+        except ValueError as exc:
+            raise ValueError("Confidence must be an integer from 0 to 100.") from exc
+        record = EvidenceRecord(parts[0], parts[1], parts[2], confidence)
+        key = (
+            record.subject_id.strip(),
+            record.claim.strip(),
+            record.source.strip(),
+            record.confidence,
+        )
+        if key in seen:
+            raise ValueError("Evidence records must be unique.")
+        if record.subject_id.strip() not in entity_ids:
+            raise ValueError(f"Unknown evidence subject entity id: {record.subject_id.strip()}.")
+        seen.add(key)
+        parsed_evidence.append(record)
+
+    lines = [
+        "World evidence and provenance representation (read-only):",
+        f"Entity count: {len(model.entities)}",
+        f"Evidence count: {len(parsed_evidence)}",
+    ]
+    for record in parsed_evidence:
+        lines.append(
+            f"- {record.subject_id.strip()} | claim: {record.claim.strip()} | "
+            f"source: {record.source.strip()} | confidence: {record.confidence}"
+        )
+    lines.extend([
+        "Boundary: evidence and provenance were represented only when explicitly supplied; no claim, source, relationship, or state was inferred.",
+        "No entity state, evidence, relationship, action, or device state was changed.",
+    ])
+    return "\n".join(lines)
