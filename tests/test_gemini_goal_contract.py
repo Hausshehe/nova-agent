@@ -143,12 +143,6 @@ class GoalContractTests(unittest.TestCase):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS
         client.tool_declarations = [*TOOL_DECLARATIONS]
-        client.cloudflare_model = "@cf/zai-org/glm-4.7-flash"
-        client.cloudflare_account_id = "test-account"
-        client.cloudflare_api_token = "test-token"
-        client.last_tool_calls = []
-        client.last_grounding_sources = []
-        client.goal_state = None
         prompt = (
             'Diagnose the outcome discrepancy for the goal "Identify foreground app". '
             'The success condition was "Foreground app is identified and safe read-only inspection is supported". '
@@ -156,6 +150,15 @@ class GoalContractTests(unittest.TestCase):
             'The failure condition was "Foreground app cannot be safely identified". '
             'The supplied observed evidence is "The observed activity is wrong and read-only inspection is not supported."'
         )
-        result = client.ask(prompt)
+        contents = [{"role": "user", "parts": [{"text": prompt}]}]
+        requested_tool = client._requested_local_tool(contents)
+        self.assertEqual(requested_tool, "diagnose_outcome_discrepancy")
+        result = client.tool_handlers[requested_tool](
+            goal="Identify foreground app",
+            success_condition="Foreground app is identified and safe read-only inspection is supported",
+            expected_transition="Foreground package and activity become established",
+            failure_condition="Foreground app cannot be safely identified",
+            observed_evidence="The observed activity is wrong and read-only inspection is not supported.",
+        )
         self.assertIn("Outcome state: MISMATCH", result)
         self.assertIn("Next decision: REPLAN", result)
