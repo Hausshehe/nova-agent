@@ -1674,8 +1674,6 @@ def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     return establish_goal_contract(goal, success_condition)
 
 
-def select_goal_next_step_tool(
-
 def assess_autonomy_boundary(
     goal: str,
     outcome_state: str,
