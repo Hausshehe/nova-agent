@@ -370,6 +370,16 @@ class GeminiClient:
         ):
             return "get_capability_outcome_history"
         if any(phrase in user_text for phrase in (
+            "assess capability evidence quality",
+            "capability evidence quality",
+            "evidence quality for capability",
+            "is the capability evidence sufficient",
+            "is the capability verification evidence sufficient",
+            "check capability evidence freshness",
+            "check capability verification evidence",
+        )):
+            return "assess_capability_evidence_quality"
+        if any(phrase in user_text for phrase in (
             "assess your own readiness",
             "assess capability readiness",
             "capability readiness",
