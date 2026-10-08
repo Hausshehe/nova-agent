@@ -1031,27 +1031,6 @@ class GeminiClient:
         )
 
         requested_tool = self._requested_local_tool(contents)
-        # Explicit autonomy-boundary assessments are deterministic, read-only policy
-        # decisions. Dispatch them before any provider round-trip so the model cannot
-        # reinterpret the supplied uncertainty or risk constraints.
-        if requested_tool == "assess_autonomy_boundary":
-            patterns = {
-                "goal": r'\b(?:the )?goal\s+"([^"]+)"',
-                "outcome_state": r'\boutcome state\s*[:=]?\s*(ACHIEVED|VERIFIED|COMPLETE|COMPLETED|MISMATCH|FAILED|CONTRADICTED|PARTIAL_OR_UNCERTAIN|INCONCLUSIVE|MISMATCH_OR_UNKNOWN|UNKNOWN|UNKNOWN_MISMATCH)',
-                "uncertainty": r'\buncertainty\s*(?:is|was|:)?\s*"([^"]+)"',
-                "observed_evidence": r'\b(?:observed evidence|supplied observed evidence)\s*(?:is|was|:)?\s*"([^"]+)"',
-                "available_actions": r'\bavailable actions\s*(?:are|is|were|:)?\s*"([^"]+)"',
-                "risk_constraints": r'\brisk constraints\s*(?:are|is|were|:)?\s*"([^"]+)"',
-            }
-            extracted = {}
-            for key, pattern in patterns.items():
-                match = re.search(pattern, prompt_text, re.IGNORECASE | re.DOTALL)
-                if match:
-                    extracted[key] = match.group(1).strip() if key != "outcome_state" else match.group(1).upper()
-            if all(key in extracted for key in patterns):
-                result = str(self.tool_handlers[requested_tool](**extracted))
-                self.last_tool_calls.append({"name": requested_tool, "args": extracted, "result": result})
-                return result
         # Keep the goal-contract safety boundary deterministic even if local
         # routing heuristics do not recognize the phrasing of this explicit request.
         if (
@@ -3758,6 +3737,27 @@ class GeminiClient:
                 })
                 return str(tool_result)
         requested_tool = self._requested_local_tool(contents)
+        # Explicit autonomy-boundary assessments are deterministic, read-only policy
+        # decisions. Dispatch them before any provider round-trip so the model cannot
+        # reinterpret the supplied uncertainty or risk constraints.
+        if requested_tool == "assess_autonomy_boundary":
+            patterns = {
+                "goal": r'\b(?:the )?goal\s+"([^"]+)"',
+                "outcome_state": r'\boutcome state\s*[:=]?\s*(ACHIEVED|VERIFIED|COMPLETE|COMPLETED|MISMATCH|FAILED|CONTRADICTED|PARTIAL_OR_UNCERTAIN|INCONCLUSIVE|MISMATCH_OR_UNKNOWN|UNKNOWN|UNKNOWN_MISMATCH)',
+                "uncertainty": r'\buncertainty\s*(?:is|was|:)?\s*"([^"]+)"',
+                "observed_evidence": r'\b(?:observed evidence|supplied observed evidence)\s*(?:is|was|:)?\s*"([^"]+)"',
+                "available_actions": r'\bavailable actions\s*(?:are|is|were|:)?\s*"([^"]+)"',
+                "risk_constraints": r'\brisk constraints\s*(?:are|is|were|:)?\s*"([^"]+)"',
+            }
+            extracted = {}
+            for key, pattern in patterns.items():
+                match = re.search(pattern, prompt_text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    extracted[key] = match.group(1).strip() if key != "outcome_state" else match.group(1).upper()
+            if all(key in extracted for key in patterns):
+                result = str(self.tool_handlers[requested_tool](**extracted))
+                self.last_tool_calls.append({"name": requested_tool, "args": extracted, "result": result})
+                return result
         # Resolve explicitly named generated capabilities from the live client
         # registry before any provider round-trip. This keeps execution local and
         # prevents provider-side argument generation from reinterpreting a repair
