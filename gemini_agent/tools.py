@@ -913,8 +913,8 @@ def assess_capability_evidence_provenance(capability: str) -> str:
     evidence = str(latest.get("evidence", "")).strip()
     capability_refs = []
     for pattern in (
-        r"(?:Requested capability|Capability)\s*:\s*([^\\n]+)",
-        r"(?:capability|tool)\\s+['\"]([^'\"]+)['\"]",
+        r"(?:Requested capability|Capability)\s*:\s*([^\n]+)",
+        r"(?:capability|tool)\s+['\"]([^'\"]+)['\"]",
     ):
         capability_refs.extend(match.strip() for match in re.findall(pattern, evidence, re.IGNORECASE))
 
@@ -923,7 +923,7 @@ def assess_capability_evidence_provenance(capability: str) -> str:
     mismatched = bool(normalized_refs and name not in normalized_refs)
     verification_marker = bool(
         re.search(
-            r"(?:Post-action verification|Verification|Postcondition)\\s*:\\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\\b",
+            r"(?:Post-action verification|Verification|Postcondition)\s*:\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\b",
             evidence,
             re.IGNORECASE,
         )
