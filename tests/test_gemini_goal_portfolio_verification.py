@@ -8,7 +8,7 @@ class GoalPortfolioVerificationTests(unittest.TestCase):
         result = verify_goal_portfolio(
             "battery,date",
             "battery | Check battery | Battery status is reported | VERIFIED | Battery status is reported: 82 percent\n"
-            "date | Check date | Current date is reported | ACTIVE | Current date is not yet checked",
+            "date | Check date | Current date is reported | ACTIVE | No current date has been observed",
         )
         self.assertIn("Coherence: VERIFIED", result)
         self.assertIn("Missing goals: none", result)
