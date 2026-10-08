@@ -29,7 +29,7 @@ from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
-from gemini_agent.world_model import represent_entity_states
+from gemini_agent.world_model import represent_entity_states, represent_entity_relationships
 
 
 _OPERATORS = {
@@ -4730,6 +4730,11 @@ def represent_entity_states_tool(entities: str) -> str:
     """Represent entities and their current states without changing reality."""
     return represent_entity_states(entities)
 
+
+def represent_entity_relationships_tool(entities: str, relationships: str) -> str:
+    """Represent explicitly supplied relationships between known entities."""
+    return represent_entity_relationships(entities, relationships)
+
 GET_BLUETOOTH_STATUS_DECLARATION = {
     "name": "get_bluetooth_status",
     "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
@@ -4817,6 +4822,14 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {
             "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
         }, "required": ["entities"]},
+    },
+    {
+        "name": "represent_entity_relationships",
+        "description": "Represent explicitly supplied relationships between known entities without inferring missing relationships or changing any state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
+            "relationships": {"type": "STRING", "description": "One relationship per line using: source_entity_id | relationship | target_entity_id"},
+        }, "required": ["entities", "relationships"]},
     },
     {
         "name": "select_goal_priority",
@@ -6137,6 +6150,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "resolve_goal_conflicts": resolve_goal_conflicts_tool,
     "verify_goal_portfolio": verify_goal_portfolio_tool,
     "represent_entity_states": represent_entity_states_tool,
+    "represent_entity_relationships": represent_entity_relationships_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
