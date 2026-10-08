@@ -1,6 +1,6 @@
 import unittest
 
-from gemini_agent.world_model import represent_entity_relationships, represent_world_evidence
+from gemini_agent.world_model import represent_entity_relationships, represent_world_evidence, represent_temporal_states
 
 
 class WorldModelRelationshipTests(unittest.TestCase):
@@ -79,6 +79,42 @@ class WorldModelRelationshipTests(unittest.TestCase):
             represent_world_evidence(
                 "battery | device | 82 percent | 100",
                 "battery | battery state was reported as 82 percent | user",
+            )
+
+
+    def test_represents_explicit_temporal_states(self):
+        result = represent_temporal_states(
+            "battery | device | 82 percent | 100\n"
+            "nova | agent | active | 90",
+            "battery | 82 percent | 2026-10-08T18:00:00+03:00 | 95\n"
+            "nova | active | 2026-10-08T18:05:00+03:00 | 90",
+        )
+        self.assertIn("Temporal state representation (read-only):", result)
+        self.assertIn("Entity count: 2", result)
+        self.assertIn("Observation count: 2", result)
+        self.assertIn("battery | state: 82 percent | observed_at: 2026-10-08T18:00:00+03:00 | confidence: 95", result)
+        self.assertIn("no prior, current, or future state was inferred", result)
+
+    def test_rejects_temporal_observation_for_unknown_entity(self):
+        with self.assertRaises(ValueError):
+            represent_temporal_states(
+                "battery | device | 82 percent | 100",
+                "missing | active | 2026-10-08T18:00:00+03:00 | 90",
+            )
+
+    def test_rejects_duplicate_temporal_observations(self):
+        with self.assertRaises(ValueError):
+            represent_temporal_states(
+                "battery | device | 82 percent | 100",
+                "battery | 82 percent | 2026-10-08T18:00:00+03:00 | 95\n"
+                "battery | 82 percent | 2026-10-08T18:00:00+03:00 | 95",
+            )
+
+    def test_rejects_malformed_temporal_observation(self):
+        with self.assertRaises(ValueError):
+            represent_temporal_states(
+                "battery | device | 82 percent | 100",
+                "battery | 82 percent | 2026-10-08T18:00:00+03:00",
             )
 
 
