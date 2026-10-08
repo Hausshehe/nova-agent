@@ -2897,6 +2897,68 @@ def find_executable(name: str) -> str:
 
     return f"Executable not found: {candidate}"
 
+def discover_workspace_executables(request: str) -> str:
+    """Discover available executable resources without executing them or changing state."""
+    if not isinstance(request, str) or not request.strip():
+        raise ValueError("Request cannot be empty.")
+    requested = request.strip()
+    terms = {
+        token for token in re.findall(r"[a-z0-9_]+", requested.lower())
+        if len(token) >= 3
+    }
+    search_paths = []
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if directory and directory not in search_paths:
+            search_paths.append(directory)
+    for directory in _EXECUTABLE_SEARCH_PATHS:
+        if directory not in search_paths:
+            search_paths.append(directory)
+
+    discovered = {}
+    for directory in search_paths:
+        try:
+            entries = os.listdir(directory)
+        except (OSError, PermissionError):
+            continue
+        for name in entries:
+            if not name or "/" in name or name in discovered:
+                continue
+            path = os.path.join(directory, name)
+            try:
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    discovered[name] = path
+            except OSError:
+                continue
+
+    ranked = []
+    for name, path in discovered.items():
+        name_terms = set(re.findall(r"[a-z0-9_]+", name.lower()))
+        score = len(name_terms & terms)
+        for name_term in name_terms:
+            for request_term in terms:
+                if len(name_term) >= 4 and len(request_term) >= 4 and (
+                    name_term.startswith(request_term) or request_term.startswith(name_term)
+                ):
+                    score += 1
+        ranked.append((score, name.lower(), name, path))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    lines = [
+        "Workspace executable discovery (read-only):",
+        f"Requested capability: {requested}",
+        f"Search paths inspected: {len(search_paths)}",
+        f"Executable candidates discovered: {len(ranked)}",
+    ]
+    if ranked:
+        lines.append("Candidates:")
+        lines.extend(
+            f"- {name}: {path}"
+            for _, _, name, path in ranked[:128]
+        )
+    else:
+        lines.append("Candidates: none.")
+    lines.append("No executable was launched and no workspace or device state was modified.")
+    return "\n".join(lines)
+
 def diagnose_command_failure(command: str, error: str) -> str:
     """Classify a failed command and recommend the safest next diagnostic step."""
     if not isinstance(command, str) or not command.strip():
@@ -5047,6 +5109,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "discover_workspace_executables",
+        "description": "Discover available executable resources in the current runtime environment without executing them. Use this to identify toolchains or other executable resources needed for an unfamiliar goal.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "request": {"type": "STRING", "description": "The capability whose executable resources should be discovered."}
+            },
+            "required": ["request"],
+        },
+    },
+    {
         "name": "discover_android_mechanisms",
         "description": "Discover safe, read-only Android executables, services, and bounded intent mechanisms that may implement a missing capability. Intent candidates are resolved only; no action is performed.",
         "parameters": {
@@ -6170,6 +6243,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "execute_android_mechanism": execute_android_mechanism,
     "execute_validated_android_mechanism": execute_validated_android_mechanism,
     "execute_validated_android_ui_mechanism": execute_validated_android_ui_mechanism,
+    "discover_workspace_executables": discover_workspace_executables,
     "discover_android_mechanisms": discover_android_mechanisms,
     "validate_android_mechanism": validate_android_mechanism,
     "resolve_android_intent": resolve_android_intent,
