@@ -1139,12 +1139,12 @@ class GeminiClient:
 
         if requested_tool == "verify_goal_portfolio":
             expected_match = re.search(
-                r'(?:expecteds+goals+ids|expecteds+ids)s*(?:are|is|:)?s*"([^"]+)"',
+                r'(?:expected\s+goal\s+ids|expected\s+ids)\s*(?:are|is|:)?\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             goals_match = re.search(
-                r'(?:ands+)?(?:thes+)?goals?s*(?:are|is|:|using|from)?s*"([^"]+)"',
+                r'(?:and\s+)?(?:the\s+)?goals?\s*(?:are|is|:|using|from)?\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
