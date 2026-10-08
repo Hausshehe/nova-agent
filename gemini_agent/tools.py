@@ -29,7 +29,7 @@ from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
-from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence
+from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence, represent_temporal_states
 
 
 _OPERATORS = {
@@ -1616,6 +1616,11 @@ def resolve_goal_conflicts_tool(goals: str) -> str:
 def verify_goal_portfolio_tool(expected_goal_ids: str, goals: str) -> str:
     """Verify multi-goal portfolio completeness and coherence without executing anything."""
     return verify_goal_portfolio(expected_goal_ids, goals)
+
+def represent_temporal_states_tool(entities: str, observations: str) -> str:
+    """Represent explicit entity states at supplied times without inferring history or changing state."""
+    return represent_temporal_states(entities, observations)
+
 
 def verify_outcome_contract(
     goal: str,
