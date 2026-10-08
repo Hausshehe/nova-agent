@@ -1568,6 +1568,43 @@ def establish_outcome_contract_tool(
         uncertainty,
     )
 
+
+
+def verify_outcome_contract(
+    goal: str,
+    success_condition: str,
+    expected_transition: str,
+    observable_evidence: str,
+    failure_condition: str,
+    observed_evidence: str,
+) -> str:
+    """Verify an observed outcome against a previously defined contract without executing anything."""
+    values = (
+        (goal, "Goal"), (success_condition, "Success condition"),
+        (expected_transition, "Expected transition"), (observable_evidence, "Observable evidence"),
+        (failure_condition, "Failure condition"), (observed_evidence, "Observed evidence"),
+    )
+    for value, label in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} cannot be empty.")
+    success, failure, observed = success_condition.strip(), failure_condition.strip(), observed_evidence.strip()
+    if failure in observed:
+        status, basis = "CONTRADICTED", "the observed evidence explicitly contains the contracted failure condition."
+    elif success in observed:
+        status, basis = "SUPPORTED", "the observed evidence explicitly contains the contracted success condition."
+    else:
+        status, basis = "INSUFFICIENT", "the observed evidence does not explicitly establish either the contracted success or failure condition."
+    return "\\n".join([
+        "Outcome verification (read-only):",
+        f"Goal: {goal.strip()}",
+        f"Expected transition: {expected_transition.strip()}",
+        f"Observed evidence: {observed}",
+        f"Outcome status: {status}",
+        f"Evidence basis: {basis}",
+        "Execution status is not treated as outcome proof; only the supplied observed evidence is evaluated.",
+        "No action was executed and no device state was changed.",
+    ])
+
 def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     """Establish an explicit bounded goal and completion condition without executing anything."""
     return establish_goal_contract(goal, success_condition)
@@ -4576,6 +4613,15 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition", "expected_transition", "observable_evidence", "failure_condition", "uncertainty"]},
     },
     {
+        "name": "verify_outcome_contract",
+        "description": "Verify observed evidence against a previously defined outcome contract without executing any action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING"}, "success_condition": {"type": "STRING"},
+            "expected_transition": {"type": "STRING"}, "observable_evidence": {"type": "STRING"},
+            "failure_condition": {"type": "STRING"}, "observed_evidence": {"type": "STRING"},
+        }, "required": ["goal", "success_condition", "expected_transition", "observable_evidence", "failure_condition", "observed_evidence"]},
+    },
+    {
         "name": "select_goal_next_step",
         "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -5782,6 +5828,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
     "establish_outcome_contract": establish_outcome_contract_tool,
+    "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
