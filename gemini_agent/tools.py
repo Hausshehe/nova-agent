@@ -26,6 +26,7 @@ from gemini_agent.goal_contract import establish_goal_contract, establish_outcom
 from gemini_agent.goal_next_step import select_goal_next_step
 from gemini_agent.goal_portfolio import establish_goal_portfolio
 from gemini_agent.goal_priority import select_goal_priority
+from gemini_agent.goal_interruption import manage_goal_interruption
 
 
 _OPERATORS = {
@@ -1597,6 +1598,11 @@ def establish_goal_portfolio_tool(goals: str) -> str:
 def select_goal_priority_tool(goals: str) -> str:
     """Select which active goal deserves attention from explicit bounded signals."""
     return select_goal_priority(goals)
+
+
+def manage_goal_interruption_tool(goal: str) -> str:
+    """Pause or resume one goal while preserving its checkpoint without executing it."""
+    return manage_goal_interruption(goal)
 
 def verify_outcome_contract(
     goal: str,
@@ -5787,6 +5793,14 @@ TOOL_DECLARATIONS = [
             "domain": {"type": "STRING"}
         }, "required": ["request", "candidates"]},
     },
+    {
+        "name": "manage_goal_interruption",
+        "description": "Pause and resume one active goal while preserving its supplied checkpoint. This changes only the bounded goal-state representation and never executes or completes the goal.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING", "description": "One goal using: goal_id | status | checkpoint | action[, action...] where action is PAUSE or RESUME."},
+        }, "required": ["goal"]},
+    },
+
 ]
 
 
@@ -6079,6 +6093,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "establish_goal_contract": establish_goal_contract_tool,
     "establish_goal_portfolio": establish_goal_portfolio_tool,
     "select_goal_priority": select_goal_priority_tool,
+    "manage_goal_interruption": manage_goal_interruption_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
