@@ -4793,7 +4793,6 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition", "expected_transition", "failure_condition", "observed_evidence"]},
     },
     {
-        "name": "select_goal_next_step",    {
         "name": "assess_autonomy_boundary",
         "description": "Classify whether a goal should stop, continue, investigate, recover, replan, or require human input from supplied evidence, uncertainty, actions, and risk constraints without executing anything.",
         "parameters": {"type": "OBJECT", "properties": {
