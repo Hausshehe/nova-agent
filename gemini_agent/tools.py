@@ -29,7 +29,7 @@ from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
-from gemini_agent.world_model import represent_entity_states, represent_entity_relationships
+from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence
 
 
 _OPERATORS = {
@@ -4735,6 +4735,11 @@ def represent_entity_relationships_tool(entities: str, relationships: str) -> st
     """Represent explicitly supplied relationships between known entities."""
     return represent_entity_relationships(entities, relationships)
 
+
+def represent_world_evidence_tool(entities: str, evidence: str) -> str:
+    """Represent explicitly supplied evidence and provenance for known entities."""
+    return represent_world_evidence(entities, evidence)
+
 GET_BLUETOOTH_STATUS_DECLARATION = {
     "name": "get_bluetooth_status",
     "description": "Get whether the Android Bluetooth radio is currently enabled or disabled.",
@@ -4830,6 +4835,14 @@ TOOL_DECLARATIONS = [
             "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
             "relationships": {"type": "STRING", "description": "One relationship per line using: source_entity_id | relationship | target_entity_id"},
         }, "required": ["entities", "relationships"]},
+    },
+    {
+        "name": "represent_world_evidence",
+        "description": "Represent explicitly supplied evidence, claims, sources, and confidence for known entities without inferring claims, provenance, relationships, or state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
+            "evidence": {"type": "STRING", "description": "One evidence record per line using: entity_id | claim | source | confidence"},
+        }, "required": ["entities", "evidence"]},
     },
     {
         "name": "select_goal_priority",
@@ -6151,6 +6164,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "verify_goal_portfolio": verify_goal_portfolio_tool,
     "represent_entity_states": represent_entity_states_tool,
     "represent_entity_relationships": represent_entity_relationships_tool,
+    "represent_world_evidence": represent_world_evidence_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
