@@ -181,7 +181,6 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
-            "select the goal next step",        if any(phrase in user_text for phrase in (
             "assess the autonomy boundary",
             "assess autonomy boundary",
             "decide whether to continue or escalate",
@@ -189,7 +188,8 @@ class GeminiClient:
             "classify whether to stop, continue, investigate, recover, replan, or escalate",
         )):
             return "assess_autonomy_boundary"
-
+        if any(phrase in user_text for phrase in (
+            "select the goal next step",
             "select a goal next step",
             "choose the next step for the goal",
             "choose a goal-directed next step",
