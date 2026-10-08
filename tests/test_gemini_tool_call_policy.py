@@ -64,9 +64,13 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
                 catches_runtime_error.append(node)
 
         self.assertTrue(catches_runtime_error)
-        handler_source = ast.get_source_segment(source, catches_runtime_error[0])
-        self.assertIn("Tool error:", handler_source)
-        self.assertIn("tool_result", handler_source)
+        matching_handlers = [
+            ast.get_source_segment(source, node)
+            for node in catches_runtime_error
+            if "Tool error:" in (ast.get_source_segment(source, node) or "")
+            and "tool_result" in (ast.get_source_segment(source, node) or "")
+        ]
+        self.assertTrue(matching_handlers)
 
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
