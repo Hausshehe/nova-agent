@@ -25,6 +25,7 @@ from gemini_agent.learning import record_verified_android_experience, rank_with_
 from gemini_agent.goal_contract import establish_goal_contract, establish_outcome_contract, establish_intent_contract, build_intent_clarification
 from gemini_agent.goal_next_step import select_goal_next_step
 from gemini_agent.goal_portfolio import establish_goal_portfolio
+from gemini_agent.goal_priority import select_goal_priority
 
 
 _OPERATORS = {
@@ -1591,6 +1592,12 @@ def establish_goal_portfolio_tool(goals: str) -> str:
     return establish_goal_portfolio(goals)
 
 
+
+
+def select_goal_priority_tool(goals: str) -> str:
+    """Select which active goal deserves attention from explicit bounded signals."""
+    return select_goal_priority(goals)
+
 def verify_outcome_contract(
     goal: str,
     success_condition: str,
@@ -2526,7 +2533,15 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = "TOOL_DECLARATIONS = ["
+    declaration_marker = "TOOL_DECLARATIONS = [
+    {
+        "name": "select_goal_priority",
+        "description": "Select which goal deserves attention from explicit user-priority, urgency, dependency, and resource-cost signals without executing, interrupting, or completing any goal. This is read-only.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"},
+        }, "required": ["goals"]},
+    },
+"
     handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
@@ -6064,6 +6079,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
     "establish_goal_portfolio": establish_goal_portfolio_tool,
+    "select_goal_priority": select_goal_priority_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
