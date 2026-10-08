@@ -31,6 +31,30 @@ class GoalPortfolioClientTests(unittest.TestCase):
         ]
         self.assertEqual(names.count("establish_goal_portfolio"), 1)
 
+    def test_client_routes_goal_portfolio_verification_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Verify goal portfolio with expected goal ids "battery,date" and goals "battery | Check battery | Battery status is reported | ACTIVE | Battery status is not yet checked\\n'
+            'date | Check date | Current date is reported | ACTIVE | Current date is not yet checked". '
+            "Do not execute or change any goal or device state."
+        )
+        self.assertIn("Coherence: VERIFIED", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "verify_goal_portfolio")
+
+    def test_goal_portfolio_verification_tool_is_registered_once(self):
+        self.assertIn("verify_goal_portfolio", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("verify_goal_portfolio"), 1)
+
     def test_client_routes_goal_priority_locally(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
