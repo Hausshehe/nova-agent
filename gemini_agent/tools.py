@@ -723,6 +723,51 @@ def autonomously_repair_capability(capability: str, failure_evidence: str) -> st
         + f"Final repair decision: {decision}. No acceptance mutation was performed."
     )
 
+def assess_capability_readiness(capability: str) -> str:
+    """Assess whether one local capability is present and what verification evidence supports it."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    name = capability.strip()
+    declaration = next(
+        (
+            item for item in TOOL_DECLARATIONS
+            if isinstance(item, dict) and item.get("name") == name
+        ),
+        None,
+    )
+    handler = TOOL_HANDLERS.get(name)
+    lines = [
+        "Capability readiness assessment (read-only):",
+        f"Capability: {name}",
+        f"Declaration: {'PRESENT' if declaration is not None else 'MISSING'}",
+        f"Handler: {'PRESENT and callable' if callable(handler) else 'MISSING or INVALID'}",
+    ]
+    if declaration is None or not callable(handler):
+        lines.extend([
+            "Readiness: UNAVAILABLE",
+            "Evidence basis: the capability is not currently registered as an executable local capability.",
+        ])
+        return "\n".join(lines)
+    history = analyze_capability_history(name)
+    status_match = re.search(r"Latest verification outcome:\s*([^\n]+)", history)
+    status = status_match.group(1).strip().upper() if status_match else "UNKNOWN"
+    if status == "VERIFIED":
+        readiness = "VERIFIED"
+        basis = "the latest persisted capability verification is VERIFIED."
+    elif status in {"FAILED", "INCONCLUSIVE"}:
+        readiness = "UNVERIFIED"
+        basis = f"the latest persisted capability verification is {status}."
+    else:
+        readiness = "AVAILABLE_BUT_UNVERIFIED"
+        basis = "the capability is registered and callable, but no current VERIFIED execution evidence is available."
+    lines.extend([
+        f"Readiness: {readiness}",
+        f"Evidence basis: {basis}",
+        "No capability execution, code modification, or device state change was performed.",
+    ])
+    return "\n".join(lines)
+
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -4552,6 +4597,17 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "OBJECT", "properties": {}},
     },
     {
+        "name": "assess_capability_readiness",
+        "description": "Assess whether a local capability is registered and what persisted verification evidence supports its readiness, without executing it.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the local capability to assess."}
+            },
+            "required": ["capability"],
+        },
+    },
+    {
         "name": "assess_capability_gap",
         "description": "Determine whether Nova has a plausible local capability for a requested task, without inventing unsupported capabilities.",
         "parameters": {
@@ -5399,6 +5455,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "apply_capability_extension": apply_capability_extension,
     "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
+    "assess_capability_readiness": assess_capability_readiness,
     "apply_capability_repair": apply_capability_repair,
     "self_test": self_test,
     "find_executable": find_executable,
