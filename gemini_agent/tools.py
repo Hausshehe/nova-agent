@@ -31,6 +31,7 @@ from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
 from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence, represent_temporal_states
 from gemini_agent.belief_revision import revise_world_beliefs
+from gemini_agent.world_model_query import query_world_model
 
 
 _OPERATORS = {
@@ -1626,6 +1627,17 @@ def represent_temporal_states_tool(entities: str, observations: str) -> str:
 def revise_world_beliefs_tool(entities: str, beliefs: str, evidence: str) -> str:
     """Revise explicit beliefs from supplied evidence without inferring missing evidence or changing reality."""
     return revise_world_beliefs(entities, beliefs, evidence)
+
+def query_world_model_tool(
+    entities: str,
+    relationships: str,
+    evidence: str,
+    temporal_states: str,
+    beliefs: str,
+    query: str,
+) -> str:
+    """Query only explicitly supplied world-model records without inferring missing facts."""
+    return query_world_model(entities, relationships, evidence, temporal_states, beliefs, query)
 
 
 def verify_outcome_contract(
@@ -5865,6 +5877,18 @@ TOOL_DECLARATIONS = [
         }, "required": ["entities", "beliefs", "evidence"]},
     },
     {
+        "name": "query_world_model",
+        "description": "Query the supplied internal world model across entities, relationships, evidence, temporal states, and beliefs. Return only explicitly supported records or UNKNOWN_OR_UNSUPPORTED; never infer missing facts or change state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence"},
+            "relationships": {"type": "STRING", "description": "One relationship per line using: source_entity_id | relationship | target_entity_id. Use an empty string when none are supplied."},
+            "evidence": {"type": "STRING", "description": "One evidence record per line using: entity_id | claim | source | confidence. Use an empty string when none are supplied."},
+            "temporal_states": {"type": "STRING", "description": "One temporal observation per line using: entity_id | state | observed_at | confidence. Use an empty string when none are supplied."},
+            "beliefs": {"type": "STRING", "description": "One belief per line using: entity_id | claim | confidence. Use an empty string when none are supplied."},
+            "query": {"type": "STRING", "description": "The fact to retrieve from only the supplied world-model records."},
+        }, "required": ["entities", "relationships", "evidence", "temporal_states", "beliefs", "query"]},
+    },
+    {
         "name": "represent_temporal_states",
         "description": "Represent explicit entity states at supplied times without inferring prior, current, or future state.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6195,6 +6219,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "represent_world_evidence": represent_world_evidence_tool,
     "represent_temporal_states": represent_temporal_states_tool,
     "revise_world_beliefs": revise_world_beliefs_tool,
+    "query_world_model": query_world_model_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
