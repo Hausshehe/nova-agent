@@ -32,6 +32,7 @@ from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
 from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence, represent_temporal_states
 from gemini_agent.belief_revision import revise_world_beliefs
 from gemini_agent.world_model_query import query_world_model
+from gemini_agent.constructed_action import execute_constructed_action, CONSTRUCTED_ACTION_DECLARATION
 
 
 _OPERATORS = {
@@ -4844,6 +4845,7 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
+    CONSTRUCTED_ACTION_DECLARATION,
     {
         "name": "represent_entity_states",
         "description": "Represent bounded entities, types, current states, and confidence as an internal world-model snapshot without inferring relationships or changing state.",
@@ -6220,6 +6222,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "represent_temporal_states": represent_temporal_states_tool,
     "revise_world_beliefs": revise_world_beliefs_tool,
     "query_world_model": query_world_model_tool,
+    "execute_constructed_action": execute_constructed_action,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
