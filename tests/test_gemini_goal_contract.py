@@ -2,7 +2,7 @@ import unittest
 
 from gemini_agent.goal_contract import GoalContract, OutcomeContract, establish_goal_contract, establish_outcome_contract
 from gemini_agent.client import GeminiClient
-from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
+from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS, verify_outcome_contract
 
 
 class GoalContractTests(unittest.TestCase):
@@ -82,3 +82,21 @@ class GoalContractTests(unittest.TestCase):
         self.assertIn("establish_goal_contract", TOOL_HANDLERS)
         names = [item["name"] for item in TOOL_DECLARATIONS]
         self.assertEqual(names.count("establish_goal_contract"), 1)
+
+
+    def test_verifies_supported_outcome_from_observed_evidence(self):
+        result = verify_outcome_contract("Open settings", "Settings page is visible", "Foreground changes to settings", "Observed UI identifies settings", "Settings page is not visible", "Post-action evidence: Settings page is visible and the observed UI identifies settings.")
+        self.assertIn("Outcome status: SUPPORTED", result)
+
+    def test_does_not_treat_execution_success_as_outcome_proof(self):
+        result = verify_outcome_contract("Open settings", "Settings page is visible", "Foreground changes to settings", "Observed UI identifies settings", "Settings page is not visible", "Tool execution: SUCCESS")
+        self.assertIn("Outcome status: INSUFFICIENT", result)
+
+    def test_verifies_contradicted_outcome_from_observed_evidence(self):
+        result = verify_outcome_contract("Open settings", "Settings page is visible", "Foreground changes to settings", "Observed UI identifies settings", "Settings page is not visible", "Post-action evidence: Settings page is not visible.")
+        self.assertIn("Outcome status: CONTRADICTED", result)
+
+    def test_outcome_verification_is_registered_once(self):
+        self.assertIn("verify_outcome_contract", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("verify_outcome_contract"), 1)
