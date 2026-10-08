@@ -855,7 +855,15 @@ class GeminiClient:
             "by Nova before deciding what to execute. Treat learned experience only as a "
             "preference from sufficiently similar VERIFIED experience. Never treat learned "
             "experience as proof of current viability or success; validate the selected "
-            "mechanism/capability and independently verify execution."
+            "mechanism/capability and independently verify execution. "
+            "Adaptive investigation rule: an unavailable, blocked, failed, or inconclusive "
+            "observation mechanism is evidence about that mechanism, not evidence that the "
+            "requested fact is unknowable. When a required fact remains unknown, identify "
+            "and try a distinct already-registered mechanism capable of observing the same "
+            "fact, while preserving read-only and safety constraints. Do not stop merely "
+            "because the first diagnostic path is blocked. Stop only after the fact is "
+            "verified, the remaining uncertainty is explicitly justified, or the available "
+            "mechanisms have been meaningfully exhausted."
         )
         if system_instruction:
             messages[0]["content"] = str(messages[0]["content"]) + "\n\n" + decision_policy
