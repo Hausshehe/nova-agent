@@ -1075,18 +1075,18 @@ class GeminiClient:
                 return result
         if requested_tool == "establish_goal_portfolio":
             match = re.search(
-                r'establish\\s+(?:a\\s+)?goal\\s+portfolio(?:\\s+with)?\\s*:\\s*"([^"]+)"',
+                r'establish\s+(?:a\s+)?goal\s+portfolio(?:\s+with)?\s*:\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             if not match:
                 match = re.search(
-                    r'(?:establish|create)\\s+(?:a\\s+)?goal\\s+portfolio(?:\\s+with)?\\s+"([^"]+)"',
+                    r'(?:establish|create)\s+(?:a\s+)?goal\s+portfolio(?:\s+with)?\s+"([^"]+)"',
                     request_text,
                     re.IGNORECASE | re.DOTALL,
                 )
             if match:
-                args = {"goals": match.group(1).replace("\\\\n", "\\n")}
+                args = {"goals": match.group(1).replace("\\n", "\n")}
                 result = self.tool_handlers["establish_goal_portfolio"](**args)
                 self.last_tool_calls.append({"name": "establish_goal_portfolio", "args": args, "result": result})
                 return result
