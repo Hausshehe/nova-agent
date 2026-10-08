@@ -213,6 +213,15 @@ class GeminiClient:
             return "represent_world_evidence"
 
         if any(phrase in user_text for phrase in (
+            "represent temporal states",
+            "represent temporal state",
+            "represent states over time",
+            "represent entity history",
+            "build a temporal state representation",
+            "create a temporal state representation",
+        )):
+            return "represent_temporal_states"
+        if any(phrase in user_text for phrase in (
             "represent entity states",
             "represent entities and their states",
             "represent entities with current states",
@@ -1162,6 +1171,31 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
             return "Resolving goal conflicts requires one or more goal entries using: goal_id | goal | conflict_key | constraint"
+
+        if requested_tool == "represent_temporal_states":
+            entities_match = re.search(
+                r'(?:entities|entity\s+states?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            observations_match = re.search(
+                r'(?:observations|temporal\s+observations|states\s+over\s+time)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if entities_match and observations_match:
+                args = {
+                    "entities": entities_match.group(1).replace("\\n", "\n"),
+                    "observations": observations_match.group(1).replace("\\n", "\n"),
+                }
+                result = self.tool_handlers["represent_temporal_states"](**args)
+                self.last_tool_calls.append({"name": "represent_temporal_states", "args": args, "result": result})
+                return result
+            return (
+                "Representing temporal states requires entities using: "
+                "entity_id | entity_type | state | confidence; and observations using: "
+                "entity_id | state | observed_at | confidence"
+            )
 
         if requested_tool == "represent_entity_states":
             match = re.search(
