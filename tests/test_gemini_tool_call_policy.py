@@ -22,12 +22,14 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
             "an unavailable, blocked, failed, or inconclusive observation mechanism",
             source,
         )
+        self.assertIn("identify ", source)
         self.assertIn(
-            "identify and try a distinct already-registered mechanism",
+            "and try a distinct already-registered mechanism",
             source,
         )
+        self.assertIn("Stop only after the fact is", source)
         self.assertIn(
-            "Stop only after the fact is verified",
+            "verified, the remaining uncertainty is explicitly justified",
             source,
         )
 
