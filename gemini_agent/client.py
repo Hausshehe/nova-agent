@@ -212,6 +212,14 @@ class GeminiClient:
         )):
             return "select_goal_priority"
         if any(phrase in user_text for phrase in (
+            "manage goal interruption",
+            "pause and resume a goal",
+            "pause the goal and resume it",
+            "interrupt and resume the goal",
+            "pause this goal",
+        )):
+            return "manage_goal_interruption"
+        if any(phrase in user_text for phrase in (
             "establish an intent contract",
             "establish intent contract",
             "intent contract",
@@ -1100,6 +1108,19 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "select_goal_priority", "args": args, "result": result})
                 return result
             return "Selecting goal priority requires one or more goal entries using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"
+        if requested_tool == "manage_goal_interruption":
+            match = re.search(
+                r'(?:manages+goals+interruption|pauses+(?:ands+resumes+)?(?:thes+)?goal(?:s+ands+resumes+it)?)\s+(?:for|with)?\s*:??\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if match:
+                args = {"goal": match.group(1).replace("\\n", "\n")}
+                result = self.tool_handlers["manage_goal_interruption"](**args)
+                self.last_tool_calls.append({"name": "manage_goal_interruption", "args": args, "result": result})
+                return result
+            return "Managing goal interruption requires: goal_id | status | checkpoint | action[, action...]"
+
         if requested_tool == "establish_goal_portfolio":
             match = re.search(
                 r'establish\s+(?:a\s+)?goal\s+portfolio(?:\s+with)?\s*:\s*"([^"]+)"',
