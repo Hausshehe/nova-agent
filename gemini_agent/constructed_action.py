@@ -54,7 +54,7 @@ def _resolve_executable(executable: str) -> Path:
     resolved = shutil.which(candidate)
     if resolved is None:
         raise ValueError(f"Executable was not found: {candidate}")
-    path = Path(resolved).resolve()
+    path = Path(resolved)
     if not path.is_file() or not os.access(path, os.X_OK):
         raise ValueError("Resolved executable is not executable.")
     return path
