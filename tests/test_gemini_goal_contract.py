@@ -235,3 +235,49 @@ class GoalContractTests(unittest.TestCase):
     def test_client_routes_autonomy_boundary_requests_locally(self):
         contents = [{"role": "user", "parts": [{"text": "Assess the autonomy boundary for this goal and decide whether to continue or escalate."}]}]
         self.assertEqual(GeminiClient._requested_local_tool(contents), "assess_autonomy_boundary")
+
+
+    def test_establishes_bounded_intent_contract_for_material_ambiguity(self):
+        from gemini_agent.goal_contract import IntentContract, establish_intent_contract
+        contract = IntentContract(
+            "Fix this",
+            "Fix this",
+            "Unresolved: the requested target and/or concrete outcome is not explicit enough to verify safely.",
+            "None stated explicitly.",
+            "Do not invent the missing target, outcome, or context; preserve the unresolved intent until clarified.",
+            "A concrete target and observable success condition must be established before execution.",
+            "Material ambiguity remains about what the user wants acted on or what result would count as success.",
+            "None about the missing target or outcome.",
+            "REQUIRED",
+        )
+        self.assertEqual(contract.snapshot()["clarification_required"], "REQUIRED")
+        result = establish_intent_contract("Fix this")
+        self.assertIn("Intended goal: Fix this", result)
+        self.assertIn("Clarification requirement: REQUIRED", result)
+        self.assertIn("no capability", result)
+
+    def test_intent_contract_does_not_execute(self):
+        from gemini_agent.goal_contract import establish_intent_contract
+        result = establish_intent_contract("Calculate 2 + 2")
+        self.assertIn("Clarification requirement: NOT REQUIRED", result)
+        self.assertIn("without executing any capability", result)
+
+    def test_intent_contract_is_registered_once(self):
+        from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
+        self.assertIn("establish_intent_contract", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("establish_intent_contract"), 1)
+
+    def test_client_routes_intent_contract_requests_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Establish an intent contract for "Fix this". '
+            'Do not execute anything and do not invent the missing target.'
+        )
+        self.assertIn("Clarification requirement: REQUIRED", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "establish_intent_contract")
