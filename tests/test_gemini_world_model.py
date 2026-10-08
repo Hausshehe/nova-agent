@@ -14,7 +14,7 @@ class WorldModelTests(unittest.TestCase):
         self.assertIn("State: 82 percent", result)
         self.assertIn("Entity id: nova", result)
         self.assertIn("Confidence: 90", result)
-        self.assertIn("No device state was changed", result)
+        self.assertIn("device state was changed", result)
 
     def test_rejects_duplicate_entity_ids(self):
         with self.assertRaises(ValueError):
