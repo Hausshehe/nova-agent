@@ -142,6 +142,7 @@ class GoalContractTests(unittest.TestCase):
         from gemini_agent.tools import TOOL_HANDLERS
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS
+        client.tool_declarations = [*TOOL_DECLARATIONS]
         client.last_tool_calls = []
         client.last_grounding_sources = []
         client.goal_state = None
