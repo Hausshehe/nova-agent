@@ -1747,7 +1747,12 @@ def assess_autonomy_boundary(
         decision, basis = "RECOVER", "the outcome is contradicted or failed, but a bounded recovery action is explicitly available."
     elif state in {"MISMATCH", "FAILED", "CONTRADICTED"} and can_replan:
         decision, basis = "REPLAN", "the outcome is contradicted or failed, and an alternative bounded path is explicitly available."
-    elif state in {"PARTIAL_OR_UNCERTAIN", "INCONCLUSIVE", "MISMATCH_OR_UNKNOWN", "UNKNOWN", "UNKNOWN_MISMATCH"} and can_investigate:
+    elif (
+        state in {"PARTIAL_OR_UNCERTAIN", "INCONCLUSIVE", "MISMATCH_OR_UNKNOWN", "UNKNOWN", "UNKNOWN_MISMATCH"}
+        and can_investigate
+        and not explicit_human
+        and not high_risk
+    ):
         decision, basis = "INVESTIGATE", "the outcome remains uncertain and a distinct bounded observation or investigation path is available."
     elif state in {"MISMATCH", "FAILED", "CONTRADICTED"}:
         decision, basis = "ESCALATE", "the outcome is contradicted or failed and no bounded recovery or alternative path is supplied."
