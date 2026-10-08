@@ -860,6 +860,100 @@ def assess_capability_evidence_quality(capability: str) -> str:
     ]
     return "\n".join(lines)
 
+def assess_capability_evidence_provenance(capability: str) -> str:
+    """Assess whether persisted verification evidence is directly tied to the capability it claims to verify."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    name = capability.strip()
+    path = _outcome_ledger_path()
+    if not path.exists():
+        return (
+            "Capability evidence provenance assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: MISSING\n"
+            "Provenance: UNKNOWN\n"
+            "Basis: no persisted outcome ledger is available."
+        )
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return (
+            "Capability evidence provenance assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: UNAVAILABLE\n"
+            "Provenance: UNKNOWN\n"
+            f"Basis: outcome ledger could not be read: {exc}"
+        )
+    if not isinstance(entries, list):
+        return (
+            "Capability evidence provenance assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: INVALID\n"
+            "Provenance: UNKNOWN\n"
+            "Basis: outcome ledger is not a JSON list."
+        )
+
+    matches = [
+        item for item in entries
+        if isinstance(item, dict)
+        and item.get("capability") == name
+        and str(item.get("stage", "")).upper() == "VERIFICATION"
+    ]
+    if not matches:
+        return (
+            "Capability evidence provenance assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: MISSING\n"
+            "Provenance: UNKNOWN\n"
+            "Basis: no persisted verification evidence exists for this capability."
+        )
+
+    latest = matches[-1]
+    status = str(latest.get("status", "")).strip().upper() or "UNKNOWN"
+    evidence = str(latest.get("evidence", "")).strip()
+    capability_refs = []
+    for pattern in (
+        r"(?:Requested capability|Capability)\s*:\s*([^\\n]+)",
+        r"(?:capability|tool)\\s+['\"]([^'\"]+)['\"]",
+    ):
+        capability_refs.extend(match.strip() for match in re.findall(pattern, evidence, re.IGNORECASE))
+
+    normalized_refs = {ref.strip() for ref in capability_refs if ref.strip()}
+    exact = name in normalized_refs
+    mismatched = bool(normalized_refs and name not in normalized_refs)
+    verification_marker = bool(
+        re.search(
+            r"(?:Post-action verification|Verification|Postcondition)\\s*:\\s*(?:VERIFIED|FAILED|INCONCLUSIVE)\\b",
+            evidence,
+            re.IGNORECASE,
+        )
+    )
+
+    if exact:
+        provenance = "DIRECTLY_ALIGNED"
+        basis = "the persisted verification evidence explicitly identifies this capability as the observed capability."
+    elif mismatched:
+        provenance = "MISMATCHED"
+        basis = "the persisted evidence explicitly identifies a different capability, so it cannot substantiate this capability."
+    elif verification_marker:
+        provenance = "INDIRECT"
+        basis = "the evidence contains a verification outcome but does not explicitly identify the capability it verified."
+    else:
+        provenance = "UNKNOWN"
+        basis = "the persisted evidence does not contain a bounded capability identity or explicit verification marker."
+
+    lines = [
+        "Capability evidence provenance assessment (read-only):",
+        f"Capability: {name}",
+        f"Latest verification status: {status}",
+        f"Evidence capability references: {', '.join(sorted(normalized_refs)) if normalized_refs else 'NONE'}",
+        f"Verification marker present: {'YES' if verification_marker else 'NO'}",
+        f"Provenance: {provenance}",
+        f"Basis: {basis}",
+        "No capability execution, code modification, or device state change was performed.",
+    ]
+    return "\n".join(lines)
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -4711,6 +4805,17 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "assess_capability_evidence_provenance",
+        "description": "Assess whether persisted verification evidence is directly tied to the capability it claims to verify, without executing it.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the local capability to assess."}
+            },
+            "required": ["capability"],
+        },
+    },
+    {
         "name": "assess_capability_gap",
         "description": "Determine whether Nova has a plausible local capability for a requested task, without inventing unsupported capabilities.",
         "parameters": {
@@ -5560,6 +5665,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "capability_inventory": capability_inventory,
     "assess_capability_readiness": assess_capability_readiness,
     "assess_capability_evidence_quality": assess_capability_evidence_quality,
+    "assess_capability_evidence_provenance": assess_capability_evidence_provenance,
     "apply_capability_repair": apply_capability_repair,
     "self_test": self_test,
     "find_executable": find_executable,
