@@ -82,6 +82,17 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "STOP")
 
+    def test_unfamiliar_construction_falls_back_to_constructed_action(self):
+        result = select_goal_next_step(
+            "create a minimal Android app",
+            "the APK is built and verified with evidence",
+            "ACTIVE",
+            "INCONCLUSIVE",
+            "No bounded evidence is available.",
+            ["get_wifi_status", "execute_constructed_action", "verify_command_result"],
+        )
+        self.assertEqual(result.action, "execute_constructed_action")
+
     def test_unrelated_candidates_stop_safely(self):
         result = select_goal_next_step(
             "check the device battery",
