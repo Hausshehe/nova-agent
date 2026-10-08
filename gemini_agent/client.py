@@ -188,6 +188,14 @@ class GeminiClient:
         )):
             return "select_goal_next_step"
         if any(phrase in user_text for phrase in (
+            "verify the outcome against the contract",
+            "verify outcome against the contract",
+            "verify the outcome contract",
+            "verify outcome evidence",
+            "check whether the outcome was actually achieved",
+        )):
+            return "verify_outcome_contract"
+        if any(phrase in user_text for phrase in (
             "establish an outcome contract",
             "establish outcome contract",
             "define the outcome contract",
