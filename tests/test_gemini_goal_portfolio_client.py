@@ -30,6 +30,31 @@ class GoalPortfolioClientTests(unittest.TestCase):
         ]
         self.assertEqual(names.count("represent_entity_states"), 1)
 
+    def test_client_routes_entity_relationships_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Represent relationships between entities with entities "battery | device | 82 percent | 100\\n'
+            'nova | agent | active | 90" and relationships "battery | powers | nova". '
+            "Do not infer missing relationships or change any state."
+        )
+        self.assertIn("Entity relationship representation (read-only):", result)
+        self.assertIn("Relationship count: 1", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "represent_entity_relationships")
+
+    def test_entity_relationship_tool_is_registered_once(self):
+        self.assertIn("represent_entity_relationships", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("represent_entity_relationships"), 1)
+
     def test_client_routes_goal_portfolio_locally(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
