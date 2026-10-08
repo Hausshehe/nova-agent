@@ -196,6 +196,13 @@ class GeminiClient:
         )):
             return "build_intent_clarification"
         if any(phrase in user_text for phrase in (
+            "establish a goal portfolio",
+            "establish goal portfolio",
+            "create a goal portfolio",
+            "represent multiple active goals",
+        )):
+            return "establish_goal_portfolio"
+        if any(phrase in user_text for phrase in (
             "establish an intent contract",
             "establish intent contract",
             "intent contract",
@@ -1066,6 +1073,24 @@ class GeminiClient:
                     "result": result,
                 })
                 return result
+        if requested_tool == "establish_goal_portfolio":
+            match = re.search(
+                r'establish\\s+(?:a\\s+)?goal\\s+portfolio(?:\\s+with)?\\s*:\\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not match:
+                match = re.search(
+                    r'(?:establish|create)\\s+(?:a\\s+)?goal\\s+portfolio(?:\\s+with)?\\s+"([^"]+)"',
+                    request_text,
+                    re.IGNORECASE | re.DOTALL,
+                )
+            if match:
+                args = {"goals": match.group(1).replace("\\\\n", "\\n")}
+                result = self.tool_handlers["establish_goal_portfolio"](**args)
+                self.last_tool_calls.append({"name": "establish_goal_portfolio", "args": args, "result": result})
+                return result
+            return "Establishing a goal portfolio requires one or more goal entries using: goal_id | goal | success_condition"
         if requested_tool == "establish_intent_contract":
             match = re.search(
                 r'\bestablish\s+(?:an\s+)?intent\s+contract\s+for\s+"([^"]+)"',
