@@ -39,8 +39,8 @@ class GoalPortfolioClientTests(unittest.TestCase):
         client.last_grounding_sources = []
         client.goal_state = None
         result = client.ask(
-            'Verify goal portfolio with expected goal ids "battery,date" and goals "battery | Check battery | Battery status is reported | ACTIVE | Battery status is not yet checked\\n'
-            'date | Check date | Current date is reported | ACTIVE | Current date is not yet checked". '
+            'Verify goal portfolio with expected goal ids "battery,date" and goals "battery | Check battery | Battery status is reported | ACTIVE | No observations have been collected\\n'
+            'date | Check date | Current date is reported | ACTIVE | No observations have been collected". '
             "Do not execute or change any goal or device state."
         )
         self.assertIn("Coherence: VERIFIED", result)
