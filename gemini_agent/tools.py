@@ -1642,10 +1642,21 @@ def diagnose_outcome_discrepancy(
             "the expected transition is observed, but the full success condition is not established.",
         )
     else:
-        status, decision, basis = (
-            "MISMATCH_OR_UNKNOWN", "REPLAN_OR_VERIFY",
-            "the observed evidence does not establish the expected transition or either contracted outcome condition.",
+        negative_evidence = re.search(
+            r"\b(?:not|no|unsupported|unavailable|failed|failure|wrong|error|denied|blocked)\b",
+            observed,
+            re.IGNORECASE,
         )
+        if negative_evidence:
+            status, decision, basis = (
+                "MISMATCH", "REPLAN",
+                "the observed evidence contains an explicit negative outcome signal and does not establish the contracted success condition.",
+            )
+        else:
+            status, decision, basis = (
+                "MISMATCH_OR_UNKNOWN", "REPLAN_OR_VERIFY",
+                "the observed evidence does not establish the expected transition or either contracted outcome condition.",
+            )
     return "\n".join([
         "Outcome discrepancy diagnosis (read-only):",
         f"Goal: {goal.strip()}",
