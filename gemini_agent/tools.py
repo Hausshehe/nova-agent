@@ -1704,7 +1704,7 @@ def assess_autonomy_boundary(
     risks = risk_constraints.strip()
 
     high_risk = bool(re.search(
-        r"\b(?:high|critical|unsafe|dangerous|destructive|irreversible|consequential|human approval|required approval|requires human)\b",
+        r"\b(?:high|critical|unsafe|dangerous|irreversible|consequential|human approval|required approval|requires human)\b|(?<!non-)\bdestructive\b",
         risks + " " + uncertainty_text,
         re.IGNORECASE,
     ))
