@@ -24,6 +24,7 @@ from pathlib import Path
 from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
 from gemini_agent.goal_contract import establish_goal_contract, establish_outcome_contract, establish_intent_contract, build_intent_clarification
 from gemini_agent.goal_next_step import select_goal_next_step
+from gemini_agent.goal_portfolio import establish_goal_portfolio
 
 
 _OPERATORS = {
@@ -1585,6 +1586,11 @@ def build_intent_clarification_tool(
 
 
 
+def establish_goal_portfolio_tool(goals: str) -> str:
+    """Represent multiple active goals without prioritizing or executing them."""
+    return establish_goal_portfolio(goals)
+
+
 def verify_outcome_contract(
     goal: str,
     success_condition: str,
@@ -2521,7 +2527,8 @@ def apply_capability_extension(
         return f"Extension not applied: capability function '{proposed}' already exists."
 
     declaration_marker = "TOOL_DECLARATIONS = ["
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {
+    "establish_goal_portfolio": establish_goal_portfolio_tool,"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
     if kind == "android_mechanism":
@@ -4774,6 +4781,13 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 
 TOOL_DECLARATIONS = [
+    {
+        "name": "establish_goal_portfolio",
+        "description": "Represent multiple distinct active goals and their success conditions without prioritizing, executing, interrupting, or completing them. This is read-only and performs no action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | success_condition"},
+        }, "required": ["goals"]},
+    },
     {
         "name": "build_intent_clarification",
         "description": "Turn a required intent clarification into minimal bounded questions without inventing missing target, outcome, or constraints. This is read-only and performs no action.",
