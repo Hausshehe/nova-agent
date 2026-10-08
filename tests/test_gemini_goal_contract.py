@@ -124,3 +124,34 @@ class GoalContractTests(unittest.TestCase):
         self.assertIn("diagnose_outcome_discrepancy", TOOL_HANDLERS)
         names = [item["name"] for item in TOOL_DECLARATIONS]
         self.assertEqual(names.count("diagnose_outcome_discrepancy"), 1)
+
+
+    def test_diagnoses_explicit_negative_observation_as_mismatch(self):
+        from gemini_agent.tools import diagnose_outcome_discrepancy
+        result = diagnose_outcome_discrepancy(
+            "Identify foreground app",
+            "Foreground app is identified and safe read-only inspection is supported",
+            "Foreground package and activity become established",
+            "Foreground app cannot be safely identified",
+            "The observed activity is wrong and read-only inspection is not supported.",
+        )
+        self.assertIn("Outcome state: MISMATCH", result)
+        self.assertIn("Next decision: REPLAN", result)
+
+    def test_client_executes_outcome_discrepancy_diagnosis_without_provider_reinterpretation(self):
+        from gemini_agent.tools import TOOL_HANDLERS
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        prompt = (
+            'Diagnose the outcome discrepancy for the goal "Identify foreground app". '
+            'The success condition was "Foreground app is identified and safe read-only inspection is supported". '
+            'The expected transition was "Foreground package and activity become established". '
+            'The failure condition was "Foreground app cannot be safely identified". '
+            'The supplied observed evidence is "The observed activity is wrong and read-only inspection is not supported."'
+        )
+        result = client.ask(prompt)
+        self.assertIn("Outcome state: MISMATCH", result)
+        self.assertIn("Next decision: REPLAN", result)
