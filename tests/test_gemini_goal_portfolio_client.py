@@ -55,6 +55,31 @@ class GoalPortfolioClientTests(unittest.TestCase):
         ]
         self.assertEqual(names.count("represent_entity_relationships"), 1)
 
+    def test_client_routes_world_evidence_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Represent evidence and provenance with entities "battery | device | 82 percent | 100\\n'
+            'nova | agent | active | 90" and evidence "battery | battery state was reported as 82 percent | user | 100". '
+            "Do not infer claims, sources, relationships, or state, and do not change device state."
+        )
+        self.assertIn("World evidence and provenance representation (read-only):", result)
+        self.assertIn("Evidence count: 1", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "represent_world_evidence")
+
+    def test_world_evidence_tool_is_registered_once(self):
+        self.assertIn("represent_world_evidence", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("represent_world_evidence"), 1)
+
     def test_client_routes_goal_portfolio_locally(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
