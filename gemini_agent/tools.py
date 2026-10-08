@@ -2527,8 +2527,7 @@ def apply_capability_extension(
         return f"Extension not applied: capability function '{proposed}' already exists."
 
     declaration_marker = "TOOL_DECLARATIONS = ["
-    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {
-    "establish_goal_portfolio": establish_goal_portfolio_tool,"
+    handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
     if kind == "android_mechanism":
