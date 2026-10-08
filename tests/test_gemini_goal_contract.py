@@ -254,7 +254,7 @@ class GoalContractTests(unittest.TestCase):
         result = establish_intent_contract("Fix this")
         self.assertIn("Intended goal: Fix this", result)
         self.assertIn("Clarification requirement: REQUIRED", result)
-        self.assertIn("no capability", result)
+        self.assertIn("without executing any capability", result)
 
     def test_intent_contract_does_not_execute(self):
         from gemini_agent.goal_contract import establish_intent_contract
