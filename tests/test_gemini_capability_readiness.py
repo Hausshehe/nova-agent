@@ -43,6 +43,65 @@ class CapabilityReadinessTests(unittest.TestCase):
         self.assertIn("Handler: MISSING or INVALID", result)
         self.assertIn("Readiness: UNAVAILABLE", result)
 
+    def test_capability_evidence_provenance_distinguishes_direct_and_indirect_evidence(self):
+        from gemini_agent.tools import assess_capability_evidence_provenance
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger = os.path.join(temp_dir, "outcomes.json")
+            with open(ledger, "w", encoding="utf-8") as handle:
+                json.dump([
+                    {
+                        "capability": "calculator",
+                        "stage": "VERIFICATION",
+                        "status": "VERIFIED",
+                        "evidence": (
+                            "Requested capability: calculator\n"
+                            "Post-action verification: VERIFIED. Expected result observed."
+                        ),
+                    },
+                    {
+                        "capability": "get_system_battery_status",
+                        "stage": "VERIFICATION",
+                        "status": "VERIFIED",
+                        "evidence": "Post-action verification: VERIFIED. Battery state observed.",
+                    },
+                    {
+                        "capability": "inspect_android_ui",
+                        "stage": "VERIFICATION",
+                        "status": "VERIFIED",
+                        "evidence": (
+                            "Requested capability: get_foreground_android_component\n"
+                            "Post-action verification: VERIFIED. Foreground component observed."
+                        ),
+                    },
+                ], handle)
+            with unittest.mock.patch.dict(os.environ, {"NOVA_OUTCOME_LEDGER": ledger}, clear=False):
+                direct = assess_capability_evidence_provenance("calculator")
+                indirect = assess_capability_evidence_provenance("get_system_battery_status")
+                mismatched = assess_capability_evidence_provenance("inspect_android_ui")
+
+        self.assertIn("Provenance: DIRECTLY_ALIGNED", direct)
+        self.assertIn("Provenance: INDIRECT", indirect)
+        self.assertIn("Provenance: MISMATCHED", mismatched)
+        self.assertIn("No capability execution", direct)
+
+    def test_capability_evidence_provenance_request_routes_to_provenance_self_model(self):
+        from gemini_agent.client import GeminiClient
+
+        contents = [{
+            "role": "user",
+            "parts": [{
+                "text": (
+                    "Assess capability evidence provenance and determine whether "
+                    "the capability verification evidence is directly tied to the capability."
+                )
+            }],
+        }]
+        self.assertEqual(
+            GeminiClient._requested_local_tool(contents),
+            "assess_capability_evidence_provenance",
+        )
+
     def test_capability_evidence_quality_request_routes_to_quality_self_model(self):
         from gemini_agent.client import GeminiClient
 
