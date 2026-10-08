@@ -188,6 +188,14 @@ class GeminiClient:
         )):
             return "select_goal_next_step"
         if any(phrase in user_text for phrase in (
+            "establish an outcome contract",
+            "establish outcome contract",
+            "define the outcome contract",
+            "define an outcome contract",
+            "set the outcome contract",
+        )):
+            return "establish_outcome_contract"
+        if any(phrase in user_text for phrase in (
             "establish a goal contract",
             "establish goal contract",
             "set the goal contract",
@@ -370,13 +378,6 @@ class GeminiClient:
         ):
             return "get_capability_outcome_history"
 
-        if any(phrase in user_text for phrase in (
-            "select capability by evidence",
-            "select the best capability by evidence",
-            "choose capability by evidence",
-            "evidence-aware capability selection",
-        )):
-            return "select_capability_by_evidence"
         if any(phrase in user_text for phrase in (
             "select capability by evidence",
             "select the best capability by evidence",
