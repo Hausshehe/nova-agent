@@ -1674,6 +1674,106 @@ def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     return establish_goal_contract(goal, success_condition)
 
 
+def select_goal_next_step_tool(
+
+def assess_autonomy_boundary(
+    goal: str,
+    outcome_state: str,
+    uncertainty: str,
+    observed_evidence: str,
+    available_actions: str,
+    risk_constraints: str,
+) -> str:
+    """Classify whether an active goal may safely continue, investigate, recover, replan, stop, or escalate."""
+    values = (
+        (goal, "Goal"),
+        (outcome_state, "Outcome state"),
+        (uncertainty, "Uncertainty"),
+        (observed_evidence, "Observed evidence"),
+        (available_actions, "Available actions"),
+        (risk_constraints, "Risk constraints"),
+    )
+    for value, label in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} cannot be empty.")
+        if len(value.strip()) > 2048:
+            raise ValueError(f"{label} is too long.")
+
+    state = outcome_state.strip().upper()
+    uncertainty_text = uncertainty.strip()
+    evidence = observed_evidence.strip()
+    actions = available_actions.strip()
+    risks = risk_constraints.strip()
+
+    high_risk = bool(re.search(
+        r"\b(?:high|critical|unsafe|dangerous|destructive|irreversible|consequential|human approval|required approval|requires human)\b",
+        risks + " " + uncertainty_text,
+        re.IGNORECASE,
+    ))
+    explicit_human = bool(re.search(
+        r"\b(?:human|user)\s+(?:input|approval|decision|confirmation)\b|\b(?:ask|require)\s+(?:the )?(?:user|human)\b",
+        uncertainty_text + " " + risks + " " + actions,
+        re.IGNORECASE,
+    ))
+    can_investigate = bool(re.search(
+        r"\b(?:investigate|inspect|observe|diagnose|discover|check|verify)\b",
+        actions,
+        re.IGNORECASE,
+    ))
+    can_recover = bool(re.search(
+        r"\b(?:recover|retry|repair)\b",
+        actions,
+        re.IGNORECASE,
+    ))
+    can_replan = bool(re.search(
+        r"\b(?:replan|alternative|alternate|different path|different action)\b",
+        actions,
+        re.IGNORECASE,
+    ))
+    bounded_safe = bool(re.search(
+        r"\b(?:low risk|safe|read-only|reversible|bounded|non-destructive)\b",
+        risks + " " + actions,
+        re.IGNORECASE,
+    ))
+    uncertainty_high = bool(re.search(
+        r"\b(?:unknown|uncertain|ambiguous|inconclusive|insufficient|unverified|unclear|cannot determine)\b",
+        uncertainty_text,
+        re.IGNORECASE,
+    ))
+
+    if state in {"ACHIEVED", "VERIFIED", "COMPLETE", "COMPLETED"}:
+        decision, basis = "STOP", "the outcome is already supported as achieved, so further autonomous action is unnecessary."
+    elif explicit_human or high_risk:
+        decision, basis = "ESCALATE", "the supplied constraints or uncertainty require human judgment or make autonomous continuation insufficiently safe."
+    elif state in {"MISMATCH", "FAILED", "CONTRADICTED"} and can_recover:
+        decision, basis = "RECOVER", "the outcome is contradicted or failed, but a bounded recovery action is explicitly available."
+    elif state in {"MISMATCH", "FAILED", "CONTRADICTED"} and can_replan:
+        decision, basis = "REPLAN", "the outcome is contradicted or failed, and an alternative bounded path is explicitly available."
+    elif state in {"PARTIAL_OR_UNCERTAIN", "INCONCLUSIVE", "MISMATCH_OR_UNKNOWN", "UNKNOWN", "UNKNOWN_MISMATCH"} and can_investigate:
+        decision, basis = "INVESTIGATE", "the outcome remains uncertain and a distinct bounded observation or investigation path is available."
+    elif state in {"MISMATCH", "FAILED", "CONTRADICTED"}:
+        decision, basis = "ESCALATE", "the outcome is contradicted or failed and no bounded recovery or alternative path is supplied."
+    elif bounded_safe and not uncertainty_high:
+        decision, basis = "CONTINUE", "the remaining uncertainty is bounded and the supplied next actions are explicitly safe or reversible."
+    elif uncertainty_high:
+        decision, basis = "ESCALATE", "the remaining uncertainty is material and no sufficiently justified bounded autonomous path is established."
+    else:
+        decision, basis = "ESCALATE", "the supplied state and constraints do not justify autonomous continuation."
+
+    return "\n".join([
+        "Autonomy boundary assessment (read-only):",
+        f"Goal: {goal.strip()}",
+        f"Outcome state: {state}",
+        f"Uncertainty: {uncertainty_text}",
+        f"Observed evidence: {evidence}",
+        f"Available actions: {actions}",
+        f"Risk constraints: {risks}",
+        f"Autonomy decision: {decision}",
+        f"Decision basis: {basis}",
+        "No action was executed and no device state was changed.",
+    ])
+
+
 def select_goal_next_step_tool(goal: str, success_condition: str, goal_status: str, progress_status: str, progress_reason: str, candidates: list[str]) -> str:
     """Select one bounded goal-relevant next action without executing it."""
     result = select_goal_next_step(goal, success_condition, goal_status, progress_status, progress_reason, candidates)
@@ -4695,7 +4795,16 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition", "expected_transition", "failure_condition", "observed_evidence"]},
     },
     {
-        "name": "select_goal_next_step",
+        "name": "select_goal_next_step",    {
+        "name": "assess_autonomy_boundary",
+        "description": "Classify whether a goal should stop, continue, investigate, recover, replan, or require human input from supplied evidence, uncertainty, actions, and risk constraints without executing anything.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING"}, "outcome_state": {"type": "STRING"},
+            "uncertainty": {"type": "STRING"}, "observed_evidence": {"type": "STRING"},
+            "available_actions": {"type": "STRING"}, "risk_constraints": {"type": "STRING"},
+        }, "required": ["goal", "outcome_state", "uncertainty", "observed_evidence", "available_actions", "risk_constraints"]},
+    },
+
         "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
             "goal": {"type": "STRING"}, "success_condition": {"type": "STRING"},
@@ -5904,6 +6013,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "diagnose_outcome_discrepancy": diagnose_outcome_discrepancy,
     "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
+    "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
     "current_datetime": current_datetime,
