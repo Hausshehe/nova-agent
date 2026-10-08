@@ -72,6 +72,25 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
         ]
         self.assertTrue(matching_handlers)
 
+
+    def test_adaptive_investigation_stops_on_identical_observation_round(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
+        ).read_text(encoding="utf-8")
+
+        required_fragments = (
+            "last_observation_signature = None",
+            "round_trace_start = len(self.last_tool_calls)",
+            "round_observations = self.last_tool_calls[round_trace_start:]",
+            'if observation_signature == last_observation_signature:',
+            "The latest investigation round repeated exactly the same",
+            "use a genuinely distinct safe mechanism only if it can add",
+            'payload.pop("tools", None)',
+            'payload.pop("tool_choice", None)',
+        )
+        for fragment in required_fragments:
+            self.assertIn(fragment, source)
+
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
             Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
