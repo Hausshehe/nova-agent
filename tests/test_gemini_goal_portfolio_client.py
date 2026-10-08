@@ -206,6 +206,33 @@ class GoalPortfolioClientTests(unittest.TestCase):
         self.assertEqual(names.count("select_goal_priority"), 1)
 
 
+    def test_client_routes_belief_revision_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Revise world beliefs for entities "battery | device | 82 percent | 100\\n'
+            'nova | agent | active | 90" with beliefs "battery | battery level is 82 percent | 80" '
+            'and evidence "battery | battery level is 41 percent | Android system state | 95 | CONTRADICTS". '
+            "Do not infer missing evidence or change entity or device state."
+        )
+        self.assertIn("Belief revision (read-only):", result)
+        self.assertIn("decision: REVISED", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "revise_world_beliefs")
+
+    def test_belief_revision_tool_is_registered_once(self):
+        self.assertIn("revise_world_beliefs", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("revise_world_beliefs"), 1)
+
+
     def test_client_routes_temporal_states_locally(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
