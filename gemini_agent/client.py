@@ -897,8 +897,7 @@ class GeminiClient:
                 r'\bthen\s+use\s+(?:the\s+)?normal\s+decision\s+process\s+for\s+request\s+["\']([^"\']+)["\']',
                 request_text,
                 re.IGNORECASE,
-            )
-            if normal_request_match:
+            )            if normal_request_match:
                 goal = normal_request_match.group(1).strip()
             else:
                 goal = goal_match.group(1).strip() if goal_match else request_text.strip()
@@ -1797,8 +1796,7 @@ class GeminiClient:
             }
         elif goal_selected_action:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
-                goal_selected_action, goal_selected_action
-            )
+                goal_selected_action, goal_selected_action            )
             selected_declaration = next(
                 (
                     declaration
@@ -1871,7 +1869,9 @@ class GeminiClient:
         # generous finite ceiling while relying on the loop's natural stop
         # condition when the model has enough evidence.
         max_tool_rounds = 16
+        last_observation_signature = None
         for loop_index in range(max_tool_rounds):
+            round_trace_start = len(self.last_tool_calls)
             request = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode(),
@@ -2697,8 +2697,7 @@ class GeminiClient:
                 )
                 if match:
                     tool_calls = [{
-                        "id": "requested-verify-command-result",
-                        "type": "function",
+                        "id": "requested-verify-command-result",                        "type": "function",
                         "function": {
                             "name": "verify_command_result",
                             "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
@@ -3512,6 +3511,43 @@ class GeminiClient:
                                 "path and exact old_text."
                             ),
                         })
+
+                # Adaptive investigation must distinguish persistence from progress.
+                # A second consecutive round with the exact same tool inputs and
+                # observed results contains no new evidence. Give the model one
+                # explicit chance to reassess with tools disabled rather than
+                # spending the remaining safety budget repeating the same path.
+                round_observations = self.last_tool_calls[round_trace_start:]
+                if round_observations:
+                    observation_signature = json.dumps(
+                        [
+                            {
+                                "name": item.get("name"),
+                                "args": item.get("args"),
+                                "result": item.get("result"),
+                            }
+                            for item in round_observations
+                        ],
+                        sort_keys=True,
+                        default=str,
+                    )
+                    if observation_signature == last_observation_signature:
+                        payload["messages"].append({
+                            "role": "user",
+                            "content": (
+                                "The latest investigation round repeated exactly the same "
+                                "observation and produced no new evidence. Do not repeat that "
+                                "mechanism or identical call. Reassess the current evidence, "
+                                "use a genuinely distinct safe mechanism only if it can add "
+                                "new information, otherwise synthesize the best-supported "
+                                "answer and state the remaining uncertainty explicitly."
+                            ),
+                        })
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+                        last_observation_signature = None
+                        continue
+                    last_observation_signature = observation_signature
 
                 # Deterministic explicit filesystem requests do not need a second
                 # Cloudflare round-trip. Return the local tool result directly.
