@@ -1110,7 +1110,7 @@ class GeminiClient:
             return "Selecting goal priority requires one or more goal entries using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"
         if requested_tool == "manage_goal_interruption":
             match = re.search(
-                r'(?:manages+goals+interruption|pauses+(?:ands+resumes+)?(?:thes+)?goal(?:s+ands+resumes+it)?)\s+(?:for|with)?\s*:??\s*"([^"]+)"',
+                r'(?:manage\s+goal\s+interruption|pause\s+(?:and\s+resume\s+)?(?:the\s+)?goal(?:\s+and\s+resume\s+it)?)\s+(?:for|with)?\s*:?\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
