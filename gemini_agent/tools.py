@@ -153,6 +153,71 @@ def diagnose_capability_failure(capability: str, failure_evidence: str) -> str:
     lines.append("No capability execution, code modification, or device state change was performed.")
     return "\n".join(lines)
 
+
+def select_capability_by_evidence(candidates: str, requirement: str) -> str:
+    """Select the best supported capability from newline-separated candidates without executing them."""
+    if not isinstance(candidates, str) or not candidates.strip():
+        raise ValueError("Candidates cannot be empty.")
+    if not isinstance(requirement, str) or not requirement.strip():
+        raise ValueError("Requirement cannot be empty.")
+    names = [line.strip() for line in candidates.splitlines() if line.strip()]
+    if not names:
+        raise ValueError("Candidates cannot be empty.")
+    unique = list(dict.fromkeys(names))
+    assessments = []
+    rank = {
+        "VERIFIED_SUPPORTED_DIRECT": 4,
+        "VERIFIED_SUPPORTED_INDIRECT": 3,
+        "AVAILABLE_BUT_UNVERIFIED": 1,
+        "UNAVAILABLE": 0,
+    }
+    for name in unique:
+        readiness = assess_capability_readiness(name)
+        quality = assess_capability_evidence_quality(name)
+        provenance = assess_capability_evidence_provenance(name)
+        readiness_match = re.search(r"Readiness:\s*([^\\n]+)", readiness)
+        quality_match = re.search(r"Quality:\s*([^\\n]+)", quality)
+        provenance_match = re.search(r"Provenance:\s*([^\\n]+)", provenance)
+        readiness_value = readiness_match.group(1).strip().upper() if readiness_match else "UNKNOWN"
+        quality_value = quality_match.group(1).strip().upper() if quality_match else "UNKNOWN"
+        provenance_value = provenance_match.group(1).strip().upper() if provenance_match else "UNKNOWN"
+        if readiness_value == "VERIFIED" and quality_value == "SUPPORTED":
+            tier = "VERIFIED_SUPPORTED_DIRECT" if provenance_value == "DIRECTLY_ALIGNED" else (
+                "VERIFIED_SUPPORTED_INDIRECT" if provenance_value == "INDIRECT" else "AVAILABLE_BUT_UNVERIFIED"
+            )
+        elif readiness_value == "AVAILABLE_BUT_UNVERIFIED":
+            tier = "AVAILABLE_BUT_UNVERIFIED"
+        else:
+            tier = "UNAVAILABLE"
+        assessments.append((rank[tier], name, tier, readiness_value, quality_value, provenance_value))
+    assessments.sort(key=lambda item: (-item[0], unique.index(item[1])))
+    best = assessments[0]
+    if best[0] <= 0:
+        decision = "NO_SUPPORTED_CANDIDATE"
+        basis = "no candidate has sufficient verified evidence to justify selecting it."
+        selected = "NONE"
+    else:
+        decision = "SELECTED"
+        basis = (
+            "selected the highest-evidence candidate; direct verified evidence outranks indirect verified evidence, "
+            "which outranks merely available-but-unverified capability."
+        )
+        selected = best[1]
+    lines = [
+        "Capability selection by evidence (read-only):",
+        f"Requirement: {requirement.strip()}",
+        f"Selected capability: {selected}",
+        f"Decision: {decision}",
+        f"Basis: {basis}",
+        "Candidate assessments:",
+    ]
+    for _, name, tier, readiness_value, quality_value, provenance_value in assessments:
+        lines.append(
+            f"- {name}: tier={tier}; readiness={readiness_value}; quality={quality_value}; provenance={provenance_value}"
+        )
+    lines.append("No capability execution, code modification, or device state change was performed.")
+    return "\n".join(lines)
+
 def select_capability_repair_candidate(capability: str, diagnosis: str) -> str:
     """Select a bounded repair candidate from read-only capability state."""
     if not isinstance(capability, str) or not capability.strip():
@@ -4503,6 +4568,18 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition", "goal_status", "progress_status", "progress_reason", "candidates"]},
     },
     {
+        "name": "select_capability_by_evidence",
+        "description": "Select the best-supported local capability from candidates using readiness, evidence quality, and provenance without executing any candidate.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "candidates": {"type": "STRING", "description": "Newline-separated capability names to compare."},
+                "requirement": {"type": "STRING", "description": "The requirement the selected capability must satisfy."},
+            },
+            "required": ["candidates", "requirement"],
+        },
+    },
+    {
         "name": "autonomously_repair_capability",
         "description": "Run one bounded generic self-repair workflow from failure diagnosis through repair, independent verification, persisted evidence analysis, and acceptance or safe stop. The workflow executes the repaired capability at most once.",
         "parameters": {
@@ -5648,6 +5725,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "record_capability_outcome": record_capability_outcome,
     "get_capability_outcome_history": get_capability_outcome_history,
     "accept_verified_capability_repair": accept_verified_capability_repair,
+    "select_capability_by_evidence": select_capability_by_evidence,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
