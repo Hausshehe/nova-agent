@@ -219,6 +219,13 @@ class GeminiClient:
             "handle conflicts between goals",
         )):
             return "resolve_goal_conflicts"
+        if any(phrase in user_text for phrase in (
+            "verify goal portfolio",
+            "verify the goal portfolio",
+            "check goal portfolio coherence",
+            "verify portfolio coherence",
+        )):
+            return "verify_goal_portfolio"
 
         if any(phrase in user_text for phrase in (
             "manage goal interruption",
@@ -1129,6 +1136,27 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
             return "Resolving goal conflicts requires one or more goal entries using: goal_id | goal | conflict_key | constraint"
+
+        if requested_tool == "verify_goal_portfolio":
+            expected_match = re.search(
+                r'(?:expecteds+goals+ids|expecteds+ids)s*(?:are|is|:)?s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            goals_match = re.search(
+                r'(?:ands+)?(?:thes+)?goals?s*(?:are|is|:|using|from)?s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if expected_match and goals_match:
+                args = {
+                    "expected_goal_ids": expected_match.group(1).strip(),
+                    "goals": goals_match.group(1).replace("\\n", "\n"),
+                }
+                result = self.tool_handlers["verify_goal_portfolio"](**args)
+                self.last_tool_calls.append({"name": "verify_goal_portfolio", "args": args, "result": result})
+                return result
+            return "Verifying a goal portfolio requires expected goal ids and goals using: goal_id | goal | success_condition | status | evidence"
 
         if requested_tool == "manage_goal_interruption":
             match = re.search(
