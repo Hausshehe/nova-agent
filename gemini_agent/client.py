@@ -1777,6 +1777,10 @@ class GeminiClient:
             "messages": messages,
             "max_completion_tokens": 2048,
             "tools": tools,
+            # Serialize tool execution so unfamiliar investigations grow through
+            # verified observations instead of parallel tool-call bursts that
+            # Cloudflare may reject as excessive.
+            "parallel_tool_calls": False,
         }
         if requested_tool == "apply_capability_extension":
             payload["tool_choice"] = {
