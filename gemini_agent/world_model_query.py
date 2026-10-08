@@ -68,22 +68,9 @@ def query_world_model(
             if needle in record.lower() or all(term in record.lower() for term in terms):
                 matches.append((kind, record))
 
-    # If the query names an entity explicitly, include records that refer to it,
-    # but only when the entity id is actually present in the supplied data.
-    entity_ids = {
-        line.split("|", 1)[0].strip().lower()
-        for line in parsed["ENTITY"]
-        if "|" in line
-    }
-    for entity_id in sorted(entity_ids):
-        if entity_id and entity_id in needle:
-            for kind in _KINDS:
-                for record in parsed[kind]:
-                    fields = [part.strip().lower() for part in record.split("|")]
-                    if entity_id in fields:
-                        item = (kind, record)
-                        if item not in matches:
-                            matches.append(item)
+    # Do not broaden a query merely because it mentions a known entity. A known
+    # entity does not support arbitrary claims about that entity. Only records
+    # whose own fields explicitly match the query can support the answer.
 
     # Deterministic ordering keeps this a query over supplied facts, not a
     # provider-generated interpretation.
