@@ -6063,6 +6063,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "diagnose_outcome_discrepancy": diagnose_outcome_discrepancy,
     "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
+    "establish_goal_portfolio": establish_goal_portfolio_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
