@@ -123,6 +123,16 @@ def select_goal_next_step(
         scored.append((score, -index, candidate))
     best_score, _, best = max(scored)
     if best_score <= 0:
+        if (
+            "execute_constructed_action" in clean
+            and re.search(r"\b(?:build|create|construct|generate|implement|make|write)\b", f"{goal} {success_condition}", re.IGNORECASE)
+        ):
+            return GoalNextStep(
+                "execute_constructed_action",
+                "No predefined capability has sufficient semantic relevance; "
+                "use the generic constructed-action executor to perform the next "
+                "bounded workspace action required by the goal."
+            )
         return GoalNextStep("STOP", "No candidate has a bounded semantic connection to the remaining active goal.")
     reason = "Selected the candidate with the strongest bounded relevance to the active goal"
     if evidence.strip() and remaining_condition_terms:
