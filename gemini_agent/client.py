@@ -897,8 +897,8 @@ class GeminiClient:
                 r'\bthen\s+use\s+(?:the\s+)?normal\s+decision\s+process\s+for\s+request\s+["\']([^"\']+)["\']',
                 request_text,
                 re.IGNORECASE,
-            )            if normal_request_match:
-                goal = normal_request_match.group(1).strip()
+            )
+            if normal_request_match:                goal = normal_request_match.group(1).strip()
             else:
                 goal = goal_match.group(1).strip() if goal_match else request_text.strip()
             strategy_goal = goal
@@ -1797,8 +1797,7 @@ class GeminiClient:
         elif goal_selected_action:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
                 goal_selected_action, goal_selected_action            )
-            selected_declaration = next(
-                (
+            selected_declaration = next(                (
                     declaration
                     for declaration in self.tool_declarations
                     if isinstance(declaration, dict)
@@ -2697,8 +2696,7 @@ class GeminiClient:
                 )
                 if match:
                     tool_calls = [{
-                        "id": "requested-verify-command-result",                        "type": "function",
-                        "function": {
+                        "id": "requested-verify-command-result",                        "type": "function",                        "function": {
                             "name": "verify_command_result",
                             "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
                         },
