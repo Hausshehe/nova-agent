@@ -1512,12 +1512,12 @@ class GeminiClient:
             return str(self.tool_handlers["discover_android_ui_actions"]())
         if requested_tool == "assess_autonomy_boundary":
             patterns = {
-                "goal": r'\b(?:the )?goal\\s+"([^"]+)"',
-                "outcome_state": r'\boutcome state\\s*[:=]?\\s*(ACHIEVED|VERIFIED|COMPLETE|COMPLETED|MISMATCH|FAILED|CONTRADICTED|PARTIAL_OR_UNCERTAIN|INCONCLUSIVE|MISMATCH_OR_UNKNOWN|UNKNOWN|UNKNOWN_MISMATCH)',
-                "uncertainty": r'\buncertainty\\s*(?:is|was|:)?\\s*"([^"]+)"',
-                "observed_evidence": r'\b(?:observed evidence|supplied observed evidence)\\s*(?:is|was|:)?\\s*"([^"]+)"',
-                "available_actions": r'\bavailable actions\\s*(?:are|is|were|:)?\\s*"([^"]+)"',
-                "risk_constraints": r'\brisk constraints\\s*(?:are|is|were|:)?\\s*"([^"]+)"',
+                "goal": r'\b(?:the )?goal\s+"([^"]+)"',
+                "outcome_state": r'\boutcome state\s*[:=]?\s*(ACHIEVED|VERIFIED|COMPLETE|COMPLETED|MISMATCH|FAILED|CONTRADICTED|PARTIAL_OR_UNCERTAIN|INCONCLUSIVE|MISMATCH_OR_UNKNOWN|UNKNOWN|UNKNOWN_MISMATCH)',
+                "uncertainty": r'\buncertainty\s*(?:is|was|:)?\s*"([^"]+)"',
+                "observed_evidence": r'\b(?:observed evidence|supplied observed evidence)\s*(?:is|was|:)?\s*"([^"]+)"',
+                "available_actions": r'\bavailable actions\s*(?:are|is|were|:)?\s*"([^"]+)"',
+                "risk_constraints": r'\brisk constraints\s*(?:are|is|were|:)?\s*"([^"]+)"',
             }
             extracted = {}
             for key, pattern in patterns.items():
