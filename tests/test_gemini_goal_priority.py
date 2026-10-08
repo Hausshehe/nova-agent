@@ -12,6 +12,12 @@ class GoalPriorityTests(unittest.TestCase):
         self.assertIn("Selected goal: urgent", result)
         self.assertIn("Priority score: 8899995", result)
 
+    def test_accepts_semicolon_delimited_entries(self):
+        result = select_goal_priority(
+            "battery | Check battery | 10 | 1 | 0 | 5; urgent | Handle urgent task | 90 | 8 | 0 | 5"
+        )
+        self.assertIn("Selected goal: urgent", result)
+
     def test_user_priority_can_outweigh_urgency(self):
         result = select_goal_priority(
             "important | Important user goal | 20 | 10 | 0 | 0\n"
