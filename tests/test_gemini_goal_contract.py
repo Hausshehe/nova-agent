@@ -144,6 +144,8 @@ class GoalContractTests(unittest.TestCase):
         client.tool_handlers = TOOL_HANDLERS
         client.tool_declarations = [*TOOL_DECLARATIONS]
         client.cloudflare_model = "@cf/zai-org/glm-4.7-flash"
+        client.cloudflare_account_id = "test-account"
+        client.cloudflare_api_token = "test-token"
         client.last_tool_calls = []
         client.last_grounding_sources = []
         client.goal_state = None
