@@ -1119,12 +1119,12 @@ class GeminiClient:
             return "Selecting goal priority requires one or more goal entries using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"
         if requested_tool == "resolve_goal_conflicts":
             match = re.search(
-                r'(?:resolve\\s+(?:the\\s+)?goal\\s+conflicts|resolve\\s+conflicts\\s+between\\s+goals|handle\\s+(?:the\\s+)?goal\\s+conflicts|handle\\s+conflicts\\s+between\\s+goals)(?:\\s+from|\\s+with)?\\s*:?\\s*"([^"]+)"',
+                r'(?:resolve\s+(?:the\s+)?goal\s+conflicts|resolve\s+conflicts\s+between\s+goals|handle\s+(?:the\s+)?goal\s+conflicts|handle\s+conflicts\s+between\s+goals)(?:\s+from|\s+with)?\s*:?\s*"([^"]+)"',
                 request_text,
                 re.IGNORECASE | re.DOTALL,
             )
             if match:
-                args = {"goals": match.group(1).replace("\\\\n", "\\n")}
+                args = {"goals": match.group(1).replace("\\n", "\n")}
                 result = self.tool_handlers["resolve_goal_conflicts"](**args)
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
