@@ -4295,4 +4295,41 @@ class GeminiClient:
                     "result": tool_result,
                 })
                 return str(tool_result)
+        # Explicit construction requests enter the existing bounded goal loop.
+        # This is only activated when the user explicitly requires construction,
+        # execution, and verification, so ordinary descriptive requests remain
+        # conversational and do not gain autonomous mutation semantics.
+        constructive_autonomy = (
+            re.search(r"\b(?:construct|build|create|generate|make|implement)\b", prompt_text, re.IGNORECASE)
+            and re.search(r"\b(?:execute|run)\b", prompt_text, re.IGNORECASE)
+            and re.search(r"\bverify\w*\b", prompt_text, re.IGNORECASE)
+            and re.search(r"\bdo not ask me to (?:write|modify)\b", prompt_text, re.IGNORECASE)
+        )
+        if constructive_autonomy:
+            sentences = [
+                part.strip()
+                for part in re.split(r"(?<=[.!?])\\s+", prompt_text)
+                if part.strip()
+            ]
+            goal = sentences[0] if sentences else prompt_text.strip()
+            success = next(
+                (
+                    sentence
+                    for sentence in reversed(sentences)
+                    if re.search(r"\b(?:build|create|produce|deliver|verify)\b", sentence, re.IGNORECASE)
+                    and re.search(r"\b(?:verify|evidence|result|outcome|artifact|success)\b", sentence, re.IGNORECASE)
+                ),
+                "",
+            )
+            if goal and success:
+                goal = goal[:512]
+                success = success[:512]
+                contents[-1]["parts"][0]["text"] = (
+                    str(contents[-1]["parts"][0]["text"])
+                    + "\n\n[Nova orchestration directive] "
+                    + f"Establish a goal contract for \"{goal}\" with success condition "
+                    + f"\"{success}\". Then autonomously pursue the goal using bounded "
+                    + "next-step selection, constructed actions, recovery, and independent "
+                    + "outcome verification. Do not claim completion without evidence."
+                )
         return self._generate_cloudflare(contents, system_instruction)
