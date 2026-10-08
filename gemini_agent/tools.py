@@ -4801,7 +4801,8 @@ TOOL_DECLARATIONS = [
             "available_actions": {"type": "STRING"}, "risk_constraints": {"type": "STRING"},
         }, "required": ["goal", "outcome_state", "uncertainty", "observed_evidence", "available_actions", "risk_constraints"]},
     },
-
+    {
+        "name": "select_goal_next_step",
         "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
             "goal": {"type": "STRING"}, "success_condition": {"type": "STRING"},
