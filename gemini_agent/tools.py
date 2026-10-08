@@ -27,6 +27,7 @@ from gemini_agent.goal_next_step import select_goal_next_step
 from gemini_agent.goal_portfolio import establish_goal_portfolio
 from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
+from gemini_agent.goal_conflict import resolve_goal_conflicts
 
 
 _OPERATORS = {
@@ -1603,6 +1604,11 @@ def select_goal_priority_tool(goals: str) -> str:
 def manage_goal_interruption_tool(goal: str) -> str:
     """Pause or resume one goal while preserving its checkpoint without executing it."""
     return manage_goal_interruption(goal)
+
+
+def resolve_goal_conflicts_tool(goals: str) -> str:
+    """Resolve multi-goal conflicts from explicit compatibility constraints without executing them."""
+    return resolve_goal_conflicts(goals)
 
 def verify_outcome_contract(
     goal: str,
@@ -5794,6 +5800,13 @@ TOOL_DECLARATIONS = [
         }, "required": ["request", "candidates"]},
     },
     {
+        "name": "resolve_goal_conflicts",
+        "description": "Resolve conflicts among multiple active goals using explicit compatibility constraints without prioritizing, executing, interrupting, or completing any goal.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | conflict_key | constraint; constraint is MUST_CONTINUE, CAN_DEFER, MUST_NOT_INTERRUPT, or CAN_INTERRUPT."},
+        }, "required": ["goals"]},
+    },
+    {
         "name": "manage_goal_interruption",
         "description": "Pause and resume one active goal while preserving its supplied checkpoint. This changes only the bounded goal-state representation and never executes or completes the goal.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6094,6 +6107,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "establish_goal_portfolio": establish_goal_portfolio_tool,
     "select_goal_priority": select_goal_priority_tool,
     "manage_goal_interruption": manage_goal_interruption_tool,
+    "resolve_goal_conflicts": resolve_goal_conflicts_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
