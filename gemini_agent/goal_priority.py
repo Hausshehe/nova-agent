@@ -34,7 +34,7 @@ class GoalPriorityCandidate:
                 raise ValueError(f"{label} must be an integer from 0 to 100.")
 
     def score(self) -> int:
-        return (self.user_priority * 4) + (self.urgency * 3) + (self.dependency_count * 2) - self.resource_cost
+        return (self.user_priority * 11) + (self.urgency * 3) + (self.dependency_count * 2) - self.resource_cost
 
 
 @dataclass(frozen=True)
