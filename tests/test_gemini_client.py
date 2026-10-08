@@ -44,6 +44,47 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_recovers_missing_request_argument_from_active_prompt(self):
+        first_response = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "recover-request",
+                        "type": "function",
+                        "function": {
+                            "name": "discover_android_mechanisms",
+                            "arguments": "{}",
+                        },
+                    }]
+                }
+            }]
+        }
+        second_response = {"choices": [{"message": {"content": "continued"}}]}
+        captured = []
+
+        def discover(request):
+            captured.append(request)
+            return "discovery evidence"
+
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=[
+            FakeResponse(first_response),
+            FakeResponse(second_response),
+        ]):
+            client = GeminiClient(tool_handlers={
+                "discover_android_mechanisms": discover,
+            })
+            result = client.ask("Build an unfamiliar artifact using available mechanisms.")
+
+        self.assertEqual(result, "continued")
+        self.assertEqual(
+            captured,
+            ["Build an unfamiliar artifact using available mechanisms."],
+        )
+
     def test_explicit_construction_request_enters_goal_orchestration(self):
         with patch.dict(
             os.environ,
