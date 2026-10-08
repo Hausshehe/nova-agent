@@ -101,8 +101,8 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "orchestration-routed")
         routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
         self.assertIn("[Nova orchestration directive]", routed_prompt)
-        self.assertIn("Establish a goal contract", routed_prompt)
-        self.assertIn("success condition", routed_prompt)
+        self.assertIn('Establish a goal contract for "Create a minimal Android app from scratch."', routed_prompt)
+        self.assertIn('success condition "Build the APK and verify the resulting artifact with evidence."', routed_prompt)
         self.assertIn("autonomously pursue the goal", routed_prompt)
 
     def test_goal_contract_initializes_runtime_goal_state_without_execution(self):
