@@ -14,24 +14,26 @@ class ConstructedActionTests(unittest.TestCase):
     def test_workspace_action_executes_structured_argv_without_shell(self):
         with tempfile.TemporaryDirectory() as root:
             os.environ["NOVA_FILES_ROOT"] = root
-            completed = type("Completed", (), {"returncode": 0, "stdout": "created\n", "stderr": ""})()
-            with patch("gemini_agent.constructed_action.shutil.which", return_value="/bin/touch"), patch(
-                "gemini_agent.constructed_action.subprocess.run", return_value=completed
-            ) as run:
-                result = execute_constructed_action(
-                    executable="touch",
-                    arguments=["artifact.txt"],
-                    working_directory=".",
-                    timeout_seconds=5,
-                    mutation_scope="WORKSPACE_MUTATION",
-                    expected_effects=["artifact.txt exists"],
-                    evidence_requirements=["exit code is 0", "artifact exists"],
-                )
-            self.assertIn("Exit code: 0", result)
-            self.assertEqual(run.call_args.args[0], ["/bin/touch", "artifact.txt"])
-            self.assertFalse(run.call_args.kwargs["shell"])
-            self.assertEqual(Path(run.call_args.kwargs["cwd"]), Path(root).resolve())
-            os.environ.pop("NOVA_FILES_ROOT", None)
+            try:
+                completed = type("Completed", (), {"returncode": 0, "stdout": "created\n", "stderr": ""})()
+                with patch("gemini_agent.constructed_action.shutil.which", return_value="/bin/touch"), patch(
+                    "gemini_agent.constructed_action.subprocess.run", return_value=completed
+                ) as run:
+                    result = execute_constructed_action(
+                        executable="touch",
+                        arguments=["artifact.txt"],
+                        working_directory=".",
+                        timeout_seconds=5,
+                        mutation_scope="WORKSPACE_MUTATION",
+                        expected_effects=["artifact.txt exists"],
+                        evidence_requirements=["exit code is 0", "artifact exists"],
+                    )
+                self.assertIn("Exit code: 0", result)
+                self.assertEqual(run.call_args.args[0], [str(Path("/bin/touch").resolve()), "artifact.txt"])
+                self.assertFalse(run.call_args.kwargs["shell"])
+                self.assertEqual(Path(run.call_args.kwargs["cwd"]), Path(root).resolve())
+            finally:
+                os.environ.pop("NOVA_FILES_ROOT", None)
 
     def test_shell_and_interpreter_executables_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Interpreter or shell"):
