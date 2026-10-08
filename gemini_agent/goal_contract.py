@@ -216,6 +216,58 @@ def establish_intent_contract(request: str) -> str:
         "Safety boundary: intent was interpreted without executing any capability or changing device state.",
     ])
 
+def build_intent_clarification(
+    request: str,
+    uncertainty: str,
+    required_evidence: str,
+    clarification_required: str,
+) -> str:
+    """Turn a required clarification into bounded questions without inventing missing intent."""
+    values = (
+        (request, "Request"),
+        (uncertainty, "Uncertainty"),
+        (required_evidence, "Required evidence"),
+        (clarification_required, "Clarification requirement"),
+    )
+    for value, label in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} cannot be empty.")
+        if len(value.strip()) > 1024:
+            raise ValueError(f"{label} is too long.")
+
+    required = clarification_required.strip().upper()
+    if required != "REQUIRED":
+        return "\n".join([
+            "Intent clarification assessment (read-only):",
+            f"Request: {request.strip()}",
+            "Clarification required: NOT REQUIRED",
+            "Clarification action: NONE",
+            "No missing intent was identified that requires user clarification.",
+            "No action was executed and no device state was changed.",
+        ])
+
+    questions = []
+    evidence = required_evidence.strip().lower()
+    if "target" in evidence:
+        questions.append("What specific target should Nova act on?")
+    if "outcome" in evidence or "success condition" in evidence:
+        questions.append("What concrete result should count as success?")
+    if not questions:
+        questions.append("What missing information is necessary to define the intended target and successful outcome?")
+
+    return "\n".join([
+        "Intent clarification assessment (read-only):",
+        f"Request: {request.strip()}",
+        "Clarification required: REQUIRED",
+        f"Uncertainty: {uncertainty.strip()}",
+        f"Required evidence: {required_evidence.strip()}",
+        "Clarification questions:",
+        *[f"- {question}" for question in questions],
+        "Boundary: these questions preserve unresolved intent and do not assume a target, outcome, or constraint.",
+        "No action was executed and no device state was changed.",
+    ])
+
+
 def establish_goal_contract(goal: str, success_condition: str) -> str:
     """Create one bounded goal contract without executing or changing device state."""
     contract = GoalContract(goal.strip(), success_condition.strip())
