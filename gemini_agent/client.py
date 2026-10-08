@@ -204,6 +204,15 @@ class GeminiClient:
         )):
             return "represent_entity_relationships"
         if any(phrase in user_text for phrase in (
+            "represent world evidence",
+            "represent evidence and provenance",
+            "represent evidence provenance",
+            "build an evidence and provenance representation",
+            "create an evidence and provenance representation",
+        )):
+            return "represent_world_evidence"
+
+        if any(phrase in user_text for phrase in (
             "represent entity states",
             "represent entities and their states",
             "represent entities with current states",
@@ -1190,6 +1199,31 @@ class GeminiClient:
                 "Representing entity relationships requires entities using: "
                 "entity_id | entity_type | state | confidence; and relationships using: "
                 "source_entity_id | relationship | target_entity_id"
+            )
+
+        if requested_tool == "represent_world_evidence":
+            entities_match = re.search(
+                r'(?:entities|entity\s+states?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            evidence_match = re.search(
+                r'(?:evidence|evidence\s+records?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if entities_match and evidence_match:
+                args = {
+                    "entities": entities_match.group(1).replace("\\n", "\n"),
+                    "evidence": evidence_match.group(1).replace("\\n", "\n"),
+                }
+                result = self.tool_handlers["represent_world_evidence"](**args)
+                self.last_tool_calls.append({"name": "represent_world_evidence", "args": args, "result": result})
+                return result
+            return (
+                "Representing world evidence requires entities using: "
+                "entity_id | entity_type | state | confidence; and evidence using: "
+                "entity_id | claim | source | confidence"
             )
 
         if requested_tool == "verify_goal_portfolio":
