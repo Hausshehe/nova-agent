@@ -15,6 +15,41 @@ class CapabilityReadinessTests(unittest.TestCase):
         self.assertIn("Readiness: AVAILABLE_BUT_UNVERIFIED", result)
         self.assertIn("No capability execution", result)
 
+
+    def test_capability_selection_prefers_direct_supported_evidence(self):
+        from gemini_agent.tools import select_capability_by_evidence
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger=os.path.join(temp_dir,"outcomes.json")
+            with open(ledger,"w",encoding="utf-8") as handle:
+                json.dump([
+                    {"capability":"calculator","stage":"VERIFICATION","status":"VERIFIED",
+                     "evidence":"Requested capability: calculator\nPost-action verification: VERIFIED. Expected result observed.",
+                     "recorded_at":"2026-10-08T00:00:00+00:00"},
+                    {"capability":"get_system_battery_status","stage":"VERIFICATION","status":"VERIFIED",
+                     "evidence":"Post-action verification: VERIFIED. Battery state observed.",
+                     "recorded_at":"2026-10-08T00:00:00+00:00"},
+                ],handle)
+            with unittest.mock.patch.dict(os.environ,{"NOVA_OUTCOME_LEDGER":ledger},clear=False):
+                result=select_capability_by_evidence("get_system_battery_status\ncalculator","perform a calculation")
+        self.assertIn("Selected capability: calculator",result)
+        self.assertIn("calculator: tier=VERIFIED_SUPPORTED_DIRECT",result)
+        self.assertIn("get_system_battery_status: tier=VERIFIED_SUPPORTED_INDIRECT",result)
+
+    def test_capability_selection_rejects_candidates_without_supported_evidence(self):
+        from gemini_agent.tools import select_capability_by_evidence
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger=os.path.join(temp_dir,"outcomes.json")
+            with open(ledger,"w",encoding="utf-8") as handle: json.dump([],handle)
+            with unittest.mock.patch.dict(os.environ,{"NOVA_OUTCOME_LEDGER":ledger},clear=False):
+                result=select_capability_by_evidence("calculator\nget_system_battery_status","perform a calculation safely")
+        self.assertIn("Selected capability: NONE",result)
+        self.assertIn("Decision: NO_SUPPORTED_CANDIDATE",result)
+
+    def test_capability_selection_request_routes_to_evidence_selection(self):
+        from gemini_agent.client import GeminiClient
+        contents=[{"role":"user","parts":[{"text":"Select the best capability by evidence from calculator and get_system_battery_status for the requirement."}]}]
+        self.assertEqual(GeminiClient._requested_local_tool(contents),"select_capability_by_evidence")
+
     def test_capability_evidence_quality_reports_verified_evidence(self):
         from gemini_agent.tools import assess_capability_evidence_quality
 
