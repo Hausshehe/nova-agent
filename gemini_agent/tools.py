@@ -768,6 +768,98 @@ def assess_capability_readiness(capability: str) -> str:
     return "\n".join(lines)
 
 
+def assess_capability_evidence_quality(capability: str) -> str:
+    """Assess the quality and consistency of persisted verification evidence without executing a capability."""
+    if not isinstance(capability, str) or not capability.strip():
+        raise ValueError("Capability cannot be empty.")
+    name = capability.strip()
+    path = _outcome_ledger_path()
+    if not path.exists():
+        return (
+            "Capability evidence quality assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: MISSING\n"
+            "Quality: INSUFFICIENT\n"
+            "Basis: no persisted outcome ledger is available."
+        )
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return (
+            "Capability evidence quality assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: UNAVAILABLE\n"
+            "Quality: INSUFFICIENT\n"
+            f"Basis: outcome ledger could not be read: {exc}"
+        )
+    if not isinstance(entries, list):
+        return (
+            "Capability evidence quality assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: INVALID\n"
+            "Quality: INSUFFICIENT\n"
+            "Basis: outcome ledger is not a JSON list."
+        )
+
+    matches = [
+        item for item in entries
+        if isinstance(item, dict)
+        and item.get("capability") == name
+        and str(item.get("stage", "")).upper() == "VERIFICATION"
+    ]
+    if not matches:
+        return (
+            "Capability evidence quality assessment (read-only):\n"
+            f"Capability: {name}\n"
+            "Evidence status: MISSING\n"
+            "Quality: INSUFFICIENT\n"
+            "Basis: no persisted verification evidence exists for this capability."
+        )
+
+    latest = matches[-1]
+    status = str(latest.get("status", "")).strip().upper() or "UNKNOWN"
+    evidence = str(latest.get("evidence", "")).strip()
+    recorded_at = str(latest.get("recorded_at", "")).strip()
+    try:
+        recorded = dt.datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+        if recorded.tzinfo is None:
+            recorded = recorded.replace(tzinfo=dt.timezone.utc)
+        age_seconds = max(0.0, (dt.datetime.now(dt.timezone.utc) - recorded).total_seconds())
+        age = f"{age_seconds:.0f}s"
+    except (TypeError, ValueError, OverflowError):
+        age = "UNKNOWN"
+
+    prior_statuses = [
+        str(item.get("status", "")).strip().upper()
+        for item in matches[:-1]
+        if str(item.get("status", "")).strip()
+    ]
+    regression = bool(prior_statuses and prior_statuses[-1] == "VERIFIED" and status in {"FAILED", "INCONCLUSIVE"})
+    evidence_complete = bool(
+        evidence
+        and re.search(r"(?:Post-action verification|Verification)\s*:\s*\w+", evidence, re.IGNORECASE)
+    )
+
+    if status == "VERIFIED" and evidence_complete and not regression:
+        quality = "SUPPORTED"
+    elif status in {"FAILED", "INCONCLUSIVE"} or regression:
+        quality = "CONTRADICTED_OR_FAILED"
+    else:
+        quality = "INSUFFICIENT"
+
+    lines = [
+        "Capability evidence quality assessment (read-only):",
+        f"Capability: {name}",
+        f"Latest verification status: {status}",
+        f"Recorded at: {recorded_at or 'UNKNOWN'}",
+        f"Evidence age: {age}",
+        f"Evidence completeness: {'SUFFICIENT' if evidence_complete else 'INSUFFICIENT'}",
+        f"Prior VERIFIED-to-current regression: {'YES' if regression else 'NO'}",
+        f"Quality: {quality}",
+        "No capability execution, code modification, or device state change was performed.",
+    ]
+    return "\n".join(lines)
+
 def capability_inventory() -> str:
     """List the capabilities Nova currently exposes to its local tool runtime."""
     entries = []
@@ -4606,6 +4698,18 @@ TOOL_DECLARATIONS = [
             },
             "required": ["capability"],
         },
+
+    {
+        "name": "assess_capability_evidence_quality",
+        "description": "Assess the completeness, consistency, and recorded age of persisted capability verification evidence without executing the capability.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the local capability to assess."}
+            },
+            "required": ["capability"],
+        },
+    },
     },
     {
         "name": "assess_capability_gap",
@@ -5456,6 +5560,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "assess_capability_gap": assess_capability_gap,
     "capability_inventory": capability_inventory,
     "assess_capability_readiness": assess_capability_readiness,
+    "assess_capability_evidence_quality": assess_capability_evidence_quality,
     "apply_capability_repair": apply_capability_repair,
     "self_test": self_test,
     "find_executable": find_executable,
