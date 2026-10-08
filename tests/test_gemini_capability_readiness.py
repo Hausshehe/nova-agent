@@ -17,6 +17,26 @@ class CapabilityReadinessTests(unittest.TestCase):
         self.assertIn("Handler: MISSING or INVALID", result)
         self.assertIn("Readiness: UNAVAILABLE", result)
 
+    def test_capability_readiness_request_routes_to_readiness_self_model(self):
+        from gemini_agent.client import GeminiClient
+
+        contents = [{
+            "role": "user",
+            "parts": [{
+                "text": (
+                    "Assess your own readiness for the capabilities needed to safely "
+                    "determine the current foreground Android app. Determine which "
+                    "capabilities are actually available, which are verified, which "
+                    "are merely present but unverified, and which are unavailable. "
+                    "Use your own capability evidence and persisted verification history."
+                )
+            }],
+        }]
+        self.assertEqual(
+            GeminiClient._requested_local_tool(contents),
+            "assess_capability_readiness",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
