@@ -369,6 +369,7 @@ class GeminiClient:
             "read" in user_text or "retrieve" in user_text or "show" in user_text
         ):
             return "get_capability_outcome_history"
+
         if any(phrase in user_text for phrase in (
             "assess capability evidence quality",
             "capability evidence quality",
@@ -400,9 +401,7 @@ class GeminiClient:
             "capability evidence and persisted verification history",
         )):
             return "assess_capability_readiness"
-        if "capability inventory" in user_text or "what tools" in user_text or (
-            "list nova" in user_text and "capabilities" in user_text
-        ):
+        if "capability inventory" in user_text or "capabilities" in user_text or "what tools" in user_text:
             return "capability_inventory"
         if "assess_capability_gap" in user_text:
             return "assess_capability_gap"
@@ -3008,3 +3007,756 @@ class GeminiClient:
 
                 if native_tool_calls:
                     normalized_message = dict(message)
+                    normalized_message["tool_calls"] = normalized_tool_calls
+                    payload["messages"].append(normalized_message)
+                else:
+                    payload["messages"].append({
+                        "role": "assistant",
+                        "tool_calls": normalized_tool_calls,
+                    })
+
+                for tool_call in tool_calls:
+                    function = tool_call.get("function") or {}
+                    name = function.get("name")
+                    local_name = next(
+                        (tool_name for tool_name, cloud_name in self._CLOUD_TOOL_NAMES.items() if cloud_name == name),
+                        name,
+                    )
+                    handler = self.tool_handlers.get(local_name)
+                    if handler is None:
+                        raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
+
+                    args = {}
+                    raw_tool_result = ""
+                    raw_tool_failed = False
+                    goal_replan_pending = False
+                    try:
+                        args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        if local_name == "plan_capability_extension":
+                            args["request"] = request_text
+                            args["inspect_reality"] = True
+                        if local_name == "apply_capability_extension":
+                            args = self._fill_extension_request(args, request_text)
+                            if str(args.get("implementation_kind", "")).strip().lower() == "android_mechanism":
+                                target = str(args.get("implementation_target", "")).strip()
+                                target = re.sub(r"^(intent|executable|service|ui-text|ui):\s+", r"\1:", target, flags=re.IGNORECASE)
+                                extracted = self._extract_mechanism(target)
+                                if extracted:
+                                    args["implementation_target"] = extracted
+                        if requested_tool == "recover_command" and "expected postcondition" in prompt.lower():
+                            command_match = re.search(r"`([^`]+)`", prompt)
+                            expected_match = re.search(
+                                r"expected postcondition(?:\s+is|\s*[:=])?\s*`([^`]+)`",
+                                prompt,
+                                re.IGNORECASE,
+                            )
+                            if command_match and expected_match:
+                                args = {
+                                    "command": command_match.group(1).strip(),
+                                    "expected": expected_match.group(1).strip(),
+                                }
+                        # Preserve explicit command arguments from the user's goal when
+                        # the selected executable strategy is run_command. Provider-generated
+                        # arguments are advisory here: they must not reinterpret a concrete
+                        # command such as "dumpsys -l" as "run_command -l".
+                        if selected_strategy and local_name == selected_strategy == "run_command":
+                            command_match = re.search(
+                                r'\b(?:using\s+)?command\s+["\\\']([^"\\\']+)["\\\']',
+                                request_text,
+                                re.IGNORECASE,
+                            )
+                            if command_match:
+                                args = {"command": command_match.group(1).strip()}
+                        # Satisfy required observation inputs for the selected strategy
+                        # before invoking it. The rule is schema-driven: when the selected
+                        # tool requires a "result" and the request supplies a bounded command,
+                        # execute that prerequisite observation once and pass its result into
+                        # the selected strategy. The selected strategy itself still executes once.
+                        if selected_strategy and local_name == selected_strategy:
+                            selected_declaration = next(
+                                (
+                                    declaration
+                                    for declaration in self.tool_declarations
+                                    if declaration.get("name") == local_name
+                                ),
+                                None,
+                            )
+                            required = set(
+                                (selected_declaration or {})
+                                .get("parameters", {})
+                                .get("required", [])
+                            )
+                            current_result = str(args.get("result", "")).strip()
+                            if "result" in required and (
+                                not current_result or "Exit code:" not in current_result
+                            ):
+                                command_match = re.search(
+                                    r'\busing\s+command\s+["\']([^"\']+)["\']',
+                                    request_text,
+                                    re.IGNORECASE,
+                                )
+                                if not command_match:
+                                    command_match = re.search(
+                                        r'\bcommand\s+["\']([^"\']+)["\']',
+                                        request_text,
+                                        re.IGNORECASE,
+                                    )
+                                if command_match:
+                                    args["result"] = self.tool_handlers["run_command"](
+                                        command=command_match.group(1).strip()
+                                    )
+                        tool_result = handler(**args)
+                        raw_tool_result = str(tool_result)
+                        raw_tool_failed = bool(
+                            re.search(r"\bExit code:\s*[1-9]\d*\b", raw_tool_result)
+                            or re.search(r"\bTool error\s*:", raw_tool_result, re.IGNORECASE)
+                            or re.search(r"\bOutcome:\s*(?:FAILED|failure)\b", raw_tool_result, re.IGNORECASE)
+                        )
+                        tool_result = self._coordinate_tool_failure(
+                            local_name=local_name,
+                            args=args,
+                            tool_result=raw_tool_result,
+                            request_text=request_text,
+                            learning_request=strategy_goal,
+                        )
+
+                    except (json.JSONDecodeError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+                        if local_name == "run_command":
+                            recovery_args = dict(args)
+                            if not str(recovery_args.get("command", "")).strip():
+                                command_match = re.search(
+                                    r'\b(?:using\s+)?command\s+["\']([^"\']+)["\']',
+                                    request_text,
+                                    re.IGNORECASE,
+                                )
+                                if command_match:
+                                    recovery_args["command"] = command_match.group(1).strip()
+                            if str(recovery_args.get("command", "")).strip():
+                                args = recovery_args
+                                tool_result = self._coordinate_tool_failure(
+                                    local_name="run_command",
+                                    args=recovery_args,
+                                    tool_result=f"Tool error: {exc}",
+                                    request_text=request_text,
+                                    learning_request=strategy_goal,
+                                )
+                            else:
+                                args = {}
+                                tool_result = f"Tool error: {exc}"
+                        else:
+                            args = {}
+                            tool_result = f"Tool error: {exc}"
+
+                    if self.goal_state is not None:
+                        self.goal_state.add_evidence(str(tool_result))
+                        bounded_observation_evidence = (
+                            self.goal_state.evidence[-1]
+                            if self.goal_state.evidence
+                            else str(tool_result)[:512]
+                        )
+                        observation = observe_goal_progress(
+                            self.goal_state.goal,
+                            self.goal_state.success_condition,
+                            bounded_observation_evidence,
+                        )
+                        self.goal_state.progress_status = observation.status
+                        self.goal_state.progress_reason = observation.reason
+                        goal_result = str(tool_result)
+                        recovery_match = re.search(
+                            r"Recovery result:\s*(.*?)(?=\n(?:Diagnosis|Failure learning|Recovery learning):|$)",
+                            goal_result,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                        recovery_result = recovery_match.group(1).strip() if recovery_match else ""
+                        if recovery_result:
+                            recovery_result = re.split(
+                                r"(?:\\\\n|\\n|\\r?\\n)",
+                                recovery_result,
+                                maxsplit=1,
+                            )[0].strip()
+                        if not recovery_result:
+                            verified_match = re.search(
+                                r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
+                                goal_result,
+                                re.IGNORECASE,
+                            )
+                            if verified_match:
+                                recovery_result = goal_result[verified_match.start():]
+                                recovery_result = re.split(
+                                    r"(?:\\\\n|\\n|\\r?\\n)",
+                                    recovery_result,
+                                    maxsplit=1,
+                                )[0].strip()
+                        recovery_verified = bool(
+                            raw_tool_failed
+                            and recovery_result
+                            and re.search(
+                                r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
+                                recovery_result,
+                                re.IGNORECASE,
+                            )
+                        )
+                        # Completion evidence must distinguish a recovered failure from an
+                        # unresolved failure. A failed step remains FAILED in the ledger, but its
+                        # raw Tool error must not poison later completion verification after verified
+                        # recovery. Preserve only the bounded verified recovery evidence for recovered
+                        # failed steps.
+                        normalized_step_evidence = []
+                        for step in self.goal_state.steps:
+                            step_evidence = str(step.get("evidence", ""))
+                            if step.get("status") == "FAILED":
+                                verified_step_match = re.search(
+                                    r"(?:Post-action verification|Verification|Postcondition|Outcome)\s*:\s*VERIFIED\b",
+                                    step_evidence,
+                                    re.IGNORECASE,
+                                )
+                                if verified_step_match:
+                                    recovered_evidence = step_evidence[verified_step_match.start():]
+                                    recovered_evidence = re.split(
+                                        r"(?:\\n|\n|\r?\n)",
+                                        recovered_evidence,
+                                        maxsplit=1,
+                                    )[0].strip()
+                                    if recovered_evidence:
+                                        normalized_step_evidence.append(recovered_evidence)
+                                # Failed attempts remain in the ledger, but an unresolved
+                                # historical failure is not proof that the overall goal is
+                                # impossible. Replanning may satisfy the same goal by another
+                                # path, so keep the failure out of completion evidence unless
+                                # it has verified recovery evidence.
+                                continue
+                            normalized_step_evidence.append(step_evidence)
+                        normalized_step_evidence.append(str(tool_result))
+                        completion_evidence = "\n".join(
+                            [*normalized_step_evidence, f"Observed tool: {local_name}"]
+                        )
+                        if recovery_verified:
+                            normalized_step_evidence = [
+                                evidence
+                                for evidence in normalized_step_evidence
+                                if evidence != str(tool_result)
+                            ]
+                            # Recovery reports may contain learning/meta text that repeats the
+                            # original goal wording. Only the bounded verified recovery evidence should
+                            # contribute to goal completion, otherwise metadata can falsely satisfy a
+                            # remaining success-condition clause.
+                            completion_evidence = "\n".join(
+                                [*normalized_step_evidence, recovery_result, f"Observed recovery for: {local_name}"]
+                            )
+                        if len(completion_evidence) > 3800:
+                            completion_evidence = (
+                                completion_evidence[:1900]
+                                + "\n...\n"
+                                + completion_evidence[-1896:]
+                            )
+                        completion = verify_goal_completion(
+                            self.goal_state.goal,
+                            self.goal_state.success_condition,
+                            completion_evidence,
+                        )
+                        if completion.status == "VERIFIED":
+                            self.goal_state.status = "VERIFIED"
+                        elif completion.status == "FAILED" and not recovery_verified:
+                            # A failed step is not automatically a failed goal. Keep the
+                            # goal active when the autonomous loop can replan around a
+                            # changed/unavailable environment, while preserving the failed
+                            # step in the ledger.
+                            goal_replan_pending = bool(raw_tool_failed)
+                            self.goal_state.status = "ACTIVE" if goal_replan_pending else "FAILED"
+                        step_status = (
+                            "FAILED" if raw_tool_failed
+                            else "VERIFIED" if completion.status == "VERIFIED"
+                            else "EXECUTED"
+                        )
+                        self.goal_state.record_step(
+                            local_name, step_status, str(tool_result)
+                        )
+                        tool_result = (
+                            str(tool_result)
+                            + "\nGoal progress observation: "
+                            + observation.status
+                            + "\nGoal progress reason: "
+                            + observation.reason
+                            + "\nGoal completion verification: "
+                            + completion.status
+                            + "\nGoal completion reason: "
+                            + completion.reason
+                            + "\nRuntime goal status: "
+                            + self.goal_state.status
+                            + "\nGoal steps:"
+                            + "".join(
+                                f"\n- {step['action']}: {step['status']} | {step['evidence']}"
+                                for step in self.goal_state.steps
+                            )
+                        )
+                        goal_verified = self.goal_state.status == "VERIFIED"
+
+
+                    trace = {"name": local_name, "args": args, "result": tool_result}
+                    if (
+                        selected_strategy
+                        and strategy_goal
+                        and local_name == selected_strategy
+                        and re.search(
+                            r"(?:Post-action verification|Verification)\s*:\s*VERIFIED\b",
+                            str(tool_result),
+                            re.IGNORECASE,
+                        )
+                    ):
+                        from gemini_agent.learning import record_verified_experience, record_verified_failure
+                        learning_result = record_verified_experience(
+                            strategy_goal,
+                            selected_strategy,
+                            str(tool_result),
+                            domain="general",
+                        )
+                        trace["verified_experience_learning"] = learning_result
+                    if "expression" in args:
+                        trace["expression"] = str(args["expression"])
+                    self.last_tool_calls.append(trace)
+
+                    if self.goal_state is not None and self.goal_state.status == "VERIFIED":
+                        final_result = str(tool_result)
+                        for note in goal_replan_notes:
+                            if note not in final_result:
+                                final_result += "\n" + note
+                        return final_result
+
+                    payload["messages"].append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id", ""),
+                        "content": str(tool_result),
+                    })
+
+                    # An unrecoverable-step replan is bounded to one alternative
+                    # action. If that action does not verify the goal, stop safely
+                    # instead of allowing the provider to wander into more rounds.
+                    if (
+                        goal_replan_step
+                        and local_name == goal_replan_step
+                        and self.goal_state is not None
+                        and self.goal_state.status != "VERIFIED"
+                    ):
+                        return (
+                            str(tool_result)
+                            + "\nGoal replan: Alternative step completed, but the "
+                            "goal was not verified. Stopping safely."
+                        )
+
+                    # Goal-directed continuation: after each bounded step, reuse
+                    # the existing selector against accumulated evidence and allow
+                    # one different relevant capability to advance the same goal.
+                    if (
+                        self.goal_state is not None
+                        and self.goal_state.status == "ACTIVE"
+                        and not strategy_candidates
+                        and re.search(
+                            r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
+                            request_text,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                    ):
+                        from gemini_agent.goal_next_step import select_goal_next_step
+                        executed_names = {
+                            step["action"]
+                            for step in self.goal_state.steps
+                            if step.get("status") in {"EXECUTED", "VERIFIED", "FAILED"}
+                        }
+                        continuation_declarations = self.tool_declarations
+                        continuation_candidates = [
+                            str(declaration.get("name", "")).strip()
+                            for declaration in continuation_declarations
+                            if (
+                                isinstance(declaration, dict)
+                                and str(declaration.get("name", "")).strip()
+                                and str(declaration.get("name", "")).strip() not in executed_names
+                                and str(declaration.get("name", "")).strip() not in {
+                                    "establish_goal_contract", "select_goal_next_step",
+                                    "self_test", "capability_inventory", "assess_capability_gap",
+                                }
+                            )
+                        ]
+                        if continuation_candidates:
+                            continuation_evidence = "\n".join(self.goal_state.evidence)
+                            if len(continuation_evidence) > 480:
+                                continuation_evidence = (
+                                    continuation_evidence[:238]
+                                    + "\n...\n"
+                                    + continuation_evidence[-237:]
+                                )
+                            continuation_selection = select_goal_next_step(
+                                self.goal_state.goal,
+                                self.goal_state.success_condition,
+                                self.goal_state.status,
+                                self.goal_state.progress_status,
+                                self.goal_state.progress_reason,
+                                continuation_candidates,
+                                continuation_evidence,
+                            )
+                            if continuation_selection.action in self.tool_handlers:
+                                next_action = continuation_selection.action
+                                if goal_replan_pending:
+                                    replan_note = (
+                                        "Goal replan: "
+                                        f"Selected alternative step {next_action} after the failed step."
+                                    )
+                                    goal_replan_notes.append(replan_note)
+                                    goal_replan_step = next_action
+                                    tool_result = str(tool_result).replace(
+                                        "Runtime goal status: FAILED",
+                                        "Runtime goal status: ACTIVE",
+                                    )
+                                    tool_result += "\n" + replan_note
+                                self.last_tool_calls.append({
+                                    "name": "select_goal_next_step",
+                                    "args": {
+                                        "goal": self.goal_state.goal,
+                                        "success_condition": self.goal_state.success_condition,
+                                        "goal_status": self.goal_state.status,
+                                        "progress_status": self.goal_state.progress_status,
+                                        "progress_reason": self.goal_state.progress_reason,
+                                        "candidates": continuation_candidates,
+                                        "evidence": "\n".join(self.goal_state.evidence),
+                                    },
+                                    "result": (
+                                        f"Next step: {next_action}\n"
+                                        f"Reason: {continuation_selection.reason}"
+                                    ),
+                                })
+                                next_cloud_name = self._CLOUD_TOOL_NAMES.get(next_action, next_action)
+                                next_declaration = next(
+                                    (
+                                        declaration
+                                        for declaration in self.tool_declarations
+                                        if declaration.get("name") == next_action
+                                    ),
+                                    None,
+                                )
+                                if next_declaration is not None:
+                                    payload["tools"] = [{
+                                        "type": "function",
+                                        "function": {
+                                            "name": next_cloud_name,
+                                            "description": next_declaration["description"],
+                                            "parameters": self._schema(next_declaration["parameters"]),
+                                        },
+                                    }]
+                                    payload["tool_choice"] = {
+                                        "type": "function",
+                                        "function": {"name": next_cloud_name},
+                                    }
+                            elif goal_replan_pending:
+                                self.goal_state.status = "FAILED"
+                                tool_result += (
+                                    "\nGoal replan: No viable alternative step was found; "
+                                    "goal cannot continue safely."
+                                )
+
+                    # Once a requested seed experience is recorded, the selected
+                    # strategy becomes the only executable tool in this workflow.
+                    # This prevents the provider from substituting a prerequisite
+                    # observation or another candidate for Nova's selected strategy.
+                    if (
+                        strategy_candidates
+                        and selected_strategy
+                        and strategy_seed_tool
+                        and local_name == strategy_seed_tool
+                    ):
+                        selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                            selected_strategy, selected_strategy
+                        )
+                        payload["tools"] = [
+                            tool
+                            for tool in payload.get("tools", [])
+                            if tool.get("function", {}).get("name") == selected_cloud_name
+                        ]
+                        payload["tool_choice"] = {
+                            "type": "function",
+                            "function": {"name": selected_cloud_name},
+                        }
+
+                    # The selected strategy has now executed. Its result is authoritative
+                    # for this decision step. Do not offer the same strategy another turn,
+                    # or the provider can repeat execution until the outer call budget dies.
+                    if (
+                        strategy_candidates
+                        and selected_strategy
+                        and local_name == selected_strategy
+                    ):
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+
+                    # Self-extension is transactional and must not enter an
+                    # unbounded repair conversation with the model. One model
+                    # proposal, one local transaction, then return the result.
+                    if requested_tool == "apply_capability_extension":
+                        return str(tool_result)
+
+                    # An explicitly named capability request is a single local
+                    # action. Execute it once and return its result instead of
+                    # sending the same action back to Cloudflare for another round.
+                    explicit_capability_use = bool(
+                        re.search(r"\buse\s+(?:the\s+)?[\w.-]+\s+capability\b", request_text, re.IGNORECASE)
+                        or (
+                            local_name
+                            and re.search(r"\buse\b", request_text, re.IGNORECASE)
+                            and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
+                            and local_name.lower() in request_text.lower()
+                        )
+                    )
+                    if (
+                        explicit_capability_use
+                        and requested_tool == local_name
+                        and not strategy_candidates
+                    ):
+                        return str(tool_result)
+
+                    # Dynamically added capabilities are local extensions, not
+                    # ordinary Cloudflare planning tools. When the user explicitly
+                    # asks to use one, execute it once and return its result.
+                    builtin_names = {declaration["name"] for declaration in TOOL_DECLARATIONS}
+                    dynamic_capability_use = bool(
+                        local_name
+                        and local_name not in builtin_names
+                        and re.search(r"\bcapabilit(?:y|ies)\b", request_text, re.IGNORECASE)
+                        and (
+                            local_name.lower() in request_text.lower()
+                            or re.search(r"\bnewly\s+generated\b", request_text, re.IGNORECASE)
+                        )
+                    )
+                    if dynamic_capability_use or (
+                        unnamed_generated_capability_request
+                        and getattr(handler, "__nova_generated_capability__", False)
+                    ):
+                        return str(tool_result)
+
+                    if requested_tool == "apply_capability_extension" and not str(tool_result).startswith("Extension status: source edit applied and transaction committed."):
+                        payload["messages"].append({
+                            "role": "user",
+                            "content": (
+                                "Previous extension attempt failed: "
+                                + str(tool_result)
+                                + ". Inspect the supplied repository context and call "
+                                "apply_capability_extension again with a corrected existing "
+                                "path and exact old_text."
+                            ),
+                        })
+
+                # Adaptive investigation must distinguish persistence from progress.
+                # A second consecutive round with the exact same tool inputs and
+                # observed results contains no new evidence. Give the model one
+                # explicit chance to reassess with tools disabled rather than
+                # spending the remaining safety budget repeating the same path.
+                round_observations = self.last_tool_calls[round_trace_start:]
+                if round_observations:
+                    observation_signature = json.dumps(
+                        [
+                            {
+                                "name": item.get("name"),
+                                "args": item.get("args"),
+                                "result": item.get("result"),
+                            }
+                            for item in round_observations
+                        ],
+                        sort_keys=True,
+                        default=str,
+                    )
+                    if observation_signature == last_observation_signature:
+                        payload["messages"].append({
+                            "role": "user",
+                            "content": (
+                                "The latest investigation round repeated exactly the same "
+                                "observation and produced no new evidence. Do not repeat that "
+                                "mechanism or identical call. Reassess the current evidence, "
+                                "use a genuinely distinct safe mechanism only if it can add "
+                                "new information, otherwise synthesize the best-supported "
+                                "answer and state the remaining uncertainty explicitly."
+                            ),
+                        })
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+                        last_observation_signature = None
+                        continue
+                    last_observation_signature = observation_signature
+
+                # Deterministic explicit filesystem requests do not need a second
+                # Cloudflare round-trip. Return the local tool result directly.
+                if requested_tool in {"capability_inventory", "assess_capability_gap", "plan_capability_extension", "self_test", "discover_camera_control", "resolve_android_intent", "send_android_keyevent", "send_android_intent", "list_processes", "run_root_command", "run_command", "find_executable", "diagnose_command_failure", "verify_command_result", "retry_command", "recover_command", "path_exists", "get_file_access_time", "get_file_modified_time", "get_file_extension", "get_file_name", "get_file_stem", "get_file_permissions", "get_directory_entry_count", "get_directory_size", "count_file_lines", "get_disk_usage", "get_hostname", "get_system_info", "get_cpu_count", "get_process_id", "get_current_working_directory", "get_python_executable", "get_memory_usage", "get_temp_directory", "get_home_directory", "get_process_uptime", "get_process_thread_count", "get_parent_process_id", "get_process_group_id", "get_session_id", "get_user_id", "get_umask", "get_process_status", "get_process_command_line", "get_process_executable", "get_process_working_directory", "get_process_parent_name", "get_process_memory_usage", "get_system_uptime", "get_system_swap_usage", "get_system_boot_time", "get_system_cpu_usage", "get_system_memory_usage", "get_system_battery_status", "get_wifi_status", "get_bluetooth_status", "get_airplane_mode", "get_screen_state", "get_screen_brightness", "get_screen_brightness_mode", "get_screen_resolution", "get_screen_density", "get_media_volume", "get_screen_refresh_rate", "get_screen_timeout"} and loop_index == 0:
+                    return str(tool_result)
+
+                # Tool execution is Nova's responsibility. For an explicit
+                # single-tool request, synthesize locally after one execution.
+                # For a normal task, retain the tool set so Cloudflare can compose
+                # bounded multi-step work from the observed result. The outer loop
+                # caps the number of tool rounds and therefore bounds execution.
+                if requested_tool == "apply_capability_extension":
+                    if "Extension status: source edit applied and transaction committed." in str(tool_result):
+                        return str(tool_result)
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": "apply_capability_extension"},
+                    }
+                elif strategy_candidates and selected_strategy:
+                    if local_name == selected_strategy:
+                        # The selected strategy has already executed in this round.
+                        # It is evidence now, not another executable option.
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+                    else:
+                        selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
+                            selected_strategy, selected_strategy
+                        )
+                        payload["tools"] = [
+                            tool
+                            for tool in payload.get("tools", [])
+                            if tool.get("function", {}).get("name") == selected_cloud_name
+                        ]
+                        payload["tool_choice"] = {
+                            "type": "function",
+                            "function": {"name": selected_cloud_name},
+                        }
+                elif requested_tool:
+                    payload.pop("tools", None)
+                    payload.pop("tool_choice", None)
+                else:
+                    payload["tool_choice"] = "auto"
+                continue
+
+            elif not content:
+                if requested_tool == "apply_capability_extension":
+                    return (
+                        "Extension not applied: Cloudflare did not return a valid "
+                        "capability-extension proposal. No code or device state was modified."
+                    )
+                raise RuntimeError(
+                    f"Cloudflare returned an unexpected response: {result}"
+                )
+            return str(content)
+
+        raise RuntimeError("Cloudflare requested too many tool calls.")
+
+    def ask(
+        self,
+        prompt: str,
+        history: list[dict] | None = None,
+        system_instruction: str | None = None,
+    ) -> str:
+        contents = list(history or []) + [
+            {"role": "user", "parts": [{"text": prompt}]}
+        ]
+        self.last_tool_calls = []
+        self.last_grounding_sources = []
+        self.goal_state = None
+        prompt_text = str(prompt)
+        if "recover_command" in prompt_text.lower() and "expected postcondition" in prompt_text.lower():
+            quoted = re.findall(r"`([^`]+)`", prompt_text)
+            if len(quoted) >= 2:
+                arguments = {
+                    "command": quoted[0].strip(),
+                    "expected": quoted[1].strip(),
+                }
+                tool_result = self.tool_handlers["recover_command"](**arguments)
+                self.last_tool_calls.append({
+                    "name": "recover_command",
+                    "args": arguments,
+                    "result": tool_result,
+                })
+                return str(tool_result)
+        requested_tool = self._requested_local_tool(contents)
+        # Resolve explicitly named generated capabilities from the live client
+        # registry before any provider round-trip. This keeps execution local and
+        # prevents provider-side argument generation from reinterpreting a repair
+        # verification request.
+        lower_prompt = prompt_text.lower()
+        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
+            generated_names = []
+            for name, handler in self.tool_handlers.items():
+                if getattr(handler, "__nova_generated_capability__", False):
+                    generated_names.append(name)
+                    continue
+                code = getattr(handler, "__code__", None)
+                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
+                    generated_names.append(name)
+            for name in sorted(generated_names, key=len, reverse=True):
+                if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
+                    requested_tool = name
+                    break
+        normalized_prompt = str(prompt).upper()
+        if (
+            requested_tool == "resolve_android_intent"
+            or "RESOLVE THE ANDROID IMAGE_CAPTURE INTENT" in normalized_prompt
+            or "RESOLVE ANDROID INTENT" in normalized_prompt
+        ):
+            action = "STILL_IMAGE_CAMERA" if "STILL_IMAGE_CAMERA" in normalized_prompt else "IMAGE_CAPTURE"
+            return str(self.tool_handlers["resolve_android_intent"](action=action))
+        if requested_tool == "discover_android_ui_actions":
+            return str(self.tool_handlers["discover_android_ui_actions"]())
+        if requested_tool == "validate_android_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            if not mechanism:
+                return "Mechanism validation requires an explicit mechanism such as intent:IMAGE_CAPTURE."
+            return str(self.tool_handlers["validate_android_mechanism"](request=prompt, mechanism=mechanism))
+        if requested_tool == "execute_validated_android_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            if not mechanism:
+                try:
+                    discovery = str(
+                        self.tool_handlers["discover_android_mechanisms"](
+                            request=prompt
+                        )
+                    )
+                    candidates = self._rank_android_mechanism_candidates(
+                        prompt,
+                        self._parse_android_mechanism_candidates(discovery),
+                    )
+                    for candidate in candidates:
+                        validation = str(
+                            self.tool_handlers["validate_android_mechanism"](
+                                request=prompt,
+                                mechanism=candidate,
+                            )
+                        )
+                        if "Status: VIABLE" in validation:
+                            mechanism = candidate
+                            break
+                except (RuntimeError, ValueError, TypeError):
+                    mechanism = ""
+            if not mechanism:
+                return (
+                    "Mechanism execution could not select a viable discovered mechanism. "
+                    "No Android mechanism was executed."
+                )
+            handler = self.tool_handlers.get("execute_android_mechanism")
+            if handler is None:
+                handler = self.tool_handlers["execute_validated_android_mechanism"]
+            return str(
+                handler(
+                    request=prompt,
+                    mechanism=mechanism,
+                )
+            )
+        if requested_tool == "execute_validated_android_ui_mechanism":
+            mechanism = self._extract_mechanism(prompt)
+            if not mechanism:
+                return "UI mechanism execution requires an explicit mechanism such as ui:<resource-id>."
+            return str(execute_validated_android_ui_mechanism(request=prompt, mechanism=mechanism))
+        if "expected postcondition" in prompt.lower() and "recover_command" in prompt.lower():
+            command_match = re.search(r"`([^`]+)`", prompt)
+            expected_match = re.search(
+                r"expected postcondition(?:\s+is|\s*[:=])?\s*`([^`]+)`",
+                prompt,
+                re.IGNORECASE,
+            )
+            if command_match and expected_match:
+                arguments = {
+                    "command": command_match.group(1).strip(),
+                    "expected": expected_match.group(1).strip(),
+                }
+                tool_result = self.tool_handlers["recover_command"](**arguments)
+                self.last_tool_calls.append({
+                    "name": "recover_command",
+                    "args": arguments,
+                    "result": tool_result,
+                })
+                return str(tool_result)
+        return self._generate_cloudflare(contents, system_instruction)
