@@ -846,7 +846,8 @@ class GeminiClient:
 
         # Verified experience is part of Nova's normal decision loop. When a task
         # presents multiple candidate strategies, deterministically apply the existing
-        # generic selector before the provider reasons about execution. Learned experience        # is preference only: it never substitutes for validation, execution, or
+        # generic selector before the provider reasons about execution. Learned experience
+        # is preference only: it never substitutes for validation, execution, or
         # postcondition verification.
         decision_policy = (
             "Nova decision policy: when multiple candidate strategies are explicitly "
@@ -948,6 +949,7 @@ class GeminiClient:
                 "args": {"request": goal, "candidates": strategy_candidates, "domain": "general"},
                 "result": selection,
             })
+
         unnamed_generated_capability_request = bool(
             re.search(r"\\b(?:use|execute|run|verify|test)\\b", request_text, re.IGNORECASE)
             and re.search(r"\\bcapabilit(?:y|ies)\\b", request_text, re.IGNORECASE)
@@ -1795,8 +1797,13 @@ class GeminiClient:
             }
         elif goal_selected_action:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
-                goal_selected_action, goal_selected_action            )
-            selected_declaration = next(                (                    declaration                    for declaration in self.tool_declarations                    if isinstance(declaration, dict)
+                goal_selected_action, goal_selected_action
+            )
+            selected_declaration = next(
+                (
+                    declaration
+                    for declaration in self.tool_declarations
+                    if isinstance(declaration, dict)
                     and declaration.get("name") == goal_selected_action
                 ),
                 None,
@@ -2690,12 +2697,17 @@ class GeminiClient:
                 )
                 if match:
                     tool_calls = [{
-                        "id": "requested-verify-command-result",                        "type": "function",
+                        "id": "requested-verify-command-result",
+                        "type": "function",
                         "function": {
-                            "name": "verify_command_result",                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
-                        },                    }]
+                            "name": "verify_command_result",
+                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
+                        },
+                    }]
                     native_tool_calls = False
-            if requested_tool == "get_umask" and loop_index == 0:                tool_calls = [{
+
+            if requested_tool == "get_umask" and loop_index == 0:
+                tool_calls = [{
                     "id": "requested-umask",
                     "type": "function",
                     "function": {
@@ -3585,16 +3597,21 @@ class GeminiClient:
                 })
                 return str(tool_result)
         requested_tool = self._requested_local_tool(contents)
-        # Resolve explicitly named generated capabilities from the live client        # registry before any provider round-trip. This keeps execution local and
+        # Resolve explicitly named generated capabilities from the live client
+        # registry before any provider round-trip. This keeps execution local and
         # prevents provider-side argument generation from reinterpreting a repair
         # verification request.
-        lower_prompt = prompt_text.lower()\n        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
+        lower_prompt = prompt_text.lower()
+        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
             generated_names = []
-            for name, handler in self.tool_handlers.items():                if getattr(handler, "__nova_generated_capability__", False):
+            for name, handler in self.tool_handlers.items():
+                if getattr(handler, "__nova_generated_capability__", False):
                     generated_names.append(name)
                     continue
-                code = getattr(handler, "__code__", None)                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
-                    generated_names.append(name)            for name in sorted(generated_names, key=len, reverse=True):
+                code = getattr(handler, "__code__", None)
+                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
+                    generated_names.append(name)
+            for name in sorted(generated_names, key=len, reverse=True):
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
                     requested_tool = name
                     break
