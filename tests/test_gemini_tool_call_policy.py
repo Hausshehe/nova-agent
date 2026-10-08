@@ -12,26 +12,27 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
         self.assertIn("max_tool_rounds = 16", source)
         self.assertNotIn("max_tool_rounds = 8", source)
 
-
     def test_adaptive_investigation_requires_mechanism_substitution_after_failure(self):
         source = (
             Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(
-            "an unavailable, blocked, failed, or inconclusive observation mechanism",
-            source,
-        )
-        self.assertIn("identify ", source)
-        self.assertIn(
-            "and try a distinct already-registered mechanism",
-            source,
-        )
-        self.assertIn("Stop only after the fact is", source)
-        self.assertIn(
+        required_fragments = (
+            "Adaptive investigation rule:",
+            "unavailable, blocked, failed, or inconclusive ",
+            "observation mechanism is evidence about that mechanism",
+            "requested fact is unknowable",
+            "identify ",
+            "and try a distinct already-registered mechanism capable of observing the same ",
+            "while preserving read-only and safety constraints",
+            "Do not stop merely ",
+            "because the first diagnostic path is blocked",
+            "Stop only after the fact is ",
             "verified, the remaining uncertainty is explicitly justified",
-            source,
+            "or the available mechanisms have been meaningfully exhausted",
         )
+        for fragment in required_fragments:
+            self.assertIn(fragment, source)
 
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
