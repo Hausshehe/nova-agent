@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 _MAX_TEXT = 512
 _MAX_GOALS = 8
@@ -59,7 +60,7 @@ def select_goal_priority(goals: str) -> str:
     """
     if not isinstance(goals, str) or not goals.strip():
         raise ValueError("Goals cannot be empty.")
-    entries = [line.strip() for line in goals.strip().splitlines() if line.strip()]
+    entries = [entry.strip() for entry in re.split(r"[;\\n]+", goals.strip()) if entry.strip()]
     if not entries or len(entries) > _MAX_GOALS:
         raise ValueError(f"Priority selection requires between 1 and {_MAX_GOALS} goals.")
 
