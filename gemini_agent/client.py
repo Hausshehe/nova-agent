@@ -1899,12 +1899,12 @@ class GeminiClient:
         if requested_tool == "execute_constructed_action":
             patterns = {
                 "executable": r"executable\s*[:=]\s*([^,\n]+)",
-                "arguments": r"arguments\s*[:=]\s*(\[[^\n]+\])",
+                "arguments": r"arguments\s*[:=]\s*(\[[^\]]*\])",
                 "working_directory": r"working_directory\s*[:=]\s*([^,\n]+)",
                 "timeout_seconds": r"timeout_seconds\s*[:=]\s*(\d+)",
                 "mutation_scope": r"mutation_scope\s*[:=]\s*([^,\n]+)",
-                "expected_effects": r"expected_effects\s*[:=]\s*(\[[^\n]+\])",
-                "evidence_requirements": r"evidence_requirements\s*[:=]\s*(\[[^\n]+\])",
+                "expected_effects": r"expected_effects\s*[:=]\s*(\[[^\]]*\])",
+                "evidence_requirements": r"evidence_requirements\s*[:=]\s*(\[[^\]]*\])",
             }
             fields = {}
             for key, pattern in patterns.items():
