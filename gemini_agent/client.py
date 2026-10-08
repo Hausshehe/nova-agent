@@ -189,6 +189,7 @@ class GeminiClient:
             return "select_goal_next_step"
         if any(phrase in user_text for phrase in (
             "diagnose outcome discrepancy",
+            "diagnose the outcome discrepancy",
             "diagnose the outcome mismatch",
             "determine whether reality matches the expected outcome",
             "decide whether to stop or replan from observed outcome",
