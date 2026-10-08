@@ -162,3 +162,63 @@ class GoalContractTests(unittest.TestCase):
         )
         self.assertIn("Outcome state: MISMATCH", result)
         self.assertIn("Next decision: REPLAN", result)
+
+
+    def test_autonomy_boundary_stops_on_verified_outcome(self):
+        from gemini_agent.tools import assess_autonomy_boundary
+        result = assess_autonomy_boundary(
+            "Check battery",
+            "VERIFIED",
+            "none",
+            "Battery status was observed and verified.",
+            "none",
+            "low risk, read-only",
+        )
+        self.assertIn("Autonomy decision: STOP", result)
+        self.assertIn("No action was executed", result)
+
+    def test_autonomy_boundary_investigates_uncertain_safe_state(self):
+        from gemini_agent.tools import assess_autonomy_boundary
+        result = assess_autonomy_boundary(
+            "Identify foreground app",
+            "INCONCLUSIVE",
+            "foreground component is unknown",
+            "No reliable foreground observation yet.",
+            "inspect or observe the environment using a bounded read-only mechanism",
+            "low risk, read-only, bounded",
+        )
+        self.assertIn("Autonomy decision: INVESTIGATE", result)
+
+    def test_autonomy_boundary_replans_mismatch_when_alternative_exists(self):
+        from gemini_agent.tools import assess_autonomy_boundary
+        result = assess_autonomy_boundary(
+            "Open settings",
+            "MISMATCH",
+            "expected target was not reached",
+            "Observed wrong activity.",
+            "replan using an alternative bounded action",
+            "low risk, reversible",
+        )
+        self.assertIn("Autonomy decision: REPLAN", result)
+
+    def test_autonomy_boundary_escalates_material_uncertainty(self):
+        from gemini_agent.tools import assess_autonomy_boundary
+        result = assess_autonomy_boundary(
+            "Perform consequential action",
+            "INCONCLUSIVE",
+            "the user approval requirement is unknown",
+            "Evidence is incomplete.",
+            "continue with the action",
+            "high risk and irreversible",
+        )
+        self.assertIn("Autonomy decision: ESCALATE", result)
+
+    def test_autonomy_boundary_is_registered_once(self):
+        from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
+        self.assertIn("assess_autonomy_boundary", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("assess_autonomy_boundary"), 1)
+
+    def test_client_routes_autonomy_boundary_requests_locally(self):
+        contents = [{"role": "user", "parts": [{"text": "Assess the autonomy boundary for this goal and decide whether to continue or escalate."}]}]
+        self.assertEqual(GeminiClient._requested_local_tool(contents), "assess_autonomy_boundary")
