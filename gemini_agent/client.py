@@ -188,6 +188,14 @@ class GeminiClient:
             "classify whether to stop, continue, investigate, recover, replan, or escalate",
         )):
             return "assess_autonomy_boundary"
+
+        if any(phrase in user_text for phrase in (
+            "establish an intent contract",
+            "establish intent contract",
+            "intent contract",
+            "interpret my request as a bounded intent",
+        )):
+            return "establish_intent_contract"
         if any(phrase in user_text for phrase in (
             "select the goal next step",
             "select a goal next step",
@@ -1031,6 +1039,21 @@ class GeminiClient:
         )
 
         requested_tool = self._requested_local_tool(contents)
+        # Keep intent interpretation deterministic and provider-independent.
+        if requested_tool == "establish_intent_contract":
+            match = re.search(
+                r'\bestablish\s+(?:an\s+)?intent\s+contract\s+for\s+"([^"]+)"',
+                request_text,
+                re.IGNORECASE,
+            )
+            if match:
+                result = self.tool_handlers["establish_intent_contract"](request=match.group(1))
+                self.last_tool_calls.append({
+                    "name": "establish_intent_contract",
+                    "args": {"request": match.group(1)},
+                    "result": result,
+                })
+                return result
         # Keep the goal-contract safety boundary deterministic even if local
         # routing heuristics do not recognize the phrasing of this explicit request.
         if (
