@@ -8,7 +8,7 @@ from pathlib import Path
 
 _MAX_TIMEOUT_SECONDS = 30
 _MAX_OUTPUT_BYTES = 16 * 1024
-_ALLOWED_SCOPES = {"READ_ONLY", "WORKSPACE_MUTATION"}
+_ALLOWED_SCOPES = {"WORKSPACE_MUTATION"}
 _BLOCKED_EXECUTABLES = {
     "sh", "bash", "dash", "zsh", "fish", "ksh", "csh", "tcsh",
     "python", "python3", "python3.10", "python3.11", "python3.12",
@@ -29,6 +29,8 @@ def _confined_path(path: str) -> Path:
     target = Path(path).expanduser()
     if not target.is_absolute():
         target = root / target
+    if target.exists() and target.is_symlink():
+        raise ValueError("Working directory cannot be a symlink.")
     target = target.resolve()
     try:
         target.relative_to(root)
@@ -36,8 +38,6 @@ def _confined_path(path: str) -> Path:
         raise ValueError("Working directory is outside Nova's allowed filesystem root.") from exc
     if not target.is_dir():
         raise ValueError("Working directory must be an existing directory.")
-    if target.is_symlink():
-        raise ValueError("Working directory cannot be a symlink.")
     return target
 
 
@@ -61,8 +61,8 @@ def _resolve_executable(executable: str) -> Path:
 
 
 def _validate_arguments(arguments) -> list[str]:
-    if not isinstance(arguments, list) or not arguments:
-        raise ValueError("Arguments must be a non-empty argv list.")
+    if not isinstance(arguments, list):
+        raise ValueError("Arguments must be an argv list.")
     if len(arguments) > 64:
         raise ValueError("Too many action arguments.")
     normalized = []
@@ -154,7 +154,7 @@ def execute_constructed_action(
 
 CONSTRUCTED_ACTION_DECLARATION = {
     "name": "execute_constructed_action",
-    "description": "Execute one previously unknown solution action from a bounded structured argv without shell interpretation, while enforcing a confined working directory, execution timeout, mutation scope, and structured execution evidence. This executes an action but does not claim overall goal success.",
+    "description": "Execute one previously unknown workspace-mutating solution action from a bounded structured argv without shell interpretation, while enforcing a confined working directory, execution timeout, mutation scope, and structured execution evidence. This executes an action but does not claim overall goal success.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -162,7 +162,7 @@ CONSTRUCTED_ACTION_DECLARATION = {
             "arguments": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Direct argv elements. Do not provide a shell command string."},
             "working_directory": {"type": "STRING", "description": "Existing directory inside Nova's bounded filesystem root."},
             "timeout_seconds": {"type": "INTEGER", "description": "Execution timeout from 1 to 30 seconds."},
-            "mutation_scope": {"type": "STRING", "description": "READ_ONLY or WORKSPACE_MUTATION."},
+            "mutation_scope": {"type": "STRING", "description": "WORKSPACE_MUTATION is the currently executable scope."},
             "expected_effects": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Declared effects expected from the action."},
             "evidence_requirements": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Evidence that should later be used to verify the result."},
         },
