@@ -30,6 +30,7 @@ from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
 from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
 from gemini_agent.world_model import represent_entity_states, represent_entity_relationships, represent_world_evidence, represent_temporal_states
+from gemini_agent.belief_revision import revise_world_beliefs
 
 
 _OPERATORS = {
@@ -1620,6 +1621,11 @@ def verify_goal_portfolio_tool(expected_goal_ids: str, goals: str) -> str:
 def represent_temporal_states_tool(entities: str, observations: str) -> str:
     """Represent explicit entity states at supplied times without inferring history or changing state."""
     return represent_temporal_states(entities, observations)
+
+
+def revise_world_beliefs_tool(entities: str, beliefs: str, evidence: str) -> str:
+    """Revise explicit beliefs from supplied evidence without inferring missing evidence or changing reality."""
+    return revise_world_beliefs(entities, beliefs, evidence)
 
 
 def verify_outcome_contract(
@@ -5850,6 +5856,15 @@ TOOL_DECLARATIONS = [
         }, "required": ["request", "candidates"]},
     },
     {
+        "name": "revise_world_beliefs",
+        "description": "Revise explicit beliefs only from supplied evidence and confidence; do not infer missing evidence or change entity/device state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence."},
+            "beliefs": {"type": "STRING", "description": "One belief per line using: entity_id | claim | confidence."},
+            "evidence": {"type": "STRING", "description": "One evidence record per line using: entity_id | claim | source | confidence | SUPPORTS or CONTRADICTS."},
+        }, "required": ["entities", "beliefs", "evidence"]},
+    },
+    {
         "name": "represent_temporal_states",
         "description": "Represent explicit entity states at supplied times without inferring prior, current, or future state.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6179,6 +6194,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "represent_entity_relationships": represent_entity_relationships_tool,
     "represent_world_evidence": represent_world_evidence_tool,
     "represent_temporal_states": represent_temporal_states_tool,
+    "revise_world_beliefs": revise_world_beliefs_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
