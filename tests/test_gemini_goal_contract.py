@@ -6,6 +6,18 @@ from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS, verify_outcome_
 
 
 class GoalContractTests(unittest.TestCase):
+    def test_exact_autonomy_boundary_prompt_dispatches_deterministically(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        prompt = ('Assess the autonomy boundary for the goal "determine whether the current foreground Android app is safely identifiable for a read-only interaction" using only the supplied state; do not execute any capability, inspect the device, change device state, or perform the interaction. The outcome state is "INCONCLUSIVE". The uncertainty is "the foreground target and read-only support are unknown and cannot yet be determined". The observed evidence is "no reliable observation has established the foreground package or activity". The available actions are "investigate by using a bounded read-only observation mechanism". The risk constraints are "low risk, read-only, bounded, non-destructive". Decide whether Nova should STOP, CONTINUE, INVESTIGATE, RECOVER, REPLAN, or ESCALATE, explain the evidence basis, and confirm that nothing was executed.')
+        result = client.ask(prompt)
+        self.assertIn("Autonomy decision: INVESTIGATE", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "assess_autonomy_boundary")
+
+
     def test_establishes_bounded_goal_contract(self):
         contract = GoalContract("Check battery", "Battery status is reported")
         self.assertEqual(contract.snapshot(), {
