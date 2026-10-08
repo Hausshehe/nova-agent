@@ -2533,15 +2533,7 @@ def apply_capability_extension(
     if proposed in existing_functions:
         return f"Extension not applied: capability function '{proposed}' already exists."
 
-    declaration_marker = "TOOL_DECLARATIONS = [
-    {
-        "name": "select_goal_priority",
-        "description": "Select which goal deserves attention from explicit user-priority, urgency, dependency, and resource-cost signals without executing, interrupting, or completing any goal. This is read-only.",
-        "parameters": {"type": "OBJECT", "properties": {
-            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"},
-        }, "required": ["goals"]},
-    },
-"
+    declaration_marker = "TOOL_DECLARATIONS = ["
     handler_marker = "TOOL_HANDLERS: dict[str, Callable[..., str]] = {"
 
     # Generate the wrapper from an AST so model-supplied text cannot corrupt Python syntax.
