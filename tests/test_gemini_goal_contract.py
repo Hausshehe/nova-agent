@@ -100,3 +100,27 @@ class GoalContractTests(unittest.TestCase):
         self.assertIn("verify_outcome_contract", TOOL_HANDLERS)
         names = [item["name"] for item in TOOL_DECLARATIONS]
         self.assertEqual(names.count("verify_outcome_contract"), 1)
+
+
+    def test_diagnoses_achieved_outcome_and_stops(self):
+        from gemini_agent.tools import diagnose_outcome_discrepancy
+        result = diagnose_outcome_discrepancy("Open settings", "Settings page is visible", "Foreground changes to settings", "Settings page is not visible", "Post-action evidence: Settings page is visible.")
+        self.assertIn("Outcome state: ACHIEVED", result)
+        self.assertIn("Next decision: STOP", result)
+
+    def test_diagnoses_mismatch_and_replans(self):
+        from gemini_agent.tools import diagnose_outcome_discrepancy
+        result = diagnose_outcome_discrepancy("Open settings", "Settings page is visible", "Foreground changes to settings", "Settings page is not visible", "Post-action evidence: Settings page is not visible.")
+        self.assertIn("Outcome state: MISMATCH", result)
+        self.assertIn("Next decision: REPLAN", result)
+
+    def test_does_not_treat_tool_success_as_outcome(self):
+        from gemini_agent.tools import diagnose_outcome_discrepancy
+        result = diagnose_outcome_discrepancy("Open settings", "Settings page is visible", "Foreground changes to settings", "Settings page is not visible", "Tool execution: SUCCESS")
+        self.assertIn("Outcome state: MISMATCH_OR_UNKNOWN", result)
+        self.assertIn("Next decision: REPLAN_OR_VERIFY", result)
+
+    def test_outcome_discrepancy_is_registered_once(self):
+        self.assertIn("diagnose_outcome_discrepancy", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("diagnose_outcome_discrepancy"), 1)
