@@ -380,7 +380,9 @@ class GeminiClient:
             "capability evidence and persisted verification history",
         )):
             return "assess_capability_readiness"
-        if "capability inventory" in user_text or "what tools" in user_text:
+        if "capability inventory" in user_text or "what tools" in user_text or (
+            "list nova" in user_text and "capabilities" in user_text
+        ):
             return "capability_inventory"
         if "assess_capability_gap" in user_text:
             return "assess_capability_gap"
