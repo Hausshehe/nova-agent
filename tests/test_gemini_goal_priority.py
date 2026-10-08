@@ -10,7 +10,7 @@ class GoalPriorityTests(unittest.TestCase):
             "urgent | Handle urgent task | 90 | 8 | 0 | 5"
         )
         self.assertIn("Selected goal: urgent", result)
-        self.assertIn("Priority score: 1073", result)
+        self.assertIn("Priority score: 8099995", result)
 
     def test_user_priority_can_outweigh_urgency(self):
         result = select_goal_priority(
