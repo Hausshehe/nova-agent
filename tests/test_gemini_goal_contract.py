@@ -1,6 +1,6 @@
 import unittest
 
-from gemini_agent.goal_contract import GoalContract, establish_goal_contract
+from gemini_agent.goal_contract import GoalContract, OutcomeContract, establish_goal_contract, establish_outcome_contract
 from gemini_agent.client import GeminiClient
 from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
 
@@ -20,6 +20,47 @@ class GoalContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             GoalContract("goal", "")
 
+    def test_establishes_bounded_outcome_contract(self):
+        contract = OutcomeContract(
+            "Open the settings page",
+            "Settings page is visible",
+            "The foreground screen changes to settings",
+            "The observed UI identifies the settings page",
+            "The foreground screen remains unchanged or shows an error",
+            "The UI may be unavailable for direct inspection",
+        )
+        self.assertEqual(contract.snapshot(), {
+            "goal": "Open the settings page",
+            "success_condition": "Settings page is visible",
+            "expected_transition": "The foreground screen changes to settings",
+            "observable_evidence": "The observed UI identifies the settings page",
+            "failure_condition": "The foreground screen remains unchanged or shows an error",
+            "uncertainty": "The UI may be unavailable for direct inspection",
+        })
+
+    def test_establish_outcome_contract_has_no_execution_claim(self):
+        result = establish_outcome_contract(
+            "Open settings", "Settings is visible",
+            "Foreground screen changes to settings",
+            "Observed UI identifies settings",
+            "Foreground screen remains unchanged or shows an error",
+            "UI inspection may be unavailable",
+        )
+        self.assertIn("Outcome contract established (read-only).", result)
+        self.assertIn("Expected transition: Foreground screen changes to settings", result)
+        self.assertIn("Observable evidence: Observed UI identifies settings", result)
+        self.assertIn("Failure condition: Foreground screen remains unchanged or shows an error", result)
+        self.assertIn("Uncertainty: UI inspection may be unavailable", result)
+        self.assertIn("no action was executed", result)
+
+    def test_client_routes_explicit_outcome_contract_requests_locally(self):
+        contents = [{"role": "user", "parts": [{"text": "Establish an outcome contract for opening settings with the expected transition, observable evidence, failure condition, and uncertainty."}]}]
+        self.assertEqual(GeminiClient._requested_local_tool(contents), "establish_outcome_contract")
+
+    def test_outcome_contract_is_registered_once(self):
+        self.assertIn("establish_outcome_contract", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("establish_outcome_contract"), 1)
     def test_establish_goal_contract_has_no_execution_claim(self):
         result = establish_goal_contract("Check battery", "Battery status is reported")
         self.assertIn("Goal contract established.", result)
