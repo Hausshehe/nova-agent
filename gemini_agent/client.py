@@ -3574,6 +3574,9 @@ class GeminiClient:
                     goal_replan_pending = False
                     try:
                         args = self._parse_tool_arguments(function.get("arguments", "{}"))
+                        args = self._recover_required_tool_arguments(
+                            local_name, args, request_text
+                        )
                         if local_name == "plan_capability_extension":
                             args["request"] = request_text
                             args["inspect_reality"] = True
