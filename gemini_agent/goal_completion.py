@@ -103,10 +103,17 @@ def verify_goal_completion(
             or stripped_line.startswith("Any tool outcome must be observed as goal evidence;")
             or stripped_line.startswith("Observed tool:")
             or stripped_line.startswith("Observed recovery for:")
+            or stripped_line.startswith("Requested capability:")
+            or stripped_line.startswith("[Nova orchestration directive]")
         ):
             continue
         evidence_lines.append(line)
     normalized = "\n".join(evidence_lines).strip()
+    if re.search(r"\bNo action was performed and no device state was modified\b", normalized, re.IGNORECASE):
+        return GoalCompletionObservation(
+            "INCONCLUSIVE",
+            "Observed evidence explicitly reports that no action was performed; it cannot establish a mutating construction outcome.",
+        )
     if not normalized:
         return GoalCompletionObservation(
             "INCONCLUSIVE",
