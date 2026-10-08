@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 _MAX_TEXT = 512
-_MAX_CANDIDATES = 128
+_MAX_CANDIDATES = 256
 _STOP_WORDS = {
     "a","an","and","are","be","been","being","by","current","for","from",
     "is","of","on","reported","successfully","the","to","was","with","get","status","system",
@@ -60,7 +60,7 @@ def select_goal_next_step(
     if progress_status not in {"PROGRESS", "BLOCKED", "INCONCLUSIVE"}:
         raise ValueError("Progress status is invalid.")
     if not isinstance(candidates, list) or not candidates or len(candidates) > _MAX_CANDIDATES:
-        raise ValueError("Candidates must contain between 1 and 128 items.")
+        raise ValueError("Candidates must contain between 1 and 256 items.")
     clean = []
     for candidate in candidates:
         if not isinstance(candidate, str) or not candidate.strip() or len(candidate.strip()) > _MAX_TEXT:
