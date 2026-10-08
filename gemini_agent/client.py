@@ -196,6 +196,14 @@ class GeminiClient:
         )):
             return "build_intent_clarification"
         if any(phrase in user_text for phrase in (
+            "represent entity relationships",
+            "represent relationships between entities",
+            "represent entity relationships and dependencies",
+            "build an entity relationship representation",
+            "create an entity relationship representation",
+        )):
+            return "represent_entity_relationships"
+        if any(phrase in user_text for phrase in (
             "represent entity states",
             "represent entities and their states",
             "represent entities with current states",
@@ -1158,6 +1166,31 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "represent_entity_states", "args": args, "result": result})
                 return result
             return "Representing entity states requires one or more entries using: entity_id | entity_type | state | confidence"
+
+        if requested_tool == "represent_entity_relationships":
+            entities_match = re.search(
+                r'(?:entities|entity\s+states?)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            relationships_match = re.search(
+                r'(?:relationships|relations)\s*(?:are|is|:|using|from|with)?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if entities_match and relationships_match:
+                args = {
+                    "entities": entities_match.group(1).replace("\\n", "\n"),
+                    "relationships": relationships_match.group(1).replace("\\n", "\n"),
+                }
+                result = self.tool_handlers["represent_entity_relationships"](**args)
+                self.last_tool_calls.append({"name": "represent_entity_relationships", "args": args, "result": result})
+                return result
+            return (
+                "Representing entity relationships requires entities using: "
+                "entity_id | entity_type | state | confidence; and relationships using: "
+                "source_entity_id | relationship | target_entity_id"
+            )
 
         if requested_tool == "verify_goal_portfolio":
             expected_match = re.search(
