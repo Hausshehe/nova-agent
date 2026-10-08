@@ -223,6 +223,15 @@ class GeminiClient:
             return "revise_world_beliefs"
 
         if any(phrase in user_text for phrase in (
+            "query world model",
+            "query the world model",
+            "query internal world model",
+            "search the world model",
+            "ask the world model",
+        )):
+            return "query_world_model"
+
+        if any(phrase in user_text for phrase in (
             "represent temporal states",
             "represent temporal state",
             "represent states over time",
@@ -1181,6 +1190,30 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
             return "Resolving goal conflicts requires one or more goal entries using: goal_id | goal | conflict_key | constraint"
+
+        if requested_tool == "query_world_model":
+            fields = {}
+            patterns = {
+                "entities": r'(?:entities|entity\s+states?)\s*(?:are|is|:|using|from|with)?\s*"([^"]*)"',
+                "relationships": r'(?:relationships|relations)\s*(?:are|is|:|using|from|with)?\s*"([^"]*)"',
+                "evidence": r'(?:evidence|evidence\s+records?)\s*(?:are|is|:|using|from|with)?\s*"([^"]*)"',
+                "temporal_states": r'(?:temporal\s+states|temporal\s+observations|observations)\s*(?:are|is|:|using|from|with)?\s*"([^"]*)"',
+                "beliefs": r'(?:beliefs|belief\s+records?)\s*(?:are|is|:|using|from|with)?\s*"([^"]*)"',
+                "query": r'(?:query|question|fact\s+to\s+find)\s*(?:is|:|about|for)?\s*"([^"]+)"',
+            }
+            for key, pattern in patterns.items():
+                match = re.search(pattern, request_text, re.IGNORECASE | re.DOTALL)
+                if match:
+                    fields[key] = match.group(1).replace("\\n", "\n")
+            if all(key in fields for key in patterns):
+                result = self.tool_handlers["query_world_model"](**fields)
+                self.last_tool_calls.append({"name": "query_world_model", "args": fields, "result": result})
+                return result
+            return (
+                "World-model query requires entities, relationships, evidence, temporal states, "
+                "beliefs, and a query, each supplied in quotes. Use an empty string for an unused "
+                "record category."
+            )
 
         if requested_tool == "revise_world_beliefs":
             entities_match = re.search(
