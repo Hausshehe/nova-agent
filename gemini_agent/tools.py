@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
 from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
-from gemini_agent.goal_contract import establish_goal_contract, establish_outcome_contract, establish_intent_contract
+from gemini_agent.goal_contract import establish_goal_contract, establish_outcome_contract, establish_intent_contract, build_intent_clarification
 from gemini_agent.goal_next_step import select_goal_next_step
 
 
@@ -1571,6 +1571,16 @@ def establish_outcome_contract_tool(
 def establish_intent_contract_tool(request: str) -> str:
     """Establish a bounded intent contract without executing anything."""
     return establish_intent_contract(request)
+
+
+def build_intent_clarification_tool(
+    request: str,
+    uncertainty: str,
+    required_evidence: str,
+    clarification_required: str,
+) -> str:
+    """Produce bounded clarification questions without executing anything."""
+    return build_intent_clarification(request, uncertainty, required_evidence, clarification_required)
 
 
 
@@ -4765,6 +4775,16 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "build_intent_clarification",
+        "description": "Turn a required intent clarification into minimal bounded questions without inventing missing target, outcome, or constraints. This is read-only and performs no action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "request": {"type": "STRING"},
+            "uncertainty": {"type": "STRING"},
+            "required_evidence": {"type": "STRING"},
+            "clarification_required": {"type": "STRING"},
+        }, "required": ["request", "uncertainty", "required_evidence", "clarification_required"]},
+    },
+    {
         "name": "establish_intent_contract",
         "description": "Transform a raw user request into a bounded intent contract containing goal, outcome, constraints, evidence, uncertainty, assumptions, and whether clarification is required. This is read-only and performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6026,6 +6046,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "send_android_intent": send_android_intent,
     "establish_outcome_contract": establish_outcome_contract_tool,
     "establish_intent_contract": establish_intent_contract_tool,
+    "build_intent_clarification": build_intent_clarification_tool,
     "diagnose_outcome_discrepancy": diagnose_outcome_discrepancy,
     "verify_outcome_contract": verify_outcome_contract,
     "establish_goal_contract": establish_goal_contract_tool,
