@@ -4788,6 +4788,13 @@ VERIFY_COMMAND_RESULT_DECLARATION = {
 
 TOOL_DECLARATIONS = [
     {
+        "name": "select_goal_priority",
+        "description": "Select which goal deserves attention from explicit user-priority, urgency, dependency, and resource-cost signals without executing, interrupting, or completing any goal. This is read-only.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"},
+        }, "required": ["goals"]},
+    },
+    {
         "name": "establish_goal_portfolio",
         "description": "Represent multiple distinct active goals and their success conditions without prioritizing, executing, interrupting, or completing them. This is read-only and performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
