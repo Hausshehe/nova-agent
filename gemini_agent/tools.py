@@ -5850,6 +5850,14 @@ TOOL_DECLARATIONS = [
         }, "required": ["request", "candidates"]},
     },
     {
+        "name": "represent_temporal_states",
+        "description": "Represent explicit entity states at supplied times without inferring prior, current, or future state.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "entities": {"type": "STRING", "description": "One entity per line using: entity_id | entity_type | state | confidence."},
+            "observations": {"type": "STRING", "description": "One temporal observation per line using: entity_id | state | observed_at | confidence."},
+        }, "required": ["entities", "observations"]},
+    },
+    {
         "name": "verify_goal_portfolio",
         "description": "Verify that multiple active goals remain complete and coherent, including missing, unexpected, duplicate, and evidence-inconsistent goal states. This is read-only and performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6170,6 +6178,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "represent_entity_states": represent_entity_states_tool,
     "represent_entity_relationships": represent_entity_relationships_tool,
     "represent_world_evidence": represent_world_evidence_tool,
+    "represent_temporal_states": represent_temporal_states_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
