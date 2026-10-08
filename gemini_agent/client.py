@@ -371,6 +371,13 @@ class GeminiClient:
             return "get_capability_outcome_history"
 
         if any(phrase in user_text for phrase in (
+            "select capability by evidence",
+            "select the best capability by evidence",
+            "choose capability by evidence",
+            "evidence-aware capability selection",
+        )):
+            return "select_capability_by_evidence"
+        if any(phrase in user_text for phrase in (
             "assess capability evidence quality",
             "capability evidence quality",
             "evidence quality for capability",
