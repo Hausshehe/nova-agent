@@ -203,6 +203,15 @@ class GeminiClient:
         )):
             return "establish_goal_portfolio"
         if any(phrase in user_text for phrase in (
+            "select goal priority",
+            "select the goal priority",
+            "choose which goal deserves attention",
+            "choose the goal that deserves attention",
+            "prioritize the active goals",
+            "prioritize these goals",
+        )):
+            return "select_goal_priority"
+        if any(phrase in user_text for phrase in (
             "establish an intent contract",
             "establish intent contract",
             "intent contract",
@@ -1073,6 +1082,24 @@ class GeminiClient:
                     "result": result,
                 })
                 return result
+        if requested_tool == "select_goal_priority":
+            match = re.search(
+                r'(?:select|choose)\s+(?:the\s+)?(?:goal\s+)?priority(?:\s+from)?\s*:?\s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not match:
+                match = re.search(
+                    r'(?:select|choose)\s+(?:which\s+)?goal(?:\s+deserves\s+attention)?(?:\s+from)?\s*:?\s*"([^"]+)"',
+                    request_text,
+                    re.IGNORECASE | re.DOTALL,
+                )
+            if match:
+                args = {"goals": match.group(1).replace("\\n", "\n")}
+                result = self.tool_handlers["select_goal_priority"](**args)
+                self.last_tool_calls.append({"name": "select_goal_priority", "args": args, "result": result})
+                return result
+            return "Selecting goal priority requires one or more goal entries using: goal_id | goal | urgency | user_priority | dependency_count | resource_cost"
         if requested_tool == "establish_goal_portfolio":
             match = re.search(
                 r'establish\s+(?:a\s+)?goal\s+portfolio(?:\s+with)?\s*:\s*"([^"]+)"',
