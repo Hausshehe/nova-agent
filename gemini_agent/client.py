@@ -369,7 +369,18 @@ class GeminiClient:
             "read" in user_text or "retrieve" in user_text or "show" in user_text
         ):
             return "get_capability_outcome_history"
-        if "capability inventory" in user_text or "capabilities" in user_text or "what tools" in user_text:
+        if any(phrase in user_text for phrase in (
+            "assess your own readiness",
+            "assess capability readiness",
+            "capability readiness",
+            "which capabilities are verified",
+            "which capabilities are unverified",
+            "capabilities are actually available",
+            "capabilities are merely present",
+            "capability evidence and persisted verification history",
+        )):
+            return "assess_capability_readiness"
+        if "capability inventory" in user_text or "what tools" in user_text:
             return "capability_inventory"
         if "assess_capability_gap" in user_text:
             return "assess_capability_gap"
