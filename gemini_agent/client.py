@@ -1048,7 +1048,7 @@ class GeminiClient:
         # Keep intent interpretation deterministic and provider-independent.
         if requested_tool == "build_intent_clarification":
             match = re.search(
-                r'build\\s+intent\\s+clarification\\s+for\\s+"([^"]+)".*?uncertainty\\s+is\\s+"([^"]+)".*?required\\s+evidence\\s+is\\s+"([^"]+)".*?clarification\\s+is\\s+"([^"]+)"',
+                r'build\s+intent\s+clarification\s+for\s+"([^"]+)".*?uncertainty\s+is\s+"([^"]+)".*?required\s+evidence\s+is\s+"([^"]+)".*?clarification\s+is\s+"([^"]+)"',
                 request_text,
                 re.IGNORECASE,
             )
