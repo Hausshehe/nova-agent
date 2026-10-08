@@ -143,6 +143,7 @@ class GoalContractTests(unittest.TestCase):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS
         client.tool_declarations = [*TOOL_DECLARATIONS]
+        client.cloudflare_model = "@cf/zai-org/glm-4.7-flash"
         client.last_tool_calls = []
         client.last_grounding_sources = []
         client.goal_state = None
