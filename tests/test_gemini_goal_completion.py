@@ -26,6 +26,19 @@ class GoalCompletionTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "INCONCLUSIVE")
 
+
+    def test_read_only_discovery_echo_cannot_verify_construction_goal(self):
+        result = verify_goal_completion(
+            "Create a minimal Android calculator app from scratch in a new workspace.",
+            "Build the APK and verify the resulting artifact with evidence.",
+            "Android mechanism discovery (read-only):\n"
+            "Requested capability: Create a minimal Android calculator app from scratch in a new workspace. "
+            "Build the APK and verify the resulting artifact with evidence.\n"
+            "Discovered bounded UI mechanisms: ui-text:HOME\n"
+            "No action was performed and no device state was modified.",
+        )
+        self.assertEqual(result.status, "INCONCLUSIVE")
+
     def test_iso_datetime_is_date_evidence(self):
         result = verify_goal_completion(
             "check the battery and current date",
