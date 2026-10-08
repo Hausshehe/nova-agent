@@ -281,3 +281,51 @@ class GoalContractTests(unittest.TestCase):
         )
         self.assertIn("Clarification requirement: REQUIRED", result)
         self.assertEqual(client.last_tool_calls[-1]["name"], "establish_intent_contract")
+
+
+    def test_builds_bounded_clarification_for_required_intent(self):
+        from gemini_agent.goal_contract import build_intent_clarification
+        result = build_intent_clarification(
+            "Fix this",
+            "Material ambiguity remains about the target and successful outcome.",
+            "A concrete target and observable success condition must be established before execution.",
+            "REQUIRED",
+        )
+        self.assertIn("Clarification required: REQUIRED", result)
+        self.assertIn("What specific target should Nova act on?", result)
+        self.assertIn("What concrete result should count as success?", result)
+        self.assertIn("do not assume a target", result)
+
+    def test_intent_clarification_is_noop_when_not_required(self):
+        from gemini_agent.goal_contract import build_intent_clarification
+        result = build_intent_clarification(
+            "Calculate 2 + 2",
+            "No material intent ambiguity detected.",
+            "Evidence must support the requested result.",
+            "NOT REQUIRED",
+        )
+        self.assertIn("Clarification required: NOT REQUIRED", result)
+        self.assertIn("Clarification action: NONE", result)
+        self.assertIn("No action was executed", result)
+
+    def test_intent_clarification_is_registered_once(self):
+        from gemini_agent.tools import TOOL_HANDLERS, TOOL_DECLARATIONS
+        self.assertIn("build_intent_clarification", TOOL_HANDLERS)
+        names = [item["name"] for item in TOOL_DECLARATIONS]
+        self.assertEqual(names.count("build_intent_clarification"), 1)
+
+    def test_client_routes_intent_clarification_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Build intent clarification for "Fix this". '
+            'The uncertainty is "Material ambiguity remains about the target and successful outcome." '
+            'The required evidence is "A concrete target and observable success condition must be established before execution." '
+            'The clarification is "REQUIRED".'
+        )
+        self.assertIn("Clarification required: REQUIRED", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "build_intent_clarification")
