@@ -1,4 +1,8 @@
+import json
+import os
+import tempfile
 import unittest
+
 
 from gemini_agent.tools import assess_capability_readiness
 
@@ -11,11 +15,50 @@ class CapabilityReadinessTests(unittest.TestCase):
         self.assertIn("Readiness: AVAILABLE_BUT_UNVERIFIED", result)
         self.assertIn("No capability execution", result)
 
+    def test_capability_evidence_quality_reports_verified_evidence(self):
+        from gemini_agent.tools import assess_capability_evidence_quality
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ledger = os.path.join(temp_dir, "outcomes.json")
+            with open(ledger, "w", encoding="utf-8") as handle:
+                json.dump([{
+                    "capability": "calculator",
+                    "stage": "VERIFICATION",
+                    "status": "VERIFIED",
+                    "evidence": "Post-action verification: VERIFIED. Calculator returned the expected result.",
+                    "recorded_at": "2026-10-08T00:00:00+00:00",
+                }], handle)
+            with unittest.mock.patch.dict(os.environ, {"NOVA_OUTCOME_LEDGER": ledger}, clear=False):
+                result = assess_capability_evidence_quality("calculator")
+
+        self.assertIn("Latest verification status: VERIFIED", result)
+        self.assertIn("Evidence completeness: SUFFICIENT", result)
+        self.assertIn("Prior VERIFIED-to-current regression: NO", result)
+        self.assertIn("Quality: SUPPORTED", result)
+        self.assertIn("No capability execution", result)
+
     def test_unknown_capability_reports_unavailable(self):
         result = assess_capability_readiness("nova_missing_capability")
         self.assertIn("Declaration: MISSING", result)
         self.assertIn("Handler: MISSING or INVALID", result)
         self.assertIn("Readiness: UNAVAILABLE", result)
+
+    def test_capability_evidence_quality_request_routes_to_quality_self_model(self):
+        from gemini_agent.client import GeminiClient
+
+        contents = [{
+            "role": "user",
+            "parts": [{
+                "text": (
+                    "Check capability verification evidence quality and determine "
+                    "whether the capability evidence is sufficient."
+                )
+            }],
+        }]
+        self.assertEqual(
+            GeminiClient._requested_local_tool(contents),
+            "assess_capability_evidence_quality",
+        )
 
     def test_capability_readiness_request_routes_to_readiness_self_model(self):
         from gemini_agent.client import GeminiClient
