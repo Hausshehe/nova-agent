@@ -43,6 +43,31 @@ class CloudflareToolCallPolicyTests(unittest.TestCase):
         for fragment in required_fragments:
             self.assertIn(fragment, policy)
 
+    def test_tool_runtime_failures_enter_adaptive_investigation(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
+        ).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+
+        catches_runtime_error = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
+            if not isinstance(node.type, ast.Tuple):
+                continue
+            names = {
+                item.id
+                for item in node.type.elts
+                if isinstance(item, ast.Name)
+            }
+            if "RuntimeError" in names:
+                catches_runtime_error.append(node)
+
+        self.assertTrue(catches_runtime_error)
+        handler_source = ast.get_source_segment(source, catches_runtime_error[0])
+        self.assertIn("Tool error:", handler_source)
+        self.assertIn("tool_result", handler_source)
+
     def test_cloudflare_tool_rounds_serialize_tool_calls(self):
         source = (
             Path(__file__).resolve().parents[1] / "gemini_agent" / "client.py"
