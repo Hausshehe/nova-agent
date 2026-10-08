@@ -29,7 +29,7 @@ class ConstructedActionTests(unittest.TestCase):
                         evidence_requirements=["exit code is 0", "artifact exists"],
                     )
                 self.assertIn("Exit code: 0", result)
-                self.assertEqual(run.call_args.args[0], [str(Path("/bin/touch").resolve()), "artifact.txt"])
+                self.assertEqual(run.call_args.args[0], [str(Path("/bin/touch")), "artifact.txt"])
                 self.assertFalse(run.call_args.kwargs["shell"])
                 self.assertEqual(Path(run.call_args.kwargs["cwd"]), Path(root).resolve())
             finally:
