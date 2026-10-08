@@ -4338,7 +4338,7 @@ class GeminiClient:
         if constructive_autonomy:
             sentences = [
                 part.strip()
-                for part in re.split(r"(?<=[.!?])\\s+", prompt_text)
+                for part in re.split(r"(?<=[.!?])\s+", prompt_text)
                 if part.strip()
             ]
             goal = sentences[0] if sentences else prompt_text.strip()
