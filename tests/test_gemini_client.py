@@ -1997,3 +1997,21 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ), patch("urllib.request.urlopen", return_value=FakeResponse(first_response)) as open_url:
             client = GeminiClient()
+
+    def test_allows_bounded_investigation_beyond_three_tool_rounds(self):
+        responses = [
+            {"choices": [{"message": {"tool_calls": [{"id": "r1", "type": "function", "function": {"name": "get_hostname", "arguments": {}}}]}}]},
+            {"choices": [{"message": {"tool_calls": [{"id": "r2", "type": "function", "function": {"name": "get_system_info", "arguments": {}}}]}}]},
+            {"choices": [{"message": {"tool_calls": [{"id": "r3", "type": "function", "function": {"name": "get_cpu_count", "arguments": {}}}]}}]},
+            {"choices": [{"message": {"tool_calls": [{"id": "r4", "type": "function", "function": {"name": "get_temp_directory", "arguments": {}}}]}}]},
+            {"choices": [{"message": {"content": "Investigation complete.", "tool_calls": []}}]},
+        ]
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch("urllib.request.urlopen", side_effect=[FakeResponse(r) for r in responses]) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Investigate the current runtime context using the available observations and report when complete.")
+        self.assertEqual(answer, "Investigation complete.")
+        self.assertEqual(open_url.call_count, 5)
