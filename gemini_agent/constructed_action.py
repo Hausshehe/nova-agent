@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import shutil
 from pathlib import Path
 
 
@@ -50,7 +51,6 @@ def _resolve_executable(executable: str) -> Path:
     name = Path(candidate).name
     if name.lower() in _BLOCKED_EXECUTABLES:
         raise ValueError("Interpreter or shell executables are not permitted for constructed actions.")
-    import shutil
     resolved = shutil.which(candidate)
     if resolved is None:
         raise ValueError(f"Executable was not found: {candidate}")
