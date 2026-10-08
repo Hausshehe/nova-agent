@@ -182,6 +182,13 @@ class GeminiClient:
                 return max(scored)[2]
 
         if any(phrase in user_text for phrase in (
+            "execute a newly constructed workspace action",
+            "execute a constructed workspace action",
+            "execute_constructed_action",
+        )):
+            return "execute_constructed_action"
+
+        if any(phrase in user_text for phrase in (
             "assess the autonomy boundary",
             "assess autonomy boundary",
             "decide whether to continue or escalate",
