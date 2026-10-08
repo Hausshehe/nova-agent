@@ -17,7 +17,7 @@ class GoalPortfolioVerificationTests(unittest.TestCase):
     def test_detects_missing_goal(self):
         result = verify_goal_portfolio(
             "battery,date",
-            "battery | Check battery | Battery status is reported | ACTIVE | No observations have been collected; date | Check date | Current date is reported | ACTIVE | No observations have been collected",
+            "battery | Check battery | Battery status is reported | ACTIVE | No observations have been collected",
         )
         self.assertIn("Missing goals: date", result)
         self.assertIn("Coherence: INCOHERENT", result)
@@ -41,8 +41,7 @@ class GoalPortfolioVerificationTests(unittest.TestCase):
     def test_detects_unexpected_goal(self):
         result = verify_goal_portfolio(
             "battery",
-            "battery | Check battery | Battery status is reported | ACTIVE | No observations have been collected; date | Check date | Current date is reported | ACTIVE | No observations have been collected"
-            "date | Check date | Current date is reported | ACTIVE | No observations have been collected",
+            "battery | Check battery | Battery status is reported | ACTIVE | No observations have been collected; date | Check date | Current date is reported | ACTIVE | No observations have been collected",
         )
         self.assertIn("Unexpected goals: date", result)
         self.assertIn("Coherence: INCOHERENT", result)
