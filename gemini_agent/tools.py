@@ -28,6 +28,7 @@ from gemini_agent.goal_portfolio import establish_goal_portfolio
 from gemini_agent.goal_priority import select_goal_priority
 from gemini_agent.goal_interruption import manage_goal_interruption
 from gemini_agent.goal_conflict import resolve_goal_conflicts
+from gemini_agent.goal_portfolio_verification import verify_goal_portfolio
 
 
 _OPERATORS = {
@@ -1609,6 +1610,11 @@ def manage_goal_interruption_tool(goal: str) -> str:
 def resolve_goal_conflicts_tool(goals: str) -> str:
     """Resolve multi-goal conflicts from explicit compatibility constraints without executing them."""
     return resolve_goal_conflicts(goals)
+
+
+def verify_goal_portfolio_tool(expected_goal_ids: str, goals: str) -> str:
+    """Verify multi-goal portfolio completeness and coherence without executing anything."""
+    return verify_goal_portfolio(expected_goal_ids, goals)
 
 def verify_outcome_contract(
     goal: str,
@@ -5800,6 +5806,14 @@ TOOL_DECLARATIONS = [
         }, "required": ["request", "candidates"]},
     },
     {
+        "name": "verify_goal_portfolio",
+        "description": "Verify that multiple active goals remain complete and coherent, including missing, unexpected, duplicate, and evidence-inconsistent goal states. This is read-only and performs no action.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "expected_goal_ids": {"type": "STRING", "description": "Comma-separated expected goal ids."},
+            "goals": {"type": "STRING", "description": "One goal per line using: goal_id | goal | success_condition | status | evidence; status is ACTIVE, PAUSED, VERIFIED, FAILED, or ABANDONED."},
+        }, "required": ["expected_goal_ids", "goals"]},
+    },
+    {
         "name": "resolve_goal_conflicts",
         "description": "Resolve conflicts among multiple active goals using explicit compatibility constraints without prioritizing, executing, interrupting, or completing any goal.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -6108,6 +6122,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "select_goal_priority": select_goal_priority_tool,
     "manage_goal_interruption": manage_goal_interruption_tool,
     "resolve_goal_conflicts": resolve_goal_conflicts_tool,
+    "verify_goal_portfolio": verify_goal_portfolio_tool,
     "assess_autonomy_boundary": assess_autonomy_boundary,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
