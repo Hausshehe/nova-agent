@@ -31,6 +31,31 @@ class GoalPortfolioClientTests(unittest.TestCase):
         ]
         self.assertEqual(names.count("establish_goal_portfolio"), 1)
 
+    def test_client_routes_goal_priority_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Select goal priority from "battery | Check battery | 10 | 1 | 0 | 5\\n'
+            'urgent | Handle urgent task | 90 | 8 | 0 | 5". '
+            "Do not execute, interrupt, or complete any goal."
+        )
+        self.assertIn("Selected goal: urgent", result)
+        self.assertIn("Priority score:", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "select_goal_priority")
+
+    def test_goal_priority_tool_is_registered_once(self):
+        self.assertIn("select_goal_priority", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("select_goal_priority"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
