@@ -109,3 +109,102 @@ def represent_entity_states(entities: str) -> str:
         "No action was executed and no device state was changed.",
     ])
     return "\n".join(lines)
+
+@dataclass(frozen=True)
+class EntityRelationship:
+    """One explicit relationship between two represented entities."""
+
+    source_id: str
+    relationship: str
+    target_id: str
+
+    def __post_init__(self) -> None:
+        for value, label in (
+            (self.source_id, "Source entity id"),
+            (self.relationship, "Relationship"),
+            (self.target_id, "Target entity id"),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{label} cannot be empty.")
+            if len(value.strip()) > _MAX_TEXT:
+                raise ValueError(f"{label} is too long.")
+
+    def snapshot(self) -> dict[str, str]:
+        return {
+            "source_id": self.source_id.strip(),
+            "relationship": self.relationship.strip(),
+            "target_id": self.target_id.strip(),
+        }
+
+
+def represent_entity_relationships(entities: str, relationships: str) -> str:
+    """Represent supplied entity relationships without inferring missing links."""
+    if not isinstance(entities, str) or not entities.strip():
+        raise ValueError("Entities cannot be empty.")
+    if not isinstance(relationships, str) or not relationships.strip():
+        raise ValueError("Relationships cannot be empty.")
+
+    entity_entries = [line.strip() for line in entities.strip().splitlines() if line.strip()]
+    relationship_entries = [line.strip() for line in relationships.strip().splitlines() if line.strip()]
+    if not entity_entries:
+        raise ValueError("World model cannot be empty.")
+    if not relationship_entries:
+        raise ValueError("Relationships cannot be empty.")
+    if len(entity_entries) > _MAX_ENTITIES:
+        raise ValueError(f"World model cannot contain more than {_MAX_ENTITIES} entities.")
+    if len(relationship_entries) > _MAX_ENTITIES * 2:
+        raise ValueError(f"World model cannot contain more than {_MAX_ENTITIES * 2} relationships.")
+
+    parsed_entities: list[EntityState] = []
+    for entry in entity_entries:
+        parts = [part.strip() for part in entry.split("|")]
+        if len(parts) != 4:
+            raise ValueError(
+                "Each entity must use: entity_id | entity_type | state | confidence"
+            )
+        try:
+            confidence = int(parts[3])
+        except ValueError as exc:
+            raise ValueError("Confidence must be an integer from 0 to 100.") from exc
+        parsed_entities.append(EntityState(parts[0], parts[1], parts[2], confidence))
+
+    model = WorldModel(tuple(parsed_entities))
+    entity_ids = {entity.entity_id.strip() for entity in model.entities}
+    parsed_relationships: list[EntityRelationship] = []
+    seen: set[tuple[str, str, str]] = set()
+    for entry in relationship_entries:
+        parts = [part.strip() for part in entry.split("|")]
+        if len(parts) != 3:
+            raise ValueError(
+                "Each relationship must use: source_entity_id | relationship | target_entity_id"
+            )
+        relationship = EntityRelationship(parts[0], parts[1], parts[2])
+        key = (
+            relationship.source_id.strip(),
+            relationship.relationship.strip(),
+            relationship.target_id.strip(),
+        )
+        if key in seen:
+            raise ValueError("Relationships must be unique.")
+        if relationship.source_id.strip() not in entity_ids:
+            raise ValueError(f"Unknown source entity id: {relationship.source_id.strip()}.")
+        if relationship.target_id.strip() not in entity_ids:
+            raise ValueError(f"Unknown target entity id: {relationship.target_id.strip()}.")
+        seen.add(key)
+        parsed_relationships.append(relationship)
+
+    lines = [
+        "Entity relationship representation (read-only):",
+        f"Entity count: {len(model.entities)}",
+        f"Relationship count: {len(parsed_relationships)}",
+    ]
+    for relationship in parsed_relationships:
+        lines.append(
+            f"- {relationship.source_id.strip()} | {relationship.relationship.strip()} | "
+            f"{relationship.target_id.strip()}"
+        )
+    lines.extend([
+        "Boundary: relationships were represented only when explicitly supplied; no missing relationship was inferred.",
+        "No entity state, relationship, action, or device state was changed.",
+    ])
+    return "\n".join(lines)
