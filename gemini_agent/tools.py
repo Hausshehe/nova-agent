@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
 from gemini_agent.learning import record_verified_android_experience, rank_with_verified_android_experience
-from gemini_agent.goal_contract import establish_goal_contract
+from gemini_agent.goal_contract import establish_goal_contract, establish_outcome_contract
 from gemini_agent.goal_next_step import select_goal_next_step
 
 
@@ -150,71 +150,6 @@ def diagnose_capability_failure(capability: str, failure_evidence: str) -> str:
             "Recovery decision: OBSERVE_AND_ANALYZE.",
         ])
 
-    lines.append("No capability execution, code modification, or device state change was performed.")
-    return "\n".join(lines)
-
-
-def select_capability_by_evidence(candidates: str, requirement: str) -> str:
-    """Select the best supported capability from newline-separated candidates without executing them."""
-    if not isinstance(candidates, str) or not candidates.strip():
-        raise ValueError("Candidates cannot be empty.")
-    if not isinstance(requirement, str) or not requirement.strip():
-        raise ValueError("Requirement cannot be empty.")
-    names = [line.strip() for line in candidates.splitlines() if line.strip()]
-    if not names:
-        raise ValueError("Candidates cannot be empty.")
-    unique = list(dict.fromkeys(names))
-    assessments = []
-    rank = {
-        "VERIFIED_SUPPORTED_DIRECT": 4,
-        "VERIFIED_SUPPORTED_INDIRECT": 3,
-        "AVAILABLE_BUT_UNVERIFIED": 1,
-        "UNAVAILABLE": 0,
-    }
-    for name in unique:
-        readiness = assess_capability_readiness(name)
-        quality = assess_capability_evidence_quality(name)
-        provenance = assess_capability_evidence_provenance(name)
-        readiness_match = re.search(r"Readiness:\s*([^\\n]+)", readiness)
-        quality_match = re.search(r"Quality:\s*([^\\n]+)", quality)
-        provenance_match = re.search(r"Provenance:\s*([^\\n]+)", provenance)
-        readiness_value = readiness_match.group(1).strip().upper() if readiness_match else "UNKNOWN"
-        quality_value = quality_match.group(1).strip().upper() if quality_match else "UNKNOWN"
-        provenance_value = provenance_match.group(1).strip().upper() if provenance_match else "UNKNOWN"
-        if readiness_value == "VERIFIED" and quality_value == "SUPPORTED":
-            tier = "VERIFIED_SUPPORTED_DIRECT" if provenance_value == "DIRECTLY_ALIGNED" else (
-                "VERIFIED_SUPPORTED_INDIRECT" if provenance_value == "INDIRECT" else "AVAILABLE_BUT_UNVERIFIED"
-            )
-        elif readiness_value == "AVAILABLE_BUT_UNVERIFIED":
-            tier = "AVAILABLE_BUT_UNVERIFIED"
-        else:
-            tier = "UNAVAILABLE"
-        assessments.append((rank[tier], name, tier, readiness_value, quality_value, provenance_value))
-    assessments.sort(key=lambda item: (-item[0], unique.index(item[1])))
-    best = assessments[0]
-    if best[0] <= 0:
-        decision = "NO_SUPPORTED_CANDIDATE"
-        basis = "no candidate has sufficient verified evidence to justify selecting it."
-        selected = "NONE"
-    else:
-        decision = "SELECTED"
-        basis = (
-            "selected the highest-evidence candidate; direct verified evidence outranks indirect verified evidence, "
-            "which outranks merely available-but-unverified capability."
-        )
-        selected = best[1]
-    lines = [
-        "Capability selection by evidence (read-only):",
-        f"Requirement: {requirement.strip()}",
-        f"Selected capability: {selected}",
-        f"Decision: {decision}",
-        f"Basis: {basis}",
-        "Candidate assessments:",
-    ]
-    for _, name, tier, readiness_value, quality_value, provenance_value in assessments:
-        lines.append(
-            f"- {name}: tier={tier}; readiness={readiness_value}; quality={quality_value}; provenance={provenance_value}"
-        )
     lines.append("No capability execution, code modification, or device state change was performed.")
     return "\n".join(lines)
 
@@ -1613,6 +1548,25 @@ def recover_android_mechanism(
         recovery = replan_android_mechanism(request, mechanism)
         return diagnosis + "\nRecovery action:\n" + recovery
     return diagnosis + "\nRecovery action: NONE."
+
+
+def establish_outcome_contract_tool(
+    goal: str,
+    success_condition: str,
+    expected_transition: str,
+    observable_evidence: str,
+    failure_condition: str,
+    uncertainty: str,
+) -> str:
+    """Establish the observable outcome contract for a goal without executing anything."""
+    return establish_outcome_contract(
+        goal,
+        success_condition,
+        expected_transition,
+        observable_evidence,
+        failure_condition,
+        uncertainty,
+    )
 
 def establish_goal_contract_tool(goal: str, success_condition: str) -> str:
     """Establish an explicit bounded goal and completion condition without executing anything."""
@@ -4610,6 +4564,18 @@ TOOL_DECLARATIONS = [
         }, "required": ["goal", "success_condition"]},
     },
     {
+        "name": "establish_outcome_contract",
+        "description": "Define the expected transition, observable evidence, failure condition, and uncertainty for a goal without executing it.",
+        "parameters": {"type": "OBJECT", "properties": {
+            "goal": {"type": "STRING"},
+            "success_condition": {"type": "STRING"},
+            "expected_transition": {"type": "STRING"},
+            "observable_evidence": {"type": "STRING"},
+            "failure_condition": {"type": "STRING"},
+            "uncertainty": {"type": "STRING"},
+        }, "required": ["goal", "success_condition", "expected_transition", "observable_evidence", "failure_condition", "uncertainty"]},
+    },
+    {
         "name": "select_goal_next_step",
         "description": "Select one bounded next action that is relevant to the active goal from supplied candidates. This performs no action.",
         "parameters": {"type": "OBJECT", "properties": {
@@ -4617,18 +4583,6 @@ TOOL_DECLARATIONS = [
             "goal_status": {"type": "STRING"}, "progress_status": {"type": "STRING"},
             "progress_reason": {"type": "STRING"}, "candidates": {"type": "ARRAY", "items": {"type": "STRING"}},
         }, "required": ["goal", "success_condition", "goal_status", "progress_status", "progress_reason", "candidates"]},
-    },
-    {
-        "name": "select_capability_by_evidence",
-        "description": "Select the best-supported local capability from candidates using readiness, evidence quality, and provenance without executing any candidate.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "candidates": {"type": "STRING", "description": "Newline-separated capability names to compare."},
-                "requirement": {"type": "STRING", "description": "The requirement the selected capability must satisfy."},
-            },
-            "required": ["candidates", "requirement"],
-        },
     },
     {
         "name": "select_capability_by_evidence",
@@ -5785,7 +5739,6 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "get_capability_outcome_history": get_capability_outcome_history,
     "accept_verified_capability_repair": accept_verified_capability_repair,
     "select_capability_by_evidence": select_capability_by_evidence,
-    "select_capability_by_evidence": select_capability_by_evidence,
     "select_capability_repair_candidate": select_capability_repair_candidate,
     "diagnose_capability_failure": diagnose_capability_failure,
     "diagnose_android_mechanism_outcome": diagnose_android_mechanism_outcome,
@@ -5828,6 +5781,7 @@ TOOL_HANDLERS: dict[str, Callable[..., str]] = {
     "discover_android_ui_actions": discover_android_ui_actions,
     "get_foreground_android_component": get_foreground_android_component,
     "send_android_intent": send_android_intent,
+    "establish_outcome_contract": establish_outcome_contract_tool,
     "establish_goal_contract": establish_goal_contract_tool,
     "select_goal_next_step": select_goal_next_step_tool,
     "calculator": calculator,
