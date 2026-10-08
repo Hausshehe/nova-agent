@@ -1858,7 +1858,11 @@ class GeminiClient:
 
         # Long-horizon investigation may require more than three distinct observations.
         # Keep the budget bounded, but do not force unfamiliar tasks into a three-step shape.
-        max_tool_rounds = 8
+        # Adaptive investigations may need several distinct observations before
+        # the model can establish a reliable environment picture. Keep a
+        # generous finite ceiling while relying on the loop's natural stop
+        # condition when the model has enough evidence.
+        max_tool_rounds = 16
         for loop_index in range(max_tool_rounds):
             request = urllib.request.Request(
                 url,
