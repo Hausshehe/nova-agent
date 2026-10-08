@@ -897,8 +897,9 @@ class GeminiClient:
                 r'\bthen\s+use\s+(?:the\s+)?normal\s+decision\s+process\s+for\s+request\s+["\']([^"\']+)["\']',
                 request_text,
                 re.IGNORECASE,
-            )            if normal_request_match:                goal = normal_request_match.group(1).strip()
-            else:
+            )
+            if normal_request_match:
+                goal = normal_request_match.group(1).strip()            else:
                 goal = goal_match.group(1).strip() if goal_match else request_text.strip()
             strategy_goal = goal
             from gemini_agent.learning import select_verified_strategy
@@ -1797,8 +1798,7 @@ class GeminiClient:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
                 goal_selected_action, goal_selected_action            )
             selected_declaration = next(                (                    declaration
-                    for declaration in self.tool_declarations
-                    if isinstance(declaration, dict)
+                    for declaration in self.tool_declarations                    if isinstance(declaration, dict)
                     and declaration.get("name") == goal_selected_action
                 ),
                 None,
@@ -2697,7 +2697,6 @@ class GeminiClient:
                             "name": "verify_command_result",                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
                         },                    }]
                     native_tool_calls = False
-
             if requested_tool == "get_umask" and loop_index == 0:
                 tool_calls = [{
                     "id": "requested-umask",
@@ -3597,8 +3596,7 @@ class GeminiClient:
             for name, handler in self.tool_handlers.items():                if getattr(handler, "__nova_generated_capability__", False):
                     generated_names.append(name)
                     continue
-                code = getattr(handler, "__code__", None)
-                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
+                code = getattr(handler, "__code__", None)                if code is not None and any(marker in code.co_names for marker in ("_run_android_mechanism_extension", "_run_extension_primitive")):
                     generated_names.append(name)
             for name in sorted(generated_names, key=len, reverse=True):
                 if re.search(rf"\b{re.escape(name)}\b", lower_prompt):
