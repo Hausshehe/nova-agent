@@ -251,12 +251,12 @@ def select_capability_by_evidence(candidates: str, requirement: str) -> str:
         assessments.append((ranks[tier],name,tier,rv,qv,pv))
     assessments.sort(key=lambda item:(-item[0],names.index(item[1])))
     best=assessments[0]
-    if best[0] <= 0:
+    if best[0] < 3:
         selected="NONE"; decision="NO_SUPPORTED_CANDIDATE"
-        basis="no candidate has sufficient verified evidence to justify selecting it."
+        basis="no candidate has sufficiently supported verified evidence; merely available-but-unverified capabilities are not safe evidence-based selections."
     else:
         selected=best[1]; decision="SELECTED"
-        basis="selected the highest-evidence candidate: direct verified evidence outranks indirect verified evidence, which outranks merely available-but-unverified capability."
+        basis="selected the highest-evidence candidate: direct verified evidence outranks indirect verified evidence."
     lines=[
         "Capability selection by evidence (read-only):",
         f"Requirement: {requirement.strip()}",
