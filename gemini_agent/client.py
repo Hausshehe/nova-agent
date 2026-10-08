@@ -196,6 +196,15 @@ class GeminiClient:
         )):
             return "build_intent_clarification"
         if any(phrase in user_text for phrase in (
+            "represent entity states",
+            "represent entities and their states",
+            "represent entities with current states",
+            "build an entity and state representation",
+            "create an entity and state representation",
+        )):
+            return "represent_entity_states"
+
+        if any(phrase in user_text for phrase in (
             "establish a goal portfolio",
             "establish goal portfolio",
             "create a goal portfolio",
@@ -1136,6 +1145,19 @@ class GeminiClient:
                 self.last_tool_calls.append({"name": "resolve_goal_conflicts", "args": args, "result": result})
                 return result
             return "Resolving goal conflicts requires one or more goal entries using: goal_id | goal | conflict_key | constraint"
+
+        if requested_tool == "represent_entity_states":
+            match = re.search(
+                r'(?:represents+(?:thes+)?entities?(?:s+ands+theirs+states)?|represents+entitys+states|builds+ans+entitys+ands+states+representation|creates+ans+entitys+ands+states+representation)(?:s+from|s+using|s+with)?s*:?s*"([^"]+)"',
+                request_text,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if match:
+                args = {"entities": match.group(1).replace("\\n", "\n")}
+                result = self.tool_handlers["represent_entity_states"](**args)
+                self.last_tool_calls.append({"name": "represent_entity_states", "args": args, "result": result})
+                return result
+            return "Representing entity states requires one or more entries using: entity_id | entity_type | state | confidence"
 
         if requested_tool == "verify_goal_portfolio":
             expected_match = re.search(
