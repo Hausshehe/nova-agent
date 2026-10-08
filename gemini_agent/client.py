@@ -897,8 +897,8 @@ class GeminiClient:
                 r'\bthen\s+use\s+(?:the\s+)?normal\s+decision\s+process\s+for\s+request\s+["\']([^"\']+)["\']',
                 request_text,
                 re.IGNORECASE,
-            )            if normal_request_match:
-                goal = normal_request_match.group(1).strip()
+            )
+            if normal_request_match:                goal = normal_request_match.group(1).strip()
             else:
                 goal = goal_match.group(1).strip() if goal_match else request_text.strip()
             strategy_goal = goal
@@ -1797,8 +1797,7 @@ class GeminiClient:
         elif goal_selected_action:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(
                 goal_selected_action, goal_selected_action            )
-            selected_declaration = next(
-                (
+            selected_declaration = next(                (
                     declaration
                     for declaration in self.tool_declarations
                     if isinstance(declaration, dict)
@@ -2697,8 +2696,7 @@ class GeminiClient:
                     tool_calls = [{
                         "id": "requested-verify-command-result",                        "type": "function",
                         "function": {
-                            "name": "verify_command_result",
-                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
+                            "name": "verify_command_result",                            "arguments": json.dumps({"result": match.group(1), "expected": match.group(2)}),
                         },
                     }]
                     native_tool_calls = False
@@ -3597,8 +3595,7 @@ class GeminiClient:
         # Resolve explicitly named generated capabilities from the live client        # registry before any provider round-trip. This keeps execution local and
         # prevents provider-side argument generation from reinterpreting a repair
         # verification request.
-        lower_prompt = prompt_text.lower()
-        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
+        lower_prompt = prompt_text.lower()        if re.search(r"\b(?:execute|run|use|verify|test)\b", lower_prompt) and re.search(r"\bcapabilit(?:y|ies)\b", lower_prompt):
             generated_names = []
             for name, handler in self.tool_handlers.items():
                 if getattr(handler, "__nova_generated_capability__", False):
