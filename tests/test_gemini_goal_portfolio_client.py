@@ -64,6 +64,30 @@ class GoalPortfolioClientTests(unittest.TestCase):
         self.assertIn("Checkpoint preserved: YES", result)
         self.assertEqual(client.last_tool_calls[-1]["name"], "manage_goal_interruption")
 
+    def test_client_routes_goal_conflict_resolution_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Resolve goal conflicts from "urgent | Handle urgent task | shared-device | MUST_CONTINUE; '
+            'battery | Check battery | shared-device | CAN_DEFER". '
+            "Do not execute, interrupt, or complete any goal."
+        )
+        self.assertIn("battery is safely deferrable", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "resolve_goal_conflicts")
+
+    def test_goal_conflict_tool_is_registered_once(self):
+        self.assertIn("resolve_goal_conflicts", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("resolve_goal_conflicts"), 1)
+
     def test_goal_interruption_tool_is_registered_once(self):
         self.assertIn("manage_goal_interruption", TOOL_HANDLERS)
         names = [
