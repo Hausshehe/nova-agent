@@ -1923,6 +1923,36 @@ class GeminiClient:
                     return result
                 except (ValueError, TypeError, json.JSONDecodeError) as exc:
                     return f"Constructed action request rejected: {exc}"
+        if requested_tool == "execute_constructed_action":
+            patterns = {
+                "executable": r"executable\s*[:=]\s*([^,\n]+)",
+                "arguments": r"arguments\s*[:=]\s*(\[[^\n]+\])",
+                "working_directory": r"working_directory\s*[:=]\s*([^,\n]+)",
+                "timeout_seconds": r"timeout_seconds\s*[:=]\s*(\d+)",
+                "mutation_scope": r"mutation_scope\s*[:=]\s*([^,\n]+)",
+                "expected_effects": r"expected_effects\s*[:=]\s*(\[[^\n]+\])",
+                "evidence_requirements": r"evidence_requirements\s*[:=]\s*(\[[^\n]+\])",
+            }
+            fields = {}
+            for key, pattern in patterns.items():
+                match = re.search(pattern, prompt_text, re.IGNORECASE)
+                if match: fields[key] = match.group(1).strip().rstrip(";,")
+            if len(fields) == len(patterns):
+                try:
+                    args = {
+                        "executable": fields["executable"].strip().strip(chr(96)).strip(),
+                        "arguments": json.loads(fields["arguments"]),
+                        "working_directory": fields["working_directory"].strip().strip(chr(96)).strip(),
+                        "timeout_seconds": int(fields["timeout_seconds"]),
+                        "mutation_scope": fields["mutation_scope"].strip().strip(chr(96)).strip(),
+                        "expected_effects": json.loads(fields["expected_effects"]),
+                        "evidence_requirements": json.loads(fields["evidence_requirements"]),
+                    }
+                    result = str(self.tool_handlers["execute_constructed_action"](**args))
+                    self.last_tool_calls.append({"name":"execute_constructed_action","args":args,"result":result})
+                    return result
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    return f"Constructed action request rejected: {exc}"
         normalized_prompt = str(prompt).upper()
         if (
             requested_tool == "resolve_android_intent"
