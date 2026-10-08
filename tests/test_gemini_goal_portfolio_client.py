@@ -5,6 +5,31 @@ from gemini_agent.tools import TOOL_DECLARATIONS, TOOL_HANDLERS
 
 
 class GoalPortfolioClientTests(unittest.TestCase):
+    def test_client_routes_entity_state_representation_locally(self):
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
+        client.last_tool_calls = []
+        client.last_grounding_sources = []
+        client.goal_state = None
+        result = client.ask(
+            'Represent entities and their states with "battery | device | 82 percent | 100\\n'
+            'nova | agent | active | 90". '
+            "Do not change any entity or device state."
+        )
+        self.assertIn("Entity and state representation (read-only):", result)
+        self.assertIn("Entity count: 2", result)
+        self.assertEqual(client.last_tool_calls[-1]["name"], "represent_entity_states")
+
+    def test_entity_state_tool_is_registered_once(self):
+        self.assertIn("represent_entity_states", TOOL_HANDLERS)
+        names = [
+            item["name"]
+            for item in TOOL_DECLARATIONS
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(names.count("represent_entity_states"), 1)
+
     def test_client_routes_goal_portfolio_locally(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
