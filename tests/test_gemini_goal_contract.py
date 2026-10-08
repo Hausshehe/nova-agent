@@ -9,6 +9,7 @@ class GoalContractTests(unittest.TestCase):
     def test_exact_autonomy_boundary_prompt_dispatches_deterministically(self):
         client = GeminiClient.__new__(GeminiClient)
         client.tool_handlers = TOOL_HANDLERS.copy()
+        client.tool_declarations = TOOL_DECLARATIONS.copy()
         client.last_tool_calls = []
         client.last_grounding_sources = []
         client.goal_state = None
