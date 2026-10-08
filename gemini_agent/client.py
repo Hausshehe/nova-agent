@@ -1852,7 +1852,10 @@ class GeminiClient:
         ):
             payload["tool_choice"] = "auto"
 
-        # Long-horizon investigation may require more than three distinct observations.\n        # Keep the budget bounded, but do not force unfamiliar tasks into a three-step shape.\n        max_tool_rounds = 8\n        for loop_index in range(max_tool_rounds):
+        # Long-horizon investigation may require more than three distinct observations.
+        # Keep the budget bounded, but do not force unfamiliar tasks into a three-step shape.
+        max_tool_rounds = 8
+        for loop_index in range(max_tool_rounds):
             request = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode(),
