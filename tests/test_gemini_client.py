@@ -142,6 +142,39 @@ class CloudflareClientTests(unittest.TestCase):
         schema = declarations[0]["parameters"]["properties"]["steps"]
         self.assertEqual(schema["type"], "ARRAY")
 
+    def test_explicit_saved_workflow_discovery_runs_before_provider_decision(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "content": "No saved workflow fits; direct calculation is appropriate."
+                }
+            }]
+        }
+        discovery = '{"workflows":[{"name":"example","description":"Unrelated file cleanup"}]}'
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ):
+            client = GeminiClient()
+            client.tool_handlers["list_saved_workflows"] = unittest.mock.Mock(
+                return_value=discovery
+            )
+            result = client.ask(
+                "List the saved workflows and inspect their descriptions. If none fits, calculate 19 * 23."
+            )
+
+        client.tool_handlers["list_saved_workflows"].assert_called_once_with()
+        self.assertEqual(client.last_tool_calls[0], {
+            "name": "list_saved_workflows",
+            "args": {},
+            "result": discovery,
+        })
+        self.assertIn("No saved workflow fits", result)
+
     def test_goal_relevant_tools_keep_saved_workflow_discovery_and_execution_available(self):
         with patch.dict(
             os.environ,
