@@ -4995,13 +4995,15 @@ class GeminiClient:
                 })
                 contents.insert(0, {
                     "role": "system",
-                    "content": (
-                        "Required saved-workflow discovery was executed locally. Its actual "
-                        "result is below. Inspect workflow descriptions against the user's "
-                        "goal before choosing one. If none fits, use direct tools and do not "
-                        "create a workflow. Do not claim discovery was unavailable.\n"
-                        "Saved-workflow discovery result:\n" + discovery_result[:16000]
-                    ),
+                    "parts": [{
+                        "text": (
+                            "Required saved-workflow discovery was executed locally. Its actual "
+                            "result is below. Inspect workflow descriptions against the user's "
+                            "goal before choosing one. If none fits, use direct tools and do not "
+                            "create a workflow. Do not claim discovery was unavailable.\n"
+                            "Saved-workflow discovery result:\n" + discovery_result[:16000]
+                        )
+                    }],
                 })
         # An explicitly requested named-workflow inspection is a required read-only
         # action. Record the real result rather than relying on the model to narrate it.
@@ -5026,13 +5028,15 @@ class GeminiClient:
                 })
                 contents.insert(0, {
                     "role": "system",
-                    "content": (
-                        "Required named-workflow inspection was executed locally. "
-                        "Use only this actual result when reporting the workflow definition. "
-                        "An inspection does not execute the workflow. Do not claim a successful "
-                        "inspection if the result begins with Tool error:.\n"
-                        "Saved-workflow inspection result:\n" + inspect_result[:16000]
-                    ),
+                    "parts": [{
+                        "text": (
+                            "Required named-workflow inspection was executed locally. "
+                            "Use only this actual result when reporting the workflow definition. "
+                            "An inspection does not execute the workflow. Do not claim a successful "
+                            "inspection if the result begins with Tool error:.\n"
+                            "Saved-workflow inspection result:\n" + inspect_result[:16000]
+                        )
+                    }],
                 })
         # Explicit autonomy-boundary assessments are deterministic, read-only policy
         # decisions. Dispatch them before any provider round-trip so the model cannot
