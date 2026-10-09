@@ -747,6 +747,38 @@ class CloudflareClientTests(unittest.TestCase):
             ["Build an unfamiliar artifact using available mechanisms."],
         )
 
+    def test_calculator_app_construction_does_not_route_to_arithmetic_tool(self):
+        prompt = (
+            "Create a minimal Android calculator app from scratch in a new workspace. "
+            "Inspect the available environment and discover the necessary tools and build procedure. "
+            "Create the source files and configuration, build an installable APK, and verify addition, "
+            "subtraction, multiplication, and division with actual tests. Maintain ownership of this "
+            "goal through failures: diagnose the evidence, recover or replan, and continue until the "
+            "success criteria are verified or a genuine environmental blocker is demonstrated. "
+            "Do not claim success without evidence. Report the workspace, source files, build command, "
+            "APK path, test results, and any unresolved blockers."
+        )
+        contents = [{"role": "user", "parts": [{"text": prompt}]}]
+        client = GeminiClient.__new__(GeminiClient)
+        client.tool_declarations = GeminiClient.__init__ if False else []
+        # Use the actual registered declaration set without initializing provider credentials.
+        from gemini_agent.tools import TOOL_DECLARATIONS
+        client.tool_declarations = TOOL_DECLARATIONS
+
+        self.assertIsNone(
+            client._requested_local_tool(contents),
+            "The word 'calculator' names the artifact, not a request for arithmetic.",
+        )
+        names = {
+            item["name"] for item in client._relevant_tool_declarations(contents)
+        }
+        self.assertNotIn(
+            "calculator", names,
+            "Construction acceptance criteria mentioning arithmetic must not expose the arithmetic tool.",
+        )
+        self.assertIn("execute_constructed_action", names)
+        self.assertIn("write_text_file", names)
+
     def test_generic_autonomous_build_benchmark_enters_goal_orchestration(self):
         prompt = (
             "Create a minimal Android calculator app from scratch in a new workspace. "
