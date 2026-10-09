@@ -3839,12 +3839,11 @@ class GeminiClient:
                         if completion.status == "VERIFIED":
                             self.goal_state.status = "VERIFIED"
                         elif completion.status == "FAILED" and not recovery_verified:
-                            # A failed step is not automatically a failed goal. Keep the
-                            # goal active when the autonomous loop can replan around a
-                            # changed/unavailable environment, while preserving the failed
-                            # step in the ledger.
+                            # A step that does not complete the overall goal is not proof
+                            # that the goal itself is impossible. Keep ownership active;
+                            # if the tool actually failed, request a bounded alternative.
                             goal_replan_pending = bool(raw_tool_failed)
-                            self.goal_state.status = "ACTIVE" if goal_replan_pending else "FAILED"
+                            self.goal_state.status = "ACTIVE"
                         step_status = (
                             "FAILED" if raw_tool_failed
                             else "VERIFIED" if completion.status == "VERIFIED"
