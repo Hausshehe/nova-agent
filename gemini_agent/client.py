@@ -4744,11 +4744,19 @@ class GeminiClient:
         # This is only activated when the user explicitly requires construction,
         # execution, and verification, so ordinary descriptive requests remain
         # conversational and do not gain autonomous mutation semantics.
+        explicit_autonomy_commitment = (
+            re.search(r"\bdo not ask me to (?:write|modify)\b", prompt_text, re.IGNORECASE)
+            or re.search(
+                r"\b(?:maintain|keep|retain)\s+ownership\b|\bcontinue\s+until\b",
+                prompt_text,
+                re.IGNORECASE,
+            )
+        )
         constructive_autonomy = (
             re.search(r"\b(?:construct|build|create|generate|make|implement)\b", prompt_text, re.IGNORECASE)
-            and re.search(r"\b(?:execute|run)\b", prompt_text, re.IGNORECASE)
+            and re.search(r"\b(?:execute|run|build|install|produce|deliver)\b", prompt_text, re.IGNORECASE)
             and re.search(r"\bverify\w*\b", prompt_text, re.IGNORECASE)
-            and re.search(r"\bdo not ask me to (?:write|modify)\b", prompt_text, re.IGNORECASE)
+            and explicit_autonomy_commitment
         )
         if constructive_autonomy:
             sentences = [
