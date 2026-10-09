@@ -119,7 +119,10 @@ class GeminiClient:
         return (
             status == 400
             and not already_retried
-            and isinstance(payload.get("tool_choice"), dict)
+            and (
+                isinstance(payload.get("tool_choice"), dict)
+                or payload.get("tool_choice") == "required"
+            )
             and known_argument_parse_failures
         )
 
