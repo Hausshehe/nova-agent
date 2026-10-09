@@ -28,7 +28,7 @@ class DependencyAcquisitionTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["timeout"], 90)
 
     def test_rejects_arbitrary_package_names(self):
-        with self.assertRaisesRegex(ValueError, "not in the dependency-install allowlist"):
+        with self.assertRaisesRegex(ValueError, "simple lowercase repository names"):
             acquire_termux_packages(["curl;sh"], mode="install")
 
     def test_rejects_unapproved_modes_and_unbounded_timeout(self):
