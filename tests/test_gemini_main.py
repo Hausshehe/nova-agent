@@ -99,6 +99,38 @@ class MainContextTests(unittest.TestCase):
         self.assertIn('"steps_completed": 2', rendered)
         self.assertEqual(rendered.count('"result": "42"'), 2)
 
+    def test_prints_discovery_and_calculator_evidence_when_no_workflow_runs(self):
+        class FakeClient:
+            last_tool_calls = [
+                {
+                    "name": "list_saved_workflows",
+                    "args": {},
+                    "result": '[{"name":"persistence-check","description":"Verify reusable workflow persistence"}]',
+                },
+                {
+                    "name": "calculator",
+                    "args": {"expression": "19 * 23"},
+                    "result": "437",
+                },
+                {
+                    "name": "calculator",
+                    "args": {"expression": "437"},
+                    "result": "437",
+                },
+            ]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            agent_main._print_workflow_execution_evidence(FakeClient())
+
+        rendered = output.getvalue()
+        self.assertIn("Execution evidence (local direct-tool results)", rendered)
+        self.assertIn("list_saved_workflows", rendered)
+        self.assertIn("persistence-check", rendered)
+        self.assertIn('"expression": "19 * 23"', rendered)
+        self.assertIn('"expression": "437"', rendered)
+        self.assertEqual(rendered.count('"result": "437"'), 2)
+
     def test_prints_actual_recorded_saved_workflow_result(self):
         workflow_result = {
             "status": "completed",
