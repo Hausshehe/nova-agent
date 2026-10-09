@@ -46,7 +46,7 @@ class MainContextTests(unittest.TestCase):
                 pass
 
             def ask(self, prompt, history, system_instruction):
-                request_calls.append((prompt, history))
+                request_calls.append((prompt, history, system_instruction))
                 return next(answers)
 
         inputs = iter(["first question", "second question", "/exit"])
@@ -54,6 +54,9 @@ class MainContextTests(unittest.TestCase):
             agent_main.main()
 
         self.assertEqual(request_calls[1][0], "second question")
+        self.assertIn("first call list_saved_workflows", request_calls[0][2])
+        self.assertIn("execute it by its exact name with run_saved_workflow", request_calls[0][2])
+        self.assertIn("Never claim a workflow ran or a verification occurred", request_calls[0][2])
         self.assertEqual(
             request_calls[1][1],
             [
