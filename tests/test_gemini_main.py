@@ -239,6 +239,15 @@ class MainContextTests(unittest.TestCase):
             def context(self):
                 return []
 
+            def remember_fact(self, key, value):
+                return f"Remembered {key} = {value}"
+
+            def forget_fact(self, key):
+                return f"Forgot {key}."
+
+            def list_memory(self):
+                return "(no remembered facts)"
+
         class FakeClient:
             last_tool_calls = [{
                 "name": "execute_constructed_action",
