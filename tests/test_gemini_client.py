@@ -142,6 +142,29 @@ class CloudflareClientTests(unittest.TestCase):
         schema = declarations[0]["parameters"]["properties"]["steps"]
         self.assertEqual(schema["type"], "ARRAY")
 
+    def test_natural_language_run_workflow_request_excludes_atomic_tools(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            contents = [{
+                "role": "user",
+                "parts": [{
+                    "text": (
+                        'Run a workflow with two steps: step 0 calls calculator with '
+                        'expression "6 * 7"; step 1 calls calculator with expression '
+                        '{"$step_result": 0}. Report each actual step result. Do not save it.'
+                    )
+                }],
+            }]
+            requested_tool = client._requested_local_tool(contents)
+            declarations = client._relevant_tool_declarations(contents)
+
+        self.assertEqual(requested_tool, "run_workflow")
+        self.assertEqual([item["name"] for item in declarations], ["run_workflow"])
+
     def test_saved_workflow_discovery_evidence_overrides_model_denial(self):
         response = {
             "choices": [{
