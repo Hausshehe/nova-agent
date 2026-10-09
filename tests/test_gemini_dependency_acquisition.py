@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from gemini_agent.dependency_acquisition import acquire_termux_packages
+from gemini_agent.dependency_acquisition import acquire_termux_packages, discover_dependency_options
 
 
 class DependencyAcquisitionTests(unittest.TestCase):
@@ -37,6 +37,44 @@ class DependencyAcquisitionTests(unittest.TestCase):
         self.assertIn("independently verify", result)
         self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "install", "-y", "openjdk-21", "gradle"])
         self.assertEqual(run.call_args.kwargs["timeout"], 90)
+
+    def test_discovery_reports_executables_and_package_metadata_without_installing(self):
+        completed = type("Completed", (), {
+            "returncode": 0,
+            "stdout": "Package: ecj\\nVersion: 1.0",
+            "stderr": "",
+        })()
+        def which(name):
+            return { "pkg": "/usr/bin/pkg", "ecj": "/usr/bin/ecj" }.get(name)
+        with patch("gemini_agent.dependency_acquisition.shutil.which", side_effect=which), patch(
+            "gemini_agent.dependency_acquisition.subprocess.run", return_value=completed
+        ) as run:
+            result = discover_dependency_options([{
+                "capability": "compile source",
+                "executables": ["ecj", "javac"],
+                "packages": ["ecj", "unknown-tool"],
+            }])
+        self.assertIn("ecj=/usr/bin/ecj", result)
+        self.assertIn("javac", result)
+        self.assertIn("unknown-tool=availability unconfirmed", result)
+        self.assertIn("No packages were installed", result)
+        self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "show", "ecj", "unknown-tool"])
+
+    def test_discovery_rejects_unsafe_package_candidates(self):
+        with self.assertRaisesRegex(ValueError, "simple lowercase repository names"):
+            discover_dependency_options([{
+                "capability": "compile",
+                "executables": [],
+                "packages": ["ecj;sh"],
+            }])
+
+    def test_discovery_rejects_empty_requirement_groups(self):
+        with self.assertRaisesRegex(ValueError, "needs executable or package candidates"):
+            discover_dependency_options([{
+                "capability": "compile",
+                "executables": [],
+                "packages": [],
+            }])
 
     def test_rejects_arbitrary_package_names(self):
         with self.assertRaisesRegex(ValueError, "simple lowercase repository names"):
