@@ -4407,6 +4407,20 @@ class GeminiClient:
                                 re.IGNORECASE,
                             )
                         )
+                        # The original tool result still contains its Tool error even
+                        # when recovery has verified the failed step's postcondition.
+                        # Do not let that stale failure marker drive next-step selection:
+                        # classify progress from the bounded recovery evidence instead.
+                        # This keeps a recovered prerequisite from outranking a distinct
+                        # unmet success-condition clause in the continuation planner.
+                        if recovery_verified:
+                            observation = observe_goal_progress(
+                                self.goal_state.goal,
+                                self.goal_state.success_condition,
+                                recovery_result,
+                            )
+                            self.goal_state.progress_status = observation.status
+                            self.goal_state.progress_reason = observation.reason
                         # Completion evidence must distinguish a recovered failure from an
                         # unresolved failure. A failed step remains FAILED in the ledger, but its
                         # raw Tool error must not poison later completion verification after verified
