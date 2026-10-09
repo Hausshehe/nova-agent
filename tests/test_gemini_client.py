@@ -104,7 +104,7 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn('Nova has already established the runtime goal contract', routed_prompt)
         self.assertIn('Goal: "Create a minimal Android app from scratch."', routed_prompt)
         self.assertIn('Success condition: "Build the APK and verify the resulting artifact with evidence."', routed_prompt)
-        self.assertIn("autonomously pursue the goal", routed_prompt)
+        self.assertIn("Autonomously pursue the goal", routed_prompt)
         self.assertIsNotNone(client.goal_state)
         self.assertEqual(client.goal_state.status, "ACTIVE")
         self.assertEqual(client.goal_state.goal, "Create a minimal Android app from scratch.")
