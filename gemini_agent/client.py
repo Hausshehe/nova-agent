@@ -41,6 +41,12 @@ class GeminiClient:
                 raise RuntimeError(
                     "NOVA_PROVIDER=openrouter requires OPENROUTER_API_KEY."
                 )
+        elif self.provider == "groq":
+            self.provider_api_token = os.environ.get("GROQ_API_KEY")
+            self.provider_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+            self.provider_url = "https://api.groq.com/openai/v1/chat/completions"
+            if not self.provider_api_token:
+                raise RuntimeError("NOVA_PROVIDER=groq requires GROQ_API_KEY.")
         elif self.provider == "cloudflare":
             if not self.cloudflare_api_token or not self.cloudflare_account_id:
                 raise RuntimeError(
@@ -54,7 +60,7 @@ class GeminiClient:
             )
         else:
             raise RuntimeError(
-                "Unsupported NOVA_PROVIDER. Choose 'cloudflare' or 'openrouter'."
+                "Unsupported NOVA_PROVIDER. Choose 'cloudflare', 'openrouter', or 'groq'."
             )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         declarations = [*TOOL_DECLARATIONS, CONSTRUCTED_ACTION_DECLARATION, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, RUN_COMMAND_DECLARATION, LIST_PROCESSES_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, GET_AIRPLANE_MODE_DECLARATION]
