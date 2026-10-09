@@ -69,6 +69,23 @@ class GoalState:
         }
 
 
+def step_goal_disposition(
+    completion_status: str,
+    raw_tool_failed: bool,
+    recovery_verified: bool,
+) -> tuple[str, bool]:
+    """Classify one step without mistaking incomplete work for an impossible goal."""
+    if completion_status not in {"VERIFIED", "FAILED", "INCONCLUSIVE"}:
+        raise ValueError("Completion status is invalid.")
+    if completion_status == "VERIFIED":
+        return "VERIFIED", False
+    if completion_status == "FAILED" and not recovery_verified:
+        # A failed tool call warrants replanning; a successful but incomplete step
+        # simply leaves the goal active for another bounded action.
+        return "ACTIVE", bool(raw_tool_failed)
+    return "ACTIVE", False
+
+
 def start_goal_state(goal: str, success_condition: str) -> GoalState:
     """Create active runtime goal state; no execution or completion claim."""
     return GoalState(goal.strip(), success_condition.strip())
