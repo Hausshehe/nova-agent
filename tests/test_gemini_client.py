@@ -39,6 +39,91 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_malformed_text_tool_arguments_retry_with_registered_schema(self):
+        malformed = {
+            "choices": [{
+                "message": {
+                    "content": (
+                        "<tool_call>find_executable"
+                        "<arg_key>pattern</arg_key><arg_value>aapt</arg_value>"
+                        "</tool_call>"
+                    )
+                }
+            }]
+        }
+        valid_call = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "find-aapt",
+                        "type": "function",
+                        "function": {
+                            "name": "find_executable",
+                            "arguments": json.dumps({"name": "aapt"}),
+                        },
+                    }]
+                }
+            }]
+        }
+        final = {"choices": [{"message": {"content": "Executable inspected."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                FakeResponse(malformed),
+                FakeResponse(valid_call),
+                FakeResponse(final),
+            ],
+        ) as open_url:
+            client = GeminiClient()
+            client.tool_handlers["find_executable"] = lambda name: f"FOUND:{name}"
+            result = client.ask("Inspect the available executable named aapt.")
+
+        self.assertEqual(result, "Executable inspected.")
+        self.assertEqual(
+            [trace["name"] for trace in client.last_tool_calls],
+            ["find_executable"],
+        )
+        self.assertEqual(client.last_tool_calls[0]["args"], {"name": "aapt"})
+        self.assertIn("FOUND:aapt", str(client.last_tool_calls[0]["result"]))
+        retry_payload = json.loads(open_url.call_args_list[1].args[0].data)
+        retry_tool = retry_payload["tools"][0]["function"]
+        self.assertEqual(retry_tool["name"], "find_executable")
+        self.assertIn("name", retry_tool["parameters"]["properties"])
+        self.assertNotIn("pattern", retry_tool["parameters"]["properties"])
+
+    def test_repeated_malformed_text_tool_call_never_leaks_as_success(self):
+        malformed = {
+            "choices": [{
+                "message": {
+                    "content": (
+                        "<tool_call>find_executable"
+                        "<arg_key>pattern</arg_key><arg_value>aapt</arg_value>"
+                        "</tool_call>"
+                    )
+                }
+            }]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(malformed), FakeResponse(malformed)],
+        ):
+            client = GeminiClient()
+            client.tool_handlers["find_executable"] = lambda name: f"FOUND:{name}"
+            result = client.ask("Inspect the available executable named aapt.")
+
+        self.assertIn("No action executed", result)
+        self.assertIn("schema-correction retry", result)
+        self.assertNotIn("<tool_call>", result)
+        self.assertEqual(client.last_tool_calls, [])
+
     def test_requires_cloudflare_credentials(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
