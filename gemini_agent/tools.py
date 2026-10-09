@@ -6638,6 +6638,25 @@ def list_saved_workflows() -> str:
             entries.append({"name": name, "description": str(entry.get("description", "")), "steps": len(entry["steps"])})
     return json.dumps({"count": len(entries), "workflows": entries}, ensure_ascii=False, separators=(",", ":"))
 
+def inspect_saved_workflow(name: str) -> str:
+    """Inspect a saved workflow's validated definition without executing it."""
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
+        raise ValueError("Invalid workflow name.")
+    workflows = _read_workflow_store()["workflows"]
+    entry = workflows.get(name)
+    if not isinstance(entry, dict) or "steps" not in entry:
+        raise ValueError(f"Saved workflow '{name}' was not found.")
+    parsed = _parse_workflow_definition(entry["steps"])
+    return json.dumps({
+        "name": name,
+        "description": str(entry.get("description", "")),
+        "steps": [
+            {"index": index, "tool": step["tool"], "arguments": step["arguments"]}
+            for index, step in enumerate(parsed)
+        ],
+        "note": "Definition inspected only. No workflow was executed.",
+    }, ensure_ascii=False, separators=(",", ":"))
+
 
 def run_saved_workflow(name: str) -> str:
     """Load, revalidate, and execute a saved workflow by name."""
@@ -6695,6 +6714,11 @@ LIST_SAVED_WORKFLOWS_DECLARATION = {
     "description": "List names and descriptions of saved reusable workflow definitions.",
     "parameters": {"type": "OBJECT", "properties": {}},
 }
+INSPECT_SAVED_WORKFLOW_DECLARATION = {
+    "name": "inspect_saved_workflow",
+    "description": "Inspect a saved workflow's actual validated steps and arguments without executing it. Use this to judge whether its real behavior matches its description and the current goal.",
+    "parameters": {"type": "OBJECT", "properties": {"name": {"type": "STRING"}}, "required": ["name"]},
+}
 RUN_SAVED_WORKFLOW_DECLARATION = {
     "name": "run_saved_workflow",
     "description": "Load, revalidate, and execute a saved read-only workflow by name, returning its actual step trace.",
@@ -6702,9 +6726,11 @@ RUN_SAVED_WORKFLOW_DECLARATION = {
 }
 TOOL_HANDLERS["save_workflow"] = save_workflow
 TOOL_HANDLERS["list_saved_workflows"] = list_saved_workflows
+TOOL_HANDLERS["inspect_saved_workflow"] = inspect_saved_workflow
 TOOL_HANDLERS["run_saved_workflow"] = run_saved_workflow
 TOOL_DECLARATIONS.extend([
     SAVE_WORKFLOW_DECLARATION,
     LIST_SAVED_WORKFLOWS_DECLARATION,
+    INSPECT_SAVED_WORKFLOW_DECLARATION,
     RUN_SAVED_WORKFLOW_DECLARATION,
 ])
