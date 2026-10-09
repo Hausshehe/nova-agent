@@ -131,6 +131,8 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_tool_loop_exhaustion_reports_bounded_names_without_tool_output(self):
         trace = [
+            {"name": "select_goal_next_step", "args": {}, "result": "Next step: write_text_file\\nReason: create source"},
+            {"name": "write_text_file", "args": {"path": "workspace/src/Main.java", "content": "private file content"}, "result": "File written"},
             {"name": "discover_dependency_options", "result": "private or lengthy result"},
             {"name": "acquire_termux_packages", "result": "another lengthy result"},
             {"name": "discover_dependency_options", "result": "sensitive result"},
@@ -145,6 +147,9 @@ class CloudflareClientTests(unittest.TestCase):
         )
         self.assertIn("discover_dependency_options x2", diagnostic)
         self.assertIn("Goal state: ACTIVE", diagnostic)
+        self.assertIn("selector chose write_text_file", diagnostic)
+        self.assertIn("write_text_file path=workspace/src/Main.java", diagnostic)
+        self.assertNotIn("private file content", diagnostic)
         self.assertNotIn("private or lengthy result", diagnostic)
         self.assertNotIn("sensitive result", diagnostic)
 
