@@ -1030,15 +1030,6 @@ class GeminiClient:
             ):
                 selected_names.add(name)
 
-        # Keep reusable workflow discovery and execution available alongside the
-        # goal-relevant primitives. The model can inspect saved definitions first,
-        # reuse a fitting workflow, or fall back to the relevant primitives.
-        if selected_groups:
-            selected_names.update({
-                "list_saved_workflows",
-                "run_saved_workflow",
-            })
-
         selected = [d for d in self.tool_declarations if d["name"] in selected_names]
         return selected or cls.tool_declarations
 
