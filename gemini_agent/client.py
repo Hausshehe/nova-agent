@@ -115,6 +115,10 @@ class GeminiClient:
                 and "input_value=" in details
                 and "</tool_call>" in details
             )
+            or (
+                "Invalid JSON: invalid number" in details
+                and "input_value='--action " in details
+            )
         )
         return (
             status == 400
