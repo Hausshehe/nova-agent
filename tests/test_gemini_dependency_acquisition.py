@@ -17,6 +17,15 @@ class DependencyAcquisitionTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "show", "gradle"])
         self.assertFalse(run.call_args.kwargs["shell"])
 
+    def test_inspect_allows_safe_unknown_names_for_repository_discovery(self):
+        completed = type("Completed", (), {"returncode": 0, "stdout": "Package: android-sdk", "stderr": ""})()
+        with patch("gemini_agent.dependency_acquisition.shutil.which", return_value="/usr/bin/pkg"), patch(
+            "gemini_agent.dependency_acquisition.subprocess.run", return_value=completed
+        ) as run:
+            result = acquire_termux_packages(["android-sdk", "android-sdk-platform-35"], mode="inspect")
+        self.assertIn("Package: android-sdk", result)
+        self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "show", "android-sdk", "android-sdk-platform-35"])
+
     def test_install_is_allowlisted_and_uses_configured_repository(self):
         completed = type("Completed", (), {"returncode": 0, "stdout": "installed", "stderr": ""})()
         with patch("gemini_agent.dependency_acquisition.shutil.which", return_value="/usr/bin/pkg"), patch(
@@ -29,7 +38,11 @@ class DependencyAcquisitionTests(unittest.TestCase):
 
     def test_rejects_arbitrary_package_names(self):
         with self.assertRaisesRegex(ValueError, "simple lowercase repository names"):
-            acquire_termux_packages(["curl;sh"], mode="install")
+            acquire_termux_packages(["curl;sh"], mode="inspect")
+
+    def test_rejects_non_allowlisted_install_even_when_name_is_valid(self):
+        with self.assertRaisesRegex(ValueError, "not in the dependency-install allowlist"):
+            acquire_termux_packages(["android-sdk"], mode="install")
 
     def test_rejects_unapproved_modes_and_unbounded_timeout(self):
         with self.assertRaisesRegex(ValueError, "mode must"):
