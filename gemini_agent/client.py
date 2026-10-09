@@ -2670,6 +2670,23 @@ class GeminiClient:
                 if declaration.get("name") != "list_saved_workflows"
             ]
 
+        if (
+            re.search(
+                r"\binspect\s+[A-Za-z][A-Za-z0-9_-]{0,63}\s+by\s+(?:its\s+)?exact\s+name\b",
+                request_text,
+                re.IGNORECASE,
+            )
+            and any(
+                isinstance(call, dict) and call.get("name") == "inspect_saved_workflow"
+                for call in self.last_tool_calls
+            )
+            and len(declarations) > 1
+        ):
+            declarations = [
+                declaration for declaration in declarations
+                if declaration.get("name") != "inspect_saved_workflow"
+            ]
+
         tools = [{
             "type": "function",
             "function": {
@@ -4980,6 +4997,37 @@ class GeminiClient:
                         "goal before choosing one. If none fits, use direct tools and do not "
                         "create a workflow. Do not claim discovery was unavailable.\n"
                         "Saved-workflow discovery result:\n" + discovery_result[:16000]
+                    ),
+                })
+        # An explicitly requested named-workflow inspection is a required read-only
+        # action. Record the real result rather than relying on the model to narrate it.
+        inspection_match = re.search(
+            r"\binspect\s+([A-Za-z][A-Za-z0-9_-]{0,63})\s+by\s+(?:its\s+)?exact\s+name\b",
+            prompt_text,
+            re.IGNORECASE,
+        )
+        if inspection_match:
+            workflow_name = inspection_match.group(1)
+            inspect = self.tool_handlers.get("inspect_saved_workflow")
+            if callable(inspect):
+                inspect_args = {"name": workflow_name}
+                try:
+                    inspect_result = str(inspect(**inspect_args))
+                except Exception as exc:
+                    inspect_result = f"Tool error: {type(exc).__name__}: {exc}"
+                self.last_tool_calls.append({
+                    "name": "inspect_saved_workflow",
+                    "args": inspect_args,
+                    "result": inspect_result,
+                })
+                contents.insert(0, {
+                    "role": "system",
+                    "content": (
+                        "Required named-workflow inspection was executed locally. "
+                        "Use only this actual result when reporting the workflow definition. "
+                        "An inspection does not execute the workflow. Do not claim a successful "
+                        "inspection if the result begins with Tool error:.\n"
+                        "Saved-workflow inspection result:\n" + inspect_result[:16000]
                     ),
                 })
         # Explicit autonomy-boundary assessments are deterministic, read-only policy
