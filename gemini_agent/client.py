@@ -4596,7 +4596,15 @@ class GeminiClient:
                             )
                         ]
                         if continuation_candidates:
-                            continuation_evidence = "\n".join(self.goal_state.evidence)
+                            continuation_observations = list(self.goal_state.evidence)
+                            # If this step failed but its recovery postcondition was
+                            # verified, plan from that verified recovery observation,
+                            # not the stale original Tool error stored in the evidence
+                            # ledger. Otherwise the selector can choose another recovery
+                            # action instead of the still-unmet goal requirement.
+                            if recovery_verified and continuation_observations:
+                                continuation_observations[-1] = recovery_result
+                            continuation_evidence = "\n".join(continuation_observations)
                             if len(continuation_evidence) > 480:
                                 continuation_evidence = (
                                     continuation_evidence[:238]
