@@ -1241,6 +1241,24 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("Outcome: FAILED", result)
         self.assertIn("Action: stop safely.", result)
 
+    def test_compound_directory_creation_and_existence_request_stays_in_tool_loop(self):
+        request = (
+            'Using only existing registered filesystem tools, explicitly create a new directory '
+            'named "foundation-directory-test". Call make_directory first, then call path_exists '
+            'on that exact directory. Report each result and do not use shell commands.'
+        )
+        selected = GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ])
+        self.assertIsNone(selected)
+
+    def test_standalone_path_exists_request_still_routes_directly(self):
+        request = "Use the path_exists tool to check whether foundation-directory-test exists."
+        selected = GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ])
+        self.assertEqual(selected, "path_exists")
+
     def test_compound_run_command_request_routes_execution_before_recovery_mentions(self):
         request = (
             'Use run_command to execute the safe command "python -c \\"import sys; sys.exit(1)\\"". '
