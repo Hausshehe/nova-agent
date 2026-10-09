@@ -46,7 +46,7 @@ class CloudflareClientTests(unittest.TestCase):
             clear=True,
         ):
             client = GeminiClient()
-            declarations = client._relevant_tool_declarations([{
+            contents = [{
                 "role": "user",
                 "parts": [{
                     "text": (
@@ -54,8 +54,11 @@ class CloudflareClientTests(unittest.TestCase):
                         'containing calculator arguments for 6 * 7.'
                     )
                 }],
-            }])
+            }]
+            requested_tool = client._requested_local_tool(contents)
+            declarations = client._relevant_tool_declarations(contents)
 
+        self.assertEqual(requested_tool, "run_workflow")
         self.assertEqual([item["name"] for item in declarations], ["run_workflow"])
         schema = declarations[0]["parameters"]["properties"]["steps"]
         self.assertEqual(schema["type"], "ARRAY")
