@@ -2,7 +2,7 @@
 
 Read-only inspection accepts syntactically safe package names so Nova can discover
 repository contents. Installation is restricted to an explicit development-tool
-allowlist. No arbitrary URLs, shell commands, or user-controlled flags are accepted.
+allowlist. No arbitrary URLs, shell commands, or user-controlled package-manager flags.
 """
 import os
 import re
@@ -17,6 +17,7 @@ _ALLOWED_PACKAGES = {
     "libandroid-support", "binutils", "ndk-sysroot",
 }
 _PACKAGE_RE = re.compile(r"^[a-z0-9][a-z0-9+.-]{0,63}$")
+_METADATA_PACKAGE_RE = re.compile(r"^Package:\s*(\S+)\s*$", re.MULTILINE)
 _MAX_PACKAGES = 12
 _MAX_TIMEOUT = 120
 _MAX_OUTPUT = 12000
@@ -79,6 +80,15 @@ def acquire_termux_packages(packages: list[str], mode: str = "inspect", timeout_
         f"Packages: {normalized}",
         f"Exit code: {result.returncode}",
     ]
+    if mode == "inspect":
+        found = set(_METADATA_PACKAGE_RE.findall(stdout))
+        lines.append(f"Repository metadata found: {sorted(found)}")
+        missing = [package for package in normalized if package not in found]
+        if missing:
+            lines.append(
+                "No metadata returned for: " + ", ".join(missing)
+                + ". Availability is unconfirmed; this package manager may omit unknown package names."
+            )
     if stdout:
         lines.append("stdout:\n" + stdout)
     if stderr:
@@ -108,3 +118,4 @@ ACQUIRE_TERMUX_PACKAGES_DECLARATION = {
         "required": ["packages", "mode"],
     },
 }
+"
