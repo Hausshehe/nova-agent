@@ -597,6 +597,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("private or lengthy result", diagnostic)
         self.assertNotIn("sensitive result", diagnostic)
 
+    def test_tool_loop_exhaustion_reports_write_error_without_file_contents(self):
+        trace = [
+            {
+                "name": "write_text_file",
+                "args": {"path": "calc-app/settings.gradle", "content": "private source"},
+                "result": "Tool error: Permission denied while creating parent directory",
+            }
+        ]
+        diagnostic = GeminiClient._tool_loop_exhaustion_diagnostic(
+            16, trace, goal_state=type("Goal", (), {"status": "ACTIVE"})()
+        )
+        self.assertIn("write_text_file path=calc-app/settings.gradle outcome=error", diagnostic)
+        self.assertIn("Permission denied while creating parent directory", diagnostic)
+        self.assertNotIn("private source", diagnostic)
+
     def test_groq_provider_requires_its_own_api_key(self):
         with patch.dict(os.environ, {"NOVA_PROVIDER": "groq"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "GROQ_API_KEY"):
