@@ -56,6 +56,53 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("437", audited)
         self.assertNotIn("verification passed", audited)
 
+    def test_explicit_calculation_sequence_executes_missing_calculator_step(self):
+        prompt = (
+            "Calculate 19 * 23, then independently verify the result by calculating 437."
+        )
+        first = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "first-calculation",
+                        "type": "function",
+                        "function": {
+                            "name": "calculator",
+                            "arguments": json.dumps({"expression": "19 * 23"}),
+                        },
+                    }]
+                }
+            }]
+        }
+        final = {
+            "choices": [{
+                "message": {"content": "Both calculations returned 437."}
+            }]
+        }
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(first), FakeResponse(final)],
+        ):
+            client = GeminiClient()
+            result = client.ask(prompt)
+
+        calculator_calls = [
+            call for call in client.last_tool_calls if call["name"] == "calculator"
+        ]
+        self.assertEqual(
+            [call["args"]["expression"] for call in calculator_calls],
+            ["19 * 23", "437"],
+        )
+        self.assertEqual(
+            [call["result"] for call in calculator_calls],
+            ["437", "437"],
+        )
+        self.assertEqual(result, "Both calculations returned 437.")
+
     def test_explicit_calculation_sequence_accepts_matching_tool_evidence(self):
         prompt = (
             "Calculate 19 * 23, then independently verify the result by calculating 437."
