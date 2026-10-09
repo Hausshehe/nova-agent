@@ -5109,6 +5109,53 @@ class GeminiClient:
                     + "without claiming completion."
                 )
         answer = self._generate_cloudflare(contents, system_instruction)
-        return self._audit_explicit_calculation_sequence(
+        audited = self._audit_explicit_calculation_sequence(
             prompt_text, answer, self.last_tool_calls
         )
+        if audited.startswith(
+            "Execution incomplete: required calculator calls are missing;"
+        ):
+            match = re.search(
+                r"calculate\\s+([0-9\\s()+\\-*/%.]+?)\\s*,?\\s*then\\s+independently\\s+verify\\s+the\\s+result\\s+by\\s+calculating\\s+([0-9\\s()+\\-*/%.]+?)(?:[.!?]|$)",
+                prompt_text,
+                re.IGNORECASE,
+            )
+            if match:
+                required = [
+                    re.sub(r"\\s+", "", match.group(index)).rstrip(".")
+                    for index in (1, 2)
+                ]
+                recorded = {
+                    re.sub(
+                        r"\\s+", "",
+                        str(call.get("args", {}).get("expression", "")),
+                    ).rstrip(".")
+                    for call in self.last_tool_calls
+                    if isinstance(call, dict)
+                    and call.get("name") == "calculator"
+                    and isinstance(call.get("args"), dict)
+                }
+                calculator = self.tool_handlers.get("calculator")
+                if callable(calculator):
+                    for expression in required:
+                        if expression in recorded:
+                            continue
+                        try:
+                            result = str(calculator(expression=expression))
+                        except (RuntimeError, TypeError, ValueError, ArithmeticError) as exc:
+                            self.last_tool_calls.append({
+                                "name": "calculator",
+                                "args": {"expression": expression},
+                                "result": f"Tool error: {exc}",
+                            })
+                        else:
+                            self.last_tool_calls.append({
+                                "name": "calculator",
+                                "args": {"expression": expression},
+                                "result": result,
+                            })
+                            recorded.add(expression)
+                audited = self._audit_explicit_calculation_sequence(
+                    prompt_text, answer, self.last_tool_calls
+                )
+        return audited
