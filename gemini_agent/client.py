@@ -130,6 +130,27 @@ class GeminiClient:
         }
 
     @staticmethod
+    def _same_failed_write(args: dict, calls: list[dict]) -> bool:
+        path = str(args.get("path", ""))
+        content = args.get("content")
+        if not path or not isinstance(content, str):
+            return False
+        for call in reversed(calls):
+            if not isinstance(call, dict) or call.get("name") != "write_text_file":
+                continue
+            old_args = call.get("args")
+            if not isinstance(old_args, dict):
+                continue
+            old_result = str(call.get("result", ""))
+            if (
+                str(old_args.get("path", "")) == path
+                and old_args.get("content") == content
+                and ("Tool error:" in old_result or "Permission denied" in old_result)
+            ):
+                return True
+        return False
+
+    @staticmethod
     def _tool_loop_exhaustion_diagnostic(
         max_rounds: int, tool_calls: list[dict], goal_state=None
     ) -> str:
@@ -4199,8 +4220,10 @@ class GeminiClient:
                                     args["result"] = self.tool_handlers["run_command"](
                                         command=command_match.group(1).strip()
                                     )
-                        # Repeated failed writes are diagnosed before retrying; see the bounded tool trace.
-                        tool_result = handler(**args)
+                        if local_name == "write_text_file" and self._same_failed_write(args, self.last_tool_calls):
+                            tool_result = "Tool error: identical file write already failed; retry suppressed."
+                        else:
+                            tool_result = handler(**args)
                         raw_tool_result = str(tool_result)
                         raw_tool_failed = bool(
                             re.search(r"\bExit code:\s*[1-9]\d*\b", raw_tool_result)
