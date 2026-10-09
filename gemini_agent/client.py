@@ -130,6 +130,28 @@ class GeminiClient:
         }
 
     @staticmethod
+    def _restore_tools_for_autonomous_goal(
+        payload: dict, declarations: list[dict], autonomous_goal: bool
+    ) -> bool:
+        """Never send an active autonomous goal with no available tool declarations."""
+        if not autonomous_goal or payload.get("tools"):
+            return False
+        payload["tools"] = [{
+            "type": "function",
+            "function": {
+                "name": declaration.get("name", ""),
+                "description": declaration.get("description", ""),
+                "parameters": GeminiClient._schema(declaration.get("parameters", {})),
+            },
+        } for declaration in declarations if isinstance(declaration, dict)]
+        if not payload["tools"]:
+            return False
+        # The goal runtime must retain the ability to take another bounded step.
+        # Avoid stale forced choices after a previous tool was removed from the payload.
+        payload["tool_choice"] = "auto"
+        return True
+
+    @staticmethod
     def _parse_android_mechanism_candidates(discovery: str) -> list[str]:
         """Parse bounded mechanism lines without assuming values contain no spaces."""
         candidates = []
@@ -2615,6 +2637,15 @@ class GeminiClient:
         goal_blocker_rejections = 0
         for loop_index in range(max_tool_rounds):
             round_trace_start = len(self.last_tool_calls)
+            # Some recovery/strategy branches intentionally remove tools after a
+            # bounded action. For an active autonomous goal, restore the relevant
+            # tool profile before the next provider round instead of sending a
+            # contradictory tool-less continuation request.
+            self._restore_tools_for_autonomous_goal(
+                payload,
+                self._relevant_tool_declarations(contents),
+                autonomous_goal,
+            )
             request = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode(),
