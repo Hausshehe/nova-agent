@@ -6567,13 +6567,20 @@ def _parse_workflow_definition(steps) -> list[dict]:
     return parsed
 
 
+_MAX_WORKFLOW_STORE_BYTES = 256 * 1024
+
+
 def _read_workflow_store() -> dict:
     path = _workflow_store_path()
     if not path.exists():
         return {"version": 1, "workflows": {}}
     try:
+        if path.stat().st_size > _MAX_WORKFLOW_STORE_BYTES:
+            raise RuntimeError(
+                f"Workflow store exceeds the {_MAX_WORKFLOW_STORE_BYTES}-byte limit."
+            )
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"Workflow store could not be read: {exc}") from exc
     if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("workflows"), dict):
         raise RuntimeError("Workflow store has an unsupported or invalid format.")
