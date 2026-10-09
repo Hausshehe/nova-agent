@@ -107,12 +107,20 @@ class GeminiClient:
     def _should_retry_with_auto_tool_choice(
         status: int, details: str, payload: dict, already_retried: bool = False
     ) -> bool:
-        """Detect Cloudflare's malformed forced-tool argument parsing failure."""
+        """Detect known malformed forced-tool argument parsing failures from Cloudflare."""
+        known_argument_parse_failures = (
+            "Expecting value: line 1 column 1" in details
+            or (
+                "Invalid JSON: expected ident" in details
+                and "input_value=" in details
+                and "</tool_call>" in details
+            )
+        )
         return (
             status == 400
             and not already_retried
             and isinstance(payload.get("tool_choice"), dict)
-            and "Expecting value: line 1 column 1" in details
+            and known_argument_parse_failures
         )
 
     @staticmethod
