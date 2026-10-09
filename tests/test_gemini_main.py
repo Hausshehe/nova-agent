@@ -111,6 +111,11 @@ class MainContextTests(unittest.TestCase):
                     "result": '[{"name":"persistence-check","description":"Verify reusable workflow persistence"}]',
                 },
                 {
+                    "name": "inspect_saved_workflow",
+                    "args": {"name": "persistence-check"},
+                    "result": '{"name":"persistence-check","steps":[{"index":0,"tool":"calculator","arguments":{"expression":"6 * 7"}}]}',
+                },
+                {
                     "name": "calculator",
                     "args": {"expression": "19 * 23"},
                     "result": "437",
@@ -129,6 +134,8 @@ class MainContextTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("Execution evidence (local direct-tool results)", rendered)
         self.assertIn("list_saved_workflows", rendered)
+        self.assertIn("inspect_saved_workflow", rendered)
+        self.assertIn('"expression": "6 * 7"', rendered)
         self.assertIn("persistence-check", rendered)
         self.assertIn('"expression": "19 * 23"', rendered)
         self.assertIn('"expression": "437"', rendered)
