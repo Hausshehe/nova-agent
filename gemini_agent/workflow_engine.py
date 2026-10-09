@@ -12,13 +12,30 @@ MAX_WORKFLOW_RESULT_CHARS = 16000
 
 
 def _resolve_references(value: Any, results: list[str]) -> Any:
-    """Resolve explicit prior-step references recursively."""
+    """Resolve whole-result and explicit JSON-path references recursively."""
     if isinstance(value, dict):
-        if set(value) == {"$step_result"}:
+        if set(value) in ({"$step_result"}, {"$step_result", "$path"}):
             index = value["$step_result"]
             if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= len(results):
                 raise ValueError("Workflow reference must point to an earlier completed step.")
-            return results[index]
+            result = results[index]
+            if "$path" not in value:
+                return result
+            path = value["$path"]
+            if not isinstance(path, list) or not path:
+                raise ValueError("Workflow result path must be a non-empty list of object keys or array indexes.")
+            try:
+                selected = json.loads(result)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Workflow result path requires a JSON object or array result.") from exc
+            for part in path:
+                if isinstance(selected, dict) and isinstance(part, str) and part in selected:
+                    selected = selected[part]
+                elif isinstance(selected, list) and isinstance(part, int) and not isinstance(part, bool) and 0 <= part < len(selected):
+                    selected = selected[part]
+                else:
+                    raise ValueError("Workflow result path does not exist in the prior step result.")
+            return selected
         return {key: _resolve_references(item, results) for key, item in value.items()}
     if isinstance(value, list):
         return [_resolve_references(item, results) for item in value]
@@ -43,6 +60,14 @@ def validate_workflow(
                 index = value["$step_result"]
                 if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= step_index:
                     raise ValueError("Workflow reference must point to an earlier completed step.")
+                return
+            if set(value) == {"$step_result", "$path"}:
+                index = value["$step_result"]
+                path = value["$path"]
+                if not isinstance(index, int) or isinstance(index, bool) or index < 0 or index >= step_index:
+                    raise ValueError("Workflow reference must point to an earlier completed step.")
+                if not isinstance(path, list) or not path or any(not isinstance(part, (str, int)) or isinstance(part, bool) for part in path):
+                    raise ValueError("Workflow result path must be a non-empty list of object keys or array indexes.")
                 return
             for nested in value.values():
                 check_references(nested, step_index)
