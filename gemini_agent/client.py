@@ -836,6 +836,13 @@ class GeminiClient:
             "system": ("system information", "system info", "uptime", "boot time", "cpu usage", "memory usage", "swap", "hostname", "load average"),
             "recovery": ("recover", "retry", "diagnose", "failure", "failed command", "find executable", "executable"),
             "root": ("root", "su", "privileged", "dumpsys"),
+            # Broad software-construction goals need workspace, execution, and
+            # verification tools, not the entire Android diagnostics catalog.
+            "construction": (
+                "create an app", "build an app", "create a minimal android",
+                "new workspace", "from scratch", "software project",
+                "build procedure", "source files", "construct a project",
+            ),
         }
 
         selected_groups = {
@@ -876,6 +883,12 @@ class GeminiClient:
                     "retry_command", "recover_command",
                 })
                 or (selected_groups & {"root"} and name in {"run_root_command", "run_command"})
+                or (selected_groups & {"construction"} and name in {
+                    "run_command", "find_executable", "discover_workspace_executables",
+                    "verify_command_result", "diagnose_command_failure",
+                    "retry_command", "recover_command", "capability_inventory",
+                    "assess_capability_gap",
+                })
                 or (selected_groups & {"calculator"} and name == "calculator")
                 or (selected_groups & {"current_datetime"} and name == "current_datetime")
             ):
