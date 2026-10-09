@@ -954,6 +954,7 @@ class GeminiClient:
                 "discover dependency options", "arithmetic testing",
                 "continue through building", "build strategy",
             ),
+            "workflow": ("workflow", "compose capabilities", "multi-step sequence"),
         }
 
         selected_groups = {
@@ -1011,6 +1012,7 @@ class GeminiClient:
                 })
                 or (selected_groups & {"calculator"} and name == "calculator")
                 or (selected_groups & {"current_datetime"} and name == "current_datetime")
+                or (selected_groups & {"workflow"} and name == "run_workflow")
             ):
                 selected_names.add(name)
 
