@@ -39,6 +39,50 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_client_dispatches_registered_workflow_and_returns_step_evidence(self):
+        workflow_steps = json.dumps([
+            {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
+            {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
+        ])
+        tool_call = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "workflow-test",
+                        "type": "function",
+                        "function": {
+                            "name": "run_workflow",
+                            "arguments": json.dumps({"steps": workflow_steps}),
+                        },
+                    }]
+                }
+            }]
+        }
+        final = {"choices": [{"message": {"content": "Both workflow steps completed."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(tool_call), FakeResponse(final)],
+        ) as open_url:
+            client = GeminiClient()
+            result = client.ask("Run a two-step read-only workflow and report its results.")
+
+        self.assertEqual(result, "Both workflow steps completed.")
+        self.assertEqual([trace["name"] for trace in client.last_tool_calls], ["run_workflow"])
+        workflow_result = json.loads(client.last_tool_calls[0]["result"])
+        self.assertEqual(workflow_result["status"], "completed")
+        self.assertEqual(workflow_result["steps"][1]["result"], "42")
+        first_payload = json.loads(open_url.call_args_list[0].args[0].data)
+        declaration = next(
+            item["function"] for item in first_payload["tools"]
+            if item["function"]["name"] == "run_workflow"
+        )
+        self.assertIn("steps", declaration["parameters"]["properties"])
+
+
     def test_malformed_text_tool_arguments_retry_with_registered_schema(self):
         malformed = {
             "choices": [{
