@@ -7,10 +7,14 @@ from gemini_agent.memory import ConversationMemory
 
 
 def _print_workflow_execution_evidence(client) -> None:
-    """Show locally recorded workflow results, not just the model's narration."""
+    """Show local workflow or direct-tool evidence, never just model narration."""
+    calls = [
+        call for call in getattr(client, "last_tool_calls", [])
+        if isinstance(call, dict)
+    ]
     workflow_tools = {"run_workflow", "run_saved_workflow"}
-    for call in getattr(client, "last_tool_calls", []):
-        if not isinstance(call, dict) or call.get("name") not in workflow_tools:
+    for call in calls:
+        if call.get("name") not in workflow_tools:
             continue
         tool_name = call["name"]
         result = call.get("result")
@@ -21,6 +25,17 @@ def _print_workflow_execution_evidence(client) -> None:
         except (TypeError, ValueError):
             print(str(result)[:16000])
         return
+
+    # If no workflow was selected, expose the recorded discovery/calculation
+    # calls so a valid direct-tool fallback can be audited from the CLI.
+    evidence_calls = [
+        {"name": call.get("name"), "args": call.get("args"), "result": call.get("result")}
+        for call in calls
+        if call.get("name") in {"list_saved_workflows", "calculator"}
+    ]
+    if evidence_calls:
+        print("\\nExecution evidence (local direct-tool results):")
+        print(json.dumps(evidence_calls, ensure_ascii=False, indent=2, default=str)[:16000])
 
 
 def main() -> None:
