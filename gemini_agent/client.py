@@ -2020,13 +2020,9 @@ class GeminiClient:
         goal_selected_action = ""
         if (
             self.goal_state is not None
+            and self.goal_state.status == "ACTIVE"
             and not requested_tool
             and not strategy_candidates
-            and re.search(
-                r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                request_text,
-                re.IGNORECASE | re.DOTALL,
-            )
         ):
             # Long-horizon goal selection must see the full registered action set.
             # Relevance filtering can hide a prerequisite action whose name is not
@@ -2781,6 +2777,15 @@ class GeminiClient:
             declarations = [
                 declaration for declaration in declarations
                 if declaration.get("name") != "inspect_saved_workflow"
+            ]
+
+        # An active runtime goal owns next-step selection. Never expose the
+        # selector as a model-callable tool: the model previously called it,
+        # ignored its result, and repeated create_directory until the round limit.
+        if self.goal_state is not None and self.goal_state.status == "ACTIVE":
+            declarations = [
+                declaration for declaration in declarations
+                if declaration.get("name") != "select_goal_next_step"
             ]
 
         tools = [{
