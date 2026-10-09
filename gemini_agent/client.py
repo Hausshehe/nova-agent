@@ -4824,22 +4824,45 @@ class GeminiClient:
             if goal.lower().startswith("continue from "):
                 # Preserve the task context when the prompt resumes a workflow.
                 goal = prompt_text.strip()
-            success = next(
-                (
-                    sentence
-                    for sentence in reversed(sentences)
-                    if re.search(
-                        r"\b(?:build|building|create|produce|deliver|verify|install|testing|test)\b",
-                        sentence,
-                        re.IGNORECASE,
-                    )
-                    and re.search(
-                        r"\b(?:verify|evidence|result|outcome|artifact|success|apk|addition|subtraction|multiplication|division|test|testing|installation)\b",
-                        sentence,
-                        re.IGNORECASE,
+            success_candidates = [
+                sentence
+                for sentence in sentences
+                if not re.match(
+                    r"\s*(?:report|summarize|list|describe)\b",
+                    sentence,
+                    re.IGNORECASE,
+                )
+                and re.search(
+                    r"\b(?:build|building|create|produce|deliver|verify|install|testing|test)\b",
+                    sentence,
+                    re.IGNORECASE,
+                )
+                and re.search(
+                    r"\b(?:verify|evidence|result|outcome|artifact|success|apk|addition|subtraction|multiplication|division|test|testing|installation)\b",
+                    sentence,
+                    re.IGNORECASE,
+                )
+            ]
+            # Prefer the sentence that specifies the most concrete acceptance
+            # criteria. A later reporting sentence may mention "test results" but
+            # must not replace the actual build/test requirements.
+            success = max(
+                success_candidates,
+                key=lambda sentence: sum(
+                    len(re.findall(pattern, sentence, re.IGNORECASE))
+                    for pattern in (
+                        r"\bapk\b",
+                        r"\baddition\b",
+                        r"\bsubtraction\b",
+                        r"\bmultiplication\b",
+                        r"\bdivision\b",
+                        r"\b(?:test|testing)\b",
+                        r"\binstallation\b",
+                        r"\b(?:artifact|outcome|evidence|success)\b",
+                        r"\b(?:build|building|create|produce|deliver|verify|install)\b",
                     )
                 ),
-                "",
+                default="",
             )
             if goal and success:
                 goal = goal[:512]
