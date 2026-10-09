@@ -4495,21 +4495,22 @@ class GeminiClient:
                 return f"Cannot resume the persisted goal safely: {exc}. The saved record was left unchanged."
             if self.goal_state is None:
                 return "No persisted active goal is available to resume."
-            prior_steps = "\\n".join(
+            prior_steps = "\n".join(
                 f"- {step['action']}: {step['status']} | {step['evidence']}"
                 for step in self.goal_state.steps
             ) or "None recorded."
-            prior_recoveries = "\\n".join(self.goal_state.recovery_history) or "None recorded."
+            prior_recoveries = "\n".join(self.goal_state.recovery_history) or "None recorded."
+            prior_evidence = "\n".join(self.goal_state.evidence) or "None recorded."
             prompt_text = (
                 "Resume the persisted active goal below. Keep its original success criteria unchanged. "
                 "Inspect current reality and existing artifacts before repeating any previously attempted action. "
                 "Use prior evidence to diagnose failures, choose a distinct viable next step where appropriate, "
-                "and continue until independently verified complete or a concrete, evidenced blocker remains.\\n"
-                f"Goal: {self.goal_state.goal}\\n"
-                f"Success condition: {self.goal_state.success_condition}\\n"
-                f"Prior evidence: {'\\n'.join(self.goal_state.evidence) or 'None recorded.'}\\n"
-                f"Prior steps:\\n{prior_steps}\\n"
-                f"Recovery history:\\n{prior_recoveries}\\n"
+                "and continue until independently verified complete or a concrete, evidenced blocker remains.\n"
+                f"Goal: {self.goal_state.goal}\n"
+                f"Success condition: {self.goal_state.success_condition}\n"
+                f"Prior evidence: {prior_evidence}\n"
+                f"Prior steps:\n{prior_steps}\n"
+                f"Recovery history:\n{prior_recoveries}\n"
                 "Do not claim success from prior narration; verify the actual outcome."
             )
             contents[-1]["parts"][0]["text"] = prompt_text
