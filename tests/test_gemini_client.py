@@ -741,14 +741,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIn("[Nova orchestration directive]", routed_prompt)
         self.assertIsNotNone(client.goal_state)
         self.assertEqual(client.goal_state.status, "ACTIVE")
-        self.assertIn("calculator app", client.goal_state.goal)
-        success_condition = client.goal_state.success_condition.lower()
-        self.assertIn("apk", success_condition)
-        for operation in ("addition", "subtraction", "multiplication", "division"):
-            with self.subTest(operation=operation):
-                self.assertIn(operation, success_condition)
-        self.assertNotIn("report the workspace", success_condition)
-        self.assertNotIn("unresolved blockers", success_condition)
+        self.assertEqual(
+            client.goal_state.goal,
+            "Create a minimal Android calculator app from scratch in a new workspace.",
+            "The persisted goal must describe the construction task, not the reporting request.",
+        )
+        success_condition = client.goal_state.success_condition
+        self.assertEqual(
+            success_condition,
+            "Create the source files and configuration, build an installable APK, and verify addition, "
+            "subtraction, multiplication, and division with actual tests.",
+            "The success condition must preserve the concrete build and test contract.",
+        )
+        routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
+        self.assertIn(f'Goal: "{client.goal_state.goal}".', routed_prompt)
+        self.assertIn(f'Success condition: "{success_condition}".', routed_prompt)
 
     def test_dependency_recovery_prompt_starts_persistent_goal_and_exposes_construction_tools(self):
         prompt = (
