@@ -4796,18 +4796,18 @@ class GeminiClient:
     ) -> str:
         """Reject completion claims when an explicit calculation sequence lacks tool evidence."""
         match = re.search(
-            r"calculate\\s+([0-9\\s()+\\-*/%.]+?)\\s*,?\\s*then\\s+independently\\s+verify\\s+the\\s+result\\s+by\\s+calculating\\s+([0-9\\s()+\\-*/%.]+?)(?:[.!?]|$)",
+            r"calculate\s+([0-9\s()+\-*/%.]+?)\s*,?\s*then\s+independently\s+verify\s+the\s+result\s+by\s+calculating\s+([0-9\s()+\-*/%.]+?)(?:[.!?]|$)",
             str(prompt),
             re.IGNORECASE,
         )
         if not match:
             return answer
         required = [
-            re.sub(r"\\s+", "", match.group(index)).rstrip(".")
+            re.sub(r"\s+", "", match.group(index)).rstrip(".")
             for index in (1, 2)
         ]
         recorded = {
-            re.sub(r"\\s+", "", str(call.get("args", {}).get("expression", ""))).rstrip(".")
+            re.sub(r"\s+", "", str(call.get("args", {}).get("expression", ""))).rstrip(".")
             for call in tool_calls
             if isinstance(call, dict)
             and call.get("name") == "calculator"
