@@ -964,10 +964,10 @@ class GeminiClient:
         if (
             "path_exists" in user_text
             and re.search(
-                r"\\b(?:make_directory|create_directory|create a directory|make a directory|create directory)\\b",
+                r"\b(?:make_directory|create_directory|create a directory|make a directory|create directory)\b",
                 user_text,
             )
-            and re.search(r"\\b(?:then|first|after)\\b", user_text)
+            and re.search(r"\b(?:then|first|after)\b", user_text)
         ):
             return None
 
