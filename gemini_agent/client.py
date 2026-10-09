@@ -10,6 +10,7 @@ from collections.abc import Callable
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
 from gemini_agent.goal_state import GoalState, start_goal_state, is_premature_blocker_claim
+from gemini_agent.goal_state_store import load_goal_state, save_goal_state
 from gemini_agent.goal_progress import observe_goal_progress
 from gemini_agent.goal_completion import verify_goal_completion
 from gemini_agent.constructed_action import CONSTRUCTED_ACTION_DECLARATION
@@ -48,6 +49,10 @@ class GeminiClient:
         self.last_tool_calls: list[dict] = []
         self.last_grounding_sources: list[dict[str, str]] = []
         self.goal_state: GoalState | None = None
+
+    def _persist_goal_state(self) -> None:
+        if self.goal_state is not None:
+            save_goal_state(self.goal_state)
 
     @staticmethod
     def _schema(parameters: dict) -> dict:
@@ -1637,6 +1642,7 @@ class GeminiClient:
                 )
             )
             self.goal_state = start_goal_state(goal, success_condition)
+            self._persist_goal_state()
             result += (
                 "\nRuntime goal state: ACTIVE\n"
                 "Runtime evidence: 0 entries\n"
@@ -1704,6 +1710,7 @@ class GeminiClient:
                     self.goal_state.record_step(
                         requested_tool, step_status, continuation_result
                     )
+                    self._persist_goal_state()
                     return (
                         result
                         + "\nGoal progress observation: " + observation.status
@@ -4003,6 +4010,9 @@ class GeminiClient:
                         self.goal_state.record_step(
                             local_name, step_status, str(tool_result)
                         )
+                        if raw_tool_failed or recovery_result:
+                            self.goal_state.record_recovery(str(tool_result))
+                        self._persist_goal_state()
                         tool_result = (
                             str(tool_result)
                             + "\nGoal progress observation: "
@@ -4179,6 +4189,7 @@ class GeminiClient:
                                     }
                             elif goal_replan_pending:
                                 self.goal_state.status = "FAILED"
+                                self._persist_goal_state()
                                 tool_result += (
                                     "\nGoal replan: No viable alternative step was found; "
                                     "goal cannot continue safely."
@@ -4475,8 +4486,35 @@ class GeminiClient:
         ]
         self.last_tool_calls = []
         self.last_grounding_sources = []
-        self.goal_state = None
         prompt_text = str(prompt)
+        resume_requested = prompt_text.strip().lower() in {"/resume", "resume active goal", "resume the active goal"}
+        if resume_requested:
+            try:
+                self.goal_state = load_goal_state()
+            except (OSError, ValueError) as exc:
+                return f"Cannot resume the persisted goal safely: {exc}. The saved record was left unchanged."
+            if self.goal_state is None:
+                return "No persisted active goal is available to resume."
+            prior_steps = "\\n".join(
+                f"- {step['action']}: {step['status']} | {step['evidence']}"
+                for step in self.goal_state.steps
+            ) or "None recorded."
+            prior_recoveries = "\\n".join(self.goal_state.recovery_history) or "None recorded."
+            prompt_text = (
+                "Resume the persisted active goal below. Keep its original success criteria unchanged. "
+                "Inspect current reality and existing artifacts before repeating any previously attempted action. "
+                "Use prior evidence to diagnose failures, choose a distinct viable next step where appropriate, "
+                "and continue until independently verified complete or a concrete, evidenced blocker remains.\\n"
+                f"Goal: {self.goal_state.goal}\\n"
+                f"Success condition: {self.goal_state.success_condition}\\n"
+                f"Prior evidence: {'\\n'.join(self.goal_state.evidence) or 'None recorded.'}\\n"
+                f"Prior steps:\\n{prior_steps}\\n"
+                f"Recovery history:\\n{prior_recoveries}\\n"
+                "Do not claim success from prior narration; verify the actual outcome."
+            )
+            contents[-1]["parts"][0]["text"] = prompt_text
+        else:
+            self.goal_state = None
         if "recover_command" in prompt_text.lower() and "expected postcondition" in prompt_text.lower():
             quoted = re.findall(r"`([^`]+)`", prompt_text)
             if len(quoted) >= 2:
@@ -4642,6 +4680,7 @@ class GeminiClient:
                 # Asking the model to establish its own contract lets it narrate
                 # the contract instead of entering the bounded execution loop.
                 self.goal_state = start_goal_state(goal, success)
+                self._persist_goal_state()
                 contents[-1]["parts"][0]["text"] = (
                     str(contents[-1]["parts"][0]["text"])
                     + "\n\n[Nova orchestration directive] "
