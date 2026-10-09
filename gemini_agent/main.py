@@ -7,12 +7,14 @@ from gemini_agent.memory import ConversationMemory
 
 
 def _print_workflow_execution_evidence(client) -> None:
-    """Show the actual locally recorded workflow result, not the model's narration."""
+    """Show locally recorded workflow results, not just the model's narration."""
+    workflow_tools = {"run_workflow", "run_saved_workflow"}
     for call in getattr(client, "last_tool_calls", []):
-        if not isinstance(call, dict) or call.get("name") != "run_workflow":
+        if not isinstance(call, dict) or call.get("name") not in workflow_tools:
             continue
+        tool_name = call["name"]
         result = call.get("result")
-        print("\nExecution evidence (local run_workflow result):")
+        print(f"\nExecution evidence (local {tool_name} result):")
         try:
             evidence = json.loads(result) if isinstance(result, str) else result
             print(json.dumps(evidence, ensure_ascii=False, indent=2))
