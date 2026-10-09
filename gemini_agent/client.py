@@ -90,6 +90,56 @@ class GeminiClient:
         return rank_android_mechanism_candidates(request, candidates)
 
     @staticmethod
+    def _parse_text_tool_call(content, declarations: list[dict]) -> dict | None:
+        """Convert an explicit provider text-tool envelope into a registered call."""
+        if not isinstance(content, str) or "<tool_call>" not in content:
+            return None
+        match = re.search(
+            r"<tool_call>\\s*([A-Za-z_][A-Za-z0-9_]*)\\b(.*?)(?:</tool_call>|$)",
+            content,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return None
+        name = match.group(1)
+        declaration = next(
+            (item for item in declarations if isinstance(item, dict) and item.get("name") == name),
+            None,
+        )
+        if declaration is None:
+            return None
+        parameters = declaration.get("parameters") or {}
+        schema = parameters.get("properties") or {}
+        body = match.group(2)
+        args = {}
+        matches = list(re.finditer(
+            r"<arg_key>\\s*(.*?)\\s*</arg_key>\\s*<arg_value>(.*?)</arg_value>",
+            body,
+            re.IGNORECASE | re.DOTALL,
+        ))
+        if not matches and re.search(r"<arg_key>\\s*[^<]+</arg_key>", body, re.IGNORECASE):
+            return None
+        for arg_match in matches:
+            key = arg_match.group(1).strip()
+            if not key or key not in schema or key in args:
+                return None
+            value = arg_match.group(2).strip()
+            value_type = schema[key].get("type") if isinstance(schema[key], dict) else None
+            if value_type in {"object", "array", "number", "integer", "boolean", "null"}:
+                try:
+                    value = json.loads(value)
+                except (TypeError, ValueError):
+                    return None
+            args[key] = value
+        required = parameters.get("required") or []
+        if any(key not in args for key in required):
+            return None
+        return {
+            "id": "parsed-text-tool-call",
+            "type": "function",
+            "function": {"name": name, "arguments": json.dumps(args)},
+        }
+    @staticmethod
     def _parse_tool_arguments(arguments) -> dict:
         if arguments is None:
             return {}
@@ -2520,6 +2570,18 @@ class GeminiClient:
 
             tool_calls = message.get("tool_calls") or []
             native_tool_calls = bool(tool_calls)
+
+            # Some compatible endpoints emit structured tool calls as text
+            # rather than message.tool_calls. Accept only an explicit envelope
+            # and only names and argument keys registered by this runtime.
+            if not tool_calls:
+                text_call = self._parse_text_tool_call(
+                    message.get("content", ""),
+                    self.tool_declarations,
+                )
+                if text_call is not None:
+                    tool_calls = [text_call]
+                    native_tool_calls = False
 
             if not tool_calls:
                 # Some providers acknowledge a forced continuation tool in
