@@ -62,9 +62,14 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertFalse(
             GeminiClient._should_retry_with_auto_tool_choice(500, details, payload)
         )
-        self.assertFalse(
+        self.assertTrue(
             GeminiClient._should_retry_with_auto_tool_choice(
                 400, details, {"tool_choice": "required"}
+            )
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, details, {"tool_choice": "required"}, already_retried=True
             )
         )
         self.assertFalse(
