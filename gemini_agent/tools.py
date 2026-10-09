@@ -6515,16 +6515,23 @@ _WORKFLOW_ALLOWED_TOOLS = {
 }
 
 
-def run_workflow(steps: str) -> str:
+def run_workflow(steps) -> str:
     """Execute a bounded JSON workflow using only approved read-only capabilities."""
-    if not isinstance(steps, str) or not steps.strip():
-        raise ValueError("Workflow steps must be supplied as JSON text.")
-    if len(steps) > 12000:
-        raise ValueError("Workflow definition exceeds the 12000-character limit.")
-    try:
-        parsed = json.loads(steps)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Workflow steps are not valid JSON: {exc.msg}") from exc
+    if isinstance(steps, str):
+        if not steps.strip():
+            raise ValueError("Workflow steps must be supplied as a non-empty JSON array.")
+        if len(steps) > 12000:
+            raise ValueError("Workflow definition exceeds the 12000-character limit.")
+        try:
+            parsed = json.loads(steps)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Workflow steps are not valid JSON: {exc.msg}") from exc
+    elif isinstance(steps, list):
+        if len(json.dumps(steps, separators=(",", ":")))>12000:
+            raise ValueError("Workflow definition exceeds the 12000-character limit.")
+        parsed = steps
+    else:
+        raise ValueError("Workflow steps must be a JSON array or JSON text.")
     return _execute_workflow(
         parsed,
         TOOL_HANDLERS,
@@ -6536,7 +6543,7 @@ RUN_WORKFLOW_DECLARATION = {
     "name": "run_workflow",
     "description": (
         "Compose up to 8 ordered steps from approved read-only Nova capabilities. "
-        "Pass a JSON array as text; each step has 'tool' and 'arguments'. "
+        "Provide steps as a structured array; each step has a tool name and arguments object. "
         "A later argument may use {\"$step_result\": 0} to reference an earlier step result. "
         "This reports step execution, not proof that a user's overall goal is complete."
     ),
@@ -6544,8 +6551,16 @@ RUN_WORKFLOW_DECLARATION = {
         "type": "OBJECT",
         "properties": {
             "steps": {
-                "type": "STRING",
-                "description": "JSON array of up to 8 {tool, arguments} steps; only approved read-only tools are permitted.",
+                "type": "ARRAY",
+                "description": "Up to 8 ordered steps using approved read-only tools only.",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "tool": {"type": "STRING", "description": "Exact registered read-only tool name."},
+                        "arguments": {"type": "OBJECT", "description": "Arguments for that tool; prior results may be referenced with {\"$step_result\": 0}."},
+                    },
+                    "required": ["tool", "arguments"],
+                },
             }
         },
         "required": ["steps"],
