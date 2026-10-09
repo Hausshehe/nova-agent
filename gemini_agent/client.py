@@ -2886,7 +2886,7 @@ class GeminiClient:
             # never execute guessed or renamed arguments.
             malformed_match = (
                 re.search(
-                    r"<tool_call>\\s*([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    r"<tool_call>\s*([A-Za-z_][A-Za-z0-9_]*)\b",
                     content,
                     re.IGNORECASE,
                 )
