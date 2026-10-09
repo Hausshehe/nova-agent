@@ -93,6 +93,22 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "execute_constructed_action")
 
+    def test_construction_goal_does_not_select_intent_clarification_as_an_action(self):
+        result = select_goal_next_step(
+            "Create a minimal Android calculator app from scratch in a new workspace.",
+            "Create the source files and configuration, build an installable APK, and verify addition, subtraction, multiplication, and division with actual tests.",
+            "ACTIVE",
+            "INCONCLUSIVE",
+            "No bounded evidence is available.",
+            [
+                "build_intent_clarification",
+                "list_directory",
+                "read_text_file",
+                "execute_constructed_action",
+            ],
+        )
+        self.assertEqual(result.action, "execute_constructed_action")
+
     def test_unrelated_candidates_stop_safely(self):
         result = select_goal_next_step(
             "check the device battery",
