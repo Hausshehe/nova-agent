@@ -76,5 +76,28 @@ class WorkflowEngineTests(unittest.TestCase):
             execute_workflow(steps, self.handlers, allowed_tools=self.allowed)
 
 
+    def test_registered_workflow_tool_composes_real_read_only_capabilities(self):
+        from gemini_agent.tools import RUN_WORKFLOW_DECLARATION, TOOL_DECLARATIONS, TOOL_HANDLERS
+
+        self.assertIs(TOOL_HANDLERS["run_workflow"], __import__("gemini_agent.tools", fromlist=["run_workflow"]).run_workflow)
+        self.assertIn(RUN_WORKFLOW_DECLARATION, TOOL_DECLARATIONS)
+        result = json.loads(TOOL_HANDLERS["run_workflow"](
+            steps=json.dumps([
+                {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
+                {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
+            ])
+        ))
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["steps"][1]["result"], "42")
+
+    def test_public_workflow_tool_cannot_run_mutating_capabilities(self):
+        from gemini_agent.tools import run_workflow
+
+        with self.assertRaisesRegex(ValueError, "not allowed"):
+            run_workflow(json.dumps([
+                {"tool": "write_text_file", "arguments": {"path": "workflow-test.txt", "content": "no"}}
+            ]))
+
+
 if __name__ == "__main__":
     unittest.main()
