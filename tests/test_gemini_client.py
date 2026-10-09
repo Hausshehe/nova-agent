@@ -39,6 +39,27 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_explicit_workflow_request_excludes_atomic_tools_from_provider_schema(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            declarations = client._relevant_tool_declarations([{
+                "role": "user",
+                "parts": [{
+                    "text": (
+                        'Use run_workflow, not calculator directly, with a structured steps array '
+                        'containing calculator arguments for 6 * 7.'
+                    )
+                }],
+            }])
+
+        self.assertEqual([item["name"] for item in declarations], ["run_workflow"])
+        schema = declarations[0]["parameters"]["properties"]["steps"]
+        self.assertEqual(schema["type"], "ARRAY")
+
     def test_client_dispatches_registered_workflow_and_returns_step_evidence(self):
         workflow_steps = json.dumps([
             {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
