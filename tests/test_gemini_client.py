@@ -63,6 +63,24 @@ class CloudflareClientTests(unittest.TestCase):
         schema = declarations[0]["parameters"]["properties"]["steps"]
         self.assertEqual(schema["type"], "ARRAY")
 
+    def test_goal_relevant_tools_keep_saved_workflow_discovery_and_execution_available(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            contents = [{
+                "role": "user",
+                "parts": [{"text": "Calculate 6 * 7."}],
+            }]
+            declarations = client._relevant_tool_declarations(contents)
+
+        names = {item["name"] for item in declarations}
+        self.assertIn("calculator", names)
+        self.assertIn("list_saved_workflows", names)
+        self.assertIn("run_saved_workflow", names)
+
     def test_client_dispatches_registered_workflow_and_returns_step_evidence(self):
         workflow_steps = json.dumps([
             {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
