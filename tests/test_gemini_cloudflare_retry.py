@@ -69,6 +69,32 @@ class CloudflareToolChoiceRetryTests(unittest.TestCase):
         self.assertIn('"auto_tool_choice_retry_used": true', rendered)
         self.assertNotIn("token", rendered.lower())
 
+    def test_tool_loop_failure_context_reports_execution_and_goal_evidence(self):
+        from types import SimpleNamespace
+        context = GeminiClient._tool_loop_failure_context(
+            16,
+            [
+                {"name": "execute_constructed_action", "result": "created workspace"},
+                {"name": "verify_artifact", "result": "APK missing"},
+            ],
+            SimpleNamespace(
+                status="ACTIVE",
+                steps=[
+                    {"action": "execute_constructed_action", "status": "EXECUTED"},
+                    {"action": "verify_artifact", "status": "FAILED"},
+                ],
+                evidence=["workspace created"],
+            ),
+        )
+        self.assertEqual(context["round_limit"], 16)
+        self.assertEqual(context["executed_tool_call_count"], 2)
+        self.assertEqual(
+            [call["name"] for call in context["recent_executed_tool_calls"]],
+            ["execute_constructed_action", "verify_artifact"],
+        )
+        self.assertEqual(context["goal"]["status"], "ACTIVE")
+        self.assertEqual(context["goal"]["evidence_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
