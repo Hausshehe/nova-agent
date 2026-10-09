@@ -1,7 +1,24 @@
 """Command-line chat loop for the minimal Gemini agent."""
 
+import json
+
 from gemini_agent.client import GeminiClient
 from gemini_agent.memory import ConversationMemory
+
+
+def _print_workflow_execution_evidence(client) -> None:
+    """Show the actual locally recorded workflow result, not the model's narration."""
+    for call in getattr(client, "last_tool_calls", []):
+        if not isinstance(call, dict) or call.get("name") != "run_workflow":
+            continue
+        result = call.get("result")
+        print("\nExecution evidence (local run_workflow result):")
+        try:
+            evidence = json.loads(result) if isinstance(result, str) else result
+            print(json.dumps(evidence, ensure_ascii=False, indent=2))
+        except (TypeError, ValueError):
+            print(str(result)[:16000])
+        return
 
 
 def main() -> None:
@@ -44,6 +61,7 @@ def main() -> None:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
             print(f"\nNova: {answer}")
+            _print_workflow_execution_evidence(client)
         except RuntimeError as exc:
             print(f"\nError: {exc}")
 
