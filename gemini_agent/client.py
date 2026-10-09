@@ -256,6 +256,30 @@ class GeminiClient:
         return len(remaining) != len(declared_tools)
 
     @staticmethod
+    def _exclude_runtime_goal_selector(
+        declarations: list[dict], active_goal: bool
+    ) -> list[dict]:
+        """Keep the runtime-owned goal selector out of provider-callable tools."""
+        if not active_goal:
+            return declarations
+        return [
+            declaration for declaration in declarations
+            if declaration.get("name") != "select_goal_next_step"
+        ]
+
+    @staticmethod
+    def _should_select_next_step(
+        goal_state, requested_tool: str, strategy_candidates: list[str]
+    ) -> bool:
+        """An active runtime goal must deterministically select its next action."""
+        return (
+            goal_state is not None
+            and goal_state.status == "ACTIVE"
+            and not requested_tool
+            and not strategy_candidates
+        )
+
+    @staticmethod
     def _restore_tools_for_autonomous_goal(
         payload: dict, declarations: list[dict], autonomous_goal: bool
     ) -> bool:
@@ -2018,11 +2042,8 @@ class GeminiClient:
         # Goal-directed execution bridge: use the existing bounded next-step selector
         # to choose one relevant registered capability when a runtime goal is active.
         goal_selected_action = ""
-        if (
-            self.goal_state is not None
-            and self.goal_state.status == "ACTIVE"
-            and not requested_tool
-            and not strategy_candidates
+        if self._should_select_next_step(
+            self.goal_state, requested_tool, strategy_candidates
         ):
             # Long-horizon goal selection must see the full registered action set.
             # Relevance filtering can hide a prerequisite action whose name is not
@@ -2782,11 +2803,12 @@ class GeminiClient:
         # An active runtime goal owns next-step selection. Never expose the
         # selector as a model-callable tool: the model previously called it,
         # ignored its result, and repeated create_directory until the round limit.
-        if self.goal_state is not None and self.goal_state.status == "ACTIVE":
-            declarations = [
-                declaration for declaration in declarations
-                if declaration.get("name") != "select_goal_next_step"
-            ]
+        declarations = self._exclude_runtime_goal_selector(
+            declarations,
+            active_goal=(
+                self.goal_state is not None and self.goal_state.status == "ACTIVE"
+            ),
+        )
 
         tools = [{
             "type": "function",
