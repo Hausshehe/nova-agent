@@ -139,7 +139,9 @@ class GeminiClient:
         payload["tools"] = [{
             "type": "function",
             "function": {
-                "name": declaration.get("name", ""),
+                "name": GeminiClient._CLOUD_TOOL_NAMES.get(
+                    declaration.get("name", ""), declaration.get("name", "")
+                ),
                 "description": declaration.get("description", ""),
                 "parameters": GeminiClient._schema(declaration.get("parameters", {})),
             },
