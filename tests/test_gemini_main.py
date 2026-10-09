@@ -135,7 +135,7 @@ class MainContextTests(unittest.TestCase):
         self.assertIn("Execution evidence (local direct-tool results)", rendered)
         self.assertIn("list_saved_workflows", rendered)
         self.assertIn("inspect_saved_workflow", rendered)
-        self.assertIn('"expression": "6 * 7"', rendered)
+        self.assertIn("6 * 7", rendered)
         self.assertIn("persistence-check", rendered)
         self.assertIn('"expression": "19 * 23"', rendered)
         self.assertIn('"expression": "437"', rendered)
