@@ -1878,10 +1878,7 @@ class CloudflareClientTests(unittest.TestCase):
         from gemini_agent.goal_state import start_goal_state
 
         response = {"choices": [{"message": {"content": "I will investigate."}}]}
-        prompt = (
-            "[Nova orchestration directive] Nova has already established the runtime "
-            "goal contract. Autonomously pursue the goal using bounded next-step selection."
-        )
+        prompt = "Autonomously pursue the active goal using bounded next-step selection."
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
