@@ -71,6 +71,23 @@ def select_goal_next_step(
     if goal_status == "FAILED":
         return GoalNextStep("STOP", "The goal is failed; no bounded next action is justified from the supplied state.")
 
+    # Construction goals need an action-capable path, not lexical matches to
+    # orchestration tools such as build_intent_clarification or list_directory.
+    # The constructed-action executor can inspect the environment first and then
+    # create/build artifacts; repeatedly selecting planning/observation helpers
+    # without excluding prior actions caused the live goal loop to stall.
+    construction_request = re.search(
+        r"\\b(?:build|create|construct|generate|implement|make)\\b",
+        f"{goal} {success_condition}",
+        re.IGNORECASE,
+    )
+    if construction_request and "execute_constructed_action" in clean:
+        return GoalNextStep(
+            "execute_constructed_action",
+            "A construction goal requires an action-capable path; use the bounded "
+            "constructed-action executor to inspect prerequisites and make concrete progress."
+        )
+
     goal_terms = _terms(goal)
     condition_terms = _terms(success_condition)
     observed_terms = _terms(evidence)
