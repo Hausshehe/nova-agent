@@ -222,6 +222,51 @@ class CloudflareClientTests(unittest.TestCase):
         })
         self.assertIn("No saved workflow fits", result)
 
+    def test_explicit_named_saved_workflow_inspection_runs_before_provider_decision(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "content": "Inspection result received; direct calculation is appropriate."
+                }
+            }]
+        }
+        inspection = '{"name":"persistence-check","description":"Verify reusable workflow persistence","steps":[{"index":0,"tool":"calculator","arguments":{"expression":"6 * 7"}},{"index":1,"tool":"calculator","arguments":{"expression":{"$step_result":0}}}],"note":"Definition inspected only. No workflow was executed."}'
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ) as urlopen_mock:
+            client = GeminiClient()
+            client.tool_handlers["list_saved_workflows"] = unittest.mock.Mock(
+                return_value='{"count":1,"workflows":[{"name":"persistence-check","description":"Verify reusable workflow persistence","steps":2}]}'
+            )
+            client.tool_handlers["inspect_saved_workflow"] = unittest.mock.Mock(
+                return_value=inspection
+            )
+            result = client.ask(
+                "List the saved workflows. Inspect persistence-check by its exact name and report its actual steps without executing it."
+            )
+
+        client.tool_handlers["list_saved_workflows"].assert_called_once_with()
+        client.tool_handlers["inspect_saved_workflow"].assert_called_once_with(
+            name="persistence-check"
+        )
+        self.assertEqual(
+            [call["name"] for call in client.last_tool_calls],
+            ["list_saved_workflows", "inspect_saved_workflow"],
+        )
+        self.assertEqual(client.last_tool_calls[1]["result"], inspection)
+        request_payload = json.loads(urlopen_mock.call_args.args[0].data.decode())
+        offered_tools = {
+            item["function"]["name"] for item in request_payload["tools"]
+        }
+        self.assertNotIn("inspect_saved_workflow", offered_tools)
+        self.assertIn("Saved-workflow inspection result:", request_payload["messages"][0]["content"])
+        self.assertIn("Inspection result received", result)
+
     def test_goal_relevant_tools_keep_saved_workflow_discovery_and_execution_available(self):
         with patch.dict(
             os.environ,
