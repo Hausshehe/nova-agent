@@ -587,6 +587,8 @@ class GeminiClient:
             return "capability_inventory"
         if "assess_capability_gap" in user_text:
             return "assess_capability_gap"
+        if "discover executable resources" in user_text or "discover_workspace_executables" in user_text:
+            return "discover_workspace_executables"
         if "find_executable" in user_text:
             return "find_executable"
         # When a compound request explicitly says to execute run_command, that
