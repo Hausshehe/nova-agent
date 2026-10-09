@@ -2418,22 +2418,18 @@ class GeminiClient:
                 if selected_declaration
                 else []
             )
-            # Autonomous required-argument tools need provider-generated arguments.
-            # Expose only Nova's selected action and let the provider emit the call
-            # normally. This prevents it from silently choosing a different goal
-            # step while avoiding the empty-argument parser path.
-            if selected_required:
-                payload["tools"] = [
-                    tool
-                    for tool in payload.get("tools", [])
-                    if tool.get("function", {}).get("name") == selected_cloud_name
-                ]
-                payload["tool_choice"] = "auto"
-            else:
-                payload["tool_choice"] = {
-                    "type": "function",
-                    "function": {"name": selected_cloud_name},
-                }
+            # An active goal must execute its selected action, not permit a
+            # prose-only response to masquerade as progress. Function forcing still
+            # lets the provider generate arguments for tools that require them.
+            payload["tools"] = [
+                tool
+                for tool in payload.get("tools", [])
+                if tool.get("function", {}).get("name") == selected_cloud_name
+            ]
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": selected_cloud_name},
+            }
         elif strategy_candidates and selected_strategy:
             selected_cloud_name = self._CLOUD_TOOL_NAMES.get(selected_strategy, selected_strategy)
             payload["tool_choice"] = {
