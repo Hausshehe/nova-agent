@@ -189,7 +189,13 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertIsNotNone(client.goal_state)
         self.assertEqual(client.goal_state.status, "ACTIVE")
         self.assertIn("calculator app", client.goal_state.goal)
-        self.assertIn("APK", client.goal_state.success_condition)
+        success_condition = client.goal_state.success_condition.lower()
+        self.assertIn("apk", success_condition)
+        for operation in ("addition", "subtraction", "multiplication", "division"):
+            with self.subTest(operation=operation):
+                self.assertIn(operation, success_condition)
+        self.assertNotIn("report the workspace", success_condition)
+        self.assertNotIn("unresolved blockers", success_condition)
 
     def test_descriptive_build_request_does_not_start_autonomous_mutation(self):
         prompt = "Create an Android calculator app and explain how to build and verify it."
