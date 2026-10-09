@@ -955,8 +955,8 @@ class GeminiClient:
         # operations as acceptance criteria; neither should dispatch the arithmetic
         # tool before the goal-orchestration contract is established.
         construction_request = (
-            re.search(r"\\b(?:create|build|make|implement|generate)\\b.{0,100}\\b(?:app|application|project)\\b", user_text)
-            and re.search(r"\\b(?:apk|source files|new workspace|from scratch|build procedure)\\b", user_text)
+            re.search(r"\b(?:create|build|make|implement|generate)\b.{0,100}\b(?:app|application|project)\b", user_text)
+            and re.search(r"\b(?:apk|source files|new workspace|from scratch|build procedure)\b", user_text)
         )
         if construction_request:
             return None
