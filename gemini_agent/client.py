@@ -2654,6 +2654,22 @@ class GeminiClient:
                 if d["name"] == goal_selected_action
             ]
 
+        # The local preflight already performed explicit saved-workflow discovery.
+        # Keep workflow execution and relevant atomic tools available, but don't offer
+        # discovery again in this provider round and invite duplicate execution.
+        if (
+            re.search(r"\\blist\\s+(?:the\\s+)?saved\\s+workflows\\b", request_text, re.IGNORECASE)
+            and any(
+                isinstance(call, dict) and call.get("name") == "list_saved_workflows"
+                for call in self.last_tool_calls
+            )
+            and len(declarations) > 1
+        ):
+            declarations = [
+                declaration for declaration in declarations
+                if declaration.get("name") != "list_saved_workflows"
+            ]
+
         tools = [{
             "type": "function",
             "function": {
