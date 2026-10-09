@@ -39,6 +39,38 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_explicit_calculation_sequence_rejects_claims_without_matching_evidence(self):
+        prompt = (
+            "Calculate 19 * 23, then independently verify the result by calculating 437."
+        )
+        answer = "Both calculations returned 437 and verification passed."
+        calls = [
+            {"name": "list_saved_workflows", "args": {}, "result": '{"count": 1}'},
+            {"name": "calculator", "args": {"expression": "6 * 7"}, "result": "42"},
+        ]
+
+        audited = GeminiClient._audit_explicit_calculation_sequence(prompt, answer, calls)
+
+        self.assertIn("Execution incomplete", audited)
+        self.assertIn("19*23", audited)
+        self.assertIn("437", audited)
+        self.assertNotIn("verification passed", audited)
+
+    def test_explicit_calculation_sequence_accepts_matching_tool_evidence(self):
+        prompt = (
+            "Calculate 19 * 23, then independently verify the result by calculating 437."
+        )
+        calls = [
+            {"name": "calculator", "args": {"expression": "19 * 23"}, "result": "437"},
+            {"name": "calculator", "args": {"expression": "437"}, "result": "437"},
+        ]
+
+        audited = GeminiClient._audit_explicit_calculation_sequence(
+            prompt, "Both calculations are verified.", calls
+        )
+
+        self.assertEqual(audited, "Both calculations are verified.")
+
     def test_explicit_workflow_request_excludes_atomic_tools_from_provider_schema(self):
         with patch.dict(
             os.environ,
