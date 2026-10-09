@@ -597,6 +597,22 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("private or lengthy result", diagnostic)
         self.assertNotIn("sensitive result", diagnostic)
 
+    def test_identical_failed_file_write_is_suppressed(self):
+        previous = [{
+            "name": "write_text_file",
+            "args": {"path": "calc-app/settings.gradle", "content": "plugins {}"},
+            "result": "Tool error: Permission denied",
+        }]
+        self.assertTrue(GeminiClient._same_failed_write(
+            {"path": "calc-app/settings.gradle", "content": "plugins {}"}, previous
+        ))
+        self.assertFalse(GeminiClient._same_failed_write(
+            {"path": "calc-app/settings.gradle", "content": "plugins { id 'application' }"}, previous
+        ))
+        self.assertFalse(GeminiClient._same_failed_write(
+            {"path": "calc-app/app/build.gradle", "content": "plugins {}"}, previous
+        ))
+
     def test_tool_loop_exhaustion_reports_write_error_without_file_contents(self):
         trace = [
             {
