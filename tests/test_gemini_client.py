@@ -142,6 +142,47 @@ class CloudflareClientTests(unittest.TestCase):
         schema = declarations[0]["parameters"]["properties"]["steps"]
         self.assertEqual(schema["type"], "ARRAY")
 
+    def test_saved_workflow_discovery_evidence_overrides_model_denial(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "content": (
+                        "I do not have access to a tool to list saved workflows and inspect "
+                        "their descriptions. Therefore, I cannot determine if any existing "
+                        "workflow fits."
+                    )
+                }
+            }]
+        }
+        discovery = json.dumps({
+            "count": 1,
+            "workflows": [{
+                "name": "persistence-check",
+                "description": "Verify reusable workflow persistence",
+                "steps": 2,
+            }],
+        })
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            return_value=FakeResponse(response),
+        ):
+            client = GeminiClient()
+            client.tool_handlers["list_saved_workflows"] = unittest.mock.Mock(
+                return_value=discovery
+            )
+            result = client.ask(
+                "List the saved workflows and inspect their descriptions."
+            )
+
+        client.tool_handlers["list_saved_workflows"].assert_called_once_with()
+        self.assertIn("persistence-check", result)
+        self.assertIn("Verify reusable workflow persistence", result)
+        self.assertNotIn("do not have access", result.lower())
+
     def test_explicit_saved_workflow_discovery_runs_before_provider_decision(self):
         response = {
             "choices": [{
