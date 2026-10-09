@@ -6539,6 +6539,111 @@ def run_workflow(steps) -> str:
     )
 
 
+def _workflow_store_path() -> Path:
+    configured = os.environ.get("NOVA_WORKFLOW_STORE", "").strip()
+    return Path(configured).expanduser() if configured else Path.home() / ".nova-agent-workflows.json"
+
+
+def _parse_workflow_definition(steps) -> list[dict]:
+    if isinstance(steps, str):
+        if not steps.strip() or len(steps) > 12000:
+            raise ValueError("Workflow definition must be non-empty and at most 12000 characters.")
+        try:
+            parsed = json.loads(steps)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Workflow definition is not valid JSON: {exc.msg}") from exc
+    elif isinstance(steps, list):
+        try:
+            encoded = json.dumps(steps, separators=(",", ":"), ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Workflow definition must contain JSON-compatible values.") from exc
+        if len(encoded) > 12000:
+            raise ValueError("Workflow definition exceeds the 12000-character limit.")
+        parsed = steps
+    else:
+        raise ValueError("Workflow definition must be a JSON array or JSON text.")
+    from gemini_agent.workflow_engine import validate_workflow
+    validate_workflow(parsed, TOOL_HANDLERS, allowed_tools=_WORKFLOW_ALLOWED_TOOLS)
+    return parsed
+
+
+def _read_workflow_store() -> dict:
+    path = _workflow_store_path()
+    if not path.exists():
+        return {"version": 1, "workflows": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Workflow store could not be read: {exc}") from exc
+    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("workflows"), dict):
+        raise RuntimeError("Workflow store has an unsupported or invalid format.")
+    return data
+
+
+def _write_workflow_store(data: dict) -> None:
+    path = _workflow_store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent,
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            json.dump(data, temporary, ensure_ascii=False, indent=2, sort_keys=True)
+            temporary.write("\\n")
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    except OSError as exc:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise RuntimeError(f"Workflow store write failed: {exc}") from exc
+
+
+def save_workflow(name: str, steps, description: str = "", replace: bool = False) -> str:
+    """Validate and persist a named workflow made only from approved read-only tools."""
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
+        raise ValueError("Workflow name must start with a letter and contain at most 64 letters, digits, '_' or '-'.")
+    if not isinstance(description, str) or len(description) > 500:
+        raise ValueError("Workflow description must be text of at most 500 characters.")
+    if not isinstance(replace, bool):
+        raise ValueError("replace must be a boolean.")
+    parsed = _parse_workflow_definition(steps)
+    data = _read_workflow_store()
+    workflows = data["workflows"]
+    if name in workflows and not replace:
+        raise ValueError(f"Workflow '{name}' already exists; set replace=true to update it.")
+    workflows[name] = {"description": description.strip(), "steps": parsed}
+    _write_workflow_store(data)
+    return json.dumps({"status": "saved", "name": name, "steps": len(parsed)}, separators=(",", ":"))
+
+
+def list_saved_workflows() -> str:
+    """List names and descriptions of persisted workflow definitions."""
+    workflows = _read_workflow_store()["workflows"]
+    entries = []
+    for name, entry in sorted(workflows.items()):
+        if isinstance(name, str) and isinstance(entry, dict) and isinstance(entry.get("steps"), list):
+            entries.append({"name": name, "description": str(entry.get("description", "")), "steps": len(entry["steps"])})
+    return json.dumps({"count": len(entries), "workflows": entries}, ensure_ascii=False, separators=(",", ":"))
+
+
+def run_saved_workflow(name: str) -> str:
+    """Load, revalidate, and execute a saved workflow by name."""
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name):
+        raise ValueError("Invalid workflow name.")
+    workflows = _read_workflow_store()["workflows"]
+    entry = workflows.get(name)
+    if not isinstance(entry, dict) or "steps" not in entry:
+        raise ValueError(f"Saved workflow '{name}' was not found.")
+    parsed = _parse_workflow_definition(entry["steps"])
+    return run_workflow(parsed)
+
+
 RUN_WORKFLOW_DECLARATION = {
     "name": "run_workflow",
     "description": (
@@ -6569,3 +6674,30 @@ RUN_WORKFLOW_DECLARATION = {
 
 TOOL_HANDLERS["run_workflow"] = run_workflow
 TOOL_DECLARATIONS.append(RUN_WORKFLOW_DECLARATION)
+
+SAVE_WORKFLOW_DECLARATION = {
+    "name": "save_workflow",
+    "description": "Validate and persist a named workflow using only approved read-only tools. Existing names require replace=true.",
+    "parameters": {"type": "OBJECT", "properties": {
+        "name": {"type": "STRING"}, "steps": {"type": "ARRAY"},
+        "description": {"type": "STRING"}, "replace": {"type": "BOOLEAN"},
+    }, "required": ["name", "steps"]},
+}
+LIST_SAVED_WORKFLOWS_DECLARATION = {
+    "name": "list_saved_workflows",
+    "description": "List names and descriptions of saved reusable workflow definitions.",
+    "parameters": {"type": "OBJECT", "properties": {}},
+}
+RUN_SAVED_WORKFLOW_DECLARATION = {
+    "name": "run_saved_workflow",
+    "description": "Load, revalidate, and execute a saved read-only workflow by name, returning its actual step trace.",
+    "parameters": {"type": "OBJECT", "properties": {"name": {"type": "STRING"}}, "required": ["name"]},
+}
+TOOL_HANDLERS["save_workflow"] = save_workflow
+TOOL_HANDLERS["list_saved_workflows"] = list_saved_workflows
+TOOL_HANDLERS["run_saved_workflow"] = run_saved_workflow
+TOOL_DECLARATIONS.extend([
+    SAVE_WORKFLOW_DECLARATION,
+    LIST_SAVED_WORKFLOWS_DECLARATION,
+    RUN_SAVED_WORKFLOW_DECLARATION,
+])
