@@ -18,7 +18,7 @@ def _print_workflow_execution_evidence(client) -> None:
             continue
         tool_name = call["name"]
         result = call.get("result")
-        print(f"\\nExecution evidence (local {tool_name} result):")
+        print(f"\nExecution evidence (local {tool_name} result):")
         try:
             evidence = json.loads(result) if isinstance(result, str) else result
             print(json.dumps(evidence, ensure_ascii=False, indent=2))
@@ -34,7 +34,7 @@ def _print_workflow_execution_evidence(client) -> None:
         if call.get("name") in {"list_saved_workflows", "inspect_saved_workflow", "calculator"}
     ]
     if evidence_calls:
-        print("\\nExecution evidence (local direct-tool results):")
+        print("\nExecution evidence (local direct-tool results):")
         print(json.dumps(evidence_calls, ensure_ascii=False, indent=2, default=str)[:16000])
 
 
@@ -79,9 +79,9 @@ def main() -> None:
     print("Nova agent ready. Type /exit to quit.")
     while True:
         try:
-            prompt = input("\\nYou: ").strip()
+            prompt = input("\nYou: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\\nGoodbye.")
+            print("\nGoodbye.")
             break
         if prompt.lower() in {"/exit", "/quit"}:
             print("Goodbye.")
@@ -91,10 +91,10 @@ def main() -> None:
         try:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
-            print(f"\\nNova: {answer}")
+            print(f"\nNova: {answer}")
             _print_workflow_execution_evidence(client)
         except RuntimeError as exc:
-            print(f"\\nError: {exc}")
+            print(f"\nError: {exc}")
 
 
 if __name__ == "__main__":
