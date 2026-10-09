@@ -2983,9 +2983,12 @@ class CloudflareClientTests(unittest.TestCase):
             )
             client.tool_handlers["get_hostname"] = lambda: "Hostname: test-device"
             client.tool_handlers["get_system_boot_time"] = lambda: "Boot time: test-boot"
-            result = client.ask(
-                "Inspect the runtime environment, collect evidence, and report what was observed. "
-                "Do not claim success without verification."
+            result = client._generate_cloudflare(
+                [{"role": "user", "parts": [{"text":
+                    "Inspect the runtime environment, collect evidence, and report what was observed. "
+                    "Do not claim success without verification."
+                }]}],
+                None,
             )
 
         self.assertIn("Runtime goal status: VERIFIED", result)
