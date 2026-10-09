@@ -238,6 +238,7 @@ class CloudflareClientTests(unittest.TestCase):
         names = {item["name"] for item in declarations}
         self.assertIn("calculator", names)
         self.assertIn("list_saved_workflows", names)
+        self.assertIn("inspect_saved_workflow", names)
         self.assertIn("run_saved_workflow", names)
 
     def test_unrelated_narrow_intent_excludes_saved_workflow_tools(self):
