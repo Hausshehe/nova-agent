@@ -1034,7 +1034,7 @@ class GeminiClient:
         # workflow selection/reuse. Keep it available alongside atomic tools for
         # mixed goals, without leaking it into unrelated narrow routes.
         if "workflow" in selected_groups:
-            selected_names.update({"list_saved_workflows", "run_saved_workflow"})
+            selected_names.update({"list_saved_workflows", "inspect_saved_workflow", "run_saved_workflow"})
 
         selected = [d for d in self.tool_declarations if d["name"] in selected_names]
         return selected or cls.tool_declarations
