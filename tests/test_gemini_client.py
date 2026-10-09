@@ -39,6 +39,53 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_forced_tool_choice_retries_known_invalid_json_argument_error_once(self):
+        payload = {
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "write_text_file"},
+            }
+        }
+        details = (
+            "400 validation error: Invalid JSON: expected ident at line 1 column 2 "
+            "input_value='I\\'ll complete this step.../arg_value></tool_call>'"
+        )
+
+        self.assertTrue(
+            GeminiClient._should_retry_with_auto_tool_choice(400, details, payload)
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, details, payload, already_retried=True
+            )
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(500, details, payload)
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, details, {"tool_choice": "required"}
+            )
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, "Invalid JSON: expected ident at line 1 column 2", payload
+            )
+        )
+
+    def test_forced_tool_choice_keeps_legacy_invalid_json_retry_detection(self):
+        payload = {
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "write_text_file"},
+            }
+        }
+        self.assertTrue(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, "Expecting value: line 1 column 1", payload
+            )
+        )
+
     def test_explicit_calculation_sequence_rejects_claims_without_matching_evidence(self):
         prompt = (
             "Calculate 19 * 23, then independently verify the result by calculating 437."
