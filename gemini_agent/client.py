@@ -163,15 +163,15 @@ class GeminiClient:
             result = str(call.get("result", ""))
             args = call.get("args") if isinstance(call.get("args"), dict) else {}
             if name == "select_goal_next_step":
-                selected = re.search(r"Next step:\\s*([A-Za-z_][A-Za-z0-9_]*)", result)
+                selected = re.search(r"Next step:\s*([A-Za-z_][A-Za-z0-9_]*)", result)
                 if selected:
                     details.append(f"selector chose {selected.group(1)}")
             elif name == "write_text_file":
                 path = args.get("path", args.get("file_path", "unknown"))
-                outcome = "error" if re.search(r"\\b(?:error|failed|failure)\\b", result, re.I) else "returned"
+                outcome = "error" if re.search(r"\b(?:error|failed|failure)\b", result, re.I) else "returned"
                 details.append(f"write_text_file path={str(path)[:120]} outcome={outcome}")
             elif name in {"acquire_termux_packages", "discover_dependency_options", "run_command", "execute_constructed_action", "verify_command_result"}:
-                outcome = "error" if re.search(r"\\b(?:error|failed|failure)\\b", result, re.I) else "returned"
+                outcome = "error" if re.search(r"\b(?:error|failed|failure)\b", result, re.I) else "returned"
                 details.append(f"{name} outcome={outcome}")
         detail_note = (" Recent safe details: " + " | ".join(details[-8:]) + ".") if details else ""
         status = getattr(goal_state, "status", None) or "no active runtime goal"
