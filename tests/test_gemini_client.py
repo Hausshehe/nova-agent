@@ -759,11 +759,12 @@ class CloudflareClientTests(unittest.TestCase):
             "APK path, test results, and any unresolved blockers."
         )
         contents = [{"role": "user", "parts": [{"text": prompt}]}]
-        client = GeminiClient.__new__(GeminiClient)
-        client.tool_declarations = GeminiClient.__init__ if False else []
-        # Use the actual registered declaration set without initializing provider credentials.
-        from gemini_agent.tools import TOOL_DECLARATIONS
-        client.tool_declarations = TOOL_DECLARATIONS
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
 
         self.assertIsNone(
             client._requested_local_tool(contents),
