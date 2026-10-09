@@ -231,5 +231,40 @@ class MainContextTests(unittest.TestCase):
         self.assertIn("Executable candidates discovered: 0", rendered)
 
 
+    def test_prints_bounded_goal_tool_trace_when_runtime_error_occurs(self):
+        class FakeMemory:
+            def __init__(self):
+                pass
+
+            def context(self):
+                return []
+
+        class FakeClient:
+            last_tool_calls = [{
+                "name": "execute_constructed_action",
+                "args": {"executable": "python", "arguments": ["-c", "secret-free"]},
+                "result": "Tool error: constructed action failed with exit code 2",
+            }]
+
+            def __init__(self, **kwargs):
+                pass
+
+            def ask(self, prompt, history, system_instruction):
+                raise RuntimeError("Cloudflare requested too many tool calls (16 rounds)")
+
+        inputs = iter(["benchmark", "/exit"])
+        output = io.StringIO()
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True), \
+             patch.object(agent_main, "ConversationMemory", FakeMemory), \
+             patch.object(agent_main, "GeminiClient", FakeClient), \
+             patch("builtins.input", side_effect=lambda _: next(inputs)), \
+             redirect_stdout(output):
+            agent_main.main()
+
+        rendered = output.getvalue()
+        self.assertIn("Cloudflare requested too many tool calls", rendered)
+        self.assertIn("Execution evidence (recorded goal tool trace)", rendered)
+        self.assertIn("constructed action failed with exit code 2", rendered)
+
 if __name__ == "__main__":
     unittest.main()
