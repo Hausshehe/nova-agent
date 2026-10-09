@@ -22,6 +22,7 @@ class GoalState:
     progress_reason: str = "No goal-progress observation has been recorded."
     evidence: list[str] = field(default_factory=list)
     steps: list[dict[str, str]] = field(default_factory=list)
+    recovery_history: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.goal, str) or not self.goal.strip():
@@ -58,6 +59,13 @@ class GoalState:
         })
         del self.steps[:-_MAX_STEPS]
 
+    def record_recovery(self, evidence: str) -> None:
+        """Record bounded evidence of a recovery attempt for later resumption."""
+        if not isinstance(evidence, str) or not evidence.strip():
+            raise ValueError("Recovery evidence cannot be empty.")
+        self.recovery_history.append(evidence.strip()[:_MAX_TEXT])
+        del self.recovery_history[:-8]
+
     def snapshot(self) -> dict[str, object]:
         return {
             "goal": self.goal.strip(),
@@ -67,6 +75,7 @@ class GoalState:
             "progress_reason": self.progress_reason,
             "evidence": list(self.evidence),
             "steps": [dict(step) for step in self.steps],
+            "recovery_history": list(self.recovery_history),
         }
 
 
