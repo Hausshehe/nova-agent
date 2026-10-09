@@ -998,7 +998,8 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(answer, "Recovered after unknown tool.")
         self.assertEqual(open_url.call_count, 2)
         self.assertEqual(client.last_tool_calls[0]["name"], "request_workspace")
-        self.assertIn("unknown tool", client.last_tool_calls[0]["result"].lower())
+        self.assertIn("unregistered tool", client.last_tool_calls[0]["result"].lower())
+        self.assertIn("no action was executed", client.last_tool_calls[0]["result"].lower())
 
 
     def test_explicit_generated_capability_returns_after_one_execution(self):
