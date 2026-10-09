@@ -169,7 +169,13 @@ class GeminiClient:
             elif name == "write_text_file":
                 path = args.get("path", args.get("file_path", "unknown"))
                 outcome = "error" if re.search(r"\b(?:error|failed|failure)\b", result, re.I) else "returned"
-                details.append(f"write_text_file path={str(path)[:120]} outcome={outcome}")
+                detail = f"write_text_file path={str(path)[:120]} outcome={outcome}"
+                if outcome == "error":
+                    # Expose only the exception's first line, never submitted file contents.
+                    error_match = re.search(r"Tool error:\s*([^\r\n]{1,240})", result, re.IGNORECASE)
+                    if error_match:
+                        detail += f" reason={error_match.group(1).strip()}"
+                details.append(detail)
             elif name in {"acquire_termux_packages", "discover_dependency_options", "run_command", "execute_constructed_action", "verify_command_result"}:
                 outcome = "error" if re.search(r"\b(?:error|failed|failure)\b", result, re.I) else "returned"
                 details.append(f"{name} outcome={outcome}")
