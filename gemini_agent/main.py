@@ -1,4 +1,4 @@
-"""Command-line chat loop for the minimal Gemini agent."""
+""""Command-line chat loop for the minimal Gemini agent."""
 
 import json
 
@@ -14,7 +14,7 @@ def _print_workflow_execution_evidence(client) -> None:
             continue
         tool_name = call["name"]
         result = call.get("result")
-        print(f"\nExecution evidence (local {tool_name} result):")
+        print(f"\\nExecution evidence (local {tool_name} result):")
         try:
             evidence = json.loads(result) if isinstance(result, str) else result
             print(json.dumps(evidence, ensure_ascii=False, indent=2))
@@ -39,20 +39,28 @@ def main() -> None:
         "asks what you remember about them, use list_memory. When the user "
         "asks you to forget a remembered fact, use forget_fact. Do not invent facts about "
         "the user. When arithmetic is needed, use the calculator tool instead of calculating "
-        "mentally. For any question asking for the current date, current time, or current "
-        "date and time, ALWAYS use the current_datetime tool. Never use web search, web "
-        "grounding, or an external clock for those questions. Treat the current_datetime "
-        "tool result as authoritative. For any request to read, create, overwrite, append to, "
-        "search, or otherwise modify a local file or directory, you MUST call the relevant "
-        "filesystem tool. Never claim that a filesystem action was completed unless the "
-        "tool was actually called and returned successfully."
+        "mentally. For goals involving multiple steps or explicit verification, first call "
+        "list_saved_workflows and inspect the returned workflow names and descriptions. "
+        "If a saved workflow clearly covers the goal, execute it by its exact name with "
+        "run_saved_workflow; do not choose a workflow based on its name alone when its "
+        "description does not fit. If none fits, use relevant existing tools and do not "
+        "invent or save a workflow just to force reuse. Never claim a workflow ran or a "
+        "verification occurred unless the corresponding tool call and result provide "
+        "evidence. Report actual workflow step results when available. For any question "
+        "asking for the current date, current time, or current date and time, ALWAYS use "
+        "the current_datetime tool. Never use web search, web grounding, or an external "
+        "clock for those questions. Treat the current_datetime tool result as authoritative. "
+        "For any request to read, create, overwrite, append to, search, or otherwise modify "
+        "a local file or directory, you MUST call the relevant filesystem tool. Never claim "
+        "that a filesystem action was completed unless the tool was actually called and "
+        "returned successfully."
     )
     print("Nova agent ready. Type /exit to quit.")
     while True:
         try:
-            prompt = input("\nYou: ").strip()
+            prompt = input("\\nYou: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye.")
+            print("\\nGoodbye.")
             break
         if prompt.lower() in {"/exit", "/quit"}:
             print("Goodbye.")
@@ -62,10 +70,10 @@ def main() -> None:
         try:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
-            print(f"\nNova: {answer}")
+            print(f"\\nNova: {answer}")
             _print_workflow_execution_evidence(client)
         except RuntimeError as exc:
-            print(f"\nError: {exc}")
+            print(f"\\nError: {exc}")
 
 
 if __name__ == "__main__":
