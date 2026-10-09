@@ -968,7 +968,10 @@ class GeminiClient:
         # An explicit workflow-tool request must not expose atomic tools alongside
         # the workflow orchestrator. Otherwise the model can bypass composition and
         # execute the first primitive directly, even when workflow registration works.
-        if re.search(r"\brun_workflow\b", user_text):
+        if re.search(r"\brun_workflow\b", user_text) or re.search(
+            r"\b(?:run|execute)\s+(?:a|the|this|following)\s+workflow\b",
+            user_text,
+        ):
             return [
                 declaration for declaration in self.tool_declarations
                 if declaration.get("name") == "run_workflow"
