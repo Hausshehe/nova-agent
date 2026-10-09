@@ -207,5 +207,28 @@ class WorkflowEngineTests(unittest.TestCase):
                 self.assertEqual(json.loads(list_saved_workflows())["count"], 0)
 
 
+    def test_saved_workflow_inspection_exposes_validated_steps_without_execution(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import save_workflow, inspect_saved_workflow
+
+        steps = [
+            {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
+            {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": os.path.join(directory, "workflows.json")}):
+                save_workflow("double_check", steps, "Verify a calculation twice")
+                result = json.loads(inspect_saved_workflow("double_check"))
+
+        self.assertEqual(result["name"], "double_check")
+        self.assertEqual(result["description"], "Verify a calculation twice")
+        self.assertEqual([step["tool"] for step in result["steps"]], ["calculator", "calculator"])
+        self.assertEqual(result["steps"][0]["arguments"], {"expression": "6 * 7"})
+        self.assertEqual(result["steps"][1]["arguments"], {"expression": {"$step_result": 0}})
+        self.assertIn("No workflow was executed", result["note"])
+
+
 if __name__ == "__main__":
     unittest.main()
