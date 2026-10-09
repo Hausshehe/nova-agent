@@ -78,6 +78,26 @@ class CloudflareClientTests(unittest.TestCase):
             )
         )
 
+    def test_required_tool_choice_retries_cli_shaped_invalid_argument_once(self):
+        payload = {"tool_choice": "required"}
+        details = (
+            "AiError: Invalid JSON: invalid number at line 1 column 2 "
+            "input_value='--action write_text_file --path foundation-directory-test/proof.txt'"
+        )
+        self.assertTrue(
+            GeminiClient._should_retry_with_auto_tool_choice(400, details, payload)
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, details, payload, already_retried=True
+            )
+        )
+        self.assertFalse(
+            GeminiClient._should_retry_with_auto_tool_choice(
+                400, details, {"tool_choice": "auto"}
+            )
+        )
+
     def test_forced_tool_choice_keeps_legacy_invalid_json_retry_detection(self):
         payload = {
             "tool_choice": {
