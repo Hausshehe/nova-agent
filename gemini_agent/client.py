@@ -2722,6 +2722,71 @@ class GeminiClient:
 
             content = message.get("content")
 
+            # A model may invent a tool name and serialize it as XML. During an
+            # active construction goal, never return that imitation as if it
+            # were an executed action. Replan through a distinct registered tool.
+            if (
+                not tool_calls
+                and self.goal_state is not None
+                and self.goal_state.status == "ACTIVE"
+                and isinstance(content, str)
+                and "<tool_call>" in content
+            ):
+                attempted = {
+                    str(trace.get("name", ""))
+                    for trace in self.last_tool_calls
+                    if isinstance(trace, dict)
+                    and trace.get("name") not in {"select_goal_next_step", "establish_goal_contract"}
+                }
+                candidates = [
+                    str(item.get("name", "")).strip()
+                    for item in self.tool_declarations
+                    if isinstance(item, dict)
+                    and str(item.get("name", "")).strip() in self.tool_handlers
+                    and str(item.get("name", "")).strip() not in attempted
+                    and str(item.get("name", "")).strip() not in {
+                        "establish_goal_contract", "select_goal_next_step",
+                        "self_test", "capability_inventory", "assess_capability_gap",
+                    }
+                ]
+                if candidates:
+                    from gemini_agent.goal_next_step import select_goal_next_step
+                    selection = select_goal_next_step(
+                        self.goal_state.goal,
+                        self.goal_state.success_condition,
+                        self.goal_state.status,
+                        self.goal_state.progress_status,
+                        self.goal_state.progress_reason or "The provider returned an unregistered text tool call.",
+                        candidates,
+                        "\\n".join(self.goal_state.evidence),
+                    )
+                    selected_name = selection.action
+                    if selected_name == "STOP" or selected_name not in candidates:
+                        selected_name = "execute_constructed_action" if "execute_constructed_action" in candidates else candidates[0]
+                    selected = next(item for item in self.tool_declarations if item.get("name") == selected_name)
+                    cloud_name = self._CLOUD_TOOL_NAMES.get(selected_name, selected_name)
+                    payload["tools"] = [{
+                        "type": "function",
+                        "function": {
+                            "name": cloud_name,
+                            "description": selected.get("description", ""),
+                            "parameters": self._schema(selected.get("parameters", {})),
+                        },
+                    }]
+                    payload["tool_choice"] = {"type": "function", "function": {"name": cloud_name}}
+                    contents.append({"role": "model", "parts": [{"text": content}]})
+                    contents.append({"role": "user", "parts": [{
+                        "text": "The previous response named an unregistered tool, so no action was executed. "
+                        "Use only the registered tool now forced by the runtime. Supply valid arguments, "
+                        "execute one bounded step, and do not imitate tool calls in plain text."
+                    }]})
+                    continue
+                return (
+                    "Goal remains ACTIVE and unverified. The provider emitted an unregistered text tool call; "
+                    "no action was executed, and no distinct registered action remains available in this turn. "
+                    "Untrusted model output: " + content[:1000]
+                )
+
             # Explicit self-extension requests are transactional. If the model
             # produces no proposal at all, stop here rather than burning tool rounds.
             if requested_tool == "apply_capability_extension" and not tool_calls and not content:
