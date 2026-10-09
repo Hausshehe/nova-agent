@@ -44,6 +44,25 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_tool_loop_exhaustion_reports_bounded_names_without_tool_output(self):
+        trace = [
+            {"name": "discover_dependency_options", "result": "private or lengthy result"},
+            {"name": "acquire_termux_packages", "result": "another lengthy result"},
+            {"name": "discover_dependency_options", "result": "sensitive result"},
+        ]
+        diagnostic = GeminiClient._tool_loop_exhaustion_diagnostic(
+            16, trace, goal_state=type("Goal", (), {"status": "ACTIVE"})()
+        )
+        self.assertIn("16 rounds", diagnostic)
+        self.assertIn(
+            "discover_dependency_options -> acquire_termux_packages -> discover_dependency_options",
+            diagnostic,
+        )
+        self.assertIn("discover_dependency_options x2", diagnostic)
+        self.assertIn("Goal state: ACTIVE", diagnostic)
+        self.assertNotIn("private or lengthy result", diagnostic)
+        self.assertNotIn("sensitive result", diagnostic)
+
     def test_groq_provider_requires_its_own_api_key(self):
         with patch.dict(os.environ, {"NOVA_PROVIDER": "groq"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "GROQ_API_KEY"):
