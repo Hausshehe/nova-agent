@@ -1873,6 +1873,47 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(client.last_tool_calls[0]["name"], "apply_capability_repair")
         open_url.assert_not_called()
 
+    def test_active_goal_forces_selected_action_instead_of_prose_only(self):
+        from gemini_agent.goal_next_step import GoalNextStep
+
+        response = {"choices": [{"message": {"content": "I will investigate."}}]}
+        prompt = (
+            "[Nova orchestration directive] Nova has already established the runtime "
+            "goal contract. Autonomously pursue the goal using bounded next-step selection."
+        )
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen", return_value=FakeResponse(response)
+        ) as open_url, patch(
+            "gemini_agent.goal_next_step.select_goal_next_step",
+            return_value=GoalNextStep(
+                "discover_workspace_executables",
+                "Inspect available build resources before choosing a build strategy.",
+            ),
+        ):
+            client = GeminiClient()
+            client.goal_state = start_goal_state(
+                "Create an Android calculator app",
+                "Build and independently verify a functional calculator APK",
+            )
+            client.ask(prompt)
+
+        sent = json.loads(open_url.call_args.args[0].data)
+        self.assertEqual(
+            [tool["function"]["name"] for tool in sent["tools"]],
+            ["discover_workspace_executables"],
+        )
+        self.assertEqual(
+            sent["tool_choice"],
+            {
+                "type": "function",
+                "function": {"name": "discover_workspace_executables"},
+            },
+        )
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
