@@ -388,7 +388,7 @@ class GeminiClient:
         # Explicit composition requests outrank every primitive mentioned as a
         # workflow step. Otherwise the first registered name (often calculator)
         # hijacks routing before the workflow-only declaration filter runs.
-        if re.search(r"\\brun_workflow\\b", user_text):
+        if re.search(r"\brun_workflow\b", user_text):
             return "run_workflow"
         # A request referring to the newly generated capability without naming it
         # must resolve to the actual generated wrapper, not an adjacent primitive.
