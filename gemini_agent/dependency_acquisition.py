@@ -1,7 +1,8 @@
 """Controlled dependency acquisition through configured Termux repositories.
 
-Only named packages from an explicit development-tool allowlist may be installed.
-No arbitrary URLs, shell commands, or user-controlled package-manager flags are accepted.
+Read-only inspection accepts syntactically safe package names so Nova can discover
+repository contents. Installation is restricted to an explicit development-tool
+allowlist. No arbitrary URLs, shell commands, or user-controlled flags are accepted.
 """
 import os
 import re
@@ -39,28 +40,28 @@ def _package_manager() -> str:
 
 def acquire_termux_packages(packages: list[str], mode: str = "inspect", timeout_seconds: int = 60) -> str:
     """Inspect repository availability or install allowlisted development packages."""
+    if mode not in {"inspect", "install"}:
+        raise ValueError("mode must be 'inspect' or 'install'.")
     if not isinstance(packages, list) or not packages or len(packages) > _MAX_PACKAGES:
         raise ValueError(f"packages must contain 1 to {_MAX_PACKAGES} package names.")
     normalized = []
     for package in packages:
         if not isinstance(package, str) or not _PACKAGE_RE.fullmatch(package):
             raise ValueError("Package names must be simple lowercase repository names.")
-        if package not in _ALLOWED_PACKAGES:
+        if mode == "install" and package not in _ALLOWED_PACKAGES:
             raise ValueError(f"Package is not in the dependency-install allowlist: {package}")
         if package not in normalized:
             normalized.append(package)
-    if mode not in {"inspect", "install"}:
-        raise ValueError("mode must be 'inspect' or 'install'.")
     if not isinstance(timeout_seconds, int) or isinstance(timeout_seconds, bool) or not 1 <= timeout_seconds <= _MAX_TIMEOUT:
         raise ValueError(f"timeout_seconds must be between 1 and {_MAX_TIMEOUT}.")
     manager = _package_manager()
     if mode == "inspect":
         # Read-only repository metadata query. No package scripts are executed.
-        command = [manager, "show", *normalized] if Path(manager).name == "pkg" else [manager, "show", *normalized]
+        command = [manager, "show", *normalized]
     else:
         # Installs are an explicit workspace-goal side effect. The package source is
         # the device's configured repository; callers cannot provide URLs or flags.
-        command = [manager, "install", "-y", *normalized] if Path(manager).name == "pkg" else [manager, "install", "-y", *normalized]
+        command = [manager, "install", "-y", *normalized]
     try:
         result = subprocess.run(
             command, cwd=os.getcwd(), stdin=subprocess.DEVNULL,
@@ -92,18 +93,19 @@ def acquire_termux_packages(packages: list[str], mode: str = "inspect", timeout_
 ACQUIRE_TERMUX_PACKAGES_DECLARATION = {
     "name": "acquire_termux_packages",
     "description": (
-        "Inspect configured Termux repository metadata or install allowlisted development dependencies. "
-        "Use inspect first to confirm package availability. Installation is limited to approved package names "
+        "Inspect configured Termux repository metadata for syntactically safe package names, or install allowlisted development dependencies. "
+        "Use inspect first to discover package availability. Installation is limited to approved package names "
         "from configured repositories; no arbitrary URLs, shell commands, or package flags are accepted. "
         "After installation, independently discover and version-check each executable."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "packages": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "One to twelve allowlisted package names."},
+            "packages": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "One to twelve simple lowercase package names; install mode additionally requires allowlisted names."},
             "mode": {"type": "STRING", "enum": ["inspect", "install"], "description": "Inspect package metadata first; use install only when the goal requires the dependency."},
             "timeout_seconds": {"type": "INTEGER", "description": "Bounded operation timeout from 1 to 120 seconds."},
         },
         "required": ["packages", "mode"],
     },
 }
+"
