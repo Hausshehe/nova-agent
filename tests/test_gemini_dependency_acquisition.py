@@ -24,6 +24,8 @@ class DependencyAcquisitionTests(unittest.TestCase):
         ) as run:
             result = acquire_termux_packages(["android-sdk", "android-sdk-platform-35"], mode="inspect")
         self.assertIn("Package: android-sdk", result)
+        self.assertIn("Repository metadata found: ['android-sdk']", result)
+        self.assertIn("No metadata returned for: android-sdk-platform-35", result)
         self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "show", "android-sdk", "android-sdk-platform-35"])
 
     def test_install_is_allowlisted_and_uses_configured_repository(self):
