@@ -6591,7 +6591,7 @@ def _write_workflow_store(data: dict) -> None:
         ) as temporary:
             temporary_path = Path(temporary.name)
             json.dump(data, temporary, ensure_ascii=False, indent=2, sort_keys=True)
-            temporary.write("\\n")
+            temporary.write("\n")
             temporary.flush()
             os.fsync(temporary.fileno())
         os.replace(temporary_path, path)
