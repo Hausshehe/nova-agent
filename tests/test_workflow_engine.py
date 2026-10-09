@@ -230,5 +230,48 @@ class WorkflowEngineTests(unittest.TestCase):
         self.assertIn("No workflow was executed", result["note"])
 
 
+
+    def test_json_path_reference_selects_object_field_for_next_step(self):
+        handlers = {
+            "source": lambda: json.dumps({"data": {"count": 3}}),
+            "consume": lambda value: f"selected:{value}",
+        }
+        result = json.loads(execute_workflow([
+            {"tool": "source", "arguments": {}},
+            {"tool": "consume", "arguments": {"value": {"$step_result": 0, "$path": ["data", "count"]}}},
+        ], handlers, allowed_tools=set(handlers)))
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["steps"][1]["result"], "selected:3")
+
+    def test_json_path_reference_selects_array_item(self):
+        handlers = {"source": lambda: json.dumps({"items": ["a", "b"]}), "consume": lambda value: value}
+        result = json.loads(execute_workflow([
+            {"tool": "source", "arguments": {}},
+            {"tool": "consume", "arguments": {"value": {"$step_result": 0, "$path": ["items", 1]}}},
+        ], handlers, allowed_tools=set(handlers)))
+        self.assertEqual(result["steps"][1]["result"], "b")
+
+    def test_missing_json_path_stops_before_downstream_handler(self):
+        calls = []
+        handlers = {"source": lambda: '{"known":1}', "consume": lambda value: calls.append(value) or "ran"}
+        result = json.loads(execute_workflow([
+            {"tool": "source", "arguments": {}},
+            {"tool": "consume", "arguments": {"value": {"$step_result": 0, "$path": ["missing"]}}},
+        ], handlers, allowed_tools=set(handlers)))
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(calls, [])
+        self.assertIn("path does not exist", result["steps"][-1]["error"])
+
+    def test_invalid_json_path_shape_is_rejected_before_any_handler_runs(self):
+        calls = []
+        handlers = {"source": lambda: calls.append("ran") or '{"x":1}'}
+        with self.assertRaisesRegex(ValueError, "result path"):
+            execute_workflow([
+                {"tool": "source", "arguments": {}},
+                {"tool": "source", "arguments": {"unused": {"$step_result": 0, "$path": []}}},
+            ], handlers, allowed_tools=set(handlers))
+        self.assertEqual(calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()
