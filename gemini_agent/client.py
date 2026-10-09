@@ -95,7 +95,7 @@ class GeminiClient:
         if not isinstance(content, str) or "<tool_call>" not in content:
             return None
         match = re.search(
-            r"<tool_call>\\s*([A-Za-z_][A-Za-z0-9_]*)\\b(.*?)(?:</tool_call>|$)",
+            r"<tool_call>\s*([A-Za-z_][A-Za-z0-9_]*)\b(.*?)(?:</tool_call>|$)",
             content,
             re.IGNORECASE | re.DOTALL,
         )
@@ -113,11 +113,11 @@ class GeminiClient:
         body = match.group(2)
         args = {}
         matches = list(re.finditer(
-            r"<arg_key>\\s*(.*?)\\s*</arg_key>\\s*<arg_value>(.*?)</arg_value>",
+            r"<arg_key>\s*(.*?)\s*</arg_key>\s*<arg_value>(.*?)</arg_value>",
             body,
             re.IGNORECASE | re.DOTALL,
         ))
-        if not matches and re.search(r"<arg_key>\\s*[^<]+</arg_key>", body, re.IGNORECASE):
+        if not matches and re.search(r"<arg_key>\s*[^<]+</arg_key>", body, re.IGNORECASE):
             return None
         for arg_match in matches:
             key = arg_match.group(1).strip()
