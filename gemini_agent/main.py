@@ -12,8 +12,15 @@ def _print_workflow_execution_evidence(client, answer: str = "") -> None:
         call for call in getattr(client, "last_tool_calls", [])
         if isinstance(call, dict)
     ]
-    if "goal progress observation: blocked" in str(answer).lower():
-        print("\\nExecution evidence (recorded goal tool trace):")
+    normalized_answer = " ".join(str(answer).lower().split())
+    blocked_goal_report = any(marker in normalized_answer for marker in (
+        "goal progress observation: blocked",
+        "environmental blockage",
+        "environmental blocker",
+        "unresolved blockers",
+    ))
+    if blocked_goal_report:
+        print("\nExecution evidence (recorded goal tool trace):")
         safe_calls = []
         for call in calls:
             args = call.get("args")
