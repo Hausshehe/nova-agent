@@ -107,6 +107,18 @@ class GoalNextStepTests(unittest.TestCase):
                 "execute_constructed_action",
             ],
         )
+        self.assertEqual(result.action, "list_directory")
+
+    def test_construction_uses_executor_after_initial_inspection_evidence(self):
+        result = select_goal_next_step(
+            "Create a minimal Android calculator app from scratch in a new workspace.",
+            "Create the source files and configuration, build an installable APK, and verify addition, subtraction, multiplication, and division with actual tests.",
+            "ACTIVE",
+            "PROGRESS",
+            "Workspace inspection completed; no project files or build configuration exist yet.",
+            ["list_directory", "find_executable", "execute_constructed_action"],
+            "Workspace is empty; no Android project files or build configuration found.",
+        )
         self.assertEqual(result.action, "execute_constructed_action")
 
     def test_blocked_construction_diagnoses_failed_action_before_repeating_executor(self):
