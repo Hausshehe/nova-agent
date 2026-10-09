@@ -9,7 +9,7 @@ import urllib.request
 from collections.abc import Callable
 
 from gemini_agent.android_ui import execute_validated_android_ui_mechanism
-from gemini_agent.goal_state import GoalState, start_goal_state
+from gemini_agent.goal_state import GoalState, start_goal_state, is_premature_blocker_claim
 from gemini_agent.goal_progress import observe_goal_progress
 from gemini_agent.goal_completion import verify_goal_completion
 from gemini_agent.constructed_action import CONSTRUCTED_ACTION_DECLARATION
@@ -2473,6 +2473,7 @@ class GeminiClient:
         # condition when the model has enough evidence.
         max_tool_rounds = 16
         last_observation_signature = None
+        goal_blocker_rejections = 0
         for loop_index in range(max_tool_rounds):
             round_trace_start = len(self.last_tool_calls)
             request = urllib.request.Request(
@@ -4211,6 +4212,102 @@ class GeminiClient:
                     )
                 raise RuntimeError(
                     f"Cloudflare returned an unexpected response: {result}"
+                )
+            if self.goal_state is not None and is_premature_blocker_claim(
+                self.goal_state.status, str(content)
+            ):
+                if goal_blocker_rejections >= 2:
+                    return (
+                        "Goal remains ACTIVE and unverified. Nova rejected the terminal "
+                        "blocker claim because the available evidence does not establish "
+                        "that recovery paths were exhausted. Latest claim: "
+                        + str(content)[:1200]
+                    )
+
+                goal_blocker_rejections += 1
+                payload["messages"].append({
+                    "role": "assistant",
+                    "content": str(content),
+                })
+                payload["messages"].append({
+                    "role": "user",
+                    "content": (
+                        "Runtime rejection: your terminal blocker claim is not accepted as "
+                        "evidence that the active goal is impossible. Continue the goal. "
+                        "Choose and execute a distinct, registered investigation/action; do "
+                        "not repeat an already executed action. A tool missing from one "
+                        "discovery result does not prove it is absent from the environment. "
+                        "Inspect alternative mechanisms and available installation or "
+                        "substitution paths where safe. Only report a blocker after observed "
+                        "results establish why the viable alternatives cannot meet the "
+                        "success condition. Never claim success without independent evidence."
+                    ),
+                })
+
+                executed_names = {
+                    str(step.get("action", ""))
+                    for step in self.goal_state.steps
+                    if step.get("status") in {"EXECUTED", "VERIFIED", "FAILED"}
+                }
+                candidate_declarations = [
+                    declaration
+                    for declaration in self.tool_declarations
+                    if isinstance(declaration, dict)
+                    and isinstance(declaration.get("name"), str)
+                    and declaration["name"] in self.tool_handlers
+                    and declaration["name"] not in executed_names
+                    and declaration["name"] not in {
+                        "establish_goal_contract", "select_goal_next_step",
+                        "self_test", "capability_inventory", "assess_capability_gap",
+                    }
+                ][:256]
+                if candidate_declarations:
+                    candidate_names = [
+                        declaration["name"] for declaration in candidate_declarations
+                    ]
+                    evidence = "\\n".join(self.goal_state.evidence)
+                    if len(evidence) > 480:
+                        evidence = evidence[:238] + "\\n...\\n" + evidence[-237:]
+                    from gemini_agent.goal_next_step import select_goal_next_step
+                    selection = select_goal_next_step(
+                        self.goal_state.goal,
+                        self.goal_state.success_condition,
+                        "ACTIVE",
+                        "BLOCKED",
+                        "The model asserted a blocker without sufficient observed evidence.",
+                        candidate_names,
+                        evidence or "No independent evidence establishes that all recovery paths failed.",
+                    )
+                    selected_name = selection.action
+                    if selected_name not in candidate_names:
+                        selected_name = (
+                            "execute_constructed_action"
+                            if "execute_constructed_action" in candidate_names
+                            else candidate_names[0]
+                        )
+                    declaration = next(
+                        item for item in candidate_declarations
+                        if item["name"] == selected_name
+                    )
+                    cloud_name = self._CLOUD_TOOL_NAMES.get(selected_name, selected_name)
+                    payload["tools"] = [{
+                        "type": "function",
+                        "function": {
+                            "name": cloud_name,
+                            "description": declaration["description"],
+                            "parameters": self._schema(declaration["parameters"]),
+                        },
+                    }]
+                    payload["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": cloud_name},
+                    }
+                    continue
+
+                return (
+                    "Goal remains ACTIVE and unverified. A blocker claim was rejected, "
+                    "but no unexecuted registered action remains available for a distinct "
+                    "investigation. Evidence: " + str(content)[:1200]
                 )
             return str(content)
 
