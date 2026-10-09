@@ -216,6 +216,41 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("report the workspace", success_condition)
         self.assertNotIn("unresolved blockers", success_condition)
 
+    def test_dependency_recovery_prompt_starts_persistent_goal_and_exposes_construction_tools(self):
+        prompt = (
+            "Continue from the real current environment. Inspect installed dependencies first. "
+            "You may install necessary packages from configured Termux repositories using your "
+            "registered dependency-acquisition tools. Choose the smallest viable build strategy, "
+            "verify every installation, and continue through building and arithmetic testing. "
+            "Do not ask me to install dependencies manually. If a required component is unavailable, "
+            "investigate a different legitimate route before declaring a blocker."
+        )
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch.object(
+            GeminiClient, "_generate_cloudflare", return_value="orchestration-routed"
+        ) as generate:
+            client = GeminiClient()
+            answer = client.ask(prompt)
+        self.assertEqual(answer, "orchestration-routed")
+        self.assertIsNotNone(client.goal_state)
+        self.assertEqual(client.goal_state.status, "ACTIVE")
+        self.assertIn("install dependencies manually", client.goal_state.goal.lower())
+        self.assertTrue(client.goal_state.success_condition)
+        routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
+        self.assertIn("[Nova orchestration directive]", routed_prompt)
+        available_names = {
+            declaration["name"]
+            for declaration in client._relevant_tool_declarations(generate.call_args.args[0])
+        }
+        self.assertIn("discover_dependency_options", available_names)
+        self.assertIn("acquire_termux_packages", available_names)
+        self.assertIn("write_text_file", available_names)
+        self.assertIn("run_command", available_names)
+        self.assertIn("verify_command_result", available_names)
+
     def test_descriptive_build_request_does_not_start_autonomous_mutation(self):
         prompt = "Create an Android calculator app and explain how to build and verify it."
         with patch.dict(
