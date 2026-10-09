@@ -2571,8 +2571,19 @@ class GeminiClient:
                     provider_tool_choice_retry_used = True
                     payload["tool_choice"] = "auto"
                     continue
+                request_context = {
+                    "model": payload.get("model"),
+                    "tool_choice": payload.get("tool_choice"),
+                    "tool_names": [
+                        tool.get("function", {}).get("name")
+                        for tool in payload.get("tools", [])
+                        if isinstance(tool, dict)
+                    ],
+                    "auto_tool_choice_retry_used": provider_tool_choice_retry_used,
+                }
                 raise RuntimeError(
-                    f"Cloudflare API error ({exc.code}): {details}"
+                    f"Cloudflare API error ({exc.code}): {details}; "
+                    "request context: " + json.dumps(request_context, sort_keys=True)
                 ) from exc
             except TimeoutError as exc:
                 raise RuntimeError(
