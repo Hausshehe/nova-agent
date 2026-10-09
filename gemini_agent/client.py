@@ -130,6 +130,36 @@ class GeminiClient:
         }
 
     @staticmethod
+    def _tool_loop_exhaustion_diagnostic(
+        max_rounds: int, tool_calls: list[dict], goal_state=None
+    ) -> str:
+        """Report bounded tool-call names after exhaustion without leaking tool output."""
+        recent = [
+            str(call.get("name", "unknown"))
+            for call in tool_calls[-8:]
+            if isinstance(call, dict)
+        ]
+        if recent:
+            sequence = " -> ".join(recent)
+            counts = {}
+            for name in recent:
+                counts[name] = counts.get(name, 0) + 1
+            repeated = [f"{name} x{count}" for name, count in counts.items() if count > 1]
+            repeated_note = (
+                " Repeated tool names: " + ", ".join(repeated) + "."
+                if repeated else ""
+            )
+        else:
+            sequence = "none recorded"
+            repeated_note = ""
+        status = getattr(goal_state, "status", None) or "no active runtime goal"
+        return (
+            f"Cloudflare requested too many tool calls ({max_rounds} rounds). "
+            f"Recent registered tool sequence: {sequence}.{repeated_note} "
+            f"Goal state: {status}. Tool results were omitted from this diagnostic."
+        )
+
+    @staticmethod
     def _restore_tools_for_autonomous_goal(
         payload: dict, declarations: list[dict], autonomous_goal: bool
     ) -> bool:
@@ -4565,7 +4595,11 @@ class GeminiClient:
                 )
             return str(content)
 
-        raise RuntimeError("Cloudflare requested too many tool calls.")
+        raise RuntimeError(
+            self._tool_loop_exhaustion_diagnostic(
+                max_tool_rounds, self.last_tool_calls, self.goal_state
+            )
+        )
 
     def ask(
         self,
