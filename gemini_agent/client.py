@@ -4462,7 +4462,36 @@ class GeminiClient:
                 )
             return str(content)
 
-        raise RuntimeError("Cloudflare requested too many tool calls.")
+        recent_calls = [
+            {
+                "name": str(call.get("name", "")),
+                "result": str(call.get("result", ""))[:240],
+            }
+            for call in self.last_tool_calls[-8:]
+        ]
+        goal_context = None
+        if self.goal_state is not None:
+            goal_context = {
+                "status": self.goal_state.status,
+                "step_count": len(self.goal_state.steps),
+                "evidence_count": len(self.goal_state.evidence),
+                "last_steps": [
+                    {
+                        "action": str(step.get("action", "")),
+                        "status": str(step.get("status", "")),
+                    }
+                    for step in self.goal_state.steps[-5:]
+                ],
+            }
+        raise RuntimeError(
+            "Cloudflare requested too many tool calls; "
+            + json.dumps({
+                "round_limit": max_tool_rounds,
+                "executed_tool_call_count": len(self.last_tool_calls),
+                "recent_executed_tool_calls": recent_calls,
+                "goal": goal_context,
+            }, sort_keys=True, default=str)
+        )
 
     def ask(
         self,
