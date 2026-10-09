@@ -3,13 +3,13 @@
 import unittest
 
 from gemini_agent.client import GeminiClient
-from gemini_agent.tools import TOOL_DECLARATIONS
+from gemini_agent.tools import RUN_COMMAND_DECLARATION, TOOL_DECLARATIONS
 
 
 class ConstructionToolProfileTests(unittest.TestCase):
     def test_construction_goal_keeps_execution_and_verification_tools_without_diagnostics(self):
         client = GeminiClient.__new__(GeminiClient)
-        client.tool_declarations = TOOL_DECLARATIONS
+        client.tool_declarations = [*TOOL_DECLARATIONS, RUN_COMMAND_DECLARATION]
         contents = [{
             "role": "user",
             "parts": [{
