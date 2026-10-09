@@ -39,6 +39,22 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_autonomous_goal_tool_restore_excludes_goal_selector(self):
+        payload = {"tools": [], "tool_choice": {"type": "function", "function": {"name": "stale_tool"}}}
+        declarations = [
+            {"name": "select_goal_next_step", "description": "Choose next goal step", "parameters": {"type": "object", "properties": {}}},
+            {"name": "list_directory", "description": "List workspace directory", "parameters": {"type": "object", "properties": {}}},
+        ]
+
+        changed = GeminiClient._restore_tools_for_autonomous_goal(
+            payload, declarations, autonomous_goal=True
+        )
+
+        self.assertTrue(changed)
+        names = [item["function"]["name"] for item in payload["tools"]]
+        self.assertEqual(names, ["list_directory"])
+        self.assertEqual(payload["tool_choice"], "auto")
+
     def test_forced_tool_choice_retries_known_invalid_json_argument_error_once(self):
         payload = {
             "tool_choice": {
