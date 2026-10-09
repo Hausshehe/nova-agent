@@ -41,7 +41,7 @@ class DependencyAcquisitionTests(unittest.TestCase):
     def test_discovery_reports_executables_and_package_metadata_without_installing(self):
         completed = type("Completed", (), {
             "returncode": 0,
-            "stdout": "Package: ecj\\nVersion: 1.0",
+            "stdout": "Package: ecj\nVersion: 1.0",
             "stderr": "",
         })()
         def which(name):
