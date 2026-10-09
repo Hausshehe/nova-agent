@@ -182,6 +182,38 @@ class GeminiClient:
         )
 
     @staticmethod
+    def _exclude_repeated_observation_tools(payload: dict, observations: list[dict]) -> bool:
+        """Keep synthesis requests tool-capable while excluding tools that just stalled."""
+        repeated_names = {
+            str(item.get("name", ""))
+            for item in observations
+            if isinstance(item, dict) and item.get("name")
+        }
+        if not repeated_names:
+            return False
+        excluded_names = set(repeated_names)
+        excluded_names.update(
+            GeminiClient._CLOUD_TOOL_NAMES.get(name, name)
+            for name in repeated_names
+        )
+        declared_tools = payload.get("tools")
+        if not isinstance(declared_tools, list):
+            return False
+        remaining = [
+            tool for tool in declared_tools
+            if not (
+                isinstance(tool, dict)
+                and isinstance(tool.get("function"), dict)
+                and tool["function"].get("name") in excluded_names
+            )
+        ]
+        if not remaining:
+            return False
+        payload["tools"] = remaining
+        payload["tool_choice"] = "auto"
+        return len(remaining) != len(declared_tools)
+
+    @staticmethod
     def _restore_tools_for_autonomous_goal(
         payload: dict, declarations: list[dict], autonomous_goal: bool
     ) -> bool:
@@ -4531,8 +4563,15 @@ class GeminiClient:
                                 "answer and state the remaining uncertainty explicitly."
                             ),
                         })
-                        payload.pop("tools", None)
-                        payload.pop("tool_choice", None)
+                        if not self._exclude_repeated_observation_tools(
+                            payload, round_observations
+                        ):
+                            return (
+                                "Investigation stopped safely: the latest round repeated "
+                                "the same observation, and no distinct registered tool "
+                                "remains to gather new evidence. No result was claimed "
+                                "without verification."
+                            )
                         last_observation_signature = None
                         continue
                     last_observation_signature = observation_signature
