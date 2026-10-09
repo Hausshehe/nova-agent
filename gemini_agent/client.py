@@ -4888,7 +4888,7 @@ class GeminiClient:
         # Explicit saved-workflow discovery is a required first action, not optional
         # model advice. Record its real result and pass it into the existing decision
         # loop so workflow selection still depends on descriptions and goal fit.
-        if re.search(r"\\blist\\s+(?:the\\s+)?saved\\s+workflows\\b", prompt_text, re.IGNORECASE):
+        if re.search(r"\blist\s+(?:the\s+)?saved\s+workflows\b", prompt_text, re.IGNORECASE):
             discovery = self.tool_handlers.get("list_saved_workflows")
             if callable(discovery):
                 try:
