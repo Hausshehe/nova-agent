@@ -2774,12 +2774,13 @@ class GeminiClient:
                         },
                     }]
                     payload["tool_choice"] = {"type": "function", "function": {"name": cloud_name}}
-                    contents.append({"role": "model", "parts": [{"text": content}]})
-                    contents.append({"role": "user", "parts": [{
-                        "text": "The previous response named an unregistered tool, so no action was executed. "
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": "The previous response named an unregistered tool, so no action was executed. "
                         "Use only the registered tool now forced by the runtime. Supply valid arguments, "
-                        "execute one bounded step, and do not imitate tool calls in plain text."
-                    }]})
+                        "execute one bounded step, and do not imitate tool calls in plain text.",
+                    })
                     continue
                 return (
                     "Goal remains ACTIVE and unverified. The provider emitted an unregistered text tool call; "
