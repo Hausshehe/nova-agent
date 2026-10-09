@@ -96,6 +96,32 @@ class MainContextTests(unittest.TestCase):
         self.assertIn('"steps_completed": 2', rendered)
         self.assertEqual(rendered.count('"result": "42"'), 2)
 
+    def test_prints_actual_recorded_saved_workflow_result(self):
+        workflow_result = {
+            "status": "completed",
+            "steps_completed": 1,
+            "steps": [
+                {"step": 0, "tool": "calculator", "status": "completed", "result": "42"},
+            ],
+        }
+
+        class FakeClient:
+            last_tool_calls = [{
+                "name": "run_saved_workflow",
+                "args": {"name": "persistence-check"},
+                "result": json.dumps(workflow_result),
+            }]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            agent_main._print_workflow_execution_evidence(FakeClient())
+
+        rendered = output.getvalue()
+        self.assertIn("Execution evidence (local run_saved_workflow result)", rendered)
+        self.assertIn('"status": "completed"', rendered)
+        self.assertIn('"steps_completed": 1', rendered)
+        self.assertIn('"result": "42"', rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
