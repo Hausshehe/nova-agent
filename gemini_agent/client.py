@@ -4885,6 +4885,31 @@ class GeminiClient:
                 })
                 return str(tool_result)
         requested_tool = self._requested_local_tool(contents)
+        # Explicit saved-workflow discovery is a required first action, not optional
+        # model advice. Record its real result and pass it into the existing decision
+        # loop so workflow selection still depends on descriptions and goal fit.
+        if re.search(r"\\blist\\s+(?:the\\s+)?saved\\s+workflows\\b", prompt_text, re.IGNORECASE):
+            discovery = self.tool_handlers.get("list_saved_workflows")
+            if callable(discovery):
+                try:
+                    discovery_result = str(discovery())
+                except Exception as exc:
+                    discovery_result = f"Tool error: {type(exc).__name__}: {exc}"
+                self.last_tool_calls.append({
+                    "name": "list_saved_workflows",
+                    "args": {},
+                    "result": discovery_result,
+                })
+                contents.insert(0, {
+                    "role": "system",
+                    "content": (
+                        "Required saved-workflow discovery was executed locally. Its actual "
+                        "result is below. Inspect workflow descriptions against the user's "
+                        "goal before choosing one. If none fits, use direct tools and do not "
+                        "create a workflow. Do not claim discovery was unavailable.\n"
+                        "Saved-workflow discovery result:\n" + discovery_result[:16000]
+                    ),
+                })
         # Explicit autonomy-boundary assessments are deterministic, read-only policy
         # decisions. Dispatch them before any provider round-trip so the model cannot
         # reinterpret the supplied uncertainty or risk constraints.
