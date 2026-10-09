@@ -147,6 +147,51 @@ class WorkflowEngineTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "not found"):
                     run_saved_workflow("missing")
 
+    def test_saved_workflow_rejects_oversized_definition_before_execution(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import run_saved_workflow
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = os.path.join(directory, "workflows.json")
+            with open(store, "w", encoding="utf-8") as handle:
+                json.dump({"version": 1, "workflows": {"huge": {
+                    "description": "",
+                    "steps": [{"tool": "calculator", "arguments": {"expression": "x" * 13000}}],
+                }}}, handle)
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": store}):
+                with self.assertRaisesRegex(ValueError, "12000-character limit"):
+                    run_saved_workflow("huge")
+
+    def test_corrupt_workflow_store_is_rejected(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import list_saved_workflows
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = os.path.join(directory, "workflows.json")
+            with open(store, "w", encoding="utf-8") as handle:
+                handle.write('{"version": 1, "workflows": []}')
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": store}):
+                with self.assertRaisesRegex(RuntimeError, "invalid format"):
+                    list_saved_workflows()
+
+    def test_oversized_workflow_store_is_rejected_before_json_parse(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import _MAX_WORKFLOW_STORE_BYTES, list_saved_workflows
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = os.path.join(directory, "workflows.json")
+            with open(store, "w", encoding="utf-8") as handle:
+                handle.write(" " * (_MAX_WORKFLOW_STORE_BYTES + 1))
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": store}):
+                with self.assertRaisesRegex(RuntimeError, "exceeds the"):
+                    list_saved_workflows()
+
     def test_named_workflow_rejects_disallowed_tool_without_persisting(self):
         import os
         import tempfile
