@@ -1828,7 +1828,13 @@ class GeminiClient:
                         f"Reason: {goal_selection.reason}\\n"
                         "No goal-directed action was executed."
                     )
-                if goal_selection.action in self.tool_handlers:
+                if (
+                    goal_selection.action in self.tool_handlers
+                    and any(
+                        declaration.get("name") == goal_selection.action
+                        for declaration in self.tool_declarations
+                    )
+                ):
                     goal_selected_action = goal_selection.action
                     self.last_tool_calls.append({
                         "name": "select_goal_next_step",
