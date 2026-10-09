@@ -152,11 +152,33 @@ class GeminiClient:
         else:
             sequence = "none recorded"
             repeated_note = ""
+        # Include only bounded, non-content execution context. The previous
+        # name-only diagnostic could not distinguish repeated planning from repeated
+        # writes, making a real execution loop impossible to diagnose.
+        details = []
+        for call in tool_calls[-8:]:
+            if not isinstance(call, dict):
+                continue
+            name = str(call.get("name", "unknown"))
+            result = str(call.get("result", ""))
+            args = call.get("args") if isinstance(call.get("args"), dict) else {}
+            if name == "select_goal_next_step":
+                selected = re.search(r"Next step:\\s*([A-Za-z_][A-Za-z0-9_]*)", result)
+                if selected:
+                    details.append(f"selector chose {selected.group(1)}")
+            elif name == "write_text_file":
+                path = args.get("path", args.get("file_path", "unknown"))
+                outcome = "error" if re.search(r"\\b(?:error|failed|failure)\\b", result, re.I) else "returned"
+                details.append(f"write_text_file path={str(path)[:120]} outcome={outcome}")
+            elif name in {"acquire_termux_packages", "discover_dependency_options", "run_command", "execute_constructed_action", "verify_command_result"}:
+                outcome = "error" if re.search(r"\\b(?:error|failed|failure)\\b", result, re.I) else "returned"
+                details.append(f"{name} outcome={outcome}")
+        detail_note = (" Recent safe details: " + " | ".join(details[-8:]) + ".") if details else ""
         status = getattr(goal_state, "status", None) or "no active runtime goal"
         return (
             f"Cloudflare requested too many tool calls ({max_rounds} rounds). "
             f"Recent registered tool sequence: {sequence}.{repeated_note} "
-            f"Goal state: {status}. Tool results were omitted from this diagnostic."
+            f"Goal state: {status}.{detail_note} Tool contents and command output were omitted."
         )
 
     @staticmethod
