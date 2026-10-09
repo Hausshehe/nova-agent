@@ -168,5 +168,40 @@ class MainContextTests(unittest.TestCase):
         self.assertIn('"result": "42"', rendered)
 
 
+    def test_prints_full_bounded_tool_trace_when_goal_report_is_blocked(self):
+        class FakeClient:
+            last_tool_calls = [
+                {
+                    "name": "execute_constructed_action",
+                    "args": {
+                        "executable": "run_command",
+                        "arguments": ["pwd"],
+                        "mutation_scope": "READ_ONLY",
+                    },
+                    "result": "Tool error: Executable not found: run_command",
+                },
+                {
+                    "name": "discover_workspace_executables",
+                    "args": {"request": "Android SDK Gradle Java"},
+                    "result": "Executable candidates discovered: 0",
+                },
+            ]
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            agent_main._print_workflow_execution_evidence(
+                FakeClient(),
+                answer="Goal progress observation: BLOCKED. Environmental blockers were observed.",
+            )
+
+        rendered = output.getvalue()
+        self.assertIn("Execution evidence (recorded goal tool trace)", rendered)
+        self.assertIn("execute_constructed_action", rendered)
+        self.assertIn('"executable": "run_command"', rendered)
+        self.assertIn("Executable not found: run_command", rendered)
+        self.assertIn("discover_workspace_executables", rendered)
+        self.assertIn("Executable candidates discovered: 0", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()
