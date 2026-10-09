@@ -118,3 +118,85 @@ ACQUIRE_TERMUX_PACKAGES_DECLARATION = {
         "required": ["packages", "mode"],
     },
 }
+
+def discover_dependency_options(requirements: list[dict]) -> str:
+    """Discover executable and repository-package options for generic task requirements."""
+    if not isinstance(requirements, list) or not requirements or len(requirements) > 8:
+        raise ValueError("requirements must contain 1 to 8 requirement groups.")
+    package_names = []
+    normalized = []
+    for item in requirements:
+        if not isinstance(item, dict):
+            raise ValueError("Each requirement must be an object.")
+        name = item.get("capability")
+        executables = item.get("executables", [])
+        packages = item.get("packages", [])
+        if not isinstance(name, str) or not name.strip() or len(name) > 120:
+            raise ValueError("Each requirement needs a non-empty capability label of at most 120 characters.")
+        if not isinstance(executables, list) or len(executables) > 8:
+            raise ValueError("Each executable candidate list must contain at most 8 names.")
+        if not isinstance(packages, list) or len(packages) > 8:
+            raise ValueError("Each package candidate list must contain at most 8 names.")
+        if not executables and not packages:
+            raise ValueError("Each requirement needs executable or package candidates.")
+        for executable in executables:
+            if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_.+-]{1,80}", executable):
+                raise ValueError("Executable candidates must be simple command names.")
+        for package in packages:
+            if not isinstance(package, str) or not _PACKAGE_RE.fullmatch(package):
+                raise ValueError("Package candidates must be simple lowercase repository names.")
+            if package not in package_names:
+                package_names.append(package)
+        normalized.append({"capability": name.strip(), "executables": executables, "packages": packages})
+    if len(package_names) > _MAX_PACKAGES:
+        raise ValueError(f"At most {_MAX_PACKAGES} unique package candidates may be inspected.")
+    package_report = acquire_termux_packages(package_names, mode="inspect") if package_names else ""
+    found = set(_METADATA_PACKAGE_RE.findall(package_report))
+    lines = ["Dependency option discovery (read-only):"]
+    for item in normalized:
+        lines.append(f"Requirement: {item['capability']}")
+        available = []
+        for executable in item["executables"]:
+            path = shutil.which(executable)
+            if path:
+                available.append(f"{executable}={path}")
+        lines.append("Available executables: " + (", ".join(available) if available else "none found"))
+        package_status = [
+            f"{package}={'repository metadata found' if package in found else 'availability unconfirmed'}"
+            for package in item["packages"]
+        ]
+        lines.append("Package candidates: " + (", ".join(package_status) if package_status else "none supplied"))
+    lines.append("Repository inspection:")
+    lines.append(package_report or "No package inspection was needed.")
+    lines.append("This is discovery evidence only; no packages were installed and no build strategy was executed.")
+    return "\n".join(lines)
+
+
+DISCOVER_DEPENDENCY_OPTIONS_DECLARATION = {
+    "name": "discover_dependency_options",
+    "description": (
+        "Discover available executables and configured-repository package candidates for generic task requirements. "
+        "Supply requirement groups with a capability label, candidate executable names, and candidate package names. "
+        "This tool only inspects PATH and repository metadata; it does not install packages or assume one fixed build system."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "requirements": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "capability": {"type": "STRING"},
+                        "executables": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "packages": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["capability", "executables", "packages"],
+                },
+                "description": "One to eight task requirements; each may list up to eight executable and package candidates.",
+            }
+        },
+        "required": ["requirements"],
+    },
+}
+
