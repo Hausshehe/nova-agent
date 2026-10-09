@@ -50,7 +50,7 @@ class CloudflareClientTests(unittest.TestCase):
                 "role": "user",
                 "parts": [{
                     "text": (
-                        'Use run_workflow, not calculator directly, with a structured steps array '
+                        'Use run_workflow, not calculator directly, to calculate with a structured steps array '
                         'containing calculator arguments for 6 * 7.'
                     )
                 }],
