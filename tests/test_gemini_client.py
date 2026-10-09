@@ -1264,6 +1264,24 @@ class CloudflareClientTests(unittest.TestCase):
         ])
         self.assertEqual(selected, "path_exists")
 
+    def test_compound_file_write_and_read_request_stays_in_tool_loop(self):
+        request = (
+            "Using registered filesystem tools, write exact text NOVA_FILE_TEST_186 "
+            "to foundation-directory-test/proof.txt using write_text_file. Then call "
+            "read_file on that exact path and compare the complete contents."
+        )
+        selected = GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ])
+        self.assertIsNone(selected)
+
+    def test_standalone_write_text_file_request_still_routes_directly(self):
+        request = "Use write_text_file to write a note to notes.txt."
+        selected = GeminiClient._requested_local_tool([
+            {"role": "user", "parts": [{"text": request}]}
+        ])
+        self.assertEqual(selected, "write_text_file")
+
     def test_compound_run_command_request_routes_execution_before_recovery_mentions(self):
         request = (
             'Use run_command to execute the safe command "python -c \\"import sys; sys.exit(1)\\"". '
