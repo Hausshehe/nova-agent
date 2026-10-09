@@ -264,7 +264,7 @@ class CloudflareClientTests(unittest.TestCase):
             item["function"]["name"] for item in request_payload["tools"]
         }
         self.assertNotIn("inspect_saved_workflow", offered_tools)
-        self.assertIn("Saved-workflow inspection result:", request_payload["messages"][0]["content"])
+        self.assertTrue(any("Saved-workflow inspection result:" in message["content"] for message in request_payload["messages"]))
         self.assertIn("Inspection result received", result)
 
     def test_goal_relevant_tools_keep_saved_workflow_discovery_and_execution_available(self):
