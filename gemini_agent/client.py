@@ -888,6 +888,13 @@ class GeminiClient:
                     "verify_command_result", "diagnose_command_failure",
                     "retry_command", "recover_command", "capability_inventory",
                     "assess_capability_gap",
+                    "path_exists", "create_directory", "delete_directory", "get_file_info",
+                    "get_file_extension", "get_file_name", "get_file_stem", "get_file_parent",
+                    "list_directory_recursive", "move_directory", "copy_directory", "hash_file",
+                    "count_file_lines", "get_directory_entry_count", "get_disk_usage",
+                    "get_directory_size", "list_directory", "read_text_file", "search_text",
+                    "write_text_file", "edit_text_file", "append_text_file", "copy_file",
+                    "move_file", "delete_file", "find_files",
                 })
                 or (selected_groups & {"calculator"} and name == "calculator")
                 or (selected_groups & {"current_datetime"} and name == "current_datetime")
