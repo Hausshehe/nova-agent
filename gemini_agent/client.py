@@ -4845,6 +4845,62 @@ class GeminiClient:
             + json.dumps(observed, ensure_ascii=False, default=str)
         )
 
+    @staticmethod
+    def _audit_saved_workflow_discovery(
+        prompt: str, answer: str, tool_calls: list[dict]
+    ) -> str:
+        """Correct an explicit denial when recorded discovery proves it succeeded."""
+        if not re.search(
+            r"\b(?:list|inspect|show|review)\b.{0,100}\bsaved workflows?\b",
+            str(prompt),
+            re.IGNORECASE | re.DOTALL,
+        ):
+            return answer
+        denial = re.compile(
+            r"\b(?:do not|don't|cannot|can't|unable to|lack(?:ing)? access to)\b"
+            r".{0,100}\b(?:list|inspect|access|view|find)\b.{0,60}\bworkflows?\b"
+            r"|\bno access to a tool to\b.{0,80}\bworkflows?\b",
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not denial.search(str(answer)):
+            return answer
+        discovery = next(
+            (
+                call.get("result")
+                for call in tool_calls
+                if isinstance(call, dict)
+                and call.get("name") == "list_saved_workflows"
+                and isinstance(call.get("result"), str)
+                and not call["result"].lstrip().startswith("Tool error:")
+            ),
+            None,
+        )
+        if discovery is None:
+            return answer
+        try:
+            payload = json.loads(discovery)
+        except (TypeError, ValueError):
+            return answer
+        if isinstance(payload, dict):
+            workflows = payload.get("workflows")
+        elif isinstance(payload, list):
+            workflows = payload
+        else:
+            return answer
+        if not isinstance(workflows, list):
+            return answer
+        if workflows:
+            summary = "Saved workflow discovery found: " + "; ".join(
+                f"{item.get('name', '(unnamed)')} — {item.get('description', 'No description provided')}"
+                for item in workflows
+                if isinstance(item, dict)
+            )
+        else:
+            summary = "Saved workflow discovery completed; no saved workflows were found."
+        paragraphs = re.split(r"\n\s*\n", str(answer).strip())
+        retained = [paragraph for paragraph in paragraphs if not denial.search(paragraph)]
+        return summary + ("\n\n" + "\n\n".join(retained) if retained else "")
+
     def ask(
         self,
         prompt: str,
@@ -5199,4 +5255,6 @@ class GeminiClient:
                 audited = self._audit_explicit_calculation_sequence(
                     prompt_text, answer, self.last_tool_calls
                 )
-        return audited
+        return self._audit_saved_workflow_discovery(
+            prompt_text, audited, self.last_tool_calls
+        )
