@@ -2814,6 +2814,12 @@ class GeminiClient:
                 raise RuntimeError(
                     f"Could not reach {self.provider.title()}: {exc.reason}"
                 ) from exc
+            except OSError as exc:
+                # Socket-level failures such as ConnectionAbortedError are not
+                # consistently wrapped in URLError by urllib.
+                raise RuntimeError(
+                    f"Connection to {self.provider.title()} failed: {exc}"
+                ) from exc
 
             try:
                 message = result["choices"][0]["message"]
