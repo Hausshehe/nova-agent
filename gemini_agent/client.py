@@ -4821,6 +4821,9 @@ class GeminiClient:
                 if part.strip()
             ]
             goal = sentences[0] if sentences else prompt_text.strip()
+            if goal.lower().startswith("continue from "):
+                # Preserve the task context when the prompt resumes a workflow.
+                goal = prompt_text.strip()
             success = next(
                 (
                     sentence
