@@ -4265,9 +4265,9 @@ class GeminiClient:
                     candidate_names = [
                         declaration["name"] for declaration in candidate_declarations
                     ]
-                    evidence = "\\n".join(self.goal_state.evidence)
+                    evidence = "\n".join(self.goal_state.evidence)
                     if len(evidence) > 480:
-                        evidence = evidence[:238] + "\\n...\\n" + evidence[-237:]
+                        evidence = evidence[:238] + "\n...\n" + evidence[-237:]
                     from gemini_agent.goal_next_step import select_goal_next_step
                     selection = select_goal_next_step(
                         self.goal_state.goal,
