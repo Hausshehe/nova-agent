@@ -1340,9 +1340,13 @@ class GeminiClient:
                 for part in item.get("parts", [])
                 if isinstance(part, dict) and "text" in part
             ]
-            if role in {"user", "model"} and text_parts:
+            if role in {"system", "user", "model"} and text_parts:
                 messages.append({
-                    "role": "assistant" if role == "model" else "user",
+                    "role": (
+                        "assistant" if role == "model"
+                        else "system" if role == "system"
+                        else "user"
+                    ),
                     "content": "".join(text_parts),
                 })
 
