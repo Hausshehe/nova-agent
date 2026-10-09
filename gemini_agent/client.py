@@ -3836,14 +3836,13 @@ class GeminiClient:
                             self.goal_state.success_condition,
                             completion_evidence,
                         )
-                        if completion.status == "VERIFIED":
-                            self.goal_state.status = "VERIFIED"
-                        elif completion.status == "FAILED" and not recovery_verified:
-                            # A step that does not complete the overall goal is not proof
-                            # that the goal itself is impossible. Keep ownership active;
-                            # if the tool actually failed, request a bounded alternative.
-                            goal_replan_pending = bool(raw_tool_failed)
-                            self.goal_state.status = "ACTIVE"
+                        from gemini_agent.goal_state import step_goal_disposition
+                        next_goal_status, goal_replan_pending = step_goal_disposition(
+                            completion.status,
+                            raw_tool_failed,
+                            recovery_verified,
+                        )
+                        self.goal_state.status = next_goal_status
                         step_status = (
                             "FAILED" if raw_tool_failed
                             else "VERIFIED" if completion.status == "VERIFIED"
