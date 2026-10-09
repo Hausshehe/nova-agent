@@ -31,7 +31,8 @@ def _trim(value: str) -> str:
 def _package_manager() -> str:
     for name in ("pkg", "apt-get", "apt"):
         path = shutil.which(name)
-        if path and Path(path).is_file() and os.access(path, os.X_OK):
+        # which() already resolves an executable visible in the current process PATH.
+        if path:
             return path
     raise RuntimeError("No supported Termux package manager (pkg/apt-get/apt) is available.")
 
