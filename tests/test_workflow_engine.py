@@ -81,14 +81,19 @@ class WorkflowEngineTests(unittest.TestCase):
 
         self.assertIs(TOOL_HANDLERS["run_workflow"], __import__("gemini_agent.tools", fromlist=["run_workflow"]).run_workflow)
         self.assertIn(RUN_WORKFLOW_DECLARATION, TOOL_DECLARATIONS)
-        result = json.loads(TOOL_HANDLERS["run_workflow"](
-            steps=json.dumps([
-                {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
-                {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
-            ])
-        ))
+        self.assertEqual(RUN_WORKFLOW_DECLARATION["parameters"]["properties"]["steps"]["type"], "ARRAY")
+        steps = [
+            {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
+            {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
+        ]
+        result = json.loads(TOOL_HANDLERS["run_workflow"](steps=steps))
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["steps"][0]["result"], "42")
         self.assertEqual(result["steps"][1]["result"], "42")
+        # Preserve compatibility for existing callers that pass JSON text.
+        text_result = json.loads(TOOL_HANDLERS["run_workflow"](steps=json.dumps(steps)))
+        self.assertEqual(text_result["status"], "completed")
+        self.assertEqual(text_result["steps"][1]["result"], "42")
 
     def test_public_workflow_tool_cannot_run_mutating_capabilities(self):
         from gemini_agent.tools import run_workflow
