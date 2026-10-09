@@ -3024,6 +3024,35 @@ class GeminiClient:
                             "schema-correction retry."
                         )
 
+            # Ordinary chat also needs bounded recovery when a provider invents a
+            # tool name. Keep the current registered schema, ask for a valid tool
+            # call, and never execute or translate the invented name.
+            if malformed_match and malformed_name not in {
+                item.get("name") for item in self.tool_declarations
+                if isinstance(item, dict)
+            } and not (
+                self.goal_state is not None
+                and self.goal_state.status == "ACTIVE"
+            ):
+                if malformed_name not in malformed_text_tool_retries:
+                    malformed_text_tool_retries.add(malformed_name)
+                    payload["tool_choice"] = "auto"
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"The tool name '{malformed_name}' is not registered and was not executed. "
+                            "Continue the original request using only exact tool names and argument "
+                            "schemas present in the available tools. Do not repeat completed actions, "
+                            "invent aliases, or imitate tool calls in text."
+                        ),
+                    })
+                    continue
+                return (
+                    "The unregistered tool call was not executed. The provider repeated "
+                    f"the invented tool name '{malformed_name}' after one correction retry."
+                )
+
             # A model may invent a tool name and serialize it as XML. During an
             # active construction goal, never return that imitation as if it
             # were an executed action. Replan through a distinct registered tool.
