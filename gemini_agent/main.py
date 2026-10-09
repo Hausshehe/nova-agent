@@ -122,6 +122,10 @@ def main() -> None:
             _print_workflow_execution_evidence(client, answer)
         except RuntimeError as exc:
             print(f"\nError: {exc}")
+            _print_workflow_execution_evidence(
+                client,
+                answer="Goal progress observation: BLOCKED after a runtime error.",
+            )
 
 
 if __name__ == "__main__":
