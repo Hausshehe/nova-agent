@@ -57,6 +57,8 @@ class MainContextTests(unittest.TestCase):
         self.assertIn("first call list_saved_workflows", request_calls[0][2])
         self.assertIn("execute it by its exact name with run_saved_workflow", request_calls[0][2])
         self.assertIn("Never claim a workflow ran or a verification occurred", request_calls[0][2])
+        self.assertIn("execute every required action, including each independent verification", request_calls[0][2])
+        self.assertIn("compare each claimed action with the recorded tool results", request_calls[0][2])
         self.assertEqual(
             request_calls[1][1],
             [
