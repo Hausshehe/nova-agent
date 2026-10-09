@@ -67,6 +67,18 @@ class GeminiClient:
         return converted
 
     @staticmethod
+    def _should_retry_with_auto_tool_choice(
+        status: int, details: str, payload: dict, already_retried: bool = False
+    ) -> bool:
+        """Detect Cloudflare's malformed forced-tool argument parsing failure."""
+        return (
+            status == 400
+            and not already_retried
+            and isinstance(payload.get("tool_choice"), dict)
+            and "Expecting value: line 1 column 1" in details
+        )
+
+    @staticmethod
     def _parse_android_mechanism_candidates(discovery: str) -> list[str]:
         """Parse bounded mechanism lines without assuming values contain no spaces."""
         candidates = []
@@ -2522,6 +2534,7 @@ class GeminiClient:
         # generous finite ceiling while relying on the loop's natural stop
         # condition when the model has enough evidence.
         max_tool_rounds = 16
+        provider_tool_choice_retry_used = False
         last_observation_signature = None
         goal_blocker_rejections = 0
         for loop_index in range(max_tool_rounds):
@@ -2549,6 +2562,15 @@ class GeminiClient:
                     ) from exc
             except urllib.error.HTTPError as exc:
                 details = exc.read().decode(errors="replace")
+                if self._should_retry_with_auto_tool_choice(
+                    exc.code, details, payload, provider_tool_choice_retry_used
+                ):
+                    # Cloudflare can fail while parsing arguments for a forced
+                    # function call before returning a completion. Retry once with
+                    # automatic choice, keeping the selected tool declaration bounded.
+                    provider_tool_choice_retry_used = True
+                    payload["tool_choice"] = "auto"
+                    continue
                 raise RuntimeError(
                     f"Cloudflare API error ({exc.code}): {details}"
                 ) from exc
