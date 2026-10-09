@@ -158,7 +158,7 @@ class CloudflareClientTests(unittest.TestCase):
         ), patch(
             "urllib.request.urlopen",
             return_value=FakeResponse(response),
-        ):
+        ) as urlopen_mock:
             client = GeminiClient()
             client.tool_handlers["list_saved_workflows"] = unittest.mock.Mock(
                 return_value=discovery
@@ -168,6 +168,12 @@ class CloudflareClientTests(unittest.TestCase):
             )
 
         client.tool_handlers["list_saved_workflows"].assert_called_once_with()
+        request_payload = json.loads(urlopen_mock.call_args.args[0].data.decode())
+        offered_tools = {
+            item["function"]["name"] for item in request_payload["tools"]
+        }
+        self.assertNotIn("list_saved_workflows", offered_tools)
+        self.assertIn("calculator", offered_tools)
         self.assertEqual(client.last_tool_calls[0], {
             "name": "list_saved_workflows",
             "args": {},
