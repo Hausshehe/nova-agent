@@ -93,9 +93,9 @@ def is_premature_blocker_claim(goal_status: str, response: str) -> bool:
     if goal_status != "ACTIVE" or not isinstance(response, str):
         return False
     return bool(re.search(
-        r"\\b(?:goal\\s+status\\s*:\\s*blocked|goal\\s+is\\s+blocked|"
-        r"no\\s+(?:viable\\s+)?recovery\\s+path|no\\s+recovery\\s+path\\s+available|"
-        r"cannot\\s+continue\\s+safely|no\\s+recovery\\s+path\\s+available)\\b",
+        r"\b(?:goal\s+status\s*:\s*blocked|goal\s+is\s+blocked|"
+        r"no\s+(?:viable\s+)?recovery\s+path|no\s+recovery\s+path\s+available|"
+        r"cannot\s+continue\s+safely|no\s+recovery\s+path\s+available)\b",
         response,
         re.IGNORECASE,
     ))
