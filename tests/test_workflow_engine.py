@@ -104,5 +104,63 @@ class WorkflowEngineTests(unittest.TestCase):
             ]))
 
 
+    def test_invalid_later_step_is_rejected_before_any_handler_runs(self):
+        calls = []
+        handlers = {
+            "source": lambda: calls.append("ran") or "ok",
+        }
+        with self.assertRaisesRegex(ValueError, "not allowed"):
+            execute_workflow(
+                [
+                    {"tool": "source", "arguments": {}},
+                    {"tool": "forbidden", "arguments": {}},
+                ],
+                handlers,
+                allowed_tools={"source"},
+            )
+        self.assertEqual(calls, [])
+
+    def test_named_workflow_save_list_reload_and_execute(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import save_workflow, list_saved_workflows, run_saved_workflow
+
+        steps = [
+            {"tool": "calculator", "arguments": {"expression": "6 * 7"}},
+            {"tool": "calculator", "arguments": {"expression": {"$step_result": 0}}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            store = os.path.join(directory, "workflows.json")
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": store}):
+                self.assertIn('"status":"saved"', save_workflow("double_check", steps, "Two-step calculation"))
+                listed = json.loads(list_saved_workflows())
+                self.assertEqual(listed["count"], 1)
+                self.assertEqual(listed["workflows"][0]["name"], "double_check")
+                # Simulate a fresh load by invoking only through the persisted store API.
+                result = json.loads(run_saved_workflow("double_check"))
+                self.assertEqual(result["status"], "completed")
+                self.assertEqual(result["steps_completed"], 2)
+                self.assertEqual([step["result"] for step in result["steps"]], ["42", "42"])
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    save_workflow("double_check", steps)
+                with self.assertRaisesRegex(ValueError, "not found"):
+                    run_saved_workflow("missing")
+
+    def test_named_workflow_rejects_disallowed_tool_without_persisting(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from gemini_agent.tools import save_workflow, list_saved_workflows
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"NOVA_WORKFLOW_STORE": os.path.join(directory, "workflows.json")}):
+                with self.assertRaisesRegex(ValueError, "not allowed"):
+                    save_workflow("unsafe", [
+                        {"tool": "write_text_file", "arguments": {"path": "x", "content": "y"}}
+                    ])
+                self.assertEqual(json.loads(list_saved_workflows())["count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
