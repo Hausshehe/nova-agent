@@ -1878,7 +1878,10 @@ class CloudflareClientTests(unittest.TestCase):
         from gemini_agent.goal_state import start_goal_state
 
         response = {"choices": [{"message": {"content": "I will investigate."}}]}
-        prompt = "Autonomously pursue the active goal using bounded next-step selection."
+        prompt = (
+            "Create a test artifact. Execute the required actions and verify the result. "
+            "Do not ask me to write or modify code manually."
+        )
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
