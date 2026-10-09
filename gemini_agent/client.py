@@ -4758,7 +4758,7 @@ class GeminiClient:
             and re.search(r"\bverify\w*\b", prompt_text, re.IGNORECASE)
             and explicit_autonomy_commitment
         )
-        if constructive_autonomy:
+        if not resume_requested and constructive_autonomy:
             sentences = [
                 part.strip()
                 for part in re.split(r"(?<=[.!?])\s+", prompt_text)
