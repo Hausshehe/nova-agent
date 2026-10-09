@@ -27,14 +27,34 @@ class GeminiClient:
         tool_handlers: dict[str, Callable[..., str]] | None = None,
     ) -> None:
         del model, fallback_model
+        self.provider = os.environ.get("NOVA_PROVIDER", "cloudflare").strip().lower()
         self.cloudflare_api_token = os.environ.get("CLOUDFLARE_API_TOKEN")
         self.cloudflare_account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
         self.cloudflare_model = os.environ.get(
             "CLOUDFLARE_MODEL", "@cf/zai-org/glm-4.7-flash"
         )
-        if not self.cloudflare_api_token or not self.cloudflare_account_id:
+        if self.provider == "openrouter":
+            self.provider_api_token = os.environ.get("OPENROUTER_API_KEY")
+            self.provider_model = os.environ.get("OPENROUTER_MODEL", "openrouter/free")
+            self.provider_url = "https://openrouter.ai/api/v1/chat/completions"
+            if not self.provider_api_token:
+                raise RuntimeError(
+                    "NOVA_PROVIDER=openrouter requires OPENROUTER_API_KEY."
+                )
+        elif self.provider == "cloudflare":
+            if not self.cloudflare_api_token or not self.cloudflare_account_id:
+                raise RuntimeError(
+                    "Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID before starting the agent."
+                )
+            self.provider_api_token = self.cloudflare_api_token
+            self.provider_model = self.cloudflare_model
+            self.provider_url = (
+                "https://api.cloudflare.com/client/v4/accounts/"
+                f"{self.cloudflare_account_id}/ai/v1/chat/completions"
+            )
+        else:
             raise RuntimeError(
-                "Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID before starting the agent."
+                "Unsupported NOVA_PROVIDER. Choose 'cloudflare' or 'openrouter'."
             )
         self.tool_handlers = {**TOOL_HANDLERS, **(tool_handlers or {})}
         declarations = [*TOOL_DECLARATIONS, CONSTRUCTED_ACTION_DECLARATION, FIND_EXECUTABLE_DECLARATION, DIAGNOSE_COMMAND_FAILURE_DECLARATION, VERIFY_COMMAND_RESULT_DECLARATION, RETRY_COMMAND_DECLARATION, RUN_ROOT_COMMAND_DECLARATION, RUN_COMMAND_DECLARATION, LIST_PROCESSES_DECLARATION, GET_PROCESS_STATUS_DECLARATION, GET_PROCESS_COMMAND_LINE_DECLARATION, GET_PROCESS_EXECUTABLE_DECLARATION, GET_PROCESS_WORKING_DIRECTORY_DECLARATION, GET_PROCESS_PARENT_NAME_DECLARATION, GET_PROCESS_START_TIME_DECLARATION, GET_PROCESS_CPU_TIME_DECLARATION, GET_PROCESS_MEMORY_USAGE_DECLARATION, GET_PROCESS_NICE_DECLARATION, GET_NETWORK_ADDRESSES_DECLARATION, GET_SYSTEM_BATTERY_STATUS_DECLARATION, GET_SYSTEM_SCREEN_STATE_DECLARATION, GET_SYSTEM_SCREEN_TIMEOUT_DECLARATION, GET_SYSTEM_SCREEN_ORIENTATION_DECLARATION, GET_SYSTEM_SCREEN_RESOLUTION_DECLARATION, GET_SYSTEM_SCREEN_DENSITY_DECLARATION, GET_MEDIA_VOLUME_DECLARATION, GET_SYSTEM_SCREEN_REFRESH_RATE_DECLARATION, GET_SYSTEM_BOOT_TIME_DECLARATION, GET_SYSTEM_SWAP_USAGE_DECLARATION, GET_AIRPLANE_MODE_DECLARATION]
@@ -2471,7 +2491,7 @@ class GeminiClient:
         } for d in declarations]
 
         payload = {
-            "model": self.cloudflare_model,
+            "model": self.provider_model,
             "messages": messages,
             "max_completion_tokens": 2048,
             "tools": tools,
@@ -2531,10 +2551,7 @@ class GeminiClient:
         elif self._requires_local_tool(contents):
             payload["tool_choice"] = "required"
 
-        url = (
-            "https://api.cloudflare.com/client/v4/accounts/"
-            f"{self.cloudflare_account_id}/ai/v1/chat/completions"
-        )
+        url = self.provider_url
 
         # Final autonomous-goal guard: root diagnostic commands require provider-generated
         # arguments, so never let an earlier routing branch replace the non-forced choice.
@@ -2564,8 +2581,12 @@ class GeminiClient:
                 url,
                 data=json.dumps(payload).encode(),
                 headers={
-                    "Authorization": f"Bearer {self.cloudflare_api_token}",
+                    "Authorization": f"Bearer {self.provider_api_token}",
                     "Content-Type": "application/json",
+                    **(
+                        {"HTTP-Referer": "https://github.com/Hausshehe/nova-agent", "X-Title": "Nova Agent"}
+                        if self.provider == "openrouter" else {}
+                    ),
                 },
                 method="POST",
             )
@@ -2596,16 +2617,16 @@ class GeminiClient:
                     payload, provider_tool_choice_retry_used
                 )
                 raise RuntimeError(
-                    f"Cloudflare API error ({exc.code}): {details}; "
+                    f"{self.provider.title()} API error ({exc.code}): {details}; "
                     "request context: " + json.dumps(request_context, sort_keys=True)
                 ) from exc
             except TimeoutError as exc:
                 raise RuntimeError(
-                    "Cloudflare request timed out while waiting for the model response."
+                    f"{self.provider.title()} request timed out while waiting for the model response."
                 ) from exc
             except urllib.error.URLError as exc:
                 raise RuntimeError(
-                    f"Could not reach Cloudflare: {exc.reason}"
+                    f"Could not reach {self.provider.title()}: {exc.reason}"
                 ) from exc
 
             try:
