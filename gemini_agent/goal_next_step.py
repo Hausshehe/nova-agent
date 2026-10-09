@@ -96,11 +96,26 @@ def select_goal_next_step(
                     diagnostic,
                     "The previous construction action is blocked; diagnose its recorded failure before retrying."
                 )
+    if construction_request and not evidence.strip():
+        # A fresh construction goal must inspect the workspace/toolchain before
+        # invoking the mutation-only executor. Otherwise the provider commonly
+        # labels its first environment-inspection attempt READ_ONLY, which the
+        # executor correctly rejects because it cannot enforce read-only effects.
+        for inspection_action in (
+            "list_directory",
+            "find_executable",
+            "discover_workspace_executables",
+            "discover_dependency_options",
+        ):
+            if inspection_action in clean:
+                return GoalNextStep(
+                    inspection_action,
+                    "Inspect the available workspace or toolchain before starting a workspace mutation."
+                )
     if construction_request and "execute_constructed_action" in clean and progress_status != "BLOCKED":
         return GoalNextStep(
             "execute_constructed_action",
-            "A construction goal requires an action-capable path; use the bounded "
-            "constructed-action executor to inspect prerequisites and make concrete progress."
+            "Construction needs a bounded workspace mutation after initial inspection; use the constructed-action executor."
         )
 
     goal_terms = _terms(goal)
