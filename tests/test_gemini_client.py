@@ -163,6 +163,50 @@ class CloudflareClientTests(unittest.TestCase):
             ["Build an unfamiliar artifact using available mechanisms."],
         )
 
+    def test_generic_autonomous_build_benchmark_enters_goal_orchestration(self):
+        prompt = (
+            "Create a minimal Android calculator app from scratch in a new workspace. "
+            "Inspect the available environment and discover the necessary tools and build procedure. "
+            "Create the source files and configuration, build an installable APK, and verify addition, "
+            "subtraction, multiplication, and division with actual tests. Maintain ownership of this "
+            "goal through failures: diagnose the evidence, recover or replan, and continue until the "
+            "success criteria are verified or a genuine environmental blocker is demonstrated. "
+            "Do not claim success without evidence. Report the workspace, source files, build command, "
+            "APK path, test results, and any unresolved blockers."
+        )
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch.object(
+            GeminiClient, "_generate_cloudflare", return_value="orchestration-routed"
+        ) as generate:
+            client = GeminiClient()
+            answer = client.ask(prompt)
+        self.assertEqual(answer, "orchestration-routed")
+        routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
+        self.assertIn("[Nova orchestration directive]", routed_prompt)
+        self.assertIsNotNone(client.goal_state)
+        self.assertEqual(client.goal_state.status, "ACTIVE")
+        self.assertIn("calculator app", client.goal_state.goal)
+        self.assertIn("APK", client.goal_state.success_condition)
+
+    def test_descriptive_build_request_does_not_start_autonomous_mutation(self):
+        prompt = "Create an Android calculator app and explain how to build and verify it."
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch.object(
+            GeminiClient, "_generate_cloudflare", return_value="descriptive-answer"
+        ) as generate:
+            client = GeminiClient()
+            answer = client.ask(prompt)
+        self.assertEqual(answer, "descriptive-answer")
+        self.assertIsNone(client.goal_state)
+        routed_prompt = generate.call_args.args[0][-1]["parts"][0]["text"]
+        self.assertNotIn("[Nova orchestration directive]", routed_prompt)
+
     def test_explicit_construction_request_enters_goal_orchestration(self):
         with patch.dict(
             os.environ,
