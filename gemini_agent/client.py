@@ -2658,7 +2658,7 @@ class GeminiClient:
         # Keep workflow execution and relevant atomic tools available, but don't offer
         # discovery again in this provider round and invite duplicate execution.
         if (
-            re.search(r"\\blist\\s+(?:the\\s+)?saved\\s+workflows\\b", request_text, re.IGNORECASE)
+            re.search(r"\blist\s+(?:the\s+)?saved\s+workflows\b", request_text, re.IGNORECASE)
             and any(
                 isinstance(call, dict) and call.get("name") == "list_saved_workflows"
                 for call in self.last_tool_calls
