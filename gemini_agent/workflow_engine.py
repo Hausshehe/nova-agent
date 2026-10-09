@@ -111,8 +111,8 @@ def execute_workflow(
             raise ValueError(f"Step {index} references an unavailable registered tool.")
         if not isinstance(arguments, dict):
             raise ValueError(f"Step {index} arguments must be an object.")
-        resolved = _resolve_references(arguments, results)
         try:
+            resolved = _resolve_references(arguments, results)
             result = str(handler(**resolved))
         except Exception as exc:
             trace.append({"step": index, "tool": name, "status": "failed", "error": f"{type(exc).__name__}: {exc}"[:500]})
