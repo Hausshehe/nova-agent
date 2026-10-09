@@ -973,6 +973,15 @@ class GeminiClient:
             and re.search(r"\b(?:then|first|after)\b", user_text)
         ):
             return None
+        # Explicit write-then-read requests are workflows, not single-tool calls.
+        # Keep the provider's registered filesystem tools available after the write
+        # so it can perform the requested read-back instead of stripping all tools.
+        if (
+            "write_text_file" in user_text
+            and re.search(r"\bread_file\b", user_text)
+            and re.search(r"\b(?:then|after|read it back|read-back)\b", user_text)
+        ):
+            return None
 
         # A named artifact is not a request to invoke the same-named primitive.
         # Construction prompts often say "calculator app" and list arithmetic
