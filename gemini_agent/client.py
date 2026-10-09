@@ -2689,36 +2689,19 @@ class GeminiClient:
                             pass
 
                     if not tool_calls:
-                        tool_call_match = re.search(
-                            r"<tool_call>\s*([a-zA-Z_][a-zA-Z0-9_]*)"
-                            r"(.*?)</tool_call>",
+                        parsed_text_call = self._parse_text_tool_call(
                             content,
-                            re.DOTALL,
+                            self.tool_declarations,
                         )
-                        if tool_call_match:
-                            local_name = tool_call_match.group(1)
-                            body = tool_call_match.group(2)
-                            pairs = re.findall(
-                                r"<arg_key>\s*([^<]+?)\s*</arg_key>"
-                                r"\s*<arg_value>\s*(.*?)\s*</arg_value>",
-                                body,
-                                re.DOTALL,
+                        if parsed_text_call is not None:
+                            local_name = parsed_text_call["function"]["name"]
+                            parsed_text_call["function"]["name"] = self._CLOUD_TOOL_NAMES.get(
+                                local_name, local_name
                             )
-                            if local_name in {d["name"] for d in TOOL_DECLARATIONS}:
-                                arguments = {
-                                    key.strip(): value.strip() for key, value in pairs
-                                }
-                                cloud_name = self._CLOUD_TOOL_NAMES.get(
-                                    local_name, local_name
-                                )
-                                tool_calls = [{
-                                    "id": "content-xml-tool-call",
-                                    "type": "function",
-                                    "function": {
-                                        "name": cloud_name,
-                                        "arguments": arguments,
-                                    },
-                                }]
+                            parsed_text_call["function"]["arguments"] = json.loads(
+                                parsed_text_call["function"]["arguments"]
+                            )
+                            tool_calls = [parsed_text_call]
 
             content = message.get("content")
 
