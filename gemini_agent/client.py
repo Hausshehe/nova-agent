@@ -4151,7 +4151,14 @@ class GeminiClient:
                     )
                     handler = self.tool_handlers.get(local_name)
                     if handler is None:
-                        raise RuntimeError(f"Cloudflare requested an unknown tool: {name}")
+                        # A provider may hallucinate a tool name. Treat that as a
+                        # failed action result so the normal evidence/recovery loop
+                        # can continue, rather than aborting the entire goal.
+                        unknown_tool_name = str(name or local_name or "unknown")
+                        handler = lambda **kwargs: (
+                            f"Tool error: Cloudflare requested unregistered tool "
+                            f"{unknown_tool_name!r}. No action was executed."
+                        )
 
                     args = {}
                     raw_tool_result = ""
