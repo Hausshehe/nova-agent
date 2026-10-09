@@ -72,7 +72,45 @@ class CloudflareClientTests(unittest.TestCase):
             client = GeminiClient()
             contents = [{
                 "role": "user",
-                "parts": [{"text": "Calculate 6 * 7."}],
+                "parts": [{"text": "Inspect saved workflows and their descriptions; use one only if it fits, otherwise calculate 6 * 7."}],
+            }]
+            declarations = client._relevant_tool_declarations(contents)
+
+        names = {item["name"] for item in declarations}
+        self.assertIn("calculator", names)
+        self.assertIn("list_saved_workflows", names)
+        self.assertIn("run_saved_workflow", names)
+
+    def test_unrelated_narrow_intent_excludes_saved_workflow_tools(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            contents = [{
+                "role": "user",
+                "parts": [{"text": "What is the current battery level?"}],
+            }]
+            declarations = client._relevant_tool_declarations(contents)
+
+        self.assertEqual(
+            [item["name"] for item in declarations],
+            ["get_system_battery_status"],
+        )
+
+    def test_mixed_workflow_and_calculator_goal_exposes_saved_workflow_tools(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ):
+            client = GeminiClient()
+            contents = [{
+                "role": "user",
+                "parts": [{
+                    "text": "Inspect saved workflows and their descriptions; calculate 19 * 23 if none fits."
+                }],
             }]
             declarations = client._relevant_tool_declarations(contents)
 
