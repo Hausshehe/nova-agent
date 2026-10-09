@@ -1875,6 +1875,7 @@ class CloudflareClientTests(unittest.TestCase):
 
     def test_active_goal_forces_selected_action_instead_of_prose_only(self):
         from gemini_agent.goal_next_step import GoalNextStep
+        from gemini_agent.goal_state import start_goal_state
 
         response = {"choices": [{"message": {"content": "I will investigate."}}]}
         prompt = (
