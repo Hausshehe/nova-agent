@@ -2942,6 +2942,66 @@ class CloudflareClientTests(unittest.TestCase):
         discovery.assert_called_once()
         self.assertTrue(discovery.call_args.kwargs["request"].startswith("Create a test artifact."))
 
+    def test_active_goal_replans_after_each_action_without_autonomy_wording(self):
+        from gemini_agent.goal_next_step import GoalNextStep
+        from gemini_agent.goal_state import start_goal_state
+        from gemini_agent.goal_completion import GoalCompletionObservation
+
+        response = {"choices": [{"message": {"content": "I will inspect the environment."}}]}
+        selections = [
+            GoalNextStep("get_hostname", "Read the device hostname."),
+            GoalNextStep("get_system_boot_time", "Gather a distinct system observation."),
+        ]
+        completion_results = [
+            GoalCompletionObservation("INCONCLUSIVE", "One observation is not enough."),
+            GoalCompletionObservation("VERIFIED", "The test observed both bounded actions."),
+        ]
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen", side_effect=[
+                FakeResponse(response), FakeResponse(response)
+            ]
+        ) as open_url, patch(
+            "gemini_agent.goal_next_step.select_goal_next_step",
+            side_effect=selections,
+        ) as selector, patch(
+            "gemini_agent.client.observe_goal_progress",
+            return_value=type("Observation", (), {
+                "status": "PROGRESS", "reason": "A bounded observation was collected."
+            })(),
+        ), patch(
+            "gemini_agent.client.verify_goal_completion",
+            side_effect=completion_results,
+        ):
+            client = GeminiClient()
+            client.goal_state = start_goal_state(
+                "Inspect the runtime environment",
+                "Collect two distinct system observations",
+            )
+            client.tool_handlers["get_hostname"] = lambda: "Hostname: test-device"
+            client.tool_handlers["get_system_boot_time"] = lambda: "Boot time: test-boot"
+            result = client.ask(
+                "Inspect the runtime environment, collect evidence, and report what was observed. "
+                "Do not claim success without verification."
+            )
+
+        self.assertIn("Runtime goal status: VERIFIED", result)
+        self.assertEqual(selector.call_count, 2)
+        self.assertEqual(open_url.call_count, 2)
+        first_payload = json.loads(open_url.call_args_list[0].args[0].data)
+        second_payload = json.loads(open_url.call_args_list[1].args[0].data)
+        self.assertEqual(
+            [tool["function"]["name"] for tool in first_payload["tools"]],
+            ["get_hostname"],
+        )
+        self.assertEqual(
+            [tool["function"]["name"] for tool in second_payload["tools"]],
+            ["get_system_boot_time"],
+        )
+
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
         with patch.dict(
