@@ -6,12 +6,32 @@ from gemini_agent.client import GeminiClient
 from gemini_agent.memory import ConversationMemory
 
 
-def _print_workflow_execution_evidence(client) -> None:
-    """Show local workflow or direct-tool evidence, never just model narration."""
+def _print_workflow_execution_evidence(client, answer: str = "") -> None:
+    """Show bounded execution evidence, including all tool calls for blocked goals."""
     calls = [
         call for call in getattr(client, "last_tool_calls", [])
         if isinstance(call, dict)
     ]
+    if "goal progress observation: blocked" in str(answer).lower():
+        print("\\nExecution evidence (recorded goal tool trace):")
+        safe_calls = []
+        for call in calls:
+            args = call.get("args")
+            if isinstance(args, dict):
+                args = {
+                    key: ("[REDACTED]" if any(
+                        marker in str(key).lower()
+                        for marker in ("token", "password", "secret", "api_key", "authorization")
+                    ) else value)
+                    for key, value in args.items()
+                }
+            safe_calls.append({
+                "name": call.get("name"),
+                "args": args,
+                "result": str(call.get("result", ""))[:3000],
+            })
+        print(json.dumps(safe_calls, ensure_ascii=False, indent=2, default=str)[:16000])
+        return
     workflow_tools = {"run_workflow", "run_saved_workflow"}
     for call in calls:
         if call.get("name") not in workflow_tools:
@@ -92,7 +112,7 @@ def main() -> None:
             answer = client.ask(prompt, memory.context(), system_instruction)
             memory.add_exchange(prompt, answer)
             print(f"\nNova: {answer}")
-            _print_workflow_execution_evidence(client)
+            _print_workflow_execution_evidence(client, answer)
         except RuntimeError as exc:
             print(f"\nError: {exc}")
 
