@@ -109,6 +109,23 @@ class GoalNextStepTests(unittest.TestCase):
         )
         self.assertEqual(result.action, "execute_constructed_action")
 
+    def test_blocked_construction_diagnoses_failed_action_before_repeating_executor(self):
+        result = select_goal_next_step(
+            "Create a minimal Android calculator app from scratch in a new workspace.",
+            "Create the source files and configuration, build an installable APK, and verify addition, subtraction, multiplication, and division with actual tests.",
+            "ACTIVE",
+            "BLOCKED",
+            "Observed evidence contains an explicit failure marker.",
+            [
+                "execute_constructed_action",
+                "diagnose_command_failure",
+                "find_executable",
+                "discover_workspace_executables",
+                "recover_command",
+            ],
+        )
+        self.assertEqual(result.action, "diagnose_command_failure")
+
     def test_unrelated_candidates_stop_safely(self):
         result = select_goal_next_step(
             "check the device battery",
