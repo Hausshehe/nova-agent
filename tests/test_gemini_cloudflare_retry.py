@@ -61,16 +61,7 @@ class CloudflareToolChoiceRetryTests(unittest.TestCase):
                 {"function": {"name": "select_goal_next_step"}},
             ],
         }
-        context = {
-            "model": payload["model"],
-            "tool_choice": payload["tool_choice"],
-            "tool_names": [
-                tool.get("function", {}).get("name")
-                for tool in payload.get("tools", [])
-                if isinstance(tool, dict)
-            ],
-            "auto_tool_choice_retry_used": True,
-        }
+        context = GeminiClient._cloudflare_request_context(payload, True)
         import json
         rendered = json.dumps(context, sort_keys=True)
         self.assertIn("execute_constructed_action", rendered)
