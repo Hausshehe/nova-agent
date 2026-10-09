@@ -5116,18 +5116,18 @@ class GeminiClient:
             "Execution incomplete: required calculator calls are missing;"
         ):
             match = re.search(
-                r"calculate\\s+([0-9\\s()+\\-*/%.]+?)\\s*,?\\s*then\\s+independently\\s+verify\\s+the\\s+result\\s+by\\s+calculating\\s+([0-9\\s()+\\-*/%.]+?)(?:[.!?]|$)",
+                r"calculate\s+([0-9\s()+\-*/%.]+?)\s*,?\s*then\s+independently\s+verify\s+the\s+result\s+by\s+calculating\s+([0-9\s()+\-*/%.]+?)(?:[.!?]|$)",
                 prompt_text,
                 re.IGNORECASE,
             )
             if match:
                 required = [
-                    re.sub(r"\\s+", "", match.group(index)).rstrip(".")
+                    re.sub(r"\s+", "", match.group(index)).rstrip(".")
                     for index in (1, 2)
                 ]
                 recorded = {
                     re.sub(
-                        r"\\s+", "",
+                        r"\s+", "",
                         str(call.get("args", {}).get("expression", "")),
                     ).rstrip(".")
                     for call in self.last_tool_calls
