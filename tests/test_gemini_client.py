@@ -1910,7 +1910,15 @@ class CloudflareClientTests(unittest.TestCase):
                 "Build and independently verify a functional calculator APK",
             )
             from unittest.mock import Mock
-            discovery = Mock(return_value="Executable discovery evidence")
+
+            def observe_discovery(*, request):
+                # End this isolated test turn after proving the selected handler
+                # ran; the production loop is intentionally allowed to continue
+                # while a real goal remains active.
+                client.goal_state.status = "COMPLETED"
+                return "Executable discovery evidence"
+
+            discovery = Mock(side_effect=observe_discovery)
             client.tool_handlers["discover_workspace_executables"] = discovery
             client.ask(prompt)
 
