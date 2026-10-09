@@ -31,7 +31,7 @@ def _print_workflow_execution_evidence(client) -> None:
     evidence_calls = [
         {"name": call.get("name"), "args": call.get("args"), "result": call.get("result")}
         for call in calls
-        if call.get("name") in {"list_saved_workflows", "calculator"}
+        if call.get("name") in {"list_saved_workflows", "inspect_saved_workflow", "calculator"}
     ]
     if evidence_calls:
         print("\\nExecution evidence (local direct-tool results):")
