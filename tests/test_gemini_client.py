@@ -129,6 +129,43 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_repeated_observation_excludes_stalled_tools_but_keeps_alternatives(self):
+        payload = {
+            "tools": [
+                {"type": "function", "function": {"name": "read_text_file"}},
+                {"type": "function", "function": {"name": "write_text_file"}},
+                {"type": "function", "function": {"name": "run_command"}},
+            ],
+            "tool_choice": {"type": "function", "function": {"name": "read_text_file"}},
+        }
+        changed = GeminiClient._exclude_repeated_observation_tools(
+            payload,
+            [
+                {"name": "read_text_file", "args": {"path": "workspace/a.txt"}, "result": "same"},
+                {"name": "read_text_file", "args": {"path": "workspace/a.txt"}, "result": "same"},
+            ],
+        )
+        self.assertTrue(changed)
+        names = [tool["function"]["name"] for tool in payload["tools"]]
+        self.assertEqual(names, ["write_text_file", "run_command"])
+        self.assertEqual(payload["tool_choice"], "auto")
+
+    def test_repeated_observation_stops_if_no_distinct_tool_remains(self):
+        payload = {
+            "tools": [
+                {"type": "function", "function": {"name": "read_text_file"}},
+            ],
+            "tool_choice": "auto",
+        }
+        changed = GeminiClient._exclude_repeated_observation_tools(
+            payload, [{"name": "read_text_file", "args": {}, "result": "same"}]
+        )
+        self.assertFalse(changed)
+        self.assertEqual(
+            [tool["function"]["name"] for tool in payload["tools"]],
+            ["read_text_file"],
+        )
+
     def test_tool_loop_exhaustion_reports_bounded_names_without_tool_output(self):
         trace = [
             {"name": "select_goal_next_step", "args": {}, "result": "Next step: write_text_file\\nReason: create source"},
