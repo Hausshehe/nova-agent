@@ -94,6 +94,34 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(captured[0].get_header("Authorization"), "Bearer test-openrouter-key")
         self.assertEqual(json.loads(captured[0].data)["model"], "openrouter/free")
 
+    def test_gemini_provider_requires_its_own_api_key(self):
+        with patch.dict(os.environ, {"NOVA_PROVIDER": "gemini"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "GEMINI_API_KEY"):
+                GeminiClient()
+
+    def test_gemini_provider_routes_request_to_gemini_openai_compatible_endpoint(self):
+        response = {"choices": [{"message": {"content": "Gemini works"}}]}
+        captured = []
+
+        def fake_urlopen(request, timeout=180):
+            captured.append(request)
+            return FakeResponse(response)
+
+        with patch.dict(os.environ, {
+            "NOVA_PROVIDER": "gemini",
+            "GEMINI_API_KEY": "test-gemini-key",
+        }, clear=True), patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client = GeminiClient()
+            result = client.ask("Reply with a short greeting.")
+
+        self.assertEqual(result, "Gemini works")
+        self.assertEqual(
+            captured[0].full_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        )
+        self.assertEqual(captured[0].get_header("Authorization"), "Bearer test-gemini-key")
+        self.assertEqual(json.loads(captured[0].data)["model"], "gemini-3.5-flash-lite")
+
     def test_recovers_missing_request_argument_from_active_prompt(self):
         first_response = {
             "choices": [{
