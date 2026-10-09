@@ -1903,6 +1903,11 @@ class CloudflareClientTests(unittest.TestCase):
         ) as open_url, patch(
             "gemini_agent.goal_next_step.select_goal_next_step",
             side_effect=select_once_then_stop,
+        ), patch(
+            "gemini_agent.client.verify_goal_completion",
+            return_value=__import__(
+                "gemini_agent.goal_completion", fromlist=["GoalCompletionObservation"]
+            ).GoalCompletionObservation("VERIFIED", "Isolated routing test terminates after selected action."),
         ):
             client = GeminiClient()
             client.goal_state = start_goal_state(
