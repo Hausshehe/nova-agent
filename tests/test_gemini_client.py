@@ -39,6 +39,43 @@ class RawResponse:
 
 
 class CloudflareClientTests(unittest.TestCase):
+    def test_active_goal_owns_next_step_selection_without_special_prompt_wording(self):
+        active_goal = type("Goal", (), {"status": "ACTIVE"})()
+        self.assertTrue(
+            GeminiClient._should_select_next_step(active_goal, "", [])
+        )
+        self.assertFalse(
+            GeminiClient._should_select_next_step(active_goal, "calculator", [])
+        )
+        self.assertFalse(
+            GeminiClient._should_select_next_step(active_goal, "", ["some_strategy"])
+        )
+        self.assertFalse(
+            GeminiClient._should_select_next_step(
+                type("Goal", (), {"status": "VERIFIED"})(), "", []
+            )
+        )
+
+    def test_active_goal_selector_is_not_exposed_to_provider(self):
+        declarations = [
+            {"name": "select_goal_next_step"},
+            {"name": "create_directory"},
+            {"name": "execute_constructed_action"},
+        ]
+        filtered = GeminiClient._exclude_runtime_goal_selector(
+            declarations, active_goal=True
+        )
+        self.assertEqual(
+            [item["name"] for item in filtered],
+            ["create_directory", "execute_constructed_action"],
+        )
+        self.assertEqual(
+            GeminiClient._exclude_runtime_goal_selector(
+                declarations, active_goal=False
+            ),
+            declarations,
+        )
+
     def test_autonomous_goal_tool_restore_excludes_goal_selector(self):
         payload = {"tools": [], "tool_choice": {"type": "function", "function": {"name": "stale_tool"}}}
         declarations = [
