@@ -4877,7 +4877,7 @@ class GeminiClient:
                 prompt_text,
                 re.IGNORECASE,
             )
-            and re.search(r"\bverify\w*\b", prompt_text, re.IGNORECASE)
+            and re.search(r"\bverif\w*\b", prompt_text, re.IGNORECASE)
             and explicit_autonomy_commitment
         )
         if not resume_requested and constructive_autonomy:
