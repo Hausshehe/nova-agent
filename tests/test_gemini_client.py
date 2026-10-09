@@ -1786,6 +1786,21 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertEqual(seen[0]["implementation_target"], "intent:android.media.action.IMAGE_CAPTURE")
         self.assertEqual(open_url.call_count, 1)
 
+    def test_connection_aborted_returns_clear_provider_error(self):
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=ConnectionAbortedError(103, "Software caused connection abort"),
+        ):
+            client = GeminiClient()
+            with self.assertRaisesRegex(
+                RuntimeError, "Connection to Cloudflare failed:.*connection abort"
+            ):
+                client.ask("test connection handling")
+
     def test_natural_extension_request_uses_extension_planner(self):
         tool_response = {
             "choices": [{"message": {"content": "", "tool_calls": [{
