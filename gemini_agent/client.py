@@ -79,6 +79,20 @@ class GeminiClient:
         )
 
     @staticmethod
+    def _cloudflare_request_context(payload: dict, auto_tool_choice_retry_used: bool) -> dict:
+        """Return safe, non-secret context for diagnosing provider request failures."""
+        return {
+            "model": payload.get("model"),
+            "tool_choice": payload.get("tool_choice"),
+            "tool_names": [
+                tool.get("function", {}).get("name")
+                for tool in payload.get("tools", [])
+                if isinstance(tool, dict)
+            ],
+            "auto_tool_choice_retry_used": auto_tool_choice_retry_used,
+        }
+
+    @staticmethod
     def _parse_android_mechanism_candidates(discovery: str) -> list[str]:
         """Parse bounded mechanism lines without assuming values contain no spaces."""
         candidates = []
@@ -2571,16 +2585,9 @@ class GeminiClient:
                     provider_tool_choice_retry_used = True
                     payload["tool_choice"] = "auto"
                     continue
-                request_context = {
-                    "model": payload.get("model"),
-                    "tool_choice": payload.get("tool_choice"),
-                    "tool_names": [
-                        tool.get("function", {}).get("name")
-                        for tool in payload.get("tools", [])
-                        if isinstance(tool, dict)
-                    ],
-                    "auto_tool_choice_retry_used": provider_tool_choice_retry_used,
-                }
+                request_context = self._cloudflare_request_context(
+                    payload, provider_tool_choice_retry_used
+                )
                 raise RuntimeError(
                     f"Cloudflare API error ({exc.code}): {details}; "
                     "request context: " + json.dumps(request_context, sort_keys=True)
