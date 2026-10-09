@@ -44,6 +44,31 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_openrouter_provider_requires_its_own_api_key(self):
+        with patch.dict(os.environ, {"NOVA_PROVIDER": "openrouter"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "OPENROUTER_API_KEY"):
+                GeminiClient()
+
+    def test_openrouter_free_route_uses_openrouter_endpoint_and_key(self):
+        response = {"choices": [{"message": {"content": "fallback works"}}]}
+        captured = []
+
+        def fake_urlopen(request, timeout=180):
+            captured.append(request)
+            return FakeResponse(response)
+
+        with patch.dict(os.environ, {
+            "NOVA_PROVIDER": "openrouter",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+        }, clear=True), patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client = GeminiClient()
+            result = client.ask("Reply with a short greeting.")
+
+        self.assertEqual(result, "fallback works")
+        self.assertEqual(captured[0].full_url, "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(captured[0].get_header("Authorization"), "Bearer test-openrouter-key")
+        self.assertEqual(json.loads(captured[0].data)["model"], "openrouter/free")
+
     def test_recovers_missing_request_argument_from_active_prompt(self):
         first_response = {
             "choices": [{
