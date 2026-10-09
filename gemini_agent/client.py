@@ -950,6 +950,17 @@ class GeminiClient:
             return "get_process_start_time"
         if "process start time" in user_text or "start time of process" in user_text:
             return "get_process_start_time"
+        # A named artifact is not a request to invoke the same-named primitive.
+        # Construction prompts often say "calculator app" and list arithmetic
+        # operations as acceptance criteria; neither should dispatch the arithmetic
+        # tool before the goal-orchestration contract is established.
+        construction_request = (
+            re.search(r"\\b(?:create|build|make|implement|generate)\\b.{0,100}\\b(?:app|application|project)\\b", user_text)
+            and re.search(r"\\b(?:apk|source files|new workspace|from scratch|build procedure)\\b", user_text)
+        )
+        if construction_request:
+            return None
+
         for declaration in TOOL_DECLARATIONS:
             name = declaration["name"]
             if name.lower() in user_text:
@@ -1057,7 +1068,11 @@ class GeminiClient:
                     "write_text_file", "edit_text_file", "append_text_file", "copy_file",
                     "move_file", "delete_file", "find_files",
                 })
-                or (selected_groups & {"calculator"} and name == "calculator")
+                or (
+                    selected_groups & {"calculator"}
+                    and "construction" not in selected_groups
+                    and name == "calculator"
+                )
                 or (selected_groups & {"current_datetime"} and name == "current_datetime")
                 or (selected_groups & {"workflow"} and name == "run_workflow")
             ):
