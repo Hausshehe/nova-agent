@@ -52,6 +52,32 @@ class CloudflareToolChoiceRetryTests(unittest.TestCase):
             )
         )
 
+    def test_error_diagnostic_context_excludes_credentials_and_includes_tool_path(self):
+        payload = {
+            "model": "@cf/zai-org/glm-4.7-flash",
+            "tool_choice": "auto",
+            "tools": [
+                {"function": {"name": "execute_constructed_action"}},
+                {"function": {"name": "select_goal_next_step"}},
+            ],
+        }
+        context = {
+            "model": payload["model"],
+            "tool_choice": payload["tool_choice"],
+            "tool_names": [
+                tool.get("function", {}).get("name")
+                for tool in payload.get("tools", [])
+                if isinstance(tool, dict)
+            ],
+            "auto_tool_choice_retry_used": True,
+        }
+        import json
+        rendered = json.dumps(context, sort_keys=True)
+        self.assertIn("execute_constructed_action", rendered)
+        self.assertIn('"tool_choice": "auto"', rendered)
+        self.assertIn('"auto_tool_choice_retry_used": true', rendered)
+        self.assertNotIn("token", rendered.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
