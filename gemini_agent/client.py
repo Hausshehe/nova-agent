@@ -4790,6 +4790,45 @@ class GeminiClient:
             )
         )
 
+    @staticmethod
+    def _audit_explicit_calculation_sequence(
+        prompt: str, answer: str, tool_calls: list[dict]
+    ) -> str:
+        """Reject completion claims when an explicit calculation sequence lacks tool evidence."""
+        match = re.search(
+            r"calculate\\s+([0-9\\s()+\\-*/%.]+?)\\s*,?\\s*then\\s+independently\\s+verify\\s+the\\s+result\\s+by\\s+calculating\\s+([0-9\\s()+\\-*/%.]+?)(?:[.!?]|$)",
+            str(prompt),
+            re.IGNORECASE,
+        )
+        if not match:
+            return answer
+        required = [
+            re.sub(r"\\s+", "", match.group(index)).rstrip(".")
+            for index in (1, 2)
+        ]
+        recorded = {
+            re.sub(r"\\s+", "", str(call.get("args", {}).get("expression", ""))).rstrip(".")
+            for call in tool_calls
+            if isinstance(call, dict)
+            and call.get("name") == "calculator"
+            and isinstance(call.get("args"), dict)
+        }
+        missing = [expression for expression in required if expression not in recorded]
+        if not missing:
+            return answer
+        observed = [
+            {"expression": call.get("args", {}).get("expression"), "result": call.get("result")}
+            for call in tool_calls
+            if isinstance(call, dict)
+            and call.get("name") == "calculator"
+            and isinstance(call.get("args"), dict)
+        ]
+        return (
+            "Execution incomplete: required calculator calls are missing; completion cannot be claimed. "
+            f"Missing expressions: {', '.join(missing)}. Recorded calculator evidence: "
+            + json.dumps(observed, ensure_ascii=False, default=str)
+        )
+
     def ask(
         self,
         prompt: str,
@@ -5069,4 +5108,7 @@ class GeminiClient:
                     + "If no registered action can make progress, report the concrete blocker "
                     + "without claiming completion."
                 )
-        return self._generate_cloudflare(contents, system_instruction)
+        answer = self._generate_cloudflare(contents, system_instruction)
+        return self._audit_explicit_calculation_sequence(
+            prompt_text, answer, self.last_tool_calls
+        )
