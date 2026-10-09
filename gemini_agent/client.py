@@ -2672,6 +2672,7 @@ class GeminiClient:
         provider_tool_choice_retry_used = False
         last_observation_signature = None
         goal_blocker_rejections = 0
+        malformed_text_tool_retries = set()
         for loop_index in range(max_tool_rounds):
             round_trace_start = len(self.last_tool_calls)
             # Some recovery/strategy branches intentionally remove tools after a
@@ -2878,6 +2879,71 @@ class GeminiClient:
                             tool_calls = [parsed_text_call]
 
             content = message.get("content")
+
+            # Some provider models imitate tool calls in text and may use
+            # parameter names that do not exist in the registered schema. Retry
+            # one recognized malformed text call with that tool's exact schema;
+            # never execute guessed or renamed arguments.
+            malformed_match = (
+                re.search(
+                    r"<tool_call>\\s*([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    content,
+                    re.IGNORECASE,
+                )
+                if not tool_calls and isinstance(content, str)
+                else None
+            )
+            if malformed_match:
+                malformed_name = malformed_match.group(1)
+                malformed_declaration = next(
+                    (
+                        item for item in self.tool_declarations
+                        if isinstance(item, dict)
+                        and item.get("name") == malformed_name
+                        and malformed_name in self.tool_handlers
+                    ),
+                    None,
+                )
+                if malformed_declaration is not None:
+                    if malformed_name not in malformed_text_tool_retries:
+                        malformed_text_tool_retries.add(malformed_name)
+                        cloud_name = self._CLOUD_TOOL_NAMES.get(
+                            malformed_name, malformed_name
+                        )
+                        payload["tools"] = [{
+                            "type": "function",
+                            "function": {
+                                "name": cloud_name,
+                                "description": malformed_declaration.get("description", ""),
+                                "parameters": self._schema(
+                                    malformed_declaration.get("parameters", {})
+                                ),
+                            },
+                        }]
+                        payload["tool_choice"] = {
+                            "type": "function",
+                            "function": {"name": cloud_name},
+                        }
+                        messages.append({"role": "assistant", "content": content})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Your previous text-form tool call was not executed because "
+                                "its arguments did not match the registered schema. Use the "
+                                "forced registered function now, with its exact parameter "
+                                "names and valid arguments. Do not imitate tool calls in text."
+                            ),
+                        })
+                        continue
+                    if not (
+                        self.goal_state is not None
+                        and self.goal_state.status == "ACTIVE"
+                    ):
+                        return (
+                            "No action executed: the provider repeated a malformed text-form "
+                            f"tool call for registered tool '{malformed_name}' after one "
+                            "schema-correction retry."
+                        )
 
             # A model may invent a tool name and serialize it as XML. During an
             # active construction goal, never return that imitation as if it
