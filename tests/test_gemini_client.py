@@ -1890,19 +1890,25 @@ class CloudflareClientTests(unittest.TestCase):
             "urllib.request.urlopen", return_value=FakeResponse(response)
         ) as open_url, patch(
             "gemini_agent.goal_next_step.select_goal_next_step",
-            return_value=GoalNextStep(
-                "discover_workspace_executables",
-                "Inspect available build resources before choosing a build strategy.",
-            ),
+            side_effect=[
+                GoalNextStep(
+                    "discover_workspace_executables",
+                    "Inspect available build resources before choosing a build strategy.",
+                ),
+                GoalNextStep("STOP", "The test has observed the selected action."),
+            ],
         ):
             client = GeminiClient()
             client.goal_state = start_goal_state(
                 "Create an Android calculator app",
                 "Build and independently verify a functional calculator APK",
             )
+            from unittest.mock import Mock
+            discovery = Mock(return_value="Executable discovery evidence")
+            client.tool_handlers["discover_workspace_executables"] = discovery
             client.ask(prompt)
 
-        sent = json.loads(open_url.call_args.args[0].data)
+        sent = json.loads(open_url.call_args_list[0].args[0].data)
         self.assertEqual(
             [tool["function"]["name"] for tool in sent["tools"]],
             ["discover_workspace_executables"],
@@ -1914,6 +1920,8 @@ class CloudflareClientTests(unittest.TestCase):
                 "function": {"name": "discover_workspace_executables"},
             },
         )
+        discovery.assert_called_once()
+        self.assertTrue(discovery.call_args.kwargs["request"].startswith("Create a test artifact."))
 
     def test_explicit_tool_is_selected(self):
         response = {"choices": [{"message": {"content": "ok"}}]}
