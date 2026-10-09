@@ -966,6 +966,41 @@ class CloudflareClientTests(unittest.TestCase):
         ])
         open_url.assert_not_called()
 
+    def test_unknown_provider_tool_is_reported_and_does_not_abort_request(self):
+        responses = [
+            {
+                "choices": [{
+                    "message": {
+                        "tool_calls": [{
+                            "id": "unknown-workspace-call",
+                            "type": "function",
+                            "function": {
+                                "name": "request_workspace",
+                                "arguments": "{}",
+                            },
+                        }]
+                    }
+                }]
+            },
+            {"choices": [{"message": {"content": "Recovered after unknown tool."}}]},
+        ]
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[FakeResponse(item) for item in responses],
+        ) as open_url:
+            client = GeminiClient()
+            answer = client.ask("Please give a short project status summary.")
+
+        self.assertEqual(answer, "Recovered after unknown tool.")
+        self.assertEqual(open_url.call_count, 2)
+        self.assertEqual(client.last_tool_calls[0]["name"], "request_workspace")
+        self.assertIn("unknown tool", client.last_tool_calls[0]["result"].lower())
+
+
     def test_explicit_generated_capability_returns_after_one_execution(self):
         response = {
             "choices": [{
