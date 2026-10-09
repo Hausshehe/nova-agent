@@ -7,7 +7,7 @@ Branch: `minimal-gemini-agent`
 
 Evidence recorded from the TECNO/Termux live run:
 
-- Full regression suite: `723 tests`, `OK` (30.700 seconds).
+- Earlier active-agent regression suite before store hardening: `723 tests`, `OK` (30.700 seconds).
 - Live request explicitly selected `run_workflow`.
 - Locally recorded execution evidence reported `status: completed` and `steps_completed: 2`.
 - Step 0 executed `calculator` with `6 * 7` and returned `42`.
@@ -17,7 +17,7 @@ Evidence recorded from the TECNO/Termux live run:
 - Nova was exited and restarted; a subsequent request invoked `run_saved_workflow` by name without recreating or resaving the definition.
 - The live local execution evidence showed `status: completed`, `steps_completed: 2`, and both step results as `42`.
 - Targeted regression suite after evidence-display changes: `13 tests`, `OK`.
-- Active agent regression suite: `723 tests`, `OK` (30.071 seconds).
+- Active agent regression suite after store hardening: `724 tests`, `OK` (28.615 seconds).
 - The broad `unittest discover -s tests -q` run is not clean: three modules require missing `pytest`, and `test_mission_state` imports absent `nova_core.models`. These are separate from the active agent suite and should not be represented as passing.
 
 This verifies bounded read-only composition, persisted named reuse across a real process restart, and independently displayed local execution evidence. It does not establish adaptive selection among workflows, nested composition, universal goal-solving, or safe mutation workflows.
@@ -34,13 +34,13 @@ This verifies bounded read-only composition, persisted named reuse across a real
 ## Acceptance criteria status
 
 1. **Named workflow reuse:** PASS. Saved definition was invoked after restarting Nova, without resaving.
-2. **Validation and safety:** PARTIAL. Tests cover disallowed tools, duplicate/missing names, earlier-step references, failure stops, and the step limit. Do not claim the entire oversized-definition and malformed-store matrix is covered without adding those explicit regressions.
+2. **Validation and safety:** PARTIAL. Tests now cover oversized saved definitions, store-size bounds, malformed store structure, disallowed tools, duplicate/missing names, earlier-step references, failure stops, and the step limit. Additional malformed persisted-entry edge cases may still warrant tests only if they represent a concrete risk.
 3. **Deterministic execution evidence:** PASS for successful execution; engine tests also verify failed steps stop later execution and return a failed status.
-4. **Regression coverage:** PASS for core save/list/reload/reuse, disallowed tools, and failure behavior; coverage of corrupted/oversized persisted stores remains incomplete.
+4. **Regression coverage:** PASS for core save/list/reload/reuse, disallowed tools, failure behavior, oversized definitions, and corrupt/oversized stores. Focused workflow suite: `13 tests`, `OK`; active-agent suite after hardening: `724 tests`, `OK`.
 5. **Device/live verification:** PASS. Nova was restarted and its locally recorded `run_saved_workflow` trace matched the saved two-step definition.
 
 ## Next decision
 
-The named-workflow persistence increment is complete. Do not add nested workflows, mutating actions, or another planner as a continuation of this increment. If continuing the broader composability direction, the next distinct goal should be **adaptive selection and composition of existing named workflows for a goal**, evaluated against more than one materially different task and with clear evidence that Nova selects reusable definitions rather than generating a bespoke chain each time. Before that, decide whether the known validation gaps need a small hardening pass; do not quietly treat them as already solved.
+The named-workflow persistence increment is complete. Do not add nested workflows, mutating actions, or another planner as a continuation of this increment. If continuing the broader composability direction, the next distinct goal should be **adaptive selection and composition of existing named workflows for a goal**, evaluated against more than one materially different task and with clear evidence that Nova selects reusable definitions rather than generating a bespoke chain each time. The scoped hardening pass is complete; do not expand it into speculative edge-case coverage. The next work, if explicitly begun, is the distinct adaptive-selection goal.
 
 This checkpoint closes the named persistence/reuse increment. It does not declare adaptive workflow selection or the broader composability direction complete.
