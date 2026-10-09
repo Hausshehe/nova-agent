@@ -57,7 +57,7 @@ class DependencyAcquisitionTests(unittest.TestCase):
         self.assertIn("ecj=/usr/bin/ecj", result)
         self.assertIn("javac", result)
         self.assertIn("unknown-tool=availability unconfirmed", result)
-        self.assertIn("No packages were installed", result)
+        self.assertIn("no packages were installed", result)
         self.assertEqual(run.call_args.args[0], ["/usr/bin/pkg", "show", "ecj", "unknown-tool"])
 
     def test_discovery_rejects_unsafe_package_candidates(self):
