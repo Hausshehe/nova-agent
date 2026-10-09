@@ -4562,18 +4562,12 @@ class GeminiClient:
                         self.goal_state is not None
                         and self.goal_state.status == "ACTIVE"
                         and not strategy_candidates
-                        and re.search(
-                            r"\b(?:pursue|continue|work\s+toward|achieve)\b.*\b(?:goal|autonomously|automatically)\b|\bautonomously\b",
-                            request_text,
-                            re.IGNORECASE | re.DOTALL,
-                        )
                     ):
+                        # Every active goal gets a fresh runtime decision after each
+                        # observed action. Natural-language trigger words must not
+                        # decide whether Nova owns the goal; that created a one-step
+                        # executor that handed control back to the provider and looped.
                         from gemini_agent.goal_next_step import select_goal_next_step
-                        executed_names = {
-                            step["action"]
-                            for step in self.goal_state.steps
-                            if step.get("status") in {"EXECUTED", "VERIFIED", "FAILED"}
-                        }
                         continuation_declarations = self.tool_declarations
                         continuation_candidates = [
                             str(declaration.get("name", "")).strip()
@@ -4581,7 +4575,6 @@ class GeminiClient:
                             if (
                                 isinstance(declaration, dict)
                                 and str(declaration.get("name", "")).strip()
-                                and str(declaration.get("name", "")).strip() not in executed_names
                                 and str(declaration.get("name", "")).strip() not in {
                                     "establish_goal_contract", "select_goal_next_step",
                                     "self_test", "capability_inventory", "assess_capability_gap",
