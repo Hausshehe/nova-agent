@@ -77,7 +77,7 @@ def select_goal_next_step(
     # create/build artifacts; repeatedly selecting planning/observation helpers
     # without excluding prior actions caused the live goal loop to stall.
     construction_request = re.search(
-        r"\\b(?:build|create|construct|generate|implement|make)\\b",
+        r"\b(?:build|create|construct|generate|implement|make)\b",
         f"{goal} {success_condition}",
         re.IGNORECASE,
     )
