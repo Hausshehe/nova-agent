@@ -271,7 +271,14 @@ class GeminiClient:
                 "description": declaration.get("description", ""),
                 "parameters": GeminiClient._schema(declaration.get("parameters", {})),
             },
-        } for declaration in declarations if isinstance(declaration, dict)]
+        } for declaration in declarations
+            if isinstance(declaration, dict)
+            # Goal-step selection is runtime orchestration, not an action for the
+            # provider to call. Re-exposing it after a bounded action lets the model
+            # alternate between an observation and selecting another selector,
+            # exhausting the round budget without advancing the goal.
+            and declaration.get("name") != "select_goal_next_step"
+        ]
         if not payload["tools"]:
             return False
         # The goal runtime must retain the ability to take another bounded step.
