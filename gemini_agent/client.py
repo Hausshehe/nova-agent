@@ -958,6 +958,19 @@ class GeminiClient:
             return "get_process_start_time"
         if "process start time" in user_text or "start time of process" in user_text:
             return "get_process_start_time"
+        # Compound filesystem requests that sequence creation and verification
+        # must stay in the normal tool loop. Otherwise declaration-order matching
+        # can select path_exists first and short-circuit the required creation step.
+        if (
+            "path_exists" in user_text
+            and re.search(
+                r"\\b(?:make_directory|create_directory|create a directory|make a directory|create directory)\\b",
+                user_text,
+            )
+            and re.search(r"\\b(?:then|first|after)\\b", user_text)
+        ):
+            return None
+
         # A named artifact is not a request to invoke the same-named primitive.
         # Construction prompts often say "calculator app" and list arithmetic
         # operations as acceptance criteria; neither should dispatch the arithmetic
