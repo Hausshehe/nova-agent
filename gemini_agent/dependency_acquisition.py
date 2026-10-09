@@ -108,4 +108,3 @@ ACQUIRE_TERMUX_PACKAGES_DECLARATION = {
         "required": ["packages", "mode"],
     },
 }
-"
