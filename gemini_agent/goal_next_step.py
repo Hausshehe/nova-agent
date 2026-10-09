@@ -81,7 +81,22 @@ def select_goal_next_step(
         f"{goal} {success_condition}",
         re.IGNORECASE,
     )
-    if construction_request and "execute_constructed_action" in clean:
+    if construction_request and progress_status == "BLOCKED":
+        # A failed construction action must be diagnosed before another attempt.
+        # Otherwise the generic construction preference masks recovery candidates
+        # and can repeat the same invalid executable indefinitely.
+        for diagnostic in (
+            "diagnose_command_failure",
+            "diagnose_outcome_discrepancy",
+            "diagnose_android_mechanism_outcome",
+            "diagnose_capability_failure",
+        ):
+            if diagnostic in clean:
+                return GoalNextStep(
+                    diagnostic,
+                    "The previous construction action is blocked; diagnose its recorded failure before retrying."
+                )
+    if construction_request and "execute_constructed_action" in clean and progress_status != "BLOCKED":
         return GoalNextStep(
             "execute_constructed_action",
             "A construction goal requires an action-capable path; use the bounded "
