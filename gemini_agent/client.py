@@ -2907,6 +2907,84 @@ class GeminiClient:
         malformed_text_tool_retries = set()
         for loop_index in range(max_tool_rounds):
             round_trace_start = len(self.last_tool_calls)
+            # Replan from the latest observed goal state before every provider round.
+            # The initial selection configures round zero; every later round must
+            # derive a fresh action from evidence recorded by the previous execution.
+            if (
+                loop_index > 0
+                and self.goal_state is not None
+                and self.goal_state.status == "ACTIVE"
+                and not requested_tool
+                and not strategy_candidates
+            ):
+                from gemini_agent.goal_next_step import select_goal_next_step
+                goal_candidates = [
+                    str(declaration.get("name", "")).strip()
+                    for declaration in self.tool_declarations
+                    if isinstance(declaration, dict)
+                    and str(declaration.get("name", "")).strip()
+                    not in {
+                        "establish_goal_contract", "select_goal_next_step",
+                        "self_test", "capability_inventory", "assess_capability_gap",
+                    }
+                ]
+                selection = select_goal_next_step(
+                    self.goal_state.goal,
+                    self.goal_state.success_condition,
+                    self.goal_state.status,
+                    self.goal_state.progress_status,
+                    self.goal_state.progress_reason,
+                    goal_candidates,
+                    "\\n".join(self.goal_state.evidence),
+                )
+                if selection.action == "STOP":
+                    return (
+                        "Goal-directed next step: STOP\\n"
+                        f"Reason: {selection.reason}\\n"
+                        "No further goal-directed action was executed."
+                    )
+                declarations_by_name = {
+                    str(item.get("name", "")): item
+                    for item in self.tool_declarations if isinstance(item, dict)
+                }
+                selected_declaration = declarations_by_name.get(selection.action)
+                if selection.action not in self.tool_handlers or selected_declaration is None:
+                    return (
+                        "Goal-directed next step: STOP\\n"
+                        f"Planner selected unavailable action {selection.action!r}.\\n"
+                        "No further goal-directed action was executed."
+                    )
+                goal_selected_action = selection.action
+                self.last_tool_calls.append({
+                    "name": "select_goal_next_step",
+                    "args": {
+                        "goal": self.goal_state.goal,
+                        "success_condition": self.goal_state.success_condition,
+                        "goal_status": self.goal_state.status,
+                        "progress_status": self.goal_state.progress_status,
+                        "progress_reason": self.goal_state.progress_reason,
+                        "candidates": goal_candidates,
+                    },
+                    "result": f"Next step: {goal_selected_action}\\nReason: {selection.reason}",
+                })
+                selected_cloud_name = self._CLOUD_TOOL_NAMES.get(goal_selected_action, goal_selected_action)
+                payload["tools"] = [{
+                    "type": "function",
+                    "function": {
+                        "name": selected_cloud_name,
+                        "description": selected_declaration.get("description", ""),
+                        "parameters": self._schema(selected_declaration.get("parameters", {})),
+                    },
+                }]
+                payload["tool_choice"] = {
+                    "type": "function", "function": {"name": selected_cloud_name}
+                }
+                messages[0]["content"] = str(messages[0]["content"]) + (
+                    "\\n\\nReplanned from the latest observed goal evidence.\\n"
+                    f"Selected action: {goal_selected_action}\\nReason: {selection.reason}\\n"
+                    "Execute this action once and report its actual result."
+                )
+                payload["messages"] = messages
             # Some recovery/strategy branches intentionally remove tools after a
             # bounded action. For an active autonomous goal, restore the relevant
             # tool profile before the next provider round instead of sending a
