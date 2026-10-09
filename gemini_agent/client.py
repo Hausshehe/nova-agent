@@ -4598,6 +4598,22 @@ class GeminiClient:
                                 continuation_candidates,
                                 continuation_evidence,
                             )
+                            if continuation_selection.action == "STOP":
+                                return (
+                                    str(tool_result)
+                                    + "\\nGoal-directed continuation stopped safely: "
+                                    + continuation_selection.reason
+                                    + "\\nRuntime goal status: "
+                                    + str(self.goal_state.status)
+                                    + " (not verified unless explicitly stated above)."
+                                )
+                            if continuation_selection.action not in self.tool_handlers:
+                                return (
+                                    str(tool_result)
+                                    + "\\nGoal-directed continuation stopped safely: selected action "
+                                    + repr(continuation_selection.action)
+                                    + " is not registered. No further action was executed."
+                                )
                             if continuation_selection.action in self.tool_handlers:
                                 next_action = continuation_selection.action
                                 if goal_replan_pending:
