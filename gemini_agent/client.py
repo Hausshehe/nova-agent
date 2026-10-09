@@ -4389,12 +4389,21 @@ class GeminiClient:
             if goal and success:
                 goal = goal[:512]
                 success = success[:512]
+                # The runtime, not the language model, owns goal initialization.
+                # Asking the model to establish its own contract lets it narrate
+                # the contract instead of entering the bounded execution loop.
+                self.goal_state = start_goal_state(goal, success)
                 contents[-1]["parts"][0]["text"] = (
                     str(contents[-1]["parts"][0]["text"])
                     + "\n\n[Nova orchestration directive] "
-                    + f"Establish a goal contract for \"{goal}\" with success condition "
-                    + f"\"{success}\". Then autonomously pursue the goal using bounded "
-                    + "next-step selection, constructed actions, recovery, and independent "
-                    + "outcome verification. Do not claim completion without evidence."
+                    + f"Nova has already established the runtime goal contract. Goal: \"{goal}\". "
+                    + f"Success condition: \"{success}\". Runtime status: ACTIVE. "
+                    + "Autonomously pursue the goal using bounded next-step selection, "
+                    + "registered constructed-action execution, recovery, and independent "
+                    + "outcome verification. Only actual registered tool executions and their "
+                    + "returned results count as execution evidence. Never narrate or invent "
+                    + "tool calls, command output, file creation, build results, or verification. "
+                    + "If no registered action can make progress, report the concrete blocker "
+                    + "without claiming completion."
                 )
         return self._generate_cloudflare(contents, system_instruction)
