@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 
 
 _MAX_TEXT = 512
@@ -84,6 +85,20 @@ def step_goal_disposition(
         # simply leaves the goal active for another bounded action.
         return "ACTIVE", bool(raw_tool_failed)
     return "ACTIVE", False
+
+
+
+def is_premature_blocker_claim(goal_status: str, response: str) -> bool:
+    """Recognize terminal blocker claims that cannot end an active goal by themselves."""
+    if goal_status != "ACTIVE" or not isinstance(response, str):
+        return False
+    return bool(re.search(
+        r"\\b(?:goal\\s+status\\s*:\\s*blocked|goal\\s+is\\s+blocked|"
+        r"no\\s+(?:viable\\s+)?recovery\\s+path|no\\s+recovery\\s+path\\s+available|"
+        r"cannot\\s+continue\\s+safely|no\\s+recovery\\s+path\\s+available)\\b",
+        response,
+        re.IGNORECASE,
+    ))
 
 
 def start_goal_state(goal: str, success_condition: str) -> GoalState:
