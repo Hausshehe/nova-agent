@@ -156,11 +156,15 @@ def discover_dependency_options(requirements: list[dict]) -> str:
     for item in normalized:
         lines.append(f"Requirement: {item['capability']}")
         available = []
+        unavailable = []
         for executable in item["executables"]:
             path = shutil.which(executable)
             if path:
                 available.append(f"{executable}={path}")
+            else:
+                unavailable.append(executable)
         lines.append("Available executables: " + (", ".join(available) if available else "none found"))
+        lines.append("Executables not found: " + (", ".join(unavailable) if unavailable else "none"))
         package_status = [
             f"{package}={'repository metadata found' if package in found else 'availability unconfirmed'}"
             for package in item["packages"]
