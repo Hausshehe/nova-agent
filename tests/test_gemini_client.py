@@ -1882,6 +1882,18 @@ class CloudflareClientTests(unittest.TestCase):
             "Create a test artifact. Execute the required actions and verify the result. "
             "Do not ask me to write or modify code manually."
         )
+        selector_calls = 0
+
+        def select_once_then_stop(*args, **kwargs):
+            nonlocal selector_calls
+            selector_calls += 1
+            if selector_calls == 1:
+                return GoalNextStep(
+                    "discover_workspace_executables",
+                    "Inspect available build resources before choosing a build strategy.",
+                )
+            return GoalNextStep("STOP", "The test has observed the selected action.")
+
         with patch.dict(
             os.environ,
             {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
@@ -1890,13 +1902,7 @@ class CloudflareClientTests(unittest.TestCase):
             "urllib.request.urlopen", return_value=FakeResponse(response)
         ) as open_url, patch(
             "gemini_agent.goal_next_step.select_goal_next_step",
-            side_effect=[
-                GoalNextStep(
-                    "discover_workspace_executables",
-                    "Inspect available build resources before choosing a build strategy.",
-                ),
-                GoalNextStep("STOP", "The test has observed the selected action."),
-            ],
+            side_effect=select_once_then_stop,
         ):
             client = GeminiClient()
             client.goal_state = start_goal_state(
