@@ -2582,13 +2582,20 @@ class GeminiClient:
                         if forced_declaration
                         else []
                     )
-                    if forced_handler is not None and not required:
+                    recovered_args = self._recover_required_tool_arguments(
+                        forced_local_name, {}, request_text
+                    )
+                    required_args_recovered = all(
+                        str(recovered_args.get(parameter, "")).strip()
+                        for parameter in required
+                    )
+                    if forced_handler is not None and required_args_recovered:
                         tool_calls = [{
                             "id": f"nova-continuation-{loop_index}",
                             "type": "function",
                             "function": {
                                 "name": forced_cloud_name,
-                                "arguments": "{}",
+                                "arguments": json.dumps(recovered_args),
                             },
                         }]
                         native_tool_calls = False
