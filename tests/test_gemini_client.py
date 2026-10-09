@@ -44,6 +44,31 @@ class CloudflareClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
                 GeminiClient()
 
+    def test_groq_provider_requires_its_own_api_key(self):
+        with patch.dict(os.environ, {"NOVA_PROVIDER": "groq"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "GROQ_API_KEY"):
+                GeminiClient()
+
+    def test_groq_provider_routes_request_to_groq(self):
+        response = {"choices": [{"message": {"content": "Groq works"}}]}
+        captured = []
+
+        def fake_urlopen(request, timeout=180):
+            captured.append(request)
+            return FakeResponse(response)
+
+        with patch.dict(os.environ, {
+            "NOVA_PROVIDER": "groq",
+            "GROQ_API_KEY": "test-groq-key",
+        }, clear=True), patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client = GeminiClient()
+            result = client.ask("Reply with a short greeting.")
+
+        self.assertEqual(result, "Groq works")
+        self.assertEqual(captured[0].full_url, "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(captured[0].get_header("Authorization"), "Bearer test-groq-key")
+        self.assertEqual(json.loads(captured[0].data)["model"], "openai/gpt-oss-20b")
+
     def test_openrouter_provider_requires_its_own_api_key(self):
         with patch.dict(os.environ, {"NOVA_PROVIDER": "openrouter"}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "OPENROUTER_API_KEY"):
