@@ -203,5 +203,33 @@ class MainContextTests(unittest.TestCase):
         self.assertIn("Executable candidates discovered: 0", rendered)
 
 
+    def test_prints_full_tool_trace_for_environmental_blockage_wording(self):
+        class FakeClient:
+            last_tool_calls = [{
+                "name": "execute_constructed_action",
+                "args": {"executable": "run_command", "mutation_scope": "READ_ONLY"},
+                "result": "Tool error: Executable was not found",
+            }, {
+                "name": "discover_workspace_executables",
+                "args": {"request": "Android SDK Gradle Java"},
+                "result": "Executable candidates discovered: 0",
+            }]
+
+        output = io.StringIO()
+        answer = (
+            "## Environmental Blockage (Evidence-Based)\\n"
+            "The required tooling stack is not present in the available system tools."
+        )
+        with redirect_stdout(output):
+            agent_main._print_workflow_execution_evidence(FakeClient(), answer)
+
+        rendered = output.getvalue()
+        self.assertIn("Execution evidence (recorded goal tool trace)", rendered)
+        self.assertIn("execute_constructed_action", rendered)
+        self.assertIn("Executable was not found", rendered)
+        self.assertIn("discover_workspace_executables", rendered)
+        self.assertIn("Executable candidates discovered: 0", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()
