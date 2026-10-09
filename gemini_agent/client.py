@@ -896,6 +896,9 @@ class GeminiClient:
                 "create an app", "build an app", "create a minimal android",
                 "new workspace", "from scratch", "software project",
                 "build procedure", "source files", "construct a project",
+                "apk", "install necessary packages", "dependency acquisition",
+                "discover dependency options", "arithmetic testing",
+                "continue through building", "build strategy",
             ),
         }
 
@@ -939,6 +942,8 @@ class GeminiClient:
                 or (selected_groups & {"root"} and name in {"run_root_command", "run_command"})
                 or (selected_groups & {"construction"} and name in {
                     "run_command", "find_executable", "discover_workspace_executables",
+                    "discover_dependency_options", "acquire_termux_packages",
+                    "execute_constructed_action",
                     "verify_command_result", "diagnose_command_failure",
                     "retry_command", "recover_command", "capability_inventory",
                     "assess_capability_gap",
@@ -4779,16 +4784,33 @@ class GeminiClient:
         # execution, and verification, so ordinary descriptive requests remain
         # conversational and do not gain autonomous mutation semantics.
         explicit_autonomy_commitment = (
-            re.search(r"\bdo not ask me to (?:write|modify)\b", prompt_text, re.IGNORECASE)
+            re.search(
+                r"\bdo not ask me to (?:write|modify|install|create|build)\b",
+                prompt_text,
+                re.IGNORECASE,
+            )
             or re.search(
                 r"\b(?:maintain|keep|retain)\s+ownership\b|\bcontinue\s+until\b",
                 prompt_text,
                 re.IGNORECASE,
             )
+            or re.search(
+                r"\bcontinue\b.{0,100}\buntil\b.{0,100}\b(?:verified|verify|complete|completed|blocker)\b",
+                prompt_text,
+                re.IGNORECASE | re.DOTALL,
+            )
         )
         constructive_autonomy = (
-            re.search(r"\b(?:construct|build|create|generate|make|implement)\b", prompt_text, re.IGNORECASE)
-            and re.search(r"\b(?:execute|run|build|install|produce|deliver)\b", prompt_text, re.IGNORECASE)
+            re.search(
+                r"\b(?:construct|build|building|create|generate|make|implement|install)\b",
+                prompt_text,
+                re.IGNORECASE,
+            )
+            and re.search(
+                r"\b(?:execute|run|build|building|install|produce|deliver|test|testing)\b",
+                prompt_text,
+                re.IGNORECASE,
+            )
             and re.search(r"\bverify\w*\b", prompt_text, re.IGNORECASE)
             and explicit_autonomy_commitment
         )
@@ -4803,8 +4825,16 @@ class GeminiClient:
                 (
                     sentence
                     for sentence in reversed(sentences)
-                    if re.search(r"\b(?:build|create|produce|deliver|verify)\b", sentence, re.IGNORECASE)
-                    and re.search(r"\b(?:verify|evidence|result|outcome|artifact|success)\b", sentence, re.IGNORECASE)
+                    if re.search(
+                        r"\b(?:build|building|create|produce|deliver|verify|install|testing|test)\b",
+                        sentence,
+                        re.IGNORECASE,
+                    )
+                    and re.search(
+                        r"\b(?:verify|evidence|result|outcome|artifact|success|apk|addition|subtraction|multiplication|division|test|testing|installation)\b",
+                        sentence,
+                        re.IGNORECASE,
+                    )
                 ),
                 "",
             )
