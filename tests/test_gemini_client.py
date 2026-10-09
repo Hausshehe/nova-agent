@@ -210,6 +210,61 @@ class CloudflareClientTests(unittest.TestCase):
         self.assertNotIn("<tool_call>", result)
         self.assertEqual(client.last_tool_calls, [])
 
+    def test_unregistered_text_tool_name_retries_with_available_tools(self):
+        invented = {
+            "choices": [{
+                "message": {
+                    "content": (
+                        "<tool_call>calculate_workflow"
+                        "<arg_key>workflow</arg_key><arg_value>show_workflows</arg_value>"
+                        "</tool_call>"
+                    )
+                }
+            }]
+        }
+        discovery = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "discover-saved-workflows",
+                        "type": "function",
+                        "function": {
+                            "name": "list_saved_workflows",
+                            "arguments": "{}",
+                        },
+                    }]
+                }
+            }]
+        }
+        final = {"choices": [{"message": {"content": "No saved workflow fits."}}]}
+        with patch.dict(
+            os.environ,
+            {"CLOUDFLARE_API_TOKEN": "token", "CLOUDFLARE_ACCOUNT_ID": "account"},
+            clear=True,
+        ), patch(
+            "urllib.request.urlopen",
+            side_effect=[
+                FakeResponse(invented),
+                FakeResponse(discovery),
+                FakeResponse(final),
+            ],
+        ) as open_url:
+            client = GeminiClient()
+            result = client.ask(
+                "Inspect saved workflows and use only registered tools to complete the request."
+            )
+
+        self.assertEqual(result, "No saved workflow fits.")
+        self.assertEqual(
+            [trace["name"] for trace in client.last_tool_calls],
+            ["list_saved_workflows"],
+        )
+        retry_payload = json.loads(open_url.call_args_list[1].args[0].data)
+        self.assertEqual(retry_payload["tool_choice"], "auto")
+        self.assertTrue(retry_payload["tools"])
+        retry_messages = retry_payload["messages"]
+        self.assertIn("not registered and was not executed", retry_messages[-1]["content"])
+
     def test_requires_cloudflare_credentials(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "CLOUDFLARE_API_TOKEN"):
