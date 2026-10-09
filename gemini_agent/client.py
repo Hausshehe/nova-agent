@@ -4199,6 +4199,7 @@ class GeminiClient:
                                     args["result"] = self.tool_handlers["run_command"](
                                         command=command_match.group(1).strip()
                                     )
+                        # Repeated failed writes are diagnosed before retrying; see the bounded tool trace.
                         tool_result = handler(**args)
                         raw_tool_result = str(tool_result)
                         raw_tool_failed = bool(
