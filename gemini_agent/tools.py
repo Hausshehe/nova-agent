@@ -6494,3 +6494,63 @@ def _load_persisted_capability_extensions() -> list[dict]:
 
 
 _load_persisted_capability_extensions()
+
+# Reusable composition layer. Keep the initial public allowlist read-only and deterministic.
+from gemini_agent.workflow_engine import execute_workflow as _execute_workflow
+
+_WORKFLOW_ALLOWED_TOOLS = {
+    "calculator",
+    "current_datetime",
+    "path_exists",
+    "get_file_info",
+    "get_file_name",
+    "get_file_extension",
+    "get_file_parent",
+    "get_file_permissions",
+    "list_directory",
+    "list_directory_recursive",
+    "get_directory_entry_count",
+    "get_disk_usage",
+    "get_directory_size",
+}
+
+
+def run_workflow(steps: str) -> str:
+    """Execute a bounded JSON workflow using only approved read-only capabilities."""
+    if not isinstance(steps, str) or not steps.strip():
+        raise ValueError("Workflow steps must be supplied as JSON text.")
+    if len(steps) > 12000:
+        raise ValueError("Workflow definition exceeds the 12000-character limit.")
+    try:
+        parsed = json.loads(steps)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Workflow steps are not valid JSON: {exc.msg}") from exc
+    return _execute_workflow(
+        parsed,
+        TOOL_HANDLERS,
+        allowed_tools=_WORKFLOW_ALLOWED_TOOLS,
+    )
+
+
+RUN_WORKFLOW_DECLARATION = {
+    "name": "run_workflow",
+    "description": (
+        "Compose up to 8 ordered steps from approved read-only Nova capabilities. "
+        "Pass a JSON array as text; each step has 'tool' and 'arguments'. "
+        "A later argument may use {\"$step_result\": 0} to reference an earlier step result. "
+        "This reports step execution, not proof that a user's overall goal is complete."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "steps": {
+                "type": "STRING",
+                "description": "JSON array of up to 8 {tool, arguments} steps; only approved read-only tools are permitted.",
+            }
+        },
+        "required": ["steps"],
+    },
+}
+
+TOOL_HANDLERS["run_workflow"] = run_workflow
+TOOL_DECLARATIONS.append(RUN_WORKFLOW_DECLARATION)
